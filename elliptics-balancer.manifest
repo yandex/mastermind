@@ -1,0 +1,28 @@
+{
+    "type" : "python",
+    "args" : {
+        "dnet_log": "/tmp/metabalancer.log",
+        "dnet_log_mask": 31,
+        "elliptics_nodes": [
+		["elisto20f.dev.yandex.net", 1025]
+	]
+    },
+    "engine" : {
+        "heartbeat-timeout" : 60,
+        "pool-limit" : 100,
+        "queue-limit" : 250
+    },
+    "drivers" : {
+        "balance" : {
+            "type" : "native-server",
+            "emit" : "balance",
+            "endpoint" : "tcp://*:9201"
+        },
+        "aggregate" : {
+            "type" : "recurring-timer",
+            "emit" : "aggregate",
+            "interval": 60000
+        }
+    }
+}
+
