@@ -9,15 +9,15 @@ import traceback
 import sys
 sys.path.append('/usr/lib')
 
-from libelliptics_python import *
+import elliptics
 
 import msgpack
 import balancer
 
 logging = Log()
 
-log = elliptics_log_file(manifest()["dnet_log"], manifest()["dnet_log_mask"])
-n = elliptics_node_python(log)
+log = elliptics.Logger(manifest()["dnet_log"], manifest()["dnet_log_mask"])
+n = elliptics.Node(log)
 
 for host in manifest()["elliptics_nodes"]:
     try:
@@ -59,7 +59,7 @@ def collect_groups():
         balancer.collect(n)
 
 @zeromq
-def balance(meta, request):
+def balance(request):
     logging.info("Request: %s" % str(request))
     return balancer.balance(n, request)
 

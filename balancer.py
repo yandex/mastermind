@@ -9,8 +9,7 @@ import xml.dom.minidom
 import urllib2
 import socket
 
-sys.path.append('/usr/lib')
-from libelliptics_python import *
+import elliptics
 
 logging = Log()
 
@@ -84,7 +83,7 @@ def get_symmetric_groups_raw(n):
 
     return lsymm_groups
 
-def get_bad_groups_raw(n, lsymm_groups):
+def get_bad_groups_raw(s, lsymm_groups):
     to_erase = []
     for group in lsymm_groups:
         try:
@@ -114,12 +113,13 @@ def collect(n):
     lsymm_groups = {}
 
     try:
+        s = elliptics.Session(n)
         lsymm_groups = get_symmetric_groups_raw(n)
         logging.info(lsymm_groups)
 
         # check for consistency
         to_erase = []
-        to_erase = get_bad_groups_raw(n, lsymm_groups)
+        to_erase = get_bad_groups_raw(s, lsymm_groups)
         bad_groups = to_erase
 
         for g in to_erase:
@@ -157,7 +157,8 @@ def aggregate(n):
     global stats, groups
     logging.info("Start aggregate test in balancer.py")
     try:
-        raw_stats = n.stat_log()
+        s = elliptics.Session(n)
+        raw_stats = s.stat_log()
  
         lstats = {}
         lgroups = {}
@@ -191,7 +192,8 @@ def balance(n, request):
         logging.info(stats)
         logging.info(groups)
 
-        object_id = elliptics_id(list(request[2]), 0, 0)
+        s = elliptics.Session(n)
+        object_id = elliptics.Id(list(request[2]), 0, 0)
         target_groups = []
 
         if "symmetric_groups" in manifest() and manifest()["symmetric_groups"]:
@@ -208,7 +210,7 @@ def balance(n, request):
 
                 for group in gr_list:
                     object_id.group_id = int(group)
-                    addr = n.lookup_addr(object_id)
+                    addr = s.lookup_addr(object_id)
                     logging.info(addr)
                     grl["rating"] += stats[addr]['rating']
 
@@ -226,7 +228,8 @@ def balance(n, request):
         else:
             for group_id in groups:
                 object_id.group_id = int(group_id)
-                addr = n.lookup_addr(object_id)
+                logging.info("object_id: " + str(object_id.__class__))
+                addr = s.lookup_addr(object_id)
                 logging.info(addr)
                 target_groups.append(stats[addr])
 
