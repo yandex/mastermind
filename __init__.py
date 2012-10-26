@@ -54,7 +54,7 @@ def aggregate():
     balancer.aggregate(n)
 
 @timer
-def collect_groups():
+def collect():
     if "symmetric_groups" in manifest() and manifest()["symmetric_groups"]:
         balancer.collect(n)
 
@@ -64,22 +64,34 @@ def balance(request):
     return balancer.balance(n, request)
 
 @zeromq
-def get_groups(meta, request):
+def get_groups(request):
     return list(set(balancer.get_groups(n).values()))
 
 @zeromq
-def get_symmetric_groups(meta, request):
+def get_symmetric_groups(request):
     return balancer.get_symmetric_groups(n)
 
 @zeromq
-def get_bad_groups(meta, request):
+def get_bad_groups(request):
     return balancer.get_bad_groups(n)
 
 @zeromq
-def get_empty_groups(meta, request):
+def get_empty_groups(request):
     return balancer.get_empty_groups(n)
 
 @zeromq
-def get_dc_by_host(meta, request):
+def get_group_info(request):
+    return balancer.get_group_info(n, request)
+
+@zeromq
+def couple_groups(request):
+    return balancer.couple_groups(n, request)
+
+@zeromq
+def repair_groups(request):
+    return balancer.repair_groups(n, request)
+
+@zeromq
+def get_dc_by_host(request):
     return balancer.get_dc_by_host(request)
 

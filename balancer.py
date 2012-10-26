@@ -18,7 +18,8 @@ logging.info("balancer.py")
 stats = {}
 groups = {}
 symm_groups = {}
-bad_groups = []
+symm_groups_all = {}
+bad_groups = {}
 empty_groups = []
 
 def get_dc_by_host(addr):
@@ -41,7 +42,7 @@ def get_symmetric_groups(n):
     if "symmetric_groups" in manifest() and manifest()["symmetric_groups"]:
         if not symm_groups:
             collect(n)
-        return symm_groups
+        return list(set(symm_groups.values()))
     else:
         return None
 
@@ -51,6 +52,7 @@ def get_bad_groups(n):
     if "symmetric_groups" in manifest() and manifest()["symmetric_groups"]:
         if not bad_groups:
             collect(n)
+        logging.info("bad_groups: " + str(bad_groups))
         return bad_groups
     else:
         return None
@@ -61,7 +63,7 @@ def get_empty_groups(n):
     if "symmetric_groups" in manifest() and manifest()["symmetric_groups"]:
         if not empty_groups:
             collect(n)
-        return empty_groups
+        return list(set(empty_groups))
     else:
         return None
 
@@ -72,10 +74,11 @@ def get_symmetric_groups_raw(n):
     if not groups:
         aggregate(n)
 
+    s = elliptics.Session(n)
     for group in groups.values():
         try:
-            n.add_groups([group])
-            lsymm_groups[group] = msgpack.unpackb(n.read_data("metabalancer\0symmetric_groups", 0, 0, 0, 0, 0))
+            s.add_groups([group])
+            lsymm_groups[group] = msgpack.unpackb(s.read_data("metabalancer\0symmetric_groups", 0, 0, 0, 0, 0))
             logging.info("lsymm_groups[%d] = %s" % (group, str(lsymm_groups[group])))
         except:
             logging.error("Failed to read symmetric_groups from group %d" % group)
@@ -109,24 +112,23 @@ def get_bad_groups_raw(s, lsymm_groups):
     return to_erase
 
 def collect(n):
-    global groups, symm_groups, bad_groups
+    global groups, symm_groups, symm_groups_all, bad_groups
     lsymm_groups = {}
 
     try:
-        s = elliptics.Session(n)
         lsymm_groups = get_symmetric_groups_raw(n)
-        logging.info(lsymm_groups)
+        logging.info("symm_groups: " + str(lsymm_groups))
 
         # check for consistency
         to_erase = []
-        to_erase = get_bad_groups_raw(s, lsymm_groups)
-        bad_groups = to_erase
+        to_erase = get_bad_groups_raw(n, lsymm_groups)
 
         for g in to_erase:
+            bad_groups[g] = lsymm_groups[g]
             del lsymm_groups[g]
 
         logging.info("lsymm_groups after check: %s" % str(lsymm_groups))
-        symm_groups = list(set(lsymm_groups.values()))
+        symm_groups = lsymm_groups
         logging.info("symm_groups: %s" % str(symm_groups))
 
     except Exception as e:
@@ -200,7 +202,7 @@ def balance(n, request):
             if not symm_groups:
                 collect(n)
 
-            for gr_list in symm_groups:
+            for gr_list in list(set(symm_groups.values())):
 
                 logging.info("gr_list: %s %d" % (str(gr_list), request[0]))
                 if len(gr_list) != request[0]:
@@ -239,6 +241,98 @@ def balance(n, request):
 
         logging.info("result: %s" % str(result))
         return result
+    except Exception as e:
+        logging.error("Balancer error: " + str(e) + "\n" + traceback.format_exc())
+        return {'Balancer error': str(e)}
+
+def repair_groups(n, request):
+    global stats, groups, symm_groups, bad_groups
+    try:
+        logging.info("----------------------------------------")
+        logging.info("New repair groups request" + str(request))
+        logging.info(request)
+
+        if not bad_groups:
+            collect(n)
+
+        group = int(request)
+        couple = list(bad_groups[group])
+
+        logging.info("couple: " + str(couple))
+        # It should be some checks for couples crossing
+
+        packed = msgpack.packb(couple)
+        logging.info("packed couple: " + str(packed))
+
+        s = elliptics.Session(n)
+        for g in couple:
+            s.add_groups([g])
+            s.write_data("metabalancer\0symmetric_groups", packed)
+
+        collect(n)
+
+        return {"message": "Success fully repaired couple", 'couple': couple}
+
+    except Exception as e:
+        logging.error("Balancer error: " + str(e) + "\n" + traceback.format_exc())
+        return {'Balancer error': str(e)}
+
+def get_group_info(n, request):
+    global stats, groups, bad_groups
+    try:
+        if not stats or not groups:
+            aggregate(n)
+        collect(n)
+
+        group = int(request)
+
+        res = {}
+
+        res['nodes'] = [val for key, val in stats.iteritems() if val['group_id'] == group]
+
+        logging.info("bad_groups: " + str(bad_groups))
+        logging.info("symm_groups: " + str(symm_groups))
+        if group in bad_groups:
+            res['status'] = 'bad'
+            res['couples'] = bad_groups[group]
+
+        if group in symm_groups:
+            res['status'] = 'coupled'
+            res['couples'] = symm_groups[group]
+        
+        return res
+        
+    except Exception as e:
+        logging.error("Balancer error: " + str(e) + "\n" + traceback.format_exc())
+        return {'Balancer error': str(e)}
+
+def couple_groups(n, request):
+    global stats, groups, symm_groups, bad_groups
+    try:
+        logging.info("----------------------------------------")
+        logging.info("New couple groups request" + str(request))
+        logging.info(request)
+
+        collect(n)
+
+        size = int(request)
+        groups_to_couple = []
+        empty_groups = get_empty_groups(n)
+
+        while len(groups_to_couple) < size:
+            g = empty_groups.pop()
+            logging.info("g: " + str(g))
+            info = get_group_info(n, g)
+            groups_to_couple.append(g)
+
+        if len(groups_to_couple) == size:
+            packed = msgpack.packb(groups_to_couple)
+            s = elliptics.Session(n)
+            for g in groups_to_couple:
+                s.add_groups([g])
+                s.write_data("metabalancer\0symmetric_groups", packed)
+
+        return groups_to_couple
     except Exception as e:
         logging.error("Balancer error: " + str(e) + "\n" + traceback.format_exc())
         return {'Balancer error': str(e)}
