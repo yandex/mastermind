@@ -1,0 +1,88 @@
+#!/usr/bin/python
+
+from time import sleep
+from opster import command, dispatch
+from cocaine.client import Client
+import msgpack
+
+@command()
+def collect(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
+    '''Force balancer to collect groups info'''
+    c = Client(config)
+    sleep(1)
+
+    res = c.get('elliptics-balancer/collect')
+    print msgpack.unpackb(res[0])
+
+@command()
+def bad_groups(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
+    '''Get list of broken symmetric groups from balancer'''
+    c = Client(config)
+    sleep(1)
+
+    res = c.get('elliptics-balancer/get_bad_groups')
+    print msgpack.unpackb(res[0])
+
+
+@command()
+def symmetric_groups(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
+    '''Get list of symmetric groups from balancer'''
+    c = Client(config)
+    sleep(1)
+
+    res = c.get('elliptics-balancer/get_symmetric_groups')
+    print msgpack.unpackb(res[0])
+
+@command()
+def uncoupled_groups(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
+    '''Get list of uncoupled groups from balancer'''
+    c = Client(config)
+    sleep(1)
+
+    res = c.get('elliptics-balancer/get_empty_groups')
+    print msgpack.unpackb(res[0])
+
+@command()
+def repair_groups(
+            group,
+            config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
+    '''Repair broken symmetric groups'''
+    c = Client(config)
+    sleep(1)
+
+    group = int(group)
+    res = c.get('elliptics-balancer/repair_groups', group)
+    print msgpack.unpackb(res[0])
+
+@command()
+def group_info(
+            group,
+            config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
+    '''Get group info'''
+    c = Client(config)
+    sleep(1)
+
+    group = int(group)
+    res = c.get('elliptics-balancer/get_group_info', group)
+    print msgpack.unpackb(res[0])
+
+@command()
+def couple_groups(
+            size,
+            config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
+    '''Make a couple of groups, number of groups is an argument'''
+    c = Client(config)
+    sleep(1)
+
+    size = int(size)
+    res = c.get('elliptics-balancer/couple_groups', size)
+    print msgpack.unpackb(res[0])
+
+
+
+#id = [0]*64
+#res = c.get('elliptics-balancer/balance', (2, 1, id), max_retries=2)
+#print res
+
+if __name__ == '__main__':
+    dispatch()

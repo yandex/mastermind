@@ -4,7 +4,9 @@
         "dnet_log": "/tmp/metabalancer.log",
         "dnet_log_mask": 31,
         "elliptics_nodes": [
-		["elisto20f.dev.yandex.net", 1025]
+		["elisto20f.dev.yandex.net", 1025],
+		["elisto21f.dev.yandex.net", 1025],
+		["elisto22f.dev.yandex.net", 1025]
 	]
     },
     "engine" : {
