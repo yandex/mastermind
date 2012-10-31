@@ -3,10 +3,10 @@
     "args" : {
         "dnet_log": "/tmp/metabalancer.log",
         "dnet_log_mask": 31,
+        "symmetric_groups": true,
         "elliptics_nodes": [
-		["elisto20f.dev.yandex.net", 1025],
-		["elisto21f.dev.yandex.net", 1025],
-		["elisto22f.dev.yandex.net", 1025]
+		["elisto22f.dev.yandex.net", 1025],
+		["elisto23f.dev.yandex.net", 1025]
 	]
     },
     "engine" : {
@@ -20,6 +20,42 @@
             "emit" : "balance",
             "endpoint" : "tcp://*:9201"
         },
+        "get_symmetric_groups" : {
+            "type" : "native-server",
+            "emit" : "get_symmetric_groups",
+            "endpoint" : "tcp://*:9202"
+        },
+        "get_bad_groups" : {
+            "type" : "native-server",
+            "emit" : "get_bad_groups",
+            "endpoint" : "tcp://*:9203"
+        },
+        "get_empty_groups" : {
+            "type" : "native-server",
+            "emit" : "get_empty_groups",
+            "endpoint" : "tcp://*:9204"
+        },
+        "repair_groups" : {
+            "type" : "native-server",
+            "emit" : "repair_groups",
+            "endpoint" : "tcp://*:9205"
+        },
+        "collect" : {
+            "type" : "native-server",
+            "emit" : "collect",
+            "endpoint" : "tcp://*:9206"
+        },
+        "get_group_info" : {
+            "type" : "native-server",
+            "emit" : "get_group_info",
+            "endpoint" : "tcp://*:9207"
+        },
+        "couple_groups" : {
+            "type" : "native-server",
+            "emit" : "couple_groups",
+            "endpoint" : "tcp://*:9208"
+        },
+
         "aggregate" : {
             "type" : "recurring-timer",
             "emit" : "aggregate",
