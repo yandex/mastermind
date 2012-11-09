@@ -24,6 +24,9 @@ empty_groups = []
 
 def get_dc_by_host(addr):
     host = socket.gethostbyaddr(addr)[0]
+    '''
+    TODO: remove hardcode link and replace this variable to manifest (NDA)
+    '''
     hostxml = urllib2.urlopen("http://c.yandex-team.ru/api/hosts/" + host)
     hostinfo = xml.dom.minidom.parse(hostxml)
     return hostinfo.getElementsByTagName('data')[0].getElementsByTagName('item')[0].getElementsByTagName('root_datacenter')[0].firstChild.data

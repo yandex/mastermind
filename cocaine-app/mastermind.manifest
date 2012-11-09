@@ -1,12 +1,12 @@
 {
     "type" : "python",
     "args" : {
-        "dnet_log": "/tmp/metabalancer.log",
+        "dnet_log": "/var/log/mastermind/mastermind.log",
         "dnet_log_mask": 31,
         "symmetric_groups": true,
         "elliptics_nodes": [
-		["elisto22f.dev.yandex.net", 1025],
-		["elisto23f.dev.yandex.net", 1025]
+		["_YOUR_META_STORAGE_HOST", 1025],
+		["_YOUR_META_STORAGE_HOST", 1025]
 	]
     },
     "engine" : {
