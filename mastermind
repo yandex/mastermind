@@ -11,7 +11,7 @@ def collect(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')
     c = Client(config)
     sleep(1)
 
-    res = c.get('elliptics-balancer/collect')
+    res = c.get('mastermind/collect')
     print msgpack.unpackb(res[0])
 
 @command()
@@ -20,7 +20,7 @@ def bad_groups(config=('c', 'cocaine_config.json', 'Path to cocaine dealer confi
     c = Client(config)
     sleep(1)
 
-    res = c.get('elliptics-balancer/get_bad_groups')
+    res = c.get('mastermind/get_bad_groups')
     print msgpack.unpackb(res[0])
 
 
@@ -30,7 +30,7 @@ def symmetric_groups(config=('c', 'cocaine_config.json', 'Path to cocaine dealer
     c = Client(config)
     sleep(1)
 
-    res = c.get('elliptics-balancer/get_symmetric_groups')
+    res = c.get('mastermind/get_symmetric_groups', 0)
     print msgpack.unpackb(res[0])
 
 @command()
@@ -39,7 +39,7 @@ def uncoupled_groups(config=('c', 'cocaine_config.json', 'Path to cocaine dealer
     c = Client(config)
     sleep(1)
 
-    res = c.get('elliptics-balancer/get_empty_groups')
+    res = c.get('mastermind/get_empty_groups')
     print msgpack.unpackb(res[0])
 
 @command()
@@ -51,7 +51,7 @@ def repair_groups(
     sleep(1)
 
     group = int(group)
-    res = c.get('elliptics-balancer/repair_groups', group)
+    res = c.get('mastermind/repair_groups', group)
     print msgpack.unpackb(res[0])
 
 @command()
@@ -63,7 +63,7 @@ def group_info(
     sleep(1)
 
     group = int(group)
-    res = c.get('elliptics-balancer/get_group_info', group)
+    res = c.get('mastermind/get_group_info', group)
     print msgpack.unpackb(res[0])
 
 @command()
@@ -75,14 +75,9 @@ def couple_groups(
     sleep(1)
 
     size = int(size)
-    res = c.get('elliptics-balancer/couple_groups', size)
+    res = c.get('mastermind/couple_groups', size)
     print msgpack.unpackb(res[0])
 
-
-
-#id = [0]*64
-#res = c.get('elliptics-balancer/balance', (2, 1, id), max_retries=2)
-#print res
 
 if __name__ == '__main__':
     dispatch()
