@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+GIT_REPO=git://github.com/agodin/mastermind.git
+GIT_CLONE_DIR=/tmp/mastermind-build
+
+GIT_BRANCH=master
+
+include $(CURDIR)/git.mk
+
+pre-build::
+	mkdir -p $(CURDIR)/debian/mastermind/usr/lib/mastermind/cocaine-app/
+	mkdir -p $(CURDIR)/debian/mastermind/usr/bin/
+	cp $(CURDIR)/usr/bin/mastermind_deploy.sh $(CURDIR)/debian/mastermind/usr/bin/mastermind_deploy.sh
+	$(CURDIR)/make_tree.sh $(GIT_CLONE_DIR)
+
+include /usr/share/cdbs/1/rules/debhelper.mk

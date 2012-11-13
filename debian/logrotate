@@ -1,0 +1,10 @@
+/var/log/mastermind/*.log
+{
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    dateext
+    copytruncate
+}
