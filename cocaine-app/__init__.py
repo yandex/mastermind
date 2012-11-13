@@ -26,6 +26,18 @@ for host in manifest()["elliptics_nodes"]:
     except Exception as e:
         logging.error("Error: " + str(e) + "\n" + traceback.format_exc())
 
+meta_node = elliptics.Node(log)
+for host in manifest()["metadata"]["nodes"]:
+    try:
+        logging.error("host: " + str(host))
+        meta_node.add_remote(host[0], host[1])
+    except Exception as e:
+        logging.error("Error: " + str(e) + "\n" + traceback.format_exc())
+meta_session = elliptics.Session(meta_node)
+meta_session.add_groups(list(manifest()["metadata"]["groups"]))
+
+n.meta_session = meta_session
+
 '''
 def calc_rating(node):
     node['rating'] = node['free_space_rel'] * 1000 + (node['la'] + 0.1) * 100
@@ -50,7 +62,6 @@ def parse(raw_node):
 
 @timer
 def aggregate():
-    #logging.info("Start aggregate test")
     balancer.aggregate(n)
 
 @timer
@@ -90,6 +101,10 @@ def couple_groups(request):
 @zeromq
 def repair_groups(request):
     return balancer.repair_groups(n, request)
+
+@zeromq
+def get_next_group_number(request):
+    return balancer.get_get_next_group_number(n, request)
 
 @zeromq
 def get_dc_by_host(request):

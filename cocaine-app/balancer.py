@@ -131,6 +131,15 @@ def collect(n):
         symm_groups = lsymm_groups
         logging.info("symm_groups: %s" % str(symm_groups))
 
+        try:
+            max_group = int(n.meta_session.read("mastermind:max_group"))
+        except:
+            max_group = 0
+        curr_max_group = max(groups.values())
+        if curr_max_group > max_group:
+            n.meta_session.write("mastermind:max_group", str(curr_max_group))
+        
+
     except Exception as e:
         logging.error("Error: " + str(e) + "\n" + traceback.format_exc())
         return {'error': str(e)}
@@ -336,4 +345,24 @@ def couple_groups(n, request):
     except Exception as e:
         logging.error("Balancer error: " + str(e) + "\n" + traceback.format_exc())
         return {'Balancer error': str(e)}
+
+def get_get_next_group_number(n, request):
+    try:
+        groups_count = int(request)
+        if groups_count < 0 or groups_count > 100:
+            raise Exception('Incorrect groups count')
+
+        try:
+            max_group = int(n.meta_session.read("mastermind:max_group"))
+        except:
+            max_group = 0
+
+        new_max_group = max_group + groups_count
+        n.meta_session.write("mastermind:max_group", str(new_max_group))
+
+        return range(max_group+1, max_group+1 + groups_count)
+
+    except Exception as e:
+        logging.error("Mastermind error: " + str(e) + "\n" + traceback.format_exc())
+        return {'Mastermind error': str(e)}
 

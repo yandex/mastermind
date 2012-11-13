@@ -7,7 +7,14 @@
         "elliptics_nodes": [
 		["elisto22f.dev.yandex.net", 1025],
 		["elisto23f.dev.yandex.net", 1025]
-	]
+	],
+        "metadata": {
+		"nodes": [
+			["elisto22f.dev.yandex.net", 1025],
+			["elisto23f.dev.yandex.net", 1025]
+		],
+		"groups": [1,2]
+	}
     },
     "engine" : {
         "heartbeat-timeout" : 60,
@@ -54,6 +61,12 @@
             "type" : "native-server",
             "emit" : "couple_groups",
             "endpoint" : "tcp://*:9208"
+        },
+
+        "get_next_group_number" : {
+            "type" : "native-server",
+            "emit" : "get_next_group_number",
+            "endpoint" : "tcp://*:9209"
         },
 
         "aggregate" : {
