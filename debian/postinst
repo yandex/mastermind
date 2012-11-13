@@ -1,0 +1,21 @@
+#!/bin/sh
+
+
+set -e
+
+#DEBHELPER#
+
+case "$1" in
+    configure)
+    invoke-rc.d syslog-ng restart
+    ;;
+    abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+exit 0

@@ -1,0 +1,6 @@
+etc/
+etc/mastermind/
+usr/
+usr/bin/
+usr/lib/mastermind/cocaine-app
+etc/logrotate.d
