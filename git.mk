@@ -15,7 +15,7 @@ pre-build::
 	fi
 
 clean::
-	cat git_ls_files | xargs rm -rf
+	#cat git_ls_files | xargs rm -rf
 	rm -rf $(CLEAN_FILES)
 	rm -rf git_ls_files
 	rm -rf $(GIT_CLONE_DIR)
