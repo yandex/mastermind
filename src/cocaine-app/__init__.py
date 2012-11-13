@@ -11,20 +11,35 @@ sys.path.append('/usr/lib')
 
 import elliptics
 
-import msgpack
+import msgpack, json
 import balancer
 
 logging = Log()
 
-log = elliptics.Logger(manifest()["dnet_log"], manifest()["dnet_log_mask"])
+with open(manifest()["config"], 'r') as config_file:
+    config = json.load(config_file)
+
+log = elliptics.Logger(str(config["dnet_log"]), config["dnet_log_mask"])
 n = elliptics.Node(log)
 
-for host in manifest()["elliptics_nodes"]:
+for host in config["elliptics_nodes"]:
     try:
         logging.error("host: " + str(host))
-        n.add_remote(host[0], host[1])
+        n.add_remote(str(host[0]), host[1])
     except Exception as e:
         logging.error("Error: " + str(e) + "\n" + traceback.format_exc())
+
+meta_node = elliptics.Node(log)
+for host in config["metadata"]["nodes"]:
+    try:
+        logging.error("host: " + str(host))
+        meta_node.add_remote(str(host[0]), host[1])
+    except Exception as e:
+        logging.error("Error: " + str(e) + "\n" + traceback.format_exc())
+meta_session = elliptics.Session(meta_node)
+meta_session.add_groups(list(config["metadata"]["groups"]))
+
+n.meta_session = meta_session
 
 '''
 def calc_rating(node):
@@ -50,7 +65,6 @@ def parse(raw_node):
 
 @timer
 def aggregate():
-    #logging.info("Start aggregate test")
     balancer.aggregate(n)
 
 @timer
@@ -90,6 +104,10 @@ def couple_groups(request):
 @zeromq
 def repair_groups(request):
     return balancer.repair_groups(n, request)
+
+@zeromq
+def get_next_group_number(request):
+    return balancer.get_get_next_group_number(n, request)
 
 @zeromq
 def get_dc_by_host(request):

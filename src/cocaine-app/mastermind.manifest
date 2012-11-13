@@ -1,13 +1,8 @@
 {
     "type" : "python",
     "args" : {
-        "dnet_log": "/var/log/mastermind/mastermind.log",
-        "dnet_log_mask": 31,
         "symmetric_groups": true,
-        "elliptics_nodes": [
-		["_YOUR_META_STORAGE_HOST", 1025],
-		["_YOUR_META_STORAGE_HOST", 1025]
-	]
+        "config": "/etc/elliptics/mastermind.config"
     },
     "engine" : {
         "heartbeat-timeout" : 60,
@@ -54,6 +49,12 @@
             "type" : "native-server",
             "emit" : "couple_groups",
             "endpoint" : "tcp://*:9208"
+        },
+
+        "get_next_group_number" : {
+            "type" : "native-server",
+            "emit" : "get_next_group_number",
+            "endpoint" : "tcp://*:9209"
         },
 
         "aggregate" : {
