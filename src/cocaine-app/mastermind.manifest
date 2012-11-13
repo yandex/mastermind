@@ -1,20 +1,8 @@
 {
     "type" : "python",
     "args" : {
-        "dnet_log": "/var/log/mastermind/mastermind.log",
-        "dnet_log_mask": 31,
         "symmetric_groups": true,
-        "elliptics_nodes": [
-		["elisto22f.dev.yandex.net", 1025],
-		["elisto23f.dev.yandex.net", 1025]
-	],
-        "metadata": {
-		"nodes": [
-			["elisto22f.dev.yandex.net", 1025],
-			["elisto23f.dev.yandex.net", 1025]
-		],
-		"groups": [1,2]
-	}
+        "config": "/etc/elliptics/mastermind.config"
     },
     "engine" : {
         "heartbeat-timeout" : 60,
