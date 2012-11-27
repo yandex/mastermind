@@ -2,7 +2,7 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
-GIT_REPO=git://github.com/agodin/mastermind.git
+GIT_REPO=git://github.com/toshic/mastermind.git
 GIT_CLONE_DIR=/tmp/mastermind-build
 
 GIT_BRANCH=master
