@@ -40,7 +40,7 @@ def uncoupled_groups(config=('c', 'cocaine_config.json', 'Path to cocaine dealer
     c = Client(config)
     sleep(1)
 
-    res = c.get('mastermind/get_empty_groups')
+    res = c.get('mastermind/get_empty_groups', 0)
     print msgpack.unpackb(res[0])
 
 @command()
