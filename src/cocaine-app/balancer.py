@@ -66,13 +66,14 @@ def get_empty_groups(n):
     if "symmetric_groups" in manifest() and manifest()["symmetric_groups"]:
         if not empty_groups:
             collect(n)
-        return list(set(empty_groups))
+        return empty_groups
     else:
         return None
 
 def get_symmetric_groups_raw(n):
     global groups, empty_groups
     lsymm_groups = {}
+    lempty_groups = []
 
     if not groups:
         aggregate(n)
@@ -85,8 +86,9 @@ def get_symmetric_groups_raw(n):
             logging.info("lsymm_groups[%d] = %s" % (group, str(lsymm_groups[group])))
         except:
             logging.error("Failed to read symmetric_groups from group %d" % group)
-            empty_groups.append(group)
+            lempty_groups.append(group)
 
+    empty_groups = list(set(lempty_groups))
     return lsymm_groups
 
 def get_bad_groups_raw(s, lsymm_groups):
@@ -343,6 +345,8 @@ def couple_groups(n, request):
             for g in groups_to_couple:
                 s.add_groups([g])
                 s.write_data("metabalancer\0symmetric_groups", packed)
+
+        collect(n)
 
         return groups_to_couple
     except Exception as e:
