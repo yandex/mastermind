@@ -190,8 +190,6 @@ def aggregate(n):
         #db["stats"].save({'_id': 'groups', 'content': groups})#, upsert = True)
         stats = lstats
         groups = lgroups
-
-        collect(n)
     except Exception as e:
         logging.error("Error: " + str(e) + "\n" + traceback.format_exc())
         return {'error': str(e)}

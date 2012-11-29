@@ -66,6 +66,7 @@ def parse(raw_node):
 @timer
 def aggregate():
     balancer.aggregate(n)
+    balancer.collect(n)
 
 @timer
 def collect():
