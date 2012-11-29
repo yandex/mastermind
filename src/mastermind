@@ -68,6 +68,19 @@ def group_info(
     print msgpack.unpackb(res[0])
 
 @command()
+def balance(
+            size,
+            config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
+    '''Get group info'''
+    c = Client(config)
+    sleep(1)
+
+    size = int(size)
+    id = [0] * 64
+    res = c.get('mastermind/balance', (size, 1, id))
+    print msgpack.unpackb(res[0])
+
+@command()
 def couple_groups(
             size,
             config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
