@@ -83,13 +83,19 @@ def balance(
 @command()
 def couple_groups(
             size,
+            groups=('i', '', 'Use these groups in couple (example: 1:2)'),
             config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
     '''Make a couple of groups, number of groups is an argument'''
     c = Client(config)
     sleep(1)
 
     size = int(size)
-    res = c.get('mastermind/couple_groups', size)
+    if groups:
+        groups = [int(g) for g in groups.split(':')]
+    else:
+        groups = []
+
+    res = c.get('mastermind/couple_groups', (size, groups))
     print msgpack.unpackb(res[0])
 
 @command()

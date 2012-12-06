@@ -290,7 +290,7 @@ def get_group_info(n, request):
     try:
         if not stats or not groups:
             aggregate(n)
-        collect(n)
+            collect(n)
 
         group = int(request)
 
@@ -323,16 +323,43 @@ def couple_groups(n, request):
 
         collect(n)
 
-        size = int(request)
+        size = int(request[0])
+        rgroups = [int(g) for g in request[1]]
         groups_to_couple = []
         empty_groups = get_empty_groups(n)
+
+        used_dcs = set()
+
+        for g in rgroups:
+            if not g in empty_groups:
+                raise Exception("Group " + str(g) + " doesn't listed as empty")
+
+            info = get_group_info(n, g)
+
+            host = info['nodes'][0]['addr'].split(':')[0]
+            dc = inventory.get_dc_by_host(host)
+
+            if dc in used_dcs:
+                raise Exception('Group ' + str(g) + ' is in same DC ' + dc + ' as one of previous groups')
+
+            used_dcs.add(dc)
+            groups_to_couple.append(g)
 
         while len(groups_to_couple) < size:
             g = empty_groups.pop()
             logging.info("g: " + str(g))
             info = get_group_info(n, g)
+
+            host = info['nodes'][0]['addr'].split(':')[0]
+            dc = inventory.get_dc_by_host(host)
+
+            if dc in used_dcs:
+                continue
+
+            used_dcs.add(dc)
             groups_to_couple.append(g)
 
+        return groups_to_couple
         if len(groups_to_couple) == size:
             packed = msgpack.packb(groups_to_couple)
             s = elliptics.Session(n)
