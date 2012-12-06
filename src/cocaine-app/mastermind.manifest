@@ -51,10 +51,16 @@
             "endpoint" : "tcp://*:9208"
         },
 
+        "break_couple" : {
+            "type" : "native-server",
+            "emit" : "break_couple",
+            "endpoint" : "tcp://*:9209"
+        },
+
         "get_next_group_number" : {
             "type" : "native-server",
             "emit" : "get_next_group_number",
-            "endpoint" : "tcp://*:9209"
+            "endpoint" : "tcp://*:9210"
         },
 
         "aggregate" : {

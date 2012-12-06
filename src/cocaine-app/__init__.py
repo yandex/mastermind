@@ -103,6 +103,10 @@ def couple_groups(request):
     return balancer.couple_groups(n, request)
 
 @zeromq
+def break_couple(request):
+    return balancer.break_couple(n, request)
+
+@zeromq
 def repair_groups(request):
     return balancer.repair_groups(n, request)
 

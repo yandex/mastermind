@@ -20,6 +20,8 @@ symm_groups_all = {}
 bad_groups = {}
 empty_groups = []
 
+mastermind_key = "metabalancer\0symmetric_groups"
+
 def get_groups(n):
     global groups
 
@@ -71,7 +73,7 @@ def get_symmetric_groups_raw(n):
     for group in groups.values():
         try:
             s.add_groups([group])
-            lsymm_groups[group] = msgpack.unpackb(s.read_data("metabalancer\0symmetric_groups", 0, 0, 0, 0, 0))
+            lsymm_groups[group] = msgpack.unpackb(s.read_data(mastermind_key, 0, 0, 0, 0, 0))
             logging.info("lsymm_groups[%d] = %s" % (group, str(lsymm_groups[group])))
         except:
             logging.error("Failed to read symmetric_groups from group %d" % group)
@@ -117,6 +119,7 @@ def collect(n):
         to_erase = []
         to_erase = get_bad_groups_raw(n, lsymm_groups)
 
+        lbad_groups = {}
         for g in to_erase:
             lbad_groups[g] = lsymm_groups[g]
             del lsymm_groups[g]
@@ -272,7 +275,7 @@ def repair_groups(n, request):
         s = elliptics.Session(n)
         for g in couple:
             s.add_groups([g])
-            s.write_data("metabalancer\0symmetric_groups", packed)
+            s.write_data(mastermind_key, packed)
 
         collect(n)
 
@@ -335,7 +338,7 @@ def couple_groups(n, request):
             s = elliptics.Session(n)
             for g in groups_to_couple:
                 s.add_groups([g])
-                s.write_data("metabalancer\0symmetric_groups", packed)
+                s.write_data(mastermind_key, packed)
 
         collect(n)
 
@@ -343,6 +346,71 @@ def couple_groups(n, request):
     except Exception as e:
         logging.error("Balancer error: " + str(e) + "\n" + traceback.format_exc())
         return {'Balancer error': str(e)}
+
+def break_couple(n, request):
+    global symm_groups, bad_groups
+    try:
+
+        logging.info("----------------------------------------")
+        logging.info("New break couple request" + str(request))
+        logging.info(request)
+
+        collect(n)
+
+        groups = [int(g) for g in request[0]]
+        groups.sort()
+        confirm = request[1]
+
+        logging.info("groups: " + str(groups) + " confirmation: " + confirm)
+
+        # Check if all groups are in symm_groups
+        in_symm = True
+
+        for g in groups:
+            if g not in symm_groups:
+                in_symm = False
+                break
+
+            sg = list(symm_groups[g])
+            sg.sort()
+            logging.info("cheching group " + str(g) + ", sg = " + str(sg))
+            if sg != groups:
+                in_symm = False
+                break
+
+        logging.info("in_symm: " + str(in_symm))
+        if in_symm:
+            correct_confirm = "Yes, I want to break good couple " + ':'.join([str(g) for g in request[0]])
+            if confirm != correct_confirm:
+                raise Exception('Incorrect confirmation string')
+        else:
+            in_bad = True
+            # Check if all groups are in bad_groups
+            logging.info("bad_groups: " + str(bad_groups))
+            for g in groups:
+                if not g in bad_groups:
+                    in_bad = False
+                    break
+            logging.info("in_bad: " + str(in_bad))
+            if not in_bad:
+                raise Exception("Some group are not in bad groups")
+
+            correct_confirm = "Yes, I want to break bad couple " + ':'.join([str(g) for g in request[0]])
+            if confirm != correct_confirm:
+                raise Exception('Incorrect confirmation string')
+
+        s = elliptics.Session(n)
+        s.add_groups(groups)
+        s.remove(mastermind_key)
+
+        collect(n)
+
+        return True
+
+    except Exception as e:
+        logging.error("Balancer error: " + str(e) + "\n" + traceback.format_exc())
+        return {'Balancer error': str(e)}
+
 
 def get_get_next_group_number(n, request):
     try:

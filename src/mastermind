@@ -93,6 +93,20 @@ def couple_groups(
     print msgpack.unpackb(res[0])
 
 @command()
+def break_couple(
+            groups,
+            confirm,
+            config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
+    '''Break the couple of groups, couple is an argument
+        confirm parameter is a message "Yes, I want to break (bad|good) couple [1:2:3]"'''
+    c = Client(config)
+    sleep(1)
+
+    groups = [int(g) for g in groups.split(':')]
+    res = c.get('mastermind/break_couple', (groups, confirm))
+    print msgpack.unpackb(res[0])
+
+@command()
 def next_group_number(
             count,
             config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
