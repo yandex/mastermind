@@ -118,8 +118,10 @@ def collect(n):
         to_erase = get_bad_groups_raw(n, lsymm_groups)
 
         for g in to_erase:
-            bad_groups[g] = lsymm_groups[g]
+            lbad_groups[g] = lsymm_groups[g]
             del lsymm_groups[g]
+
+        bad_groups = lbad_groups
 
         logging.info("lsymm_groups after check: %s" % str(lsymm_groups))
         symm_groups = lsymm_groups
