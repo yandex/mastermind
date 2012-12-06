@@ -21,7 +21,7 @@ def bad_groups(config=('c', 'cocaine_config.json', 'Path to cocaine dealer confi
     c = Client(config)
     sleep(1)
 
-    res = c.get('mastermind/get_bad_groups')
+    res = c.get('mastermind/get_bad_groups', 0)
     print msgpack.unpackb(res[0])
 
 
