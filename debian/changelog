@@ -1,3 +1,9 @@
+mastermind (0.4) unstable; urgency=low
+
+  * Call collect() from timer event, not from aggregate() 
+
+ -- Andrey Godin <agodin@yandex-team.ru>  Thu, 06 Dec 2012 13:09:34 +0400
+
 mastermind (0.1) unstable; urgency=low
 
   * Initial Release.
