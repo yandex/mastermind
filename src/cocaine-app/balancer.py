@@ -5,11 +5,9 @@ import msgpack
 
 import traceback
 import sys
-import xml.dom.minidom
-import urllib2
-import socket
 
 import elliptics
+import inventory
 
 logging = Log()
 
@@ -21,15 +19,6 @@ symm_groups = {}
 symm_groups_all = {}
 bad_groups = {}
 empty_groups = []
-
-def get_dc_by_host(addr):
-    host = socket.gethostbyaddr(addr)[0]
-    '''
-    TODO: remove hardcode link and replace this variable to manifest (NDA)
-    '''
-    hostxml = urllib2.urlopen("http://c.yandex-team.ru/api/hosts/" + host)
-    hostinfo = xml.dom.minidom.parse(hostxml)
-    return hostinfo.getElementsByTagName('data')[0].getElementsByTagName('item')[0].getElementsByTagName('root_datacenter')[0].firstChild.data
 
 def get_groups(n):
     global groups
