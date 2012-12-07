@@ -8,6 +8,7 @@ set -e
 case "$1" in
     configure)
     invoke-rc.d syslog-ng restart
+    /usr/bin/mastermind_deploy.sh ||true
     ;;
     abort-upgrade|abort-remove|abort-deconfigure)
     ;;
