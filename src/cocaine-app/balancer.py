@@ -354,6 +354,8 @@ def couple_groups(n, request):
             dc = inventory.get_dc_by_host(host)
 
             if dc in used_dcs:
+                if not empty_groups:
+                    raise Exception('Group ' + str(g) + ' is in same DC ' + dc + ' as one of previous groups, and there is no any more unused groups')
                 continue
 
             used_dcs.add(dc)
