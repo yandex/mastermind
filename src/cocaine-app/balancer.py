@@ -361,7 +361,6 @@ def couple_groups(n, request):
             used_dcs.add(dc)
             groups_to_couple.append(g)
 
-        return groups_to_couple
         if len(groups_to_couple) == size:
             packed = msgpack.packb(groups_to_couple)
             s = elliptics.Session(n)
