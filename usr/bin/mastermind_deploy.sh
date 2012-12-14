@@ -17,6 +17,7 @@ echo "Deploy New Combainer:"
 cocaine-tool upload -m $DEPLOY_DIR/cocaine-app/mastermind.manifest -p $DEPLOY_DIR/cocaine-app/mastermind.tar.gz -n mastermind -c /etc/cocaine/cocaine.conf --verbos
 
 chown cocaine -R /usr/lib/mastermind
+chown cocaine -R /var/log/mastermind
 
 
 /etc/init.d/cocaine-server restart
