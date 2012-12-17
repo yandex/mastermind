@@ -1,3 +1,9 @@
+mastermind (0.10) lucid; urgency=low
+
+  * fixed reading metabalancer key
+
+ -- Anton Kortunov <toshik@yandex-team.ru>  Mon, 17 Dec 2012 15:03:22 +0400
+
 mastermind (0.9) lucid; urgency=low
 
   * chow logging dir 

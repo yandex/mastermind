@@ -73,7 +73,7 @@ def get_symmetric_groups_raw(n):
     for group in groups.values():
         try:
             s.add_groups([group])
-            lsymm_groups[group] = msgpack.unpackb(s.read_data(mastermind_key, 0, 0, 0, 0, 0))
+            lsymm_groups[group] = msgpack.unpackb(s.read_data(mastermind_key))
             logging.info("lsymm_groups[%d] = %s" % (group, str(lsymm_groups[group])))
         except:
             logging.error("Failed to read symmetric_groups from group %d" % group)
