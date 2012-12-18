@@ -122,5 +122,5 @@ def get_dc_by_host(request):
     return balancer.get_dc_by_host(request)
 
 @zeromq
-def get_group_weights():
+def get_group_weights(request):
     return balancer.get_group_weights(n)

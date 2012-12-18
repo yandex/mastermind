@@ -131,7 +131,7 @@ def get_group_weights(
     c = Client(config)
     sleep(1)
 
-    res = c.get('mastermind/get_group_weights')
+    res = c.get('mastermind/get_group_weights', 0)
     print msgpack.unpackb(res[0])
 
 if __name__ == '__main__':
