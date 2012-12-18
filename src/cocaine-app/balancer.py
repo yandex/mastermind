@@ -7,6 +7,8 @@ import traceback
 import sys
 
 import elliptics
+from balancelogicadapter import add_raw_node, SymmGroup, config
+import balancelogic
 import inventory
 
 logging = Log()
@@ -175,6 +177,7 @@ def aggregate(n):
  
         for raw_node in raw_stats:
             node = parse(raw_node)
+            add_raw_node(raw_node)
             calc_rating(node)
             lstats[node['addr']] = node
             lgroups[str(node['group_id'])] = node['group_id'] 
@@ -187,6 +190,28 @@ def aggregate(n):
     except Exception as e:
         logging.error("Error: " + str(e) + "\n" + traceback.format_exc())
         return {'error': str(e)}
+
+def get_group_weights(n):
+    if not symm_groups:
+        collect(n)
+    size_to_sgs = {}
+    all_symm_groups = []
+    for tuple_symm_group in set(symm_groups.values()):
+        symm_group = SymmGroup(tuple_symm_group)
+        sized_symm_groups = size_to_sgs.setdefault(len(tuple_symm_group), [])
+        sized_symm_groups.append(symm_group)
+        all_symm_groups.append(symm_group)
+        logging.info(str(symm_group))
+    
+    result = {}
+    
+    for size in size_to_sgs:
+        (group_weights, info) = balancelogic.rawBalance(all_symm_groups, config(size))
+        result[size] = [item for item in group_weights.items()]
+        logging.info("Cluster info: " + str(info))
+    
+    logging.info(str(result))
+    return result
 
 def balance(n, request):
     global stats, groups, symm_groups
@@ -459,4 +484,3 @@ def get_get_next_group_number(n, request):
     except Exception as e:
         logging.error("Mastermind error: " + str(e) + "\n" + traceback.format_exc())
         return {'Mastermind error': str(e)}
-
