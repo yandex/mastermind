@@ -13,6 +13,7 @@ import elliptics
 
 import msgpack, json
 import balancer
+import balancelogicadapter
 
 logging = Log()
 
@@ -40,6 +41,8 @@ meta_session = elliptics.Session(meta_node)
 meta_session.add_groups(list(config["metadata"]["groups"]))
 
 n.meta_session = meta_session
+
+balancelogicadapter.setConfig(config["balancer_config"])
 
 '''
 def calc_rating(node):
@@ -118,3 +121,6 @@ def get_next_group_number(request):
 def get_dc_by_host(request):
     return balancer.get_dc_by_host(request)
 
+@zeromq
+def get_group_weights(request):
+    return balancer.get_group_weights(n)

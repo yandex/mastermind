@@ -124,6 +124,15 @@ def next_group_number(
     res = c.get('mastermind/get_next_group_number', count)
     print msgpack.unpackb(res[0])
 
+@command()
+def get_group_weights(
+            config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
+    '''Get weights for symmetric groups'''
+    c = Client(config)
+    sleep(1)
+
+    res = c.get('mastermind/get_group_weights', 0)
+    print msgpack.unpackb(res[0])
 
 if __name__ == '__main__':
     dispatch()
