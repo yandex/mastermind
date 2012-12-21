@@ -1,3 +1,9 @@
+mastermind (0.11) lucid; urgency=low
+
+  * Fixed lookup_addr function call
+
+ -- Anton Kortunov <toshik@yandex-team.ru>  Fri, 21 Dec 2012 13:35:58 +0400
+
 mastermind (0.10) lucid; urgency=low
 
   * fixed reading metabalancer key
