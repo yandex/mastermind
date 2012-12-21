@@ -220,7 +220,7 @@ def balance(n, request):
 
                 for group in gr_list:
                     object_id.group_id = int(group)
-                    addr = s.lookup_addr(object_id)
+                    addr = s.lookup_addr(object_id, object_id.group_id)
                     logging.info(addr)
                     grl["rating"] += stats[addr]['rating']
 
@@ -239,7 +239,7 @@ def balance(n, request):
             for group_id in groups:
                 object_id.group_id = int(group_id)
                 logging.info("object_id: " + str(object_id.__class__))
-                addr = s.lookup_addr(object_id)
+                addr = s.lookup_addr(object_id, object_id.group_id)
                 logging.info(addr)
                 target_groups.append(stats[addr])
 
