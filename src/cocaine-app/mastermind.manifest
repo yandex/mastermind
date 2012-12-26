@@ -2,7 +2,7 @@
     "type" : "python",
     "args" : {
         "symmetric_groups": true,
-        "config": "/etc/elliptics/mastermind.config"
+        "config": "/etc/elliptics/mastermind.conf"
     },
     "engine" : {
         "heartbeat-timeout" : 60,
