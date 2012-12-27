@@ -70,7 +70,7 @@
         },
 
         "aggregate" : {
-            "type" : "recurring-timer",
+            "type" : "drifting-timer",
             "emit" : "aggregate",
             "interval": 60000
         }
