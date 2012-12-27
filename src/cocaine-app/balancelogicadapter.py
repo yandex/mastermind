@@ -30,28 +30,54 @@ def setConfig(mastermind_config):
     global __config
     __config = lconfig
 
+class NodeStateData:
+    def __init__(self, raw_node):
+        self.first = True
+        self.lastTime = time()
+        
+        self.lastRead = raw_node["storage_commands"]["READ"][0] + \
+                raw_node["proxy_commands"]["READ"][0]
+        self.lastWrite = raw_node["storage_commands"]["WRITE"][0] + \
+                raw_node["proxy_commands"]["WRITE"][0]
+
+        self.freeSpaceInKb = float(raw_node['counters']['DNET_CNTR_BAVAIL'][0]) / 1024 * raw_node['counters']['DNET_CNTR_BSIZE'][0]
+        self.freeSpaceRelative = float(raw_node['counters']['DNET_CNTR_BAVAIL'][0]) / raw_node['counters']['DNET_CNTR_BLOCKS'][0]
+        
+    def gen(self, raw_node):
+        result = NodeStateData(raw_node)
+        result.first = False
+        
+        if(result.lastRead < self.lastRead or result.lastWrite < self.lastWrite):
+            # Stats were reset
+            last_read = 0
+            last_write = 0
+        else:
+            last_read = self.lastRead
+            last_write = self.lastWrite
+        
+        dt = result.lastTime - self.lastTime
+        counters = raw_node['counters']
+        loadAverage = float((counters.get('DNET_CNTR_DU1') or counters["DNET_CNTR_LA1"])[0]) / 100
+        
+        result.realPutPerPeriod = (result.lastWrite - self.lastWrite) / dt
+        result.realGetPerPeriod = (result.lastRead - self.lastRead) / dt
+        result.maxPutPerPeriod = result.realPutPerPeriod / loadAverage
+        result.maxGetPerPeriod = result.realGetPerPeriod / loadAverage
+        
+        return result
+
 class NodeState:
     def __init__(self, raw_node):
-        self.__lastTime = time()
         self.__address = raw_node["addr"]
         self.__groupId = raw_node["group_id"]
         
-        self.__lastRead = raw_node["storage_commands"]["READ"][0] + \
-                raw_node["proxy_commands"]["READ"][0]
-        self.__lastWrite = raw_node["storage_commands"]["WRITE"][0] + \
-                raw_node["proxy_commands"]["WRITE"][0]
+        self.__data = NodeStateData(raw_node)
         
-        self.__maxPutPerPeriod = 0
-        self.__realPutPerPeriod = 0
-        self.__maxGetPerPeriod = 0
-        self.__realGetPerPeriod = 0
-        self.commonCount(raw_node)
-        
+    def update(self, raw_node):
+        self.__data = self.__data.gen(raw_node)
+
     def __str__(self):
-        result = "addr: " + self.addr()
-        result += "; __lastTime: " + str(self.__lastTime)
-        result += "; __lastRead: " + str(self.__lastRead)
-        result += "; __lastWrite: " + str(self.__lastWrite)
+        result = str(self.__address)
         result += "; realPutPerSecond: " + str(self.realPutPerPeriod())
         result += "; maxPutPerSecond: " + str(self.maxPutPerPeriod())
         result += "; realGetPerSecond: " + str(self.realGetPerPeriod())
@@ -60,49 +86,39 @@ class NodeState:
         result += "; freeSpaceRelative: " + str(self.freeSpaceRelative())
         return result
 
-    def update(self, raw_node):
-        currentTime = time()
-        
-        read = raw_node["storage_commands"]["READ"][0] + \
-                raw_node["proxy_commands"]["READ"][0]
-        write = raw_node["storage_commands"]["WRITE"][0] + \
-                raw_node["proxy_commands"]["WRITE"][0]
-        
-        if(read < self.__lastRead or write < self.__lastWrite):
-            self.__lastRead = 0
-            self.__lastWrite = 0
-            
-        dt = currentTime - self.__lastTime
-        counters = raw_node['counters']
-        loadAverage = float((counters.get('DNET_CNTR_DU1') or counters["DNET_CNTR_LA1"])[0]) / 100
-        
-        self.__realPutPerPeriod = (write - self.__lastWrite) / dt
-        self.__realGetPerPeriod = (read - self.__lastRead) / dt
-        self.__maxPutPerPeriod = self.__realPutPerPeriod / loadAverage
-        self.__maxGetPerPeriod = self.__realGetPerPeriod / loadAverage
-        self.__lastRead = read
-        self.__lastWrite = write
-        self.__lastTime = currentTime
-        self.commonCount(raw_node)
-
-    def commonCount(self, raw_node):
-        self.__freeSpaceInKb = float(raw_node['counters']['DNET_CNTR_BAVAIL'][0]) / 1024 * raw_node['counters']['DNET_CNTR_BSIZE'][0]
-        self.__freeSpaceRelative = float(raw_node['counters']['DNET_CNTR_BAVAIL'][0]) / raw_node['counters']['DNET_CNTR_BLOCKS'][0]
 
     def addr(self):
         return self.__address
+
     def realPutPerPeriod(self):
-        return self.__realPutPerPeriod
+        if self.__data.first:
+            return 0
+        else:
+            return self.__data.realPutPerPeriod
+
     def maxPutPerPeriod(self):
-        return self.__maxPutPerPeriod
+        if self.__data.first:
+            return 0
+        else:
+            return self.__data.maxPutPerPeriod
+
     def realGetPerPeriod(self):
-        return self.__realGetPerPeriod
+        if self.__data.first:
+            return 0
+        else:
+            return self.__data.realGetPerPeriod
+
     def maxGetPerPeriod(self):
-        return self.__maxGetPerPeriod
+        if self.__data.first:
+            return 0
+        else:
+            return self.__data.maxGetPerPeriod
+
     def freeSpaceInKb(self):
-        return self.__freeSpaceInKb
+        return self.__data.freeSpaceInKb
+
     def freeSpaceRelative(self):
-        return self.__freeSpaceRelative
+        return self.__data.freeSpaceRelative
 
 class GroupState:
     def __init__(self, raw_node):
