@@ -7,7 +7,7 @@ import traceback
 import sys
 
 import elliptics
-from balancelogicadapter import add_raw_node, SymmGroup, config
+from balancelogicadapter import add_raw_node, SymmGroup, config, get_group
 import balancelogic
 import inventory
 
@@ -22,7 +22,7 @@ symm_groups_all = {}
 bad_groups = {}
 empty_groups = []
 
-mastermind_key = "metabalancer\0symmetric_groups"
+symmetric_groups_key = "metabalancer\0symmetric_groups"
 
 def get_groups(n):
     global groups
@@ -75,11 +75,13 @@ def get_symmetric_groups_raw(n):
     for group in groups.values():
         try:
             s.add_groups([group])
-            lsymm_groups[group] = msgpack.unpackb(s.read_data(mastermind_key))
+            lsymm_groups[group] = msgpack.unpackb(s.read_data(symmetric_groups_key))
             logging.info("lsymm_groups[%d] = %s" % (group, str(lsymm_groups[group])))
+            get_group(int(group)).setBad(False)
         except:
             logging.error("Failed to read symmetric_groups from group %d" % group)
             lempty_groups.append(group)
+            get_group(int(group)).setBad(True)
 
     empty_groups = list(set(lempty_groups))
     return lsymm_groups
@@ -300,7 +302,7 @@ def repair_groups(n, request):
         s = elliptics.Session(n)
         for g in couple:
             s.add_groups([g])
-            s.write_data(mastermind_key, packed)
+            s.write_data(symmetric_groups_key, packed)
 
         collect(n)
 
@@ -391,7 +393,7 @@ def couple_groups(n, request):
             s = elliptics.Session(n)
             for g in groups_to_couple:
                 s.add_groups([g])
-                s.write_data(mastermind_key, packed)
+                s.write_data(symmetric_groups_key, packed)
 
         collect(n)
 
@@ -454,7 +456,7 @@ def break_couple(n, request):
 
         s = elliptics.Session(n)
         s.add_groups(groups)
-        s.remove(mastermind_key)
+        s.remove(symmetric_groups_key)
 
         collect(n)
 

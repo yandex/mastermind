@@ -33,7 +33,7 @@ for host in config["elliptics_nodes"]:
 meta_node = elliptics.Node(log)
 for host in config["metadata"]["nodes"]:
     try:
-        logging.error("host: " + str(host))
+        logging.info("host: " + str(host))
         meta_node.add_remote(str(host[0]), host[1])
     except Exception as e:
         logging.error("Error: " + str(e) + "\n" + traceback.format_exc())

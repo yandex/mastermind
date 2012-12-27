@@ -124,6 +124,7 @@ class GroupState:
     def __init__(self, raw_node):
         self.__nodes = {}
         self.__groupId = raw_node["group_id"]
+        self.__bad = False
         self.update(raw_node)
 
     def update(self, raw_node):
@@ -134,6 +135,9 @@ class GroupState:
             if not address in all_nodes:
                 all_nodes[address] = NodeState(raw_node)
             self.__nodes[address] = all_nodes[address]
+            
+    def setBad(self, is_bad):
+        self.__bad = is_bad
     
     def groupId(self):
         return self.__groupId
@@ -163,6 +167,9 @@ class GroupState:
 
     def freeSpaceRelative(self):
         return min([node.freeSpaceRelative() for node in self.__nodes.itervalues()])
+    
+    def isBad(self):
+        return self.__bad
 
 def composeDataType(size):
     return "symm" + str(size)
@@ -218,7 +225,7 @@ class SymmGroup:
         return True
     
     def isBad(self):
-        return False
+        return any([group.isBad() for group in self.__group_list])
     
     def dataType(self):
         return composeDataType(str(len(self.__group_list)))
@@ -229,3 +236,6 @@ def add_raw_node(raw_node):
         all_groups[group_id] = GroupState(raw_node)
     else:
         all_groups[group_id].update(raw_node)
+        
+def get_group(id):
+    return all_groups[id]
