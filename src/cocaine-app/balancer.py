@@ -77,11 +77,11 @@ def get_symmetric_groups_raw(n):
             s.add_groups([group])
             lsymm_groups[group] = msgpack.unpackb(s.read_data(symmetric_groups_key))
             logging.info("lsymm_groups[%d] = %s" % (group, str(lsymm_groups[group])))
-            get_group(int(group)).setBad(False)
+            get_group(int(group)).setCouples(lsymm_groups[group])
         except:
             logging.error("Failed to read symmetric_groups from group %d" % group)
             lempty_groups.append(group)
-            get_group(int(group)).setBad(True)
+            get_group(int(group)).unsetCouples()
 
     empty_groups = list(set(lempty_groups))
     return lsymm_groups

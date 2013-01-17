@@ -34,7 +34,7 @@ class NodeStateData:
     def __init__(self, raw_node):
         self.first = True
         self.lastTime = time()
-        
+
         self.lastRead = raw_node["storage_commands"]["READ"][0] + \
                 raw_node["proxy_commands"]["READ"][0]
         self.lastWrite = raw_node["storage_commands"]["WRITE"][0] + \
@@ -42,11 +42,11 @@ class NodeStateData:
 
         self.freeSpaceInKb = float(raw_node['counters']['DNET_CNTR_BAVAIL'][0]) / 1024 * raw_node['counters']['DNET_CNTR_BSIZE'][0]
         self.freeSpaceRelative = float(raw_node['counters']['DNET_CNTR_BAVAIL'][0]) / raw_node['counters']['DNET_CNTR_BLOCKS'][0]
-        
+
     def gen(self, raw_node):
         result = NodeStateData(raw_node)
         result.first = False
-        
+
         if(result.lastRead < self.lastRead or result.lastWrite < self.lastWrite):
             # Stats were reset
             last_read = 0
@@ -54,25 +54,24 @@ class NodeStateData:
         else:
             last_read = self.lastRead
             last_write = self.lastWrite
-        
+
         dt = result.lastTime - self.lastTime
         counters = raw_node['counters']
         loadAverage = float((counters.get('DNET_CNTR_DU1') or counters["DNET_CNTR_LA1"])[0]) / 100
-        
+
         result.realPutPerPeriod = (result.lastWrite - self.lastWrite) / dt
         result.realGetPerPeriod = (result.lastRead - self.lastRead) / dt
         result.maxPutPerPeriod = result.realPutPerPeriod / loadAverage
         result.maxGetPerPeriod = result.realGetPerPeriod / loadAverage
-        
+
         return result
 
 class NodeState:
     def __init__(self, raw_node):
         self.__address = raw_node["addr"]
         self.__groupId = raw_node["group_id"]
-        
         self.__data = NodeStateData(raw_node)
-        
+
     def update(self, raw_node):
         self.__data = self.__data.gen(raw_node)
 
@@ -85,7 +84,6 @@ class NodeState:
         result += "; freeSpaceInKb: " + str(self.freeSpaceInKb())
         result += "; freeSpaceRelative: " + str(self.freeSpaceRelative())
         return result
-
 
     def addr(self):
         return self.__address
@@ -124,7 +122,7 @@ class GroupState:
     def __init__(self, raw_node):
         self.__nodes = {}
         self.__groupId = raw_node["group_id"]
-        self.__bad = False
+        self.__couples = None
         self.update(raw_node)
 
     def update(self, raw_node):
@@ -135,13 +133,19 @@ class GroupState:
             if not address in all_nodes:
                 all_nodes[address] = NodeState(raw_node)
             self.__nodes[address] = all_nodes[address]
-            
-    def setBad(self, is_bad):
-        self.__bad = is_bad
-    
+
+    def setCouples(self, couples):
+        self.__couples = couples
+
+    def unsetCouples(self):
+        self.__couples = None
+
+    def checkCouples(self, couples):
+        return (self.__couples == couples)
+
     def groupId(self):
         return self.__groupId
-        
+
     def __str__(self):
         result = "groupId: " + str(self.groupId())
         result += " ["
@@ -149,13 +153,13 @@ class GroupState:
             result += str(node) + ", "
         result += "]"
         return result
-    
+
     def realPutPerPeriod(self):
         return sum([node.realPutPerPeriod() for node in self.__nodes.itervalues()])
-    
+
     def maxPutPerPeriod(self):
         return sum([node.maxPutPerPeriod() for node in self.__nodes.itervalues()])
-    
+
     def realGetPerPeriod(self):
         return sum([node.realGetPerPeriod() for node in self.__nodes.itervalues()])
 
@@ -167,9 +171,6 @@ class GroupState:
 
     def freeSpaceRelative(self):
         return min([node.freeSpaceRelative() for node in self.__nodes.itervalues()])
-    
-    def isBad(self):
-        return self.__bad
 
 def composeDataType(size):
     return "symm" + str(size)
@@ -181,8 +182,9 @@ def config(size):
 
 class SymmGroup:
     def __init__(self, group_ids):
+        self.__group_ids = group_ids
         self.__group_list = [all_groups[id] for id in group_ids]
-    
+
     def __str__(self):
         result = "groups: " + str(self.unitId())
         result += " ["
@@ -199,10 +201,10 @@ class SymmGroup:
 
     def realPutPerPeriod(self):
         return max([group.realPutPerPeriod() for group in self.__group_list])
-    
+
     def maxPutPerPeriod(self):
         return min([group.maxPutPerPeriod() for group in self.__group_list])
-    
+
     def realGetPerPeriod(self):
         return sum([group.realGetPerPeriod() for group in self.__group_list])
 
@@ -211,7 +213,7 @@ class SymmGroup:
 
     def freeSpaceInKb(self):
         return min([group.freeSpaceInKb() for group in self.__group_list])
-    
+
     def freeSpaceRelative(self):
         return min([group.freeSpaceRelative() for group in self.__group_list])
 
@@ -220,13 +222,13 @@ class SymmGroup:
 
     def inService(self):
         return False
-    
+
     def writeEnable(self):
         return True
-    
+
     def isBad(self):
-        return any([group.isBad() for group in self.__group_list])
-    
+        return not all([group.checkCouples(self.__group_ids) for group in self.__group_list])
+
     def dataType(self):
         return composeDataType(str(len(self.__group_list)))
 
@@ -236,6 +238,6 @@ def add_raw_node(raw_node):
         all_groups[group_id] = GroupState(raw_node)
     else:
         all_groups[group_id].update(raw_node)
-        
+
 def get_group(id):
     return all_groups[id]
