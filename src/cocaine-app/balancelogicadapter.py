@@ -2,16 +2,22 @@
 
 from time import time
 import copy
+import threading
 
 all_nodes = {}
+all_nodes_lock = threading.Lock()
+
 all_groups = {}
+all_groups_lock = threading.Lock()
+
+def all_group_ids():
+    with all_groups_lock:
+        return list(all_groups.iterkeys())
+
+symm_groups_map = {}
+symm_groups_map_lock = threading.Lock()
 
 __config = {}
-
-def reset():
-    global all_nodes, all_groups
-    all_nodes = {}
-    all_groups = {}
 
 def setConfig(mastermind_config):
     lconfig = {}
@@ -122,7 +128,6 @@ class GroupState:
     def __init__(self, raw_node):
         self.__nodes = {}
         self.__groupId = raw_node["group_id"]
-        self.__couples = None
         self.update(raw_node)
 
     def update(self, raw_node):
@@ -130,18 +135,20 @@ class GroupState:
         if address in self.__nodes:
             self.__nodes[address].update(raw_node)
         else:
-            if not address in all_nodes:
-                all_nodes[address] = NodeState(raw_node)
-            self.__nodes[address] = all_nodes[address]
+            with all_nodes_lock:
+                if not address in all_nodes:
+                    all_nodes[address] = NodeState(raw_node)
+                self.__nodes[address] = all_nodes[address]
 
     def setCouples(self, couples):
-        self.__couples = couples
+        with symm_groups_map_lock:
+            symm_groups_map[self.__groupId] = couples
 
     def unsetCouples(self):
-        self.__couples = None
+        self.setCouples(None)
 
     def checkCouples(self, couples):
-        return (self.__couples == couples)
+        return (symm_groups_map[self.__groupId] == couples)
 
     def groupId(self):
         return self.__groupId
@@ -181,9 +188,15 @@ def config(size):
     return result
 
 class SymmGroup:
-    def __init__(self, group_ids):
+    def __init__(self, group_ids, data_type = None):
         self.__group_ids = group_ids
-        self.__group_list = [all_groups[id] for id in group_ids]
+        self.__group_list = []
+        with all_groups_lock:
+            for id in group_ids:
+                group = all_groups.get(id, None)
+                if group is not None:
+                    self.__group_list.append(group)
+        self.__data_type = data_type
 
     def __str__(self):
         result = "groups: " + str(self.unitId())
@@ -227,17 +240,34 @@ class SymmGroup:
         return True
 
     def isBad(self):
-        return not all([group.checkCouples(self.__group_ids) for group in self.__group_list])
+        return (len(self.__group_ids) == len(self.__group_list)
+                and not all([group.checkCouples(self.__group_ids) for group in self.__group_list]))
 
     def dataType(self):
-        return composeDataType(str(len(self.__group_list)))
+        return self.__data_type or composeDataType(str(len(self.__group_list)))
+    
+def filter_symm_groups():
+    with symm_groups_map_lock:
+        all_symm_groups = set(symm_groups_map.values())
+        if None in all_symm_groups:
+            all_symm_groups.remove(None)
+        good_groups = set()
+        bad_groups = set()
+        for couples in all_symm_groups:
+            if all([symm_groups_map.get(group, None) == couples for group in couples]):
+                good_groups.add(couples)
+            else:
+                bad_groups.add(couples)
+    return (good_groups, bad_groups)
 
 def add_raw_node(raw_node):
     group_id = raw_node["group_id"]
-    if not group_id in all_groups:
-        all_groups[group_id] = GroupState(raw_node)
-    else:
-        all_groups[group_id].update(raw_node)
+    with all_groups_lock:
+        if not group_id in all_groups:
+            all_groups[group_id] = GroupState(raw_node)
+        else:
+            all_groups[group_id].update(raw_node)
 
 def get_group(id):
-    return all_groups[id]
+    with all_groups_lock:
+        return all_groups[id]
