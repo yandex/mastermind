@@ -4,11 +4,16 @@ from time import time
 import copy
 import threading
 
+import inventory
+
 all_nodes = {}
 all_nodes_lock = threading.Lock()
 
 all_groups = {}
 all_groups_lock = threading.Lock()
+
+groups_in_couple = set()
+groups_in_couple_lock = threading.Lock()
 
 def all_group_ids():
     with all_groups_lock:
@@ -16,8 +21,8 @@ def all_group_ids():
 
 symm_groups_map = {}
 symm_groups_map_lock = threading.Lock()
-
 __config = {}
+__config_lock = threading.Lock()
 
 def setConfig(mastermind_config):
     lconfig = {}
@@ -34,7 +39,12 @@ def setConfig(mastermind_config):
     lconfig["WeightMultiplierTail"] = mastermind_config.get("multiplier_tail", 600000)
     lconfig["MinimumWeight"] = mastermind_config.get("min_weight", 10000)
     global __config
-    __config = lconfig
+    with __config_lock:
+        __config = lconfig
+
+def getConfig():
+    with __config_lock:
+        return copy.copy(__config)
 
 class NodeStateData:
     def __init__(self, raw_node):
@@ -48,6 +58,7 @@ class NodeStateData:
 
         self.freeSpaceInKb = float(raw_node['counters']['DNET_CNTR_BAVAIL'][0]) / 1024 * raw_node['counters']['DNET_CNTR_BSIZE'][0]
         self.freeSpaceRelative = float(raw_node['counters']['DNET_CNTR_BAVAIL'][0]) / raw_node['counters']['DNET_CNTR_BLOCKS'][0]
+        self.loadAverage = float((raw_node['counters'].get('DNET_CNTR_DU1') or raw_node['counters']["DNET_CNTR_LA1"])[0]) / 100
 
     def gen(self, raw_node):
         result = NodeStateData(raw_node)
@@ -63,12 +74,11 @@ class NodeStateData:
 
         dt = result.lastTime - self.lastTime
         counters = raw_node['counters']
-        loadAverage = float((counters.get('DNET_CNTR_DU1') or counters["DNET_CNTR_LA1"])[0]) / 100
 
         result.realPutPerPeriod = (result.lastWrite - self.lastWrite) / dt
         result.realGetPerPeriod = (result.lastRead - self.lastRead) / dt
-        result.maxPutPerPeriod = result.realPutPerPeriod / loadAverage
-        result.maxGetPerPeriod = result.realGetPerPeriod / loadAverage
+        result.maxPutPerPeriod = result.realPutPerPeriod / result.loadAverage
+        result.maxGetPerPeriod = result.realGetPerPeriod / result.loadAverage
 
         return result
 
@@ -124,6 +134,23 @@ class NodeState:
     def freeSpaceRelative(self):
         return self.__data.freeSpaceRelative
 
+    def age(self):
+        return time() - self.__data.lastTime
+
+    def info(self):
+        result = dict()
+        result['group_id'] = self.__groupId
+        result['addr'] = self.__address
+        result['free_space_rel'] = self.__data.freeSpaceRelative
+        result['free_space_abs'] = self.__data.freeSpaceInKb / 1024 / 1024
+        result['la'] = self.__data.loadAverage
+        result['dc'] = self.get_dc()
+        return result
+
+    def get_dc(self):
+        host = self.__address.split(':')[0]
+        return inventory.get_dc_by_host(host)
+
 class GroupState:
     def __init__(self, raw_node):
         self.__nodes = {}
@@ -143,6 +170,10 @@ class GroupState:
     def setCouples(self, couples):
         with symm_groups_map_lock:
             symm_groups_map[self.__groupId] = couples
+        if couples is not None:
+            for group in couples:
+                with groups_in_couple_lock:
+                    groups_in_couple.add(group)
 
     def unsetCouples(self):
         self.setCouples(None)
@@ -174,10 +205,33 @@ class GroupState:
         return sum([node.maxGetPerPeriod() for node in self.__nodes.itervalues()])
 
     def freeSpaceInKb(self):
-        return sum([node.freeSpaceInKb() for node in self.__nodes.itervalues()])
+        return min([node.freeSpaceInKb() for node in self.__nodes.itervalues()]) * len(self.__nodes)
 
     def freeSpaceRelative(self):
         return min([node.freeSpaceRelative() for node in self.__nodes.itervalues()])
+
+    def age(self):
+        return max([node.age() for node in self.__nodes.itervalues()])
+
+    def info(self):
+        result = {}
+        result['nodes'] = [node.info() for node in self.__nodes.itervalues()]
+        with groups_in_couple_lock:
+            in_couple = (self.__groupId in groups_in_couple)
+
+        if in_couple:
+            with symm_groups_map_lock:
+                couples = symm_groups_map[self.__groupId]
+                if couples is not None and is_group_good(couples):
+                    result['status'] = 'coupled'
+                    result['couples'] = couples
+                else:
+                    result['status'] = 'bad'
+                    result['couples'] = couples
+        return result
+
+    def get_dc(self):
+        return [node for node in self.__nodes.itervalues()][0].get_dc()
 
 def composeDataType(size):
     return "symm" + str(size)
@@ -240,13 +294,17 @@ class SymmGroup:
         return True
 
     def isBad(self):
-        return (len(self.__group_ids) == len(self.__group_list)
-                and not all([group.checkCouples(self.__group_ids) for group in self.__group_list]))
+        too_old_age = getConfig().get("too_old_age", 120)
+        return (len(self.__group_ids) != len(self.__group_list)
+                or not all([group.checkCouples(self.__group_ids) and group.age() <= too_old_age for group in self.__group_list]))
 
     def dataType(self):
         return self.__data_type or composeDataType(str(len(self.__group_list)))
-    
-def filter_symm_groups():
+
+def is_group_good(couples):
+    return all([symm_groups_map.get(group, None) == couples for group in couples])
+
+def filter_symm_groups(group_id = None):
     with symm_groups_map_lock:
         all_symm_groups = set(symm_groups_map.values())
         if None in all_symm_groups:
@@ -254,11 +312,24 @@ def filter_symm_groups():
         good_groups = set()
         bad_groups = set()
         for couples in all_symm_groups:
-            if all([symm_groups_map.get(group, None) == couples for group in couples]):
-                good_groups.add(couples)
-            else:
-                bad_groups.add(couples)
+            if group_id is None or group_id in couples:
+                if is_group_good(couples):
+                    good_groups.add(couples)
+                else:
+                    bad_groups.add(couples)
     return (good_groups, bad_groups)
+
+def uncoupled_groups():
+    with all_groups_lock:
+        all_groups_set = set(all_groups.iterkeys())
+    with groups_in_couple_lock:
+        return list(all_groups_set.difference(groups_in_couple))
+
+def remove_group(group_ids):
+    for group_id in group_ids:
+        get_group(group_id).unsetCouples()
+        with groups_in_couple_lock:
+            groups_in_couple.remove(group_id)
 
 def add_raw_node(raw_node):
     group_id = raw_node["group_id"]

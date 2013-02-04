@@ -14,6 +14,7 @@ import elliptics
 import msgpack, json
 import balancer
 import balancelogicadapter
+import node_info_updater
 
 logging = Log()
 
@@ -43,6 +44,8 @@ meta_session.add_groups(list(config["metadata"]["groups"]))
 n.meta_session = meta_session
 
 balancelogicadapter.setConfig(config["balancer_config"])
+
+niu = node_info_updater.NodeInfoUpdater(logging, n)
 
 '''
 def calc_rating(node):
@@ -83,7 +86,7 @@ def balance(request):
 
 @zeromq
 def get_groups(request):
-    return list(set(balancer.get_groups(n).values()))
+    return balancer.get_groups(n)
 
 @zeromq
 def get_symmetric_groups(request):
