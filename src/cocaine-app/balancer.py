@@ -81,8 +81,6 @@ def balance(n, request):
 
         weighted_groups = get_group_weights(n)
 
-        s = elliptics.Session(n)
-        object_id = elliptics.Id(list(request[2]), 0, 0)
         target_groups = []
 
         if manifest().get("symmetric_groups", False):
