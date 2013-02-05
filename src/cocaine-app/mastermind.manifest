@@ -67,12 +67,6 @@
             "type" : "native-server",
             "emit" : "get_group_weights",
             "endpoint" : "tcp://*:9211"
-        },
-
-        "aggregate" : {
-            "type" : "drifting-timer",
-            "emit" : "aggregate",
-            "interval": 60000
         }
     }
 }
