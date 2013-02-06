@@ -5,213 +5,72 @@ import msgpack
 
 import traceback
 import sys
+import copy
 
 import elliptics
-from balancelogicadapter import add_raw_node, SymmGroup, config
+import balancelogicadapter as bla
 import balancelogic
-import inventory
 
 logging = Log()
 
 logging.info("balancer.py")
 
-stats = {}
-groups = {}
-symm_groups = {}
-symm_groups_all = {}
-bad_groups = {}
-empty_groups = []
-
-mastermind_key = "metabalancer\0symmetric_groups"
+symmetric_groups_key = "metabalancer\0symmetric_groups"
 
 def get_groups(n):
-    global groups
-
-    if not groups:
-        aggregate(n)
-
-    return groups
+    return bla.all_group_ids()
 
 def get_symmetric_groups(n):
-    global symm_groups
-
-    if "symmetric_groups" in manifest() and manifest()["symmetric_groups"]:
-        if not symm_groups:
-            collect(n)
-        return list(set(symm_groups.values()))
+    if manifest().get("symmetric_groups", False):
+        (good_symm_groups, bad_symm_groups) = bla.filter_symm_groups()
+        result = list(good_symm_groups)
+        logging.info("good_symm_groups: " + str(result))
+        return result
     else:
         return None
 
 def get_bad_groups(n):
-    global bad_groups
-
-    if "symmetric_groups" in manifest() and manifest()["symmetric_groups"]:
-        if not bad_groups:
-            collect(n)
-        logging.info("bad_groups: " + str(bad_groups))
-        return bad_groups
+    if manifest().get("symmetric_groups", False):
+        (good_symm_groups, bad_symm_groups) = bla.filter_symm_groups()
+        result = list(bad_symm_groups)
+        logging.info("bad_symm_groups: " + str(result))
+        return result
     else:
         return None
 
 def get_empty_groups(n):
-    global empty_groups
-
-    if "symmetric_groups" in manifest() and manifest()["symmetric_groups"]:
-        if not empty_groups:
-            collect(n)
-        return empty_groups
+    if manifest().get("symmetric_groups", False):
+        result = bla.uncoupled_groups()
+        logging.info("uncoupled groups: " + str(result))
+        return result
     else:
         return None
 
-def get_symmetric_groups_raw(n):
-    global groups, empty_groups
-    lsymm_groups = {}
-    lempty_groups = []
-
-    if not groups:
-        aggregate(n)
-
-    s = elliptics.Session(n)
-    for group in groups.values():
-        try:
-            s.add_groups([group])
-            lsymm_groups[group] = msgpack.unpackb(s.read_data(mastermind_key))
-            logging.info("lsymm_groups[%d] = %s" % (group, str(lsymm_groups[group])))
-        except:
-            logging.error("Failed to read symmetric_groups from group %d" % group)
-            lempty_groups.append(group)
-
-    empty_groups = list(set(lempty_groups))
-    return lsymm_groups
-
-def get_bad_groups_raw(s, lsymm_groups):
-    to_erase = []
-    for group in lsymm_groups:
-        try:
-            erase = False
-            symms = lsymm_groups[group]
-
-            if not symms.count(group):
-                erase = True
-
-            logging.info("erase = %s" % erase)
-            for g in symms:
-                if lsymm_groups[g] != symms:
-                    erase = True
-                    logging.info("erase = %s, lsymm_groups[%d] %s != %s " % (erase, g, str(lsymm_groups[symms]), str(symms)))
-                    break
-
-            if erase:
-                to_erase.extend(symms)
-                to_erase.append(group)
-        except:
-            to_erase.append(group)
-    to_erase = list(set(to_erase))
-    return to_erase
-
-def collect(n):
-    global groups, symm_groups, symm_groups_all, bad_groups
-    lsymm_groups = {}
-
-    try:
-        lsymm_groups = get_symmetric_groups_raw(n)
-        logging.info("symm_groups: " + str(lsymm_groups))
-
-        # check for consistency
-        to_erase = []
-        to_erase = get_bad_groups_raw(n, lsymm_groups)
-
-        lbad_groups = {}
-        for g in to_erase:
-            lbad_groups[g] = lsymm_groups[g]
-            del lsymm_groups[g]
-
-        bad_groups = lbad_groups
-
-        logging.info("lsymm_groups after check: %s" % str(lsymm_groups))
-        symm_groups = lsymm_groups
-        logging.info("symm_groups: %s" % str(symm_groups))
-
-        try:
-            max_group = int(n.meta_session.read("mastermind:max_group"))
-        except:
-            max_group = 0
-        curr_max_group = max(groups.values())
-        if curr_max_group > max_group:
-            n.meta_session.write("mastermind:max_group", str(curr_max_group))
-        
-
-    except Exception as e:
-        logging.error("Error: " + str(e) + "\n" + traceback.format_exc())
-        return {'error': str(e)}
-
-def calc_rating(node):
-    node['rating'] = node['free_space_rel'] * 1000 + (node['la'] + 0.1) * 100
-
-def parse(raw_node):
-    ret = dict()
-
-    ret['group_id'] = raw_node["group_id"]
-    ret['addr'] = raw_node['addr']
-
-    bsize = raw_node['counters']['DNET_CNTR_BSIZE'][0]
-    avail = raw_node['counters']['DNET_CNTR_BAVAIL'][0]
-    total = raw_node['counters']['DNET_CNTR_BLOCKS'][0]
-
-    ret['free_space_rel'] = float(avail) / total;
-    ret['free_space_abs'] = float(avail) / 1024 / 1024 / 1024 * bsize
-
-    ret['la'] = float(raw_node['counters']['DNET_CNTR_LA15'][0]) / 100
-
-    return ret
-
-def aggregate(n):
-    global stats, groups
-    logging.info("Start aggregate test in balancer.py")
-    try:
-        s = elliptics.Session(n)
-        raw_stats = s.stat_log()
- 
-        lstats = {}
-        lgroups = {}
- 
-        for raw_node in raw_stats:
-            node = parse(raw_node)
-            add_raw_node(raw_node)
-            calc_rating(node)
-            lstats[node['addr']] = node
-            lgroups[str(node['group_id'])] = node['group_id'] 
-
-        #logging.info(groups)
-        #db["stats"].save({'_id': 'stats', 'content': stats})
-        #db["stats"].save({'_id': 'groups', 'content': groups})#, upsert = True)
-        stats = lstats
-        groups = lgroups
-    except Exception as e:
-        logging.error("Error: " + str(e) + "\n" + traceback.format_exc())
-        return {'error': str(e)}
-
 def get_group_weights(n):
-    if not symm_groups:
-        collect(n)
-    size_to_sgs = {}
-    all_symm_groups = []
-    for tuple_symm_group in set(symm_groups.values()):
-        symm_group = SymmGroup(tuple_symm_group)
-        sized_symm_groups = size_to_sgs.setdefault(len(tuple_symm_group), [])
-        sized_symm_groups.append(symm_group)
-        all_symm_groups.append(symm_group)
-        logging.info(str(symm_group))
-    
-    result = {}
-    
-    for size in size_to_sgs:
-        (group_weights, info) = balancelogic.rawBalance(all_symm_groups, config(size))
-        result[size] = [item for item in group_weights.items()]
-        logging.info("Cluster info: " + str(info))
-    
-    logging.info(str(result))
-    return result
+    try:
+        size_to_sgs = {}
+        (good, bad) = bla.filter_symm_groups()
+        all_symm_groups = list(good) + list(bad)
+        all_symm_group_objects = []
+        for tuple_symm_group in all_symm_groups:
+            symm_group = bla.SymmGroup(tuple_symm_group)
+            sized_symm_groups = size_to_sgs.setdefault(len(tuple_symm_group), [])
+            sized_symm_groups.append(symm_group)
+            all_symm_group_objects.append(symm_group)
+            logging.info(str(symm_group))
+
+        result = {}
+
+        for size in size_to_sgs:
+            (group_weights, info) = balancelogic.rawBalance(all_symm_group_objects, bla.config(size))
+            result[size] = [item for item in group_weights.items()]
+            logging.info("Cluster info: " + str(info))
+
+        logging.info(str(result))
+        return result
+    except Exception as e:
+        logging.error("Balancelogic error: " + str(e) + "\n" + traceback.format_exc())
+        return {'Balancelogic error': str(e)}
 
 def balance(n, request):
     global stats, groups, symm_groups
@@ -220,35 +79,16 @@ def balance(n, request):
         logging.info("New request" + str(len(request)))
         logging.info(request)
 
-        if not stats or not groups:
-            aggregate(n)
-        #stats = db["stats"].find_one({'_id': 'stats'})['content']
-        #groups = db["stats"].find_one({'_id': 'groups'})['content']
-        logging.info(stats)
-        logging.info(groups)
+        weighted_groups = get_group_weights(n)
 
-        s = elliptics.Session(n)
-        object_id = elliptics.Id(list(request[2]), 0, 0)
         target_groups = []
 
-        if "symmetric_groups" in manifest() and manifest()["symmetric_groups"]:
-            if not symm_groups:
-                collect(n)
+        if manifest().get("symmetric_groups", False):
+            lsymm_groups = weighted_groups[request[0]]
 
-            for gr_list in list(set(symm_groups.values())):
-
+            for (gr_list, weight) in lsymm_groups:
                 logging.info("gr_list: %s %d" % (str(gr_list), request[0]))
-                if len(gr_list) != request[0]:
-                    continue
-
-                grl = {'rating': 0, 'groups': gr_list}
-
-                for group in gr_list:
-                    object_id.group_id = int(group)
-                    addr = s.lookup_addr(object_id)
-                    logging.info(addr)
-                    grl["rating"] += stats[addr]['rating']
-
+                grl = {'rating': weight, 'groups': gr_list}
                 logging.info("grl: %s" % str(grl))
                 target_groups.append(grl)
 
@@ -261,16 +101,11 @@ def balance(n, request):
                 result = ([], request[1])
 
         else:
-            for group_id in groups:
-                object_id.group_id = int(group_id)
-                logging.info("object_id: " + str(object_id.__class__))
-                addr = s.lookup_addr(object_id)
-                logging.info(addr)
-                target_groups.append(stats[addr])
-
-            sorted_groups = sorted(target_groups, key=lambda gr: gr['rating'], reverse=True)[:int(request[0])]
+            for group_id in bla.all_group_ids():
+                target_groups.append(bla.get_group(int(group_id)))
+            sorted_groups = sorted(target_groups, key=lambda gr: gr.freeSpaceInKb(), reverse=True)[:int(request[0])]
             logging.info(sorted_groups)
-            result = ([g['group_id'] for g in sorted_groups], request[1])
+            result = ([g.groupId() for g in sorted_groups], request[1])
 
         logging.info("result: %s" % str(result))
         return result
@@ -278,192 +113,162 @@ def balance(n, request):
         logging.error("Balancer error: " + str(e) + "\n" + traceback.format_exc())
         return {'Balancer error': str(e)}
 
+def make_symm_group(n, couple):
+    couple = tuple(couple)
+    logging.info("writing couple info: " + str(couple))
+    packed = msgpack.packb(couple)
+    logging.info("packed couple: " + str(packed))
+    s = elliptics.Session(n)
+    good = []
+    bad = ()
+    for g in couple:
+        try:
+            s.add_groups([g])
+            s.write_data(symmetric_groups_key, packed)
+            good.append(g)
+            bla.get_group(g).setCouples(couple)
+        except Exception as e:
+            logging.error("Failed to write symm group info, group %d: %s\n%s"
+                          % (g, str(e), traceback.format_exc()))
+            bad = (g, e)
+            break
+    return (good, bad)
+
 def repair_groups(n, request):
     global stats, groups, symm_groups, bad_groups
     try:
         logging.info("----------------------------------------")
-        logging.info("New repair groups request" + str(request))
+        logging.info("New repair groups request: " + str(request))
         logging.info(request)
 
-        if not bad_groups:
-            collect(n)
+        group_id = int(request)
+        (good_symm_groups, bad_symm_groups) = bla.filter_symm_groups(group_id)
 
-        group = int(request)
-        couple = list(bad_groups[group])
+        if good_symm_groups:
+            logging.error("Balancer error: cannot repair, group %d is in couple %s" % (group_id, str(good_symm_groups[0])))
+            return {"Balancer error" : "cannot repair, group %d is in couple %s" % (group_id, str(good_symm_groups[0]))}
 
-        logging.info("couple: " + str(couple))
-        # It should be some checks for couples crossing
+        if not bad_symm_groups:
+            logging.error("Balancer error: cannot repair, group %d is not a member of any couple" % group_id)
+            return {"Balancer error" : "cannot repair, group %d is not a member of any couple" % group_id}
 
-        packed = msgpack.packb(couple)
-        logging.info("packed couple: " + str(packed))
+        if len(bad_symm_groups) > 1:
+            logging.error("Balancer error: cannot repair, group %d is a member of several couples: %s" % (group_id, str(bad_symm_groups)))
+            return {"Balancer error" : "cannot repair, group %d is a member of several couples: %s" % (group_id, str(bad_symm_groups))}
 
-        s = elliptics.Session(n)
-        for g in couple:
-            s.add_groups([g])
-            s.write_data(mastermind_key, packed)
+        couple = list(bad_symm_groups)[0]
+        (good, bad) = make_symm_group(n, couple)
+        if bad:
+            raise bad[1]
 
-        collect(n)
-
-        return {"message": "Success fully repaired couple", 'couple': couple}
+        return {"message": "Successfully repaired couple", 'couple': couple}
 
     except Exception as e:
         logging.error("Balancer error: " + str(e) + "\n" + traceback.format_exc())
         return {'Balancer error': str(e)}
 
 def get_group_info(n, request):
-    global stats, groups, bad_groups
     try:
-        if not stats or not groups:
-            aggregate(n)
-            collect(n)
-
         group = int(request)
-
-        res = {}
-
-        res['nodes'] = [val for key, val in stats.iteritems() if val['group_id'] == group]
-
-        logging.info("bad_groups: " + str(bad_groups))
-        logging.info("symm_groups: " + str(symm_groups))
-        if group in bad_groups:
-            res['status'] = 'bad'
-            res['couples'] = bad_groups[group]
-
-        if group in symm_groups:
-            res['status'] = 'coupled'
-            res['couples'] = symm_groups[group]
-        
-        return res
-        
+        group_object = bla.get_group(group)
+        return group_object.info()
     except Exception as e:
         logging.error("Balancer error: " + str(e) + "\n" + traceback.format_exc())
         return {'Balancer error': str(e)}
 
 def couple_groups(n, request):
-    global stats, groups, symm_groups, bad_groups
     try:
         logging.info("----------------------------------------")
-        logging.info("New couple groups request" + str(request))
+        logging.info("New couple groups request: " + str(request))
         logging.info(request)
-
-        collect(n)
-
+        uncoupled_groups = bla.uncoupled_groups()
+        dc_by_group_id = {}
+        group_by_dc = {}
+        for group_id in uncoupled_groups:
+            group_object = bla.get_group(group_id)
+            dc = group_object.get_dc()
+            dc_by_group_id[group_id] = dc
+            groups_in_dc = group_by_dc.setdefault(dc, [])
+            groups_in_dc.append(group_id)
+        logging.info("dc by group: %s" % str(dc_by_group_id))
+        logging.info("group_by_dc: %s" % str(group_by_dc))
         size = int(request[0])
-        rgroups = [int(g) for g in request[1]]
-        groups_to_couple = []
-        empty_groups = get_empty_groups(n)
+        mandatory_groups = [int(g) for g in request[1]]
+        # check mandatory set
+        for group_id in mandatory_groups:
+            if group_id not in uncoupled_groups:
+                raise Exception("group %d is coupled" % group_id)
+            dc = dc_by_group_id[group_id]
+            if dc not in group_by_dc:
+                raise Exception("groups must be in different dcs")
+            del group_by_dc[dc]
 
-        used_dcs = set()
+        groups_to_couple = copy.copy(mandatory_groups)
 
-        for g in rgroups:
-            if not g in empty_groups:
-                raise Exception("Group " + str(g) + " doesn't listed as empty")
+        # need better algorithm for this. For a while - only 1 try and random selection
+        n_groups_to_add = size - len(groups_to_couple)
+        if n_groups_to_add > len(group_by_dc):
+            raise Exception("Not enough dcs")
+        if n_groups_to_add < 0:
+            raise Exception("Too many mandatory groups")
 
-            info = get_group_info(n, g)
+        some_dcs = group_by_dc.keys()[:n_groups_to_add]
 
-            host = info['nodes'][0]['addr'].split(':')[0]
-            dc = inventory.get_dc_by_host(host)
+        for dc in some_dcs:
+            groups_to_couple.append(group_by_dc[dc].pop())
 
-            if dc in used_dcs:
-                raise Exception('Group ' + str(g) + ' is in same DC ' + dc + ' as one of previous groups')
-
-            used_dcs.add(dc)
-            groups_to_couple.append(g)
-
-        while len(groups_to_couple) < size:
-            g = empty_groups.pop()
-            logging.info("g: " + str(g))
-            info = get_group_info(n, g)
-
-            host = info['nodes'][0]['addr'].split(':')[0]
-            dc = inventory.get_dc_by_host(host)
-
-            if dc in used_dcs:
-                if not empty_groups:
-                    raise Exception('Group ' + str(g) + ' is in same DC ' + dc + ' as one of previous groups, and there is no any more unused groups')
-                continue
-
-            used_dcs.add(dc)
-            groups_to_couple.append(g)
-
-        if len(groups_to_couple) == size:
-            packed = msgpack.packb(groups_to_couple)
-            s = elliptics.Session(n)
-            for g in groups_to_couple:
-                s.add_groups([g])
-                s.write_data(mastermind_key, packed)
-
-        collect(n)
+        (good, bad) = make_symm_group(n, groups_to_couple)
+        if bad:
+            raise bad[1]
 
         return groups_to_couple
     except Exception as e:
         logging.error("Balancer error: " + str(e) + "\n" + traceback.format_exc())
         return {'Balancer error': str(e)}
 
-def break_couple(n, request):
-    global symm_groups, bad_groups
-    try:
+def kill_symm_group(n, groups):
+    logging.info("Killing symm groups: %s" % str(groups))
+    s = elliptics.Session(n)
+    s.add_groups(groups)
+    s.remove(symmetric_groups_key)
+    bla.remove_group(groups)
 
+def break_couple(n, request):
+    try:
         logging.info("----------------------------------------")
-        logging.info("New break couple request" + str(request))
+        logging.info("New break couple request: " + str(request))
         logging.info(request)
 
-        collect(n)
+        (good_symm_groups, bad_symm_groups) = bla.filter_symm_groups()
 
-        groups = [int(g) for g in request[0]]
-        groups.sort()
+        groups = set([int(g) for g in request[0]])
+        sorted_groups = list(groups)
+        sorted_groups.sort()
         confirm = request[1]
 
-        logging.info("groups: " + str(groups) + " confirmation: " + confirm)
+        logging.info("groups: %s; confirmation: \"%s\"" % (sorted_groups, confirm))
 
-        # Check if all groups are in symm_groups
-        in_symm = True
+        for symm_group in good_symm_groups:
+            if set(symm_group) == groups:
+                correct_confirm = "Yes, I want to break good couple " + ':'.join([str(g) for g in request[0]])
+                if confirm != correct_confirm:
+                    raise Exception('Incorrect confirmation string')
+                kill_symm_group(n, sorted_groups)
+                return True
 
-        for g in groups:
-            if g not in symm_groups:
-                in_symm = False
-                break
+        for symm_group in bad_symm_groups:
+            if set(symm_group) == groups:
+                correct_confirm = "Yes, I want to break bad couple " + ':'.join([str(g) for g in request[0]])
+                if confirm != correct_confirm:
+                    raise Exception('Incorrect confirmation string')
+                kill_symm_group(n, sorted_groups)
+                return True
 
-            sg = list(symm_groups[g])
-            sg.sort()
-            logging.info("cheching group " + str(g) + ", sg = " + str(sg))
-            if sg != groups:
-                in_symm = False
-                break
-
-        logging.info("in_symm: " + str(in_symm))
-        if in_symm:
-            correct_confirm = "Yes, I want to break good couple " + ':'.join([str(g) for g in request[0]])
-            if confirm != correct_confirm:
-                raise Exception('Incorrect confirmation string')
-        else:
-            in_bad = True
-            # Check if all groups are in bad_groups
-            logging.info("bad_groups: " + str(bad_groups))
-            for g in groups:
-                if not g in bad_groups:
-                    in_bad = False
-                    break
-            logging.info("in_bad: " + str(in_bad))
-            if not in_bad:
-                raise Exception("Some group are not in bad groups")
-
-            correct_confirm = "Yes, I want to break bad couple " + ':'.join([str(g) for g in request[0]])
-            if confirm != correct_confirm:
-                raise Exception('Incorrect confirmation string')
-
-        s = elliptics.Session(n)
-        s.add_groups(groups)
-        s.remove(mastermind_key)
-
-        collect(n)
-
-        return True
+        raise Exception("No group found")
 
     except Exception as e:
         logging.error("Balancer error: " + str(e) + "\n" + traceback.format_exc())
         return {'Balancer error': str(e)}
-
 
 def get_get_next_group_number(n, request):
     try:
