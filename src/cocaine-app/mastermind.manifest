@@ -35,11 +35,6 @@
             "emit" : "repair_groups",
             "endpoint" : "tcp://*:9205"
         },
-        "collect" : {
-            "type" : "native-server",
-            "emit" : "collect",
-            "endpoint" : "tcp://*:9206"
-        },
         "get_group_info" : {
             "type" : "native-server",
             "emit" : "get_group_info",
@@ -50,19 +45,16 @@
             "emit" : "couple_groups",
             "endpoint" : "tcp://*:9208"
         },
-
         "break_couple" : {
             "type" : "native-server",
             "emit" : "break_couple",
             "endpoint" : "tcp://*:9209"
         },
-
         "get_next_group_number" : {
             "type" : "native-server",
             "emit" : "get_next_group_number",
             "endpoint" : "tcp://*:9210"
         },
-
         "get_group_weights" : {
             "type" : "native-server",
             "emit" : "get_group_weights",
