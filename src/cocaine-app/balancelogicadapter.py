@@ -233,12 +233,11 @@ class GroupState:
     def get_dc(self):
         return [node for node in self.__nodes.itervalues()][0].get_dc()
 
-def composeDataType(size):
-    return "symm" + str(size)
+def GroupSizeEquals(size):
+    return lambda symm_group, size=size: len(symm_group.unitId()) == size
 
-def config(size):
+def config():
     result = copy.deepcopy(__config)
-    result["UnitDataType"] = composeDataType(size)
     return result
 
 class SymmGroup:
