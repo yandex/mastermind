@@ -3,11 +3,30 @@ import threading
 import heapq
 import time
 
+class Task:
+    def __init__(self, task_id, function, args, kwargs):
+        self.__id = task_id
+        self.__function = function
+        self.__args = args
+        self.__kwargs = kwargs
+        self.__done = False
+    def execute(self):
+        try:
+            self.__function(*self.__args, **self.__kwargs)
+        finally:
+            self.__done = True
+    def done(self):
+        return self.__done
+    def id(self):
+        return self.__id
+
 class TimedQueue:
     def __init__(self):
         self.__shutting_down = False
         self.__shutdown_lock = threading.Lock()
         self.__heap = []
+        self.__hurry = []
+        self.__task_by_id = {}
         self.__heap_lock = threading.Lock()
         self.__loop_thread = threading.Thread(target = TimedQueue.loop, args=(self,))
 
@@ -25,24 +44,38 @@ class TimedQueue:
 
     def loop(self):
         while not self._is_shutting_down():
-            work = None
+            task = None
             with self.__heap_lock:
-                if self.__heap and time.time() >= self.__heap[0][0]:
-                    work = heapq.heappop(self.__heap)
-            if work is None:
+                if self.__hurry:
+                    task = self.__hurry.pop()
+                elif self.__heap and time.time() >= self.__heap[0][0]:
+                    task = heapq.heappop(self.__heap)[1]
+            if task is None:
                 time.sleep(1)
-            else:
-                work[1](*(work[2]), **(work[3]))
+            elif not task.done():
+                try:
+                    task.execute()
+                finally:
+                    with self.__heap_lock:
+                        del self.__task_by_id[task.id()]
 
-    def add_task_in(self, secs, function, *args, **kwargs):
-        self.add_task_at(time.time() + secs, function, *args, **kwargs)
+    def add_task_in(self, task_id, secs, function, *args, **kwargs):
+        self.add_task_at(task_id, time.time() + secs, function, *args, **kwargs)
 
-    def add_task_at(self, at, function, *args, **kwargs):
+    def add_task_at(self, task_id, at, function, *args, **kwargs):
         if self._is_shutting_down():
             return
-        func_tuple = (at, function, args, kwargs)
         with self.__heap_lock:
-            heapq.heappush(self.__heap, func_tuple)
+            if task_id in self.__task_by_id:
+                raise Exception("Task with ID %s already exists" % task_id)
+            task = Task(task_id, function, args, kwargs)
+            heapq.heappush(self.__heap, (at, task))
+            self.__task_by_id[task_id] = task
+    
+    def hurry(self, task_id):
+        with self.__heap_lock:
+            if task_id in self.__task_by_id:
+                self.__hurry.append(self.__task_by_id[task_id])
 
     def shutdown(self):
         with self.__shutdown_lock:
