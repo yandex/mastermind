@@ -52,12 +52,13 @@ class TimedQueue:
                     task = heapq.heappop(self.__heap)[1]
             if task is None:
                 time.sleep(1)
-            elif not task.done():
-                try:
+            else:
+                with self.__heap_lock:
+                    id = task.id()
+                    if id in self.__task_by_id:
+                        del self.__task_by_id[id]
+                if not task.done():
                     task.execute()
-                finally:
-                    with self.__heap_lock:
-                        del self.__task_by_id[task.id()]
 
     def add_task_in(self, task_id, secs, function, *args, **kwargs):
         self.add_task_at(task_id, time.time() + secs, function, *args, **kwargs)
