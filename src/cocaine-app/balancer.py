@@ -62,7 +62,7 @@ def get_group_weights(n):
         result = {}
 
         for size in size_to_sgs:
-            (group_weights, info) = balancelogic.rawBalance(all_symm_group_objects, bla.config(), bla.GroupSizeEquals(size))
+            (group_weights, info) = balancelogic.rawBalance(all_symm_group_objects, bla.getConfig(), bla.GroupSizeEquals(size))
             result[size] = [item for item in group_weights.items()]
             logging.info("Cluster info: " + str(info))
 

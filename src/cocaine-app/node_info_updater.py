@@ -6,6 +6,7 @@ import timed_queue
 import threading
 import msgpack
 import traceback
+import time
 
 symmetric_groups_key = "metabalancer\0symmetric_groups"
 mastermind_max_group_key = "mastermind:max_group"
@@ -32,6 +33,7 @@ class NodeInfoUpdater:
         self.__tq = timed_queue.TimedQueue()
         self.__tq.start()
         self.__session = elliptics.Session(self.__node)
+        self.__nodeUpdateTimestamps = (time.time(), time.time())
         self.loadNodes()
 
     def loadNodes(self):
@@ -59,6 +61,8 @@ class NodeInfoUpdater:
             self.__logging.error("Error while loading node stats: %s\n%s" % (str(e), traceback.format_exc()))
         finally:
             self.__tq.add_task_in("load_nodes", get_config_value("nodes_reload_period", 60), self.loadNodes)
+            self.__nodeUpdateTimestamps = self.__nodeUpdateTimestamps[1:] + (time.time(),)
+            bla.setConfigValue("dynamic_too_old_age", time.time() - self.__nodeUpdateTimestamps[0])
 
     def updateSymmGroup(self, group_id):
         try:
