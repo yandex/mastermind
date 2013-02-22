@@ -1,6 +1,6 @@
 # encoding: utf-8
 
-from cocaine.decorators import timer, zeromq
+from cocaine.decorators import zeromq
 from cocaine.context import Log, manifest
 
 from time import sleep
@@ -46,16 +46,6 @@ n.meta_session = meta_session
 balancelogicadapter.setConfig(config["balancer_config"])
 
 niu = node_info_updater.NodeInfoUpdater(logging, n)
-
-@timer
-def aggregate():
-    balancer.aggregate(n)
-    balancer.collect(n)
-
-@timer
-def collect():
-    if "symmetric_groups" in manifest() and manifest()["symmetric_groups"]:
-        balancer.collect(n)
 
 @zeromq
 def balance(request):
