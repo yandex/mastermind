@@ -58,7 +58,12 @@ class TimedQueue:
                     if id in self.__task_by_id:
                         del self.__task_by_id[id]
                 if not task.done():
-                    task.execute()
+                    try:
+                        task.execute()
+                    except:
+                        # Task should handle its exceptions. If it doesn't, will lose it here.
+                        # The loop should not stop because of it.
+                        pass
 
     def add_task_in(self, task_id, secs, function, *args, **kwargs):
         self.add_task_at(task_id, time.time() + secs, function, *args, **kwargs)
