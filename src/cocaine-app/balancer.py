@@ -117,7 +117,7 @@ def make_symm_group(n, couple):
     couple = tuple(couple)
     logging.info("writing couple info: " + str(couple))
     packed = msgpack.packb(couple)
-    logging.info("packed couple: " + str(packed))
+    logging.info("packed couple: \"%s\"" % str(packed).encode("hex"))
     s = elliptics.Session(n)
     good = []
     bad = ()
