@@ -6,16 +6,6 @@ from cocaine.client import Client
 import msgpack
 
 @command()
-def collect(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
-    '''Force balancer to collect groups info'''
-    c = Client(config)
-    sleep(1)
-
-    res = c.get('mastermind/collect')
-    if isinstance(res, list) and len(res) > 0:
-        print msgpack.unpackb(res[0])
-
-@command()
 def bad_groups(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
     '''Get list of broken symmetric groups from balancer'''
     c = Client(config)

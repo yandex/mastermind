@@ -62,7 +62,7 @@ def get_group_weights(n):
         result = {}
 
         for size in size_to_sgs:
-            (group_weights, info) = balancelogic.rawBalance(all_symm_group_objects, bla.config(size))
+            (group_weights, info) = balancelogic.rawBalance(all_symm_group_objects, bla.getConfig(), bla.GroupSizeEquals(size))
             result[size] = [item for item in group_weights.items()]
             logging.info("Cluster info: " + str(info))
 
@@ -117,7 +117,7 @@ def make_symm_group(n, couple):
     couple = tuple(couple)
     logging.info("writing couple info: " + str(couple))
     packed = msgpack.packb(couple)
-    logging.info("packed couple: " + str(packed))
+    logging.info("packed couple: \"%s\"" % str(packed).encode("hex"))
     s = elliptics.Session(n)
     good = []
     bad = ()

@@ -46,6 +46,11 @@ def getConfig():
     with __config_lock:
         return copy.copy(__config)
 
+def setConfigValue(key, value):
+    global __config
+    with __config_lock:
+        __config[key] = value
+
 class NodeStateData:
     def __init__(self, raw_node):
         self.first = True
@@ -233,13 +238,8 @@ class GroupState:
     def get_dc(self):
         return [node for node in self.__nodes.itervalues()][0].get_dc()
 
-def composeDataType(size):
-    return "symm" + str(size)
-
-def config(size):
-    result = copy.deepcopy(__config)
-    result["UnitDataType"] = composeDataType(size)
-    return result
+def GroupSizeEquals(size):
+    return lambda symm_group, size=size: len(symm_group.unitId()) == size
 
 class SymmGroup:
     def __init__(self, group_ids, data_type = None):
@@ -294,7 +294,7 @@ class SymmGroup:
         return True
 
     def isBad(self):
-        too_old_age = getConfig().get("too_old_age", 120)
+        too_old_age = getConfig().get("dynamic_too_old_age", 120)
         return (len(self.__group_ids) != len(self.__group_list)
                 or not all([group.checkCouples(self.__group_ids) and group.age() <= too_old_age for group in self.__group_list]))
 

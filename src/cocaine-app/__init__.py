@@ -1,6 +1,6 @@
 # encoding: utf-8
 
-from cocaine.decorators import timer, zeromq
+from cocaine.decorators import zeromq
 from cocaine.context import Log, manifest
 
 from time import sleep
@@ -46,38 +46,6 @@ n.meta_session = meta_session
 balancelogicadapter.setConfig(config["balancer_config"])
 
 niu = node_info_updater.NodeInfoUpdater(logging, n)
-
-'''
-def calc_rating(node):
-    node['rating'] = node['free_space_rel'] * 1000 + (node['la'] + 0.1) * 100
-
-def parse(raw_node):
-    ret = dict()
-
-    ret['group_id'] = raw_node["group_id"]
-    ret['addr'] = raw_node['addr']
-
-    bsize = raw_node['counters']['DNET_CNTR_BSIZE'][0]
-    avail = raw_node['counters']['DNET_CNTR_BAVAIL'][0]
-    total = raw_node['counters']['DNET_CNTR_BLOCKS'][0]
-
-    ret['free_space_rel'] = float(avail) / total;
-    ret['free_space_abs'] = float(avail) / 1024 / 1024 / 1024 * bsize
-
-    ret['la'] = float(raw_node['counters']['DNET_CNTR_LA15'][0]) / 100
-
-    return ret
-'''
-
-@timer
-def aggregate():
-    balancer.aggregate(n)
-    balancer.collect(n)
-
-@timer
-def collect():
-    if "symmetric_groups" in manifest() and manifest()["symmetric_groups"]:
-        balancer.collect(n)
 
 @zeromq
 def balance(request):

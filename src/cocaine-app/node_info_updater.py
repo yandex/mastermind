@@ -6,12 +6,16 @@ import timed_queue
 import threading
 import msgpack
 import traceback
+import time
 
 symmetric_groups_key = "metabalancer\0symmetric_groups"
 mastermind_max_group_key = "mastermind:max_group"
 
 __config = {}
 __config_lock = threading.Lock()
+
+def get_symm_group_update_task_id(group_id):
+    return "update_symms_for_group_%s" % str(group_id)
 
 def set_config_value(key, value):
     with __config_lock:
@@ -29,6 +33,7 @@ class NodeInfoUpdater:
         self.__tq = timed_queue.TimedQueue()
         self.__tq.start()
         self.__session = elliptics.Session(self.__node)
+        self.__nodeUpdateTimestamps = (time.time(), time.time())
         self.loadNodes()
 
     def loadNodes(self):
@@ -41,6 +46,7 @@ class NodeInfoUpdater:
 
             for group_id in bla.all_group_ids():
                 self.__tq.add_task_in(
+                    get_symm_group_update_task_id(group_id),
                     get_config_value("symm_group_read_gap", 1),
                     self.updateSymmGroup,
                     group_id)
@@ -54,7 +60,9 @@ class NodeInfoUpdater:
         except Exception as e:
             self.__logging.error("Error while loading node stats: %s\n%s" % (str(e), traceback.format_exc()))
         finally:
-            self.__tq.add_task_in(get_config_value("nodes_reload_period", 60), self.loadNodes)
+            self.__tq.add_task_in("load_nodes", get_config_value("nodes_reload_period", 60), self.loadNodes)
+            self.__nodeUpdateTimestamps = self.__nodeUpdateTimestamps[1:] + (time.time(),)
+            bla.setConfigValue("dynamic_too_old_age", time.time() - self.__nodeUpdateTimestamps[0])
 
     def updateSymmGroup(self, group_id):
         try:
@@ -62,6 +70,9 @@ class NodeInfoUpdater:
             couples = msgpack.unpackb(self.__session.read_data(symmetric_groups_key))
             self.__logging.info("Read symmetric groups from group %d: %s" % (group_id, str(couples)))
             bla.get_group(int(group_id)).setCouples(couples)
+            for group_id2 in couples:
+                if group_id2 != group_id:
+                    self.__tq.hurry(get_symm_group_update_task_id(group_id2))
         except Exception as e:
             self.__logging.error("Failed to read symmetric_groups from group %d (%s)" % (group_id, str(e)))
             bla.get_group(int(group_id)).unsetCouples()
