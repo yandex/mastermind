@@ -5,8 +5,8 @@
 include /usr/share/cdbs/1/rules/debhelper.mk
 
 pre-build::
-	mkdir -p $(CURDIR)/debian/mastermind/usr/lib/mastermind/cocaine-app/
-	mkdir -p $(CURDIR)/debian/mastermind/usr/bin/
-	cp $(CURDIR)/usr/bin/mastermind_deploy.sh $(CURDIR)/debian/mastermind/usr/bin/mastermind_deploy.sh
+	mkdir -p $(CURDIR)/debian/tmp/usr/lib/mastermind/cocaine-app/
+	mkdir -p $(CURDIR)/debian/tmp/usr/bin/
+	cp $(CURDIR)/usr/bin/mastermind_deploy.sh $(CURDIR)/debian/tmp/usr/bin/mastermind_deploy.sh
 	$(CURDIR)/make_tree.sh $(CURDIR)
 
