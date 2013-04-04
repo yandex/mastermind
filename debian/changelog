@@ -1,3 +1,9 @@
+mastermind (1.5) lucid; urgency=low
+
+  * Fixed statistics expiration time
+
+ -- Anton Kortunov <toshik@yandex-team.ru>  Thu, 04 Apr 2013 15:00:39 +0400
+
 mastermind (1.4) lucid; urgency=low
 
   * Improved statistics collection
