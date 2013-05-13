@@ -159,7 +159,7 @@ def main(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config'),
             if not os.path.isdir(group_id_dir):
                 os.mkdir(group_id_dir)
 
-            group_id_file = os.path.join(group_id_dir, 'group_id')
+            group_id_file = os.path.join(group_id_dir, 'group.id')
             if os.path.exists(group_id_file):
                 continue
 
