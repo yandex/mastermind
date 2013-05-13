@@ -131,7 +131,7 @@ def main(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config'),
     ''' Create group_id files in mount points '''
 
     p = EllipticsUbicConfigParser()
-    p.read('/home/toshik/elliptics.conf')
+    p.read(elliptics_config)
     root_dir = p.get('global', 'root_dir')
 
     dirs = os.listdir(root_dir)
