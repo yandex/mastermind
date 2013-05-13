@@ -1,0 +1,176 @@
+#!/usr/bin/python
+
+from opster import command
+from ConfigParser import *
+from cocaine.client import Client
+import time
+import re
+import os
+import msgpack
+
+
+class EllipticsUbicConfigParser(ConfigParser):
+
+    SECTCRE = re.compile(
+        r'\s*<(?P<closing>\/)?'               # <
+        r'(?P<header>[^>]+)'                  # very permissive!
+        r'>'                                  # >
+        )
+
+    OPTCRE = re.compile(
+        r'\s*(?P<option>[^:=\s][^:=]*)'       # very permissive!
+        r'\s*(?P<vi>[:=])\s*'                 # any number of space/tab,
+                                              # followed by separator
+                                              # (either : or =), followed
+                                              # by any # space/tab
+        r'(?P<value>.*)$'                     # everything up to eol
+        )
+
+    def _read(self, fp, fpname):
+        """Parse a sectioned setup file.
+
+        The sections in setup file contains a title line at the top,
+        indicated by a name in square brackets (`[]'), plus key/value
+        options lines, indicated by `name: value' format lines.
+        Continuations are represented by an embedded newline then
+        leading whitespace.  Blank lines, lines beginning with a '#',
+        and just about everything else are ignored.
+        """
+        cursect = None                            # None, or a dictionary
+        cursects = list()                         # None, or a dictionary
+        optname = None
+        lineno = 0
+        e = None                                  # None, or an exception
+        while True:
+            line = fp.readline()
+            if not line:
+                break
+            lineno = lineno + 1
+            # comment or blank line?
+            if line.strip() == '' or line.strip()[0] in '#;':
+                continue
+            # a section header or option header?
+            else:
+                # is it a section header?
+                mo = self.SECTCRE.match(line)
+                if mo:
+                    if cursects:
+                        nameslist = [cursects[-1]['__name__']]
+                    else:
+                        nameslist = []
+
+                    if not mo.group('closing'):
+                        nameslist.append(mo.group('header'))
+
+                    sectname = '/'.join(nameslist)
+
+                    if mo.group('closing'):
+                        cursects.pop()
+                        continue
+
+                    if sectname in self._sections:
+                        cursects.append(self._sections[sectname])
+                    elif sectname == DEFAULTSECT:
+                        cursects.append(self._defaults)
+                    else:
+                        cursect = self._dict()
+                        cursect['__name__'] = sectname
+                        self._sections[sectname] = cursect
+                        cursects.append(cursect)
+                    # So sections can't start with a continuation line
+                    optname = None
+                    cursect = cursects[-1]
+                # no section header in the file?
+                elif cursect is None:
+                    raise MissingSectionHeaderError(fpname, lineno, line)
+                # an option line?
+                else:
+                    mo = self.OPTCRE.match(line)
+                    if mo:
+                        optname, vi, optval = mo.group('option', 'vi', 'value')
+                        if vi in ('=', ':') and '#' in optval:
+                            # ';' is a comment delimiter only if it follows
+                            # a spacing character
+                            pos = optval.find('#')
+                            if pos != -1 and optval[pos-1].isspace():
+                                optval = optval[:pos]
+                        optval = optval.strip()
+                        # allow empty values
+                        if optval == '""':
+                            optval = ''
+                        optname = self.optionxform(optname.rstrip())
+                        cursect[optname] = optval
+                    else:
+                        # a non-fatal parsing error occurred.  set up the
+                        # exception but keep going. the exception will be
+                        # raised at the end of the file and will contain a
+                        # list of all bogus lines
+                        if not e:
+                            e = ParsingError(fpname)
+                        e.append(lineno, repr(line))
+        # if any parsing errors occurred, raise an exception
+        if e:
+            raise e
+
+def get_group_from_mastermind(config):
+    c = Client(config)
+    time.sleep(1)
+
+    while True:
+        try:
+            res = c.get('mastermind/get_next_group_number', 1)
+            res = msgpack.unpackb(res[0])[0]
+            yield res
+        except:
+            raise StopIteration()
+
+@command(usage='-c cocaine_config.json -e elliptics_config -g group_id_start[:group_id_end]')
+def main(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config'),
+         elliptics_config=('e', '/etc/elliptics/elliptics.conf', 'Path to elliptics ubic config'),
+         groups=('g', '', 'Group ids to assign instead of using mastermind')):
+    ''' Create group_id files in mount points '''
+
+    p = EllipticsUbicConfigParser()
+    p.read('/home/toshik/elliptics.conf')
+    root_dir = p.get('global', 'root_dir')
+
+    dirs = os.listdir(root_dir)
+    dirs.sort()
+
+    if groups:
+        if ':' in groups:
+            groups = [int(g) for g in groups.split(':')]
+            groups = iter(xrange(groups[0], groups[1]+1))
+        else:
+            groups = iter([int(groups)])
+    else:
+        groups = get_group_from_mastermind(config)
+
+    try:
+        for l in dirs:
+            try:
+                int(l)
+            except:
+                continue
+            if not os.path.isdir(os.path.join(root_dir, l)):
+                continue
+
+            group_id_dir = os.path.join(root_dir, l, 'kdb')
+            if not os.path.isdir(group_id_dir):
+                os.mkdir(group_id_dir)
+
+            group_id_file = os.path.join(group_id_dir, 'group_id')
+            if os.path.exists(group_id_file):
+                continue
+
+            g = groups.next()
+            print "Writing group_id = %d into file %s" % (g, group_id_file)
+
+            with open(group_id_file, 'w') as group_id:
+                group_id.write(str(g))
+
+    except StopIteration:
+        pass
+
+if __name__ == '__main__':
+    main.command()
