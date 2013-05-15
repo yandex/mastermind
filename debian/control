@@ -9,10 +9,10 @@ Vcs-Git: git://github.com/toshic/mastermind.git
 
 Package: mastermind
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, python-zmq, python-opster, cocaine-framework-python (>= 0.9.5), cocaine-generic-slave (>= 0.9.3), cocaine-server (>= 0.9.3), cocaine-tools (>= 0.9.3), libcocaine-common1 (>= 0.9.3), libcocaine-core1 (>= 0.9.3), libcocaine-dealer1 (>= 0.9.4), libcocaine-plugin-chrono (>= 0.9.0), libcocaine-plugin-dealer (>= 0.9.0), libcocaine-plugin-python (>= 0.9.0), elliptics-client (>=2.19.2.4), python-balancelogic (>= 0.4) 
+Depends: ${shlibs:Depends}, ${misc:Depends}, python-zmq, python-opster, cocaine-framework-python (>= 0.9.5), cocaine-generic-slave (>= 0.9.3), cocaine-server (>= 0.9.3), cocaine-tools (>= 0.9.3), libcocaine-common1 (>= 0.9.3), libcocaine-core1 (>= 0.9.3), libcocaine-dealer1 (>= 0.9.4), libcocaine-plugin-chrono (>= 0.9.0), libcocaine-plugin-dealer (>= 0.9.0), libcocaine-plugin-python (>= 0.9.0), elliptics-client (>=2.19.2.4), python-balancelogic (>= 0.4), python-msgpack 
 Description: Metabalancer for elliptics storage
 
 Package: mastermind-utils
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, python-zmq, python-opster, cocaine-framework-python (>= 0.9.5), libcocaine-dealer1 (>= 0.9.4)
+Depends: ${shlibs:Depends}, ${misc:Depends}, python-zmq, python-opster, cocaine-framework-python (>= 0.9.5), libcocaine-dealer1 (>= 0.9.4), python-msgpack
 Description: Metabalancer CLI for elliptics storage
