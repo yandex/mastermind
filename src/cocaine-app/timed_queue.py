@@ -29,6 +29,7 @@ class TimedQueue:
         self.__task_by_id = {}
         self.__heap_lock = threading.Lock()
         self.__loop_thread = threading.Thread(target = TimedQueue.loop, args=(self,))
+        self.__loop_thread.setDaemon(False)
 
     def start(self):
         self.__loop_thread.start()

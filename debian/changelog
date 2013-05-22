@@ -1,3 +1,9 @@
+mastermind (1.6) lucid; urgency=low
+
+  * Set collecting thread as daemon for normal shutdown
+
+ -- Anton Kortunov <toshik@yandex-team.ru>  Wed, 22 May 2013 21:26:02 +0400
+
 mastermind (1.5) lucid; urgency=low
 
   * Fixed statistics expiration time
