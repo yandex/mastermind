@@ -6,7 +6,7 @@
     },
     "engine" : {
         "heartbeat-timeout" : 60,
-        "pool-limit" : 100,
+        "pool-limit" : 10,
         "queue-limit" : 250
     },
     "drivers" : {
