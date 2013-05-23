@@ -1,3 +1,10 @@
+mastermind (1.7) lucid; urgency=low
+
+  * Fixed damon flag in collection thread
+  * Set pool-limit to 10 in manifest
+
+ -- Anton Kortunov <toshik@yandex-team.ru>  Thu, 23 May 2013 14:50:21 +0400
+
 mastermind (1.6) lucid; urgency=low
 
   * Set collecting thread as daemon for normal shutdown
