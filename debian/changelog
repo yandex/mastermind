@@ -1,3 +1,9 @@
+mastermind (1.9) lucid; urgency=low
+
+  * Fixed get-group-weight
+
+ -- Anton Kortunov <toshik@yandex-team.ru>  Mon, 27 May 2013 21:13:42 +0400
+
 mastermind (1.8) lucid; urgency=low
 
   * Show couples in bad groups
