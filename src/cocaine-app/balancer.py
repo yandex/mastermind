@@ -50,7 +50,8 @@ def get_group_weights(n):
     try:
         size_to_sgs = {}
         (good, bad) = bla.filter_symm_groups()
-        all_symm_groups = list(good) + list(bad)
+        #all_symm_groups = list(good) + list(bad)
+        all_symm_groups = list(good)
         all_symm_group_objects = []
         for tuple_symm_group in all_symm_groups:
             symm_group = bla.SymmGroup(tuple_symm_group)

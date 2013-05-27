@@ -284,12 +284,13 @@ class SymmGroup:
         for group in self.__group_list:
             result += str(group) + ", "
         result += "]"
-        result += "; realPutPerSecond: " + str(self.realPutPerPeriod())
-        result += "; maxPutPerSecond: " + str(self.maxPutPerPeriod())
-        result += "; realGetPerSecond: " + str(self.realGetPerPeriod())
-        result += "; maxGetPerSecond: " + str(self.maxGetPerPeriod())
-        result += "; freeSpaceInKb: " + str(self.freeSpaceInKb())
-        result += "; freeSpaceRelative: " + str(self.freeSpaceRelative())
+        if not self.isBad():
+            result += "; realPutPerSecond: " + str(self.realPutPerPeriod())
+            result += "; maxPutPerSecond: " + str(self.maxPutPerPeriod())
+            result += "; realGetPerSecond: " + str(self.realGetPerPeriod())
+            result += "; maxGetPerSecond: " + str(self.maxGetPerPeriod())
+            result += "; freeSpaceInKb: " + str(self.freeSpaceInKb())
+            result += "; freeSpaceRelative: " + str(self.freeSpaceRelative())
         return result
 
     def realPutPerPeriod(self):
@@ -328,7 +329,8 @@ class SymmGroup:
         return self.__data_type or composeDataType(str(len(self.__group_list)))
 
 def is_group_good(couples):
-    return all([symm_groups_map.get(group, None) == couples for group in couples])
+    logging.info("couples: " + str(couples) + " status: " + str([not all_groups[group].isBad() for group in couples]))
+    return all([symm_groups_map.get(group, None) == couples and not all_groups[group].isBad() for group in couples])
 
 def filter_symm_groups(group_id = None):
     with symm_groups_map_lock:
@@ -339,6 +341,7 @@ def filter_symm_groups(group_id = None):
         bad_groups = set()
         for couples in all_symm_groups:
             if group_id is None or group_id in couples:
+                logging.info("is_good: " + str(couples) + " " + str(is_group_good(couples)))
                 if is_group_good(couples):
                     good_groups.add(couples)
                 else:
