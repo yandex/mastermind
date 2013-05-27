@@ -83,6 +83,8 @@ class TimedQueue:
         with self.__heap_lock:
             if task_id in self.__task_by_id:
                 self.__hurry.append(self.__task_by_id[task_id])
+                return True
+        return False
 
     def shutdown(self):
         with self.__shutdown_lock:

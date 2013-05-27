@@ -1,3 +1,9 @@
+mastermind (1.8) lucid; urgency=low
+
+  * Show couples in bad groups
+
+ -- Anton Kortunov <toshik@yandex-team.ru>  Mon, 27 May 2013 20:52:31 +0400
+
 mastermind (1.7) lucid; urgency=low
 
   * Fixed damon flag in collection thread

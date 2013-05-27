@@ -6,6 +6,9 @@ import threading
 
 import inventory
 
+from cocaine.context import Log
+logging = Log()
+
 all_nodes = {}
 all_nodes_lock = threading.Lock()
 
@@ -160,7 +163,9 @@ class GroupState:
     def __init__(self, raw_node):
         self.__nodes = {}
         self.__groupId = raw_node["group_id"]
-        self.update(raw_node)
+        self.isBadMark = False
+        if not 'fake' in raw_node:
+            self.update(raw_node)
 
     def update(self, raw_node):
         address = raw_node["addr"]
@@ -181,7 +186,18 @@ class GroupState:
                     groups_in_couple.add(group)
 
     def unsetCouples(self):
-        self.setCouples(None)
+        with groups_in_couple_lock:
+            in_couple = (self.__groupId in groups_in_couple)
+
+        if in_couple:
+            with symm_groups_map_lock:
+                couples = symm_groups_map[self.__groupId]
+
+    def markBad(self, mark):
+        self.isBadMark = mark
+
+    def isBad(self):
+        return self.isBadMark
 
     def checkCouples(self, couples):
         return (symm_groups_map[self.__groupId] == couples)
@@ -219,20 +235,30 @@ class GroupState:
         return max([node.age() for node in self.__nodes.itervalues()])
 
     def info(self):
+        logging.info("group.info(%s)" % str(self.__groupId))
+        logging.info("groupId type: " + str(type(self.__groupId)))
         result = {}
         result['nodes'] = [node.info() for node in self.__nodes.itervalues()]
+        result['status'] = 'uncoupled'
+
         with groups_in_couple_lock:
             in_couple = (self.__groupId in groups_in_couple)
+        logging.info("in_couple: " + str(in_couple))
 
         if in_couple:
             with symm_groups_map_lock:
                 couples = symm_groups_map[self.__groupId]
+                logging.info("couples: " + str(couples))
+                result['couples'] = couples
+
                 if couples is not None and is_group_good(couples):
                     result['status'] = 'coupled'
-                    result['couples'] = couples
                 else:
                     result['status'] = 'bad'
-                    result['couples'] = couples
+
+        if self.isBad():
+            result['status'] = 'bad'
+
         return result
 
     def get_dc(self):
@@ -296,7 +322,7 @@ class SymmGroup:
     def isBad(self):
         too_old_age = getConfig().get("dynamic_too_old_age", 120)
         return (len(self.__group_ids) != len(self.__group_list)
-                or not all([group.checkCouples(self.__group_ids) and group.age() <= too_old_age for group in self.__group_list]))
+                or not all([group.checkCouples(self.__group_ids) and group.age() <= too_old_age and not group.isBad() for group in self.__group_list]))
 
     def dataType(self):
         return self.__data_type or composeDataType(str(len(self.__group_list)))
@@ -342,3 +368,13 @@ def add_raw_node(raw_node):
 def get_group(id):
     with all_groups_lock:
         return all_groups[id]
+
+def group_exists(id):
+    with all_groups_lock:
+        return id in all_groups
+
+def add_fake_group(group_id, couples):
+    with all_groups_lock:
+        all_groups[group_id] = GroupState({'group_id': group_id, 'fake': True})
+        all_groups[group_id].markBad(True)
+        all_groups[group_id].setCouples(couples)

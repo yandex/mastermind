@@ -73,13 +73,22 @@ class NodeInfoUpdater:
             bla.get_group(int(group_id)).setCouples(couples)
             for group_id2 in couples:
                 if group_id2 != group_id:
+                    self.__logging.info("Scheduling update for group %d" % group_id2)
                     self.__tq.hurry(get_symm_group_update_task_id(group_id2))
+
+                    if not bla.group_exists(group_id2):
+                        self.__logging.info("Group doesn't exist in all_groups, add fake data woth couples=%s" % (str(couples)))
+                        bla.add_fake_group(group_id2, couples)
+
+            bla.get_group(int(group_id)).markBad(False)
         except Exception as e:
-            self.__logging.error("Failed to read symmetric_groups from group %d (%s)" % (group_id, str(e)))
-            bla.get_group(int(group_id)).unsetCouples()
+            self.__logging.error("Failed to read symmetric_groups from group %d (%s), %s" % (group_id, str(e), traceback.format_exc()))
+            #bla.get_group(int(group_id)).unsetCouples()
+            bla.get_group(int(group_id)).markBad(True)
         except:
-            self.__logging.error("Failed to read symmetric_groups from group %d (%s)" % (group_id, sys.exc_info()[0]))
-            bla.get_group(int(group_id)).unsetCouples()
+            self.__logging.error("Failed2 to read symmetric_groups from group %d (%s), %s" % (group_id, sys.exc_info()[0], traceback.format_exc()))
+            #bla.get_group(int(group_id)).unsetCouples()
+            bla.get_group(int(group_id)).markBad(True)
 
     def stop(self):
         self.__tq.shutdown()
