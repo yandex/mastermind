@@ -10,6 +10,7 @@ import copy
 import elliptics
 import balancelogicadapter as bla
 import balancelogic
+import storage
 
 logging = Log()
 
@@ -22,47 +23,44 @@ def get_groups(n):
 
 def get_symmetric_groups(n):
     if manifest().get("symmetric_groups", False):
-        (good_symm_groups, bad_symm_groups) = bla.filter_symm_groups()
-        result = list(good_symm_groups)
-        logging.info("good_symm_groups: " + str(result))
+        result = [couple for couple in storage.couples if couple.status == storage.Status.OK]
+        logging.debug("good_symm_groups: " + str(result))
         return result
     else:
         return None
 
 def get_bad_groups(n):
     if manifest().get("symmetric_groups", False):
-        (good_symm_groups, bad_symm_groups) = bla.filter_symm_groups()
-        result = list(bad_symm_groups)
-        logging.info("bad_symm_groups: " + str(result))
+        result = [couple for couple in storage.couples if couple.status != storage.Status.OK]
+        logging.debug("bad_symm_groups: " + str(result))
         return result
     else:
         return None
 
 def get_empty_groups(n):
     if manifest().get("symmetric_groups", False):
-        result = bla.uncoupled_groups()
-        logging.info("uncoupled groups: " + str(result))
+        result = [group for group in storage.groups if group.couple in None]
+        logging.debug("uncoupled groups: " + str(result))
         return result
     else:
         return None
 
 def get_group_weights(n):
     try:
-        size_to_sgs = {}
-        (good, bad) = bla.filter_symm_groups()
-        #all_symm_groups = list(good) + list(bad)
-        all_symm_groups = list(good)
+        sizes = set()
         all_symm_group_objects = []
-        for tuple_symm_group in all_symm_groups:
-            symm_group = bla.SymmGroup(tuple_symm_group)
-            sized_symm_groups = size_to_sgs.setdefault(len(tuple_symm_group), [])
-            sized_symm_groups.append(symm_group)
+        for couple in storage.couples:
+            if couple.status != storage.Status.OK:
+                continue
+
+            symm_group = bla.SymmGroup(couple)
+            sizes.add(len(couple))
             all_symm_group_objects.append(symm_group)
-            logging.info(str(symm_group))
+            logging.debug(str(symm_group))
 
         result = {}
 
-        for size in size_to_sgs:
+        for size in sizes:
             (group_weights, info) = balancelogic.rawBalance(all_symm_group_objects, bla.getConfig(), bla.GroupSizeEquals(size))
             result[size] = [item for item in group_weights.items()]
             logging.info("Cluster info: " + str(info))
@@ -171,8 +169,7 @@ def repair_groups(n, request):
 def get_group_info(n, request):
     try:
         group = int(request)
-        group_object = bla.get_group(group)
-        return group_object.info()
+        return repr(storage.groups[group])
     except Exception as e:
         logging.error("Balancer error: " + str(e) + "\n" + traceback.format_exc())
         return {'Balancer error': str(e)}
@@ -232,7 +229,6 @@ def kill_symm_group(n, groups):
     s = elliptics.Session(n)
     s.add_groups(groups)
     s.remove(symmetric_groups_key)
-    bla.remove_group(groups)
 
 def break_couple(n, request):
     try:
@@ -240,32 +236,30 @@ def break_couple(n, request):
         logging.info("New break couple request: " + str(request))
         logging.info(request)
 
-        (good_symm_groups, bad_symm_groups) = bla.filter_symm_groups()
+        couple_str = ':'.join(sorted([int(g) for g in request[0]]))
+        if not couple_str in storage.couples:
+            raise KeyError('Couple %s was not found' % (couple_str))
 
-        groups = set([int(g) for g in request[0]])
-        sorted_groups = list(groups)
-        sorted_groups.sort()
+        couple = storage.couples[couple_str]
         confirm = request[1]
 
-        logging.info("groups: %s; confirmation: \"%s\"" % (sorted_groups, confirm))
+        logging.info("groups: %s; confirmation: \"%s\"" % (couple_str, confirm))
 
-        for symm_group in good_symm_groups:
-            if set(symm_group) == groups:
-                correct_confirm = "Yes, I want to break good couple " + ':'.join([str(g) for g in request[0]])
-                if confirm != correct_confirm:
-                    raise Exception('Incorrect confirmation string')
-                kill_symm_group(n, sorted_groups)
-                return True
+        correct_confirm = "Yes, I want to break "
+        if couple.status == storage.Status.OK:
+            correct_confirm += "good"
+        else:
+            correct_confirm += "bad"
+            
+        correct_confirm += " couple " + couple_str
 
-        for symm_group in bad_symm_groups:
-            if set(symm_group) == groups:
-                correct_confirm = "Yes, I want to break bad couple " + ':'.join([str(g) for g in request[0]])
-                if confirm != correct_confirm:
-                    raise Exception('Incorrect confirmation string')
-                kill_symm_group(n, sorted_groups)
-                return True
+        if confirm != correct_confirm:
+            raise Exception('Incorrect confirmation string')
 
-        raise Exception("No group found")
+        kill_symm_group(n, [group.group_id for group in couple])
+        couple.destroy()
+
+        return True
 
     except Exception as e:
         logging.error("Balancer error: " + str(e) + "\n" + traceback.format_exc())
