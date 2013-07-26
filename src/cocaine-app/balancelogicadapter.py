@@ -77,11 +77,11 @@ class SymmGroup:
         return False
 
     def writeEnable(self):
-        return self.status == storage.status.OK
+        return self.status == storage.Status.OK
 
     def isBad(self):
         too_old_age = getConfig().get("dynamic_too_old_age", 120)
-        return self.status != storage.status.OK or self.stat.ts < (time() - too_old_age)
+        return self.status != storage.Status.OK or self.stat.ts < (time() - too_old_age)
 
     def dataType(self):
         return composeDataType(str(self.couple))

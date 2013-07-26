@@ -176,6 +176,7 @@ class Node(object):
         self.destroyed = False
         self.read_only = False
         self.status = Status.INIT
+        self.status_test = "Node %s is not inititalized yet" % (self.__str__())
 
 
     def get_host(self):
@@ -194,23 +195,37 @@ class Node(object):
     def update_status(self):
         if self.destroyed:
             self.status = Status.BAD
+            self.status_test = "Node %s is destroyed" % (self.__str__())
 
         elif not self.stat:
             self.status = Status.INIT
+            self.status_test = "No statistics gathered for node %s" % (self.__str__())
 
         elif self.stat.ts < (time.time() - 120):
             self.status = Status.STALLED
+            self.status_test = "Statistics for node %s is too old: it was gathered %d seconds ago" % (self.__str__(), int(time.time() - self.stat.ts))
 
         elif self.read_only:
             self.status = Status.RO
+            self.status_test = "Node %s is in Read-Only state" % (self.__str__())
 
         else:
             self.status = Status.OK
+            self.status_test = "Node %s is OK" % (self.__str__())
 
-        if self.group.group_id == 1:
-            print 'Update status: ', repr(self)
+        #if self.group.group_id == 1:
+        #    print 'Update status: ', repr(self)
 
         return self.status
+
+    def info(self):
+        res = {}
+
+        res['addr'] = self.__str__()
+        res['status'] = self.status
+        #res['stat'] = str(self.stat)
+        
+        return res
 
     def __repr__(self):
         if self.destroyed:
@@ -242,6 +257,7 @@ class Group(object):
         self.nodes = []
         self.couple = None
         self.meta = None
+        self.status_test = "Group %s is not inititalized yet" % (self.__str__())
 
         if nodes:
             for node in nodes:
@@ -263,18 +279,26 @@ class Group(object):
         return reduce(lambda res, x: res + x, [node.stat for node in self.nodes])
 
     def update_status(self):
+        if not self.nodes:
+            self.status = Status.INIT
+            self.status_test = "Group %s is in INIT state because there is no nodes serving this group" % (self.__str__())
+
         if (not self.meta) or (not 'couple' in self.meta) or (not self.meta['couple']):
             self.status = Status.INIT
+            self.status_test = "Group %s is in INIT state because there is no coupling info" % (self.__str__())
             return self.status
 
-        statuses = [node.update_status() for node in self.nodes]
+        statuses_dict = dict(((node, node.update_status()) for node in self.nodes))
+        statuses = tuple(statuses_dict.itervalues())
 
         if Status.RO in statuses:
             self.status = Status.RO
+            self.status_test = "Group %s is in Read-Only state because " % (self.__str__())
             return self.status
 
         if not all([st == Status.OK for st in statuses]):
             self.status = Status.BAD
+            self.status_test = "Group %s is in Bad state because " % (self.__str__())
             return
 
         if (not self.couple) and self.meta['couple']:
@@ -289,6 +313,15 @@ class Group(object):
 
         return self.status
 
+    def info(self):
+        res = {}
+
+        res['status'] = self.status
+        res['couples'] = self.couple.as_tuple()
+        res['nodes'] = [n.info() for n in self.nodes]
+
+        return res
+
     def __hash__(self):
         return hash(self.group_id)
 
@@ -296,7 +329,7 @@ class Group(object):
         return '%d' % (self.group_id)
 
     def __repr__(self):
-        return '<Group object: group_id=%d, status=%s nodes=[%s], couple=%s>' % (self.group_id, self.status, ', '.join((repr(n) for n in self.nodes)), str(self.couple))
+        return '<Group object: group_id=%d, status=%s nodes=[%s], meta=%s, couple=%s>' % (self.group_id, self.status, ', '.join((repr(n) for n in self.nodes)), str(self.meta), str(self.couple))
 
     def __eq__(self, other):
         return self.group_id == other
@@ -304,7 +337,7 @@ class Group(object):
 class Couple(object):
     def __init__(self, groups):
         self.status = Status.INIT
-        self.groups = groups
+        self.groups = sorted(groups, key=lambda group: group.group_id)
         for group in self.groups:
             if group.couple:
                 raise Exception('Group %s is already in couple' % (repr(group)))
@@ -321,7 +354,7 @@ class Couple(object):
         statuses = [group.update_status() for group in self.groups]
 
         if all([st == Status.COUPLED for st in statuses]):
-            self.status = Status.COUPLED
+            self.status = Status.OK
             return self.status
 
         if Status.INIT in statuses:
@@ -338,14 +371,32 @@ class Couple(object):
 
         return self.status
 
+    def check_groups(self, groups):
+
+        for group in self.groups:
+            if group.meta is None or not 'couple' in group.meta or not group.meta['couple']:
+                return False
+
+            if set(groups) != set(group.meta['couple']):
+                return False
+
+        if set(groups) != set((g.group_id for g in self.groups)):
+            self.status = Status.BAD
+            return False
+
+        return True
+
     def destroy(self):
         for group in self.groups:
             group.couple = None
             group.meta = None
 
+        couples.remove(self)
         self.groups = []
         self.status = Status.INIT
-        couples.remove(self)
+
+    def as_tuple(self):
+        return tuple((group.group_id for group in self.groups))
 
     def __contains__(self, group):
         return group in self.groups
@@ -358,6 +409,16 @@ class Couple(object):
 
     def __str__(self):
         return ':'.join([str(group) for group in self.groups])
+
+    def __hash__(self):
+        return hash(self.__str__())
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.__str__() == other
+
+        if isinstance(other, Couple):
+            return self.groups == other.groups
 
     def __repr__(self):
         return '<Couple object: status=%s, groups=[%s] >' % (self.status, ', '.join([repr(g) for g in self.groups]))
@@ -381,7 +442,6 @@ def update_statistics(stats):
 
                 if not stat['group_id'] in groups:
                     group = groups.add(stat['group_id'])
-                    group.parse_meta({'couple': (1,2,3)})
                 else:
                     group = groups[stat['group_id']]
 
@@ -407,6 +467,7 @@ nodes.add(h, 1026, g2)
 
 couple = couples.add([g, g2])
 
+print '1:2' in couples
 groups[1].parse_meta({'couple': (1,2)})
 groups[2].parse_meta({'couple': (1,2)})
 couple.update_status()
