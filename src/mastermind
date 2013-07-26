@@ -4,6 +4,7 @@ from time import sleep
 from opster import command, dispatch
 from cocaine.client import Client
 import msgpack
+from pprint import pprint
 
 @command()
 def bad_groups(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):

@@ -42,8 +42,7 @@ class NodeInfoUpdater:
         try:
             raw_stats = self.__session.stat_log()
 
-            for raw_node in raw_stats:
-                bla.add_raw_node(raw_node)
+            storage.update_statistics(raw_stats)
 
             for group in storage.groups:
                 self.__tq.add_task_in(
@@ -73,7 +72,7 @@ class NodeInfoUpdater:
             self.__logging.info("Read symmetric groups from group %d: %s" % (group.group_id, str(couples)))
             group.parse_meta({'couple': couples})
             for group_id2 in couples:
-                if group_id2 != group_id:
+                if group_id2 != group.group_id:
                     self.__logging.info("Scheduling update for group %d" % group_id2)
                     self.__tq.hurry(get_symm_group_update_task_id(group_id2))
 
@@ -81,13 +80,23 @@ class NodeInfoUpdater:
                         self.__logging.info("Group %d doesn't exist in all_groups, add fake data with couples=%s" % (group_id2, str(couples)))
                         storage.groups.add(group_id2)
 
+            couple_str = ':'.join((str(g) for g in sorted(couples)))
+            print couple_str, ' in storage.couples: ', couple_str in storage.couples
+            if not couple_str in storage.couples:
+                self.__logging.info("Creating couple %s" % (couple_str))
+                c = storage.couples.add([storage.groups[gid] for gid in couples])
+                self.__logging.info("Created couple %s %s" % (str(c), repr(c)))
+            else:
+                self.__logging.info("Couple %s already exists" % (couple_str))
+            storage.couples[couple_str].update_status()
+
             group.update_status()
         except Exception as e:
-            self.__logging.error("Failed to read symmetric_groups from group %d (%s), %s" % (group_id, str(e), traceback.format_exc()))
+            self.__logging.error("Failed to read symmetric_groups from group %d (%s), %s" % (group.group_id, str(e), traceback.format_exc()))
             group.parse_meta(None)
             group.update_status()
         except:
-            self.__logging.error("Failed2 to read symmetric_groups from group %d (%s), %s" % (group_id, sys.exc_info()[0], traceback.format_exc()))
+            self.__logging.error("Failed2 to read symmetric_groups from group %d (%s), %s" % (group.group_id, sys.exc_info()[0], traceback.format_exc()))
             group.parse_meta(None)
             group.update_status()
 

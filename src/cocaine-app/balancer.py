@@ -23,7 +23,7 @@ def get_groups(n):
 
 def get_symmetric_groups(n):
     if manifest().get("symmetric_groups", False):
-        result = [couple for couple in storage.couples if couple.status == storage.Status.OK]
+        result = [couple.as_tuple() for couple in storage.couples if couple.status == storage.Status.OK]
         logging.debug("good_symm_groups: " + str(result))
         return result
     else:
@@ -31,7 +31,7 @@ def get_symmetric_groups(n):
 
 def get_bad_groups(n):
     if manifest().get("symmetric_groups", False):
-        result = [couple for couple in storage.couples if couple.status != storage.Status.OK]
+        result = [couple.as_tuple() for couple in storage.couples if couple.status != storage.Status.OK]
         logging.debug("bad_symm_groups: " + str(result))
         return result
     else:
@@ -39,7 +39,7 @@ def get_bad_groups(n):
 
 def get_empty_groups(n):
     if manifest().get("symmetric_groups", False):
-        result = [group for group in storage.groups if group.couple in None]
+        result = [group.group_id for group in storage.groups if group.couple in None]
         logging.debug("uncoupled groups: " + str(result))
         return result
     else:
@@ -169,7 +169,13 @@ def repair_groups(n, request):
 def get_group_info(n, request):
     try:
         group = int(request)
-        return repr(storage.groups[group])
+        logging.info('get_group_info: request: %s, %s' % (str(request), repr(storage.groups[group])))
+
+        if not group in storage.groups:
+            return {'Balancer error': 'Group %d is not found' % (group)}
+
+        return storage.groups[group].info()
+
     except Exception as e:
         logging.error("Balancer error: " + str(e) + "\n" + traceback.format_exc())
         return {'Balancer error': str(e)}
