@@ -1,9 +1,12 @@
+#!/usr/bin/python
 # encoding: utf-8
 
-from cocaine.decorators import zeromq
-from cocaine.context import Log, manifest
+from cocaine.worker import Worker
+from cocaine.logger import Logger
+from cocaine.service.services import Service
 
 from time import sleep
+from functools import wraps
 
 import traceback
 import sys
@@ -16,9 +19,9 @@ import balancer
 import balancelogicadapter
 import node_info_updater
 
-logging = Log()
+logging = Logger()
 
-with open(manifest()["config"], 'r') as config_file:
+with open('/etc/elliptics/mastermind.conf', 'r') as config_file:
     config = json.load(config_file)
 
 log = elliptics.Logger(str(config["dnet_log"]), config["dnet_log_mask"])
@@ -47,51 +50,65 @@ balancelogicadapter.setConfig(config["balancer_config"])
 
 niu = node_info_updater.NodeInfoUpdater(logging, n)
 
-@zeromq
+W = Worker()
+
+def register_handle(h):
+    global W
+
+    @wraps(h)
+    def wrapper(request, response):
+        data = yield request.read()
+        data = msgpack.unpackb(data)
+        msgpack.pack(h(data), response)
+
+    W.on(h.__name__, wrapper)
+    return wrapper
+
+@register_handle
 def balance(request):
     logging.info("Request: %s" % str(request))
     return balancer.balance(n, request)
 
-@zeromq
+@register_handle
 def get_groups(request):
     return balancer.get_groups(n)
 
-@zeromq
+@register_handle
 def get_symmetric_groups(request):
     return balancer.get_symmetric_groups(n)
 
-@zeromq
+@register_handle
 def get_bad_groups(request):
     return balancer.get_bad_groups(n)
 
-@zeromq
+@register_handle
 def get_empty_groups(request):
     return balancer.get_empty_groups(n)
 
-@zeromq
+@register_handle
 def get_group_info(request):
     return balancer.get_group_info(n, request)
 
-@zeromq
+@register_handle
 def couple_groups(request):
     return balancer.couple_groups(n, request)
 
-@zeromq
+@register_handle
 def break_couple(request):
     return balancer.break_couple(n, request)
 
-@zeromq
+@register_handle
 def repair_groups(request):
     return balancer.repair_groups(n, request)
 
-@zeromq
+@register_handle
 def get_next_group_number(request):
     return balancer.get_get_next_group_number(n, request)
 
-@zeromq
+@register_handle
 def get_dc_by_host(request):
     return balancer.get_dc_by_host(request)
 
-@zeromq
+@register_handle
 def get_group_weights(request):
     return balancer.get_group_weights(n)

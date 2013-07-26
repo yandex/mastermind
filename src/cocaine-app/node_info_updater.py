@@ -52,12 +52,12 @@ class NodeInfoUpdater:
                     self.updateSymmGroup,
                     group)
             try:
-                max_group = int(self.__node.meta_session.read(mastermind_max_group_key))
+                max_group = int(self.__node.meta_session.read_data(mastermind_max_group_key))
             except:
                 max_group = 0
             curr_max_group = max((g.group_id for g in storage.groups))
             if curr_max_group > max_group:
-                self.__node.meta_session.write(mastermind_max_group_key, str(curr_max_group))
+                self.__node.meta_session.write_data(mastermind_max_group_key, str(curr_max_group))
         except Exception as e:
             self.__logging.error("Error while loading node stats: %s\n%s" % (str(e), traceback.format_exc()))
         finally:

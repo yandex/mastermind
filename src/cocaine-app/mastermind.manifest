@@ -1,64 +1,12 @@
 {
     "type" : "python",
-    "args" : {
-        "symmetric_groups": true,
-        "config": "/etc/elliptics/mastermind.conf"
-    },
-    "engine" : {
-        "heartbeat-timeout" : 60,
-        "pool-limit" : 10,
-        "queue-limit" : 250
-    },
+    "slave" : "__init__.py",
     "drivers" : {
         "balance" : {
             "type" : "native-server",
-            "emit" : "balance",
-            "endpoint" : "tcp://*:9201"
-        },
-        "get_symmetric_groups" : {
-            "type" : "native-server",
-            "emit" : "get_symmetric_groups",
-            "endpoint" : "tcp://*:9202"
-        },
-        "get_bad_groups" : {
-            "type" : "native-server",
-            "emit" : "get_bad_groups",
-            "endpoint" : "tcp://*:9203"
-        },
-        "get_empty_groups" : {
-            "type" : "native-server",
-            "emit" : "get_empty_groups",
-            "endpoint" : "tcp://*:9204"
-        },
-        "repair_groups" : {
-            "type" : "native-server",
-            "emit" : "repair_groups",
-            "endpoint" : "tcp://*:9205"
-        },
-        "get_group_info" : {
-            "type" : "native-server",
-            "emit" : "get_group_info",
-            "endpoint" : "tcp://*:9207"
-        },
-        "couple_groups" : {
-            "type" : "native-server",
-            "emit" : "couple_groups",
-            "endpoint" : "tcp://*:9208"
-        },
-        "break_couple" : {
-            "type" : "native-server",
-            "emit" : "break_couple",
-            "endpoint" : "tcp://*:9209"
-        },
-        "get_next_group_number" : {
-            "type" : "native-server",
-            "emit" : "get_next_group_number",
-            "endpoint" : "tcp://*:9210"
-        },
-        "get_group_weights" : {
-            "type" : "native-server",
-            "emit" : "get_group_weights",
-            "endpoint" : "tcp://*:9211"
+            "args" : {
+                "emit" : "balance"
+            }
         }
     }
 }

@@ -1,6 +1,8 @@
 # encoding: utf-8
 
-from cocaine.context import Log, manifest
+from cocaine.worker import Worker
+from cocaine.logger import Logger
+from cocaine.service.services import Service
 import msgpack
 
 import traceback
@@ -12,7 +14,7 @@ import balancelogicadapter as bla
 import balancelogic
 import storage
 
-logging = Log()
+logging = Logger()
 
 logging.info("balancer.py")
 
@@ -272,12 +274,12 @@ def get_get_next_group_number(n, request):
             raise Exception('Incorrect groups count')
 
         try:
-            max_group = int(n.meta_session.read("mastermind:max_group"))
+            max_group = int(n.meta_session.read_data("mastermind:max_group"))
         except:
             max_group = 0
 
         new_max_group = max_group + groups_count
-        n.meta_session.write("mastermind:max_group", str(new_max_group))
+        n.meta_session.write_data("mastermind:max_group", str(new_max_group))
 
         return range(max_group+1, max_group+1 + groups_count)
 
