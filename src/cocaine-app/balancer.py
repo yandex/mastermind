@@ -1,8 +1,8 @@
 # encoding: utf-8
 
 from cocaine.worker import Worker
-from cocaine.logger import Logger
-from cocaine.service.services import Service
+from cocaine.logging import Logger
+#from cocaine.service.services import Service
 import msgpack
 
 import traceback

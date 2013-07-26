@@ -7,8 +7,8 @@ import threading
 import inventory
 import storage
 
-from cocaine.context import Log
-logging = Log()
+from cocaine.logging import Logger
+logging = Logger()
 
 __config = {}
 __config_lock = threading.Lock()

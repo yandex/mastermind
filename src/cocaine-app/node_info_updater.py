@@ -29,6 +29,7 @@ def get_config_value(key, default):
 class NodeInfoUpdater:
     def __init__(self, logging, node):
         global _tq
+        logging.info("Created NodeInfoUpdater")
         self.__logging = logging
         self.__node = node
         self.__tq = timed_queue.TimedQueue()

@@ -317,8 +317,11 @@ class Group(object):
         res = {}
 
         res['status'] = self.status
-        res['couples'] = self.couple.as_tuple()
         res['nodes'] = [n.info() for n in self.nodes]
+        if self.couple:
+            res['couples'] = self.couple.as_tuple()
+        else:
+            res['couples'] = None
 
         return res
 

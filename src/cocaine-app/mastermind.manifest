@@ -1,13 +1,4 @@
 {
-    "type" : "python",
-    "slave" : "__init__.py",
-    "drivers" : {
-        "balance" : {
-            "type" : "native-server",
-            "args" : {
-                "emit" : "balance"
-            }
-        }
-    }
+    "slave" : "__init__.py"
 }
 
