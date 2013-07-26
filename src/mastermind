@@ -2,74 +2,62 @@
 
 from time import sleep
 from opster import command, dispatch
-from cocaine.client import Client
+from cocaine.services import Service
 import msgpack
 from pprint import pprint
+
+s = Service("mastermind")
+
 
 @command()
 def bad_groups(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
     '''Get list of broken symmetric groups from balancer'''
-    c = Client(config)
-    sleep(1)
-
-    res = c.get('mastermind/get_bad_groups', 0)
-    print msgpack.unpackb(res[0])
+    res = s.enqueue("get_bad_groups", "").get()
+    print msgpack.unpackb(res)
 
 
 @command()
 def symmetric_groups(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
     '''Get list of symmetric groups from balancer'''
-    c = Client(config)
-    sleep(1)
-
-    res = c.get('mastermind/get_symmetric_groups', 0)
-    print msgpack.unpackb(res[0])
+    res = s.enqueue("get_symmetric_groups", "").get()
+    print msgpack.unpackb(res)
 
 @command()
 def uncoupled_groups(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
     '''Get list of uncoupled groups from balancer'''
-    c = Client(config)
-    sleep(1)
-
-    res = c.get('mastermind/get_empty_groups', 0)
-    print msgpack.unpackb(res[0])
+    res = s.enqueue("get_empty_groups", "").get()
+    print msgpack.unpackb(res)
 
 @command()
 def repair_groups(
             group,
             config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
     '''Repair broken symmetric groups'''
-    c = Client(config)
-    sleep(1)
-
     group = int(group)
-    res = c.get('mastermind/repair_groups', group)
-    print msgpack.unpackb(res[0])
+
+    res = s.enqueue("repair_groups", msgpack.packb(group)).get()
+    print msgpack.unpackb(res)
 
 @command()
 def group_info(
             group,
             config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
     '''Get group info'''
-    c = Client(config)
-    sleep(1)
-
     group = int(group)
-    res = c.get('mastermind/get_group_info', group)
-    print msgpack.unpackb(res[0])
+
+    res = s.enqueue("get_group_info", msgpack.packb(group)).get()
+    print msgpack.unpackb(res)
 
 @command()
 def balance(
             size,
             config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
     '''Get group info'''
-    c = Client(config)
-    sleep(1)
-
     size = int(size)
     id = [0] * 64
-    res = c.get('mastermind/balance', (size, 1, id))
-    print msgpack.unpackb(res[0])
+
+    res = s.enqueue("balance", msgpack.packb((size, 1, id))).get()
+    print msgpack.unpackb(res)
 
 @command()
 def couple_groups(
@@ -77,17 +65,14 @@ def couple_groups(
             groups=('i', '', 'Use these groups in couple (example: 1:2)'),
             config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
     '''Make a couple of groups, number of groups is an argument'''
-    c = Client(config)
-    sleep(1)
-
     size = int(size)
     if groups:
         groups = [int(g) for g in groups.split(':')]
     else:
         groups = []
 
-    res = c.get('mastermind/couple_groups', (size, groups))
-    print msgpack.unpackb(res[0])
+    res = s.enqueue("couple_groups", msgpack.packb((size, groups))).get()
+    print msgpack.unpackb(res)
 
 @command()
 def break_couple(
@@ -96,34 +81,27 @@ def break_couple(
             config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
     '''Break the couple of groups, couple is an argument
         confirm parameter is a message "Yes, I want to break (bad|good) couple [1:2:3]"'''
-    c = Client(config)
-    sleep(1)
-
     groups = [int(g) for g in groups.split(':')]
-    res = c.get('mastermind/break_couple', (groups, confirm))
-    print msgpack.unpackb(res[0])
+
+    res = s.enqueue("break_couple", msgpack.packb((groups, confirm))).get()
+    print msgpack.unpackb(res)
 
 @command()
 def next_group_number(
             count,
             config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
     '''Get unused group numbers, number of groups is an argument'''
-    c = Client(config)
-    sleep(1)
-
     count = int(count)
-    res = c.get('mastermind/get_next_group_number', count)
-    print msgpack.unpackb(res[0])
+
+    res = s.enqueue("get_next_group_number", msgpack.packb(count)).get()
+    print msgpack.unpackb(res)
 
 @command()
 def get_group_weights(
             config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
     '''Get weights for symmetric groups'''
-    c = Client(config)
-    sleep(1)
-
-    res = c.get('mastermind/get_group_weights', 0)
-    print msgpack.unpackb(res[0])
+    res = s.enqueue("get_group_weights", "").get()
+    print msgpack.unpackb(res)
 
 if __name__ == '__main__':
     dispatch()

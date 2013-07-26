@@ -24,28 +24,21 @@ def get_groups(n):
     return bla.all_group_ids()
 
 def get_symmetric_groups(n):
-    if manifest().get("symmetric_groups", False):
-        result = [couple.as_tuple() for couple in storage.couples if couple.status == storage.Status.OK]
-        logging.debug("good_symm_groups: " + str(result))
-        return result
-    else:
-        return None
+    result = [couple.as_tuple() for couple in storage.couples if couple.status == storage.Status.OK]
+    logging.debug("good_symm_groups: " + str(result))
+    return result
 
 def get_bad_groups(n):
-    if manifest().get("symmetric_groups", False):
-        result = [couple.as_tuple() for couple in storage.couples if couple.status != storage.Status.OK]
-        logging.debug("bad_symm_groups: " + str(result))
-        return result
-    else:
-        return None
+    result = [couple.as_tuple() for couple in storage.couples if couple.status != storage.Status.OK]
+    logging.debug("bad_symm_groups: " + str(result))
+    return result
 
 def get_empty_groups(n):
-    if manifest().get("symmetric_groups", False):
-        result = [group.group_id for group in storage.groups if group.couple in None]
-        logging.debug("uncoupled groups: " + str(result))
-        return result
-    else:
-        return None
+    logging.info("len(storage.groups) = %d" % (len(storage.groups.elements)))
+    logging.info("groups: %s" % str([(group.group_id, group.couple) for group in storage.groups if group.couple is None]))
+    result = [group.group_id for group in storage.groups if group.couple is None]
+    logging.debug("uncoupled groups: " + str(result))
+    return result
 
 def get_group_weights(n):
     try:
@@ -127,12 +120,12 @@ def make_symm_group(n, couple):
             s.add_groups([g])
             s.write_data(symmetric_groups_key, packed)
             good.append(g)
-            bla.get_group(g).setCouples(couple)
         except Exception as e:
             logging.error("Failed to write symm group info, group %d: %s\n%s"
                           % (g, str(e), traceback.format_exc()))
             bad = (g, e)
             break
+    storage.couples.add([storage.groups[g] for g in couple])
     return (good, bad)
 
 def repair_groups(n, request):
@@ -187,12 +180,12 @@ def couple_groups(n, request):
         logging.info("----------------------------------------")
         logging.info("New couple groups request: " + str(request))
         logging.info(request)
-        uncoupled_groups = bla.uncoupled_groups()
+        uncoupled_groups = get_empty_groups(n)
         dc_by_group_id = {}
         group_by_dc = {}
         for group_id in uncoupled_groups:
-            group_object = bla.get_group(group_id)
-            dc = group_object.get_dc()
+            group = storage.groups[group_id]
+            dc = group.nodes[0].host.get_dc()
             dc_by_group_id[group_id] = dc
             groups_in_dc = group_by_dc.setdefault(dc, [])
             groups_in_dc.append(group_id)

@@ -68,6 +68,7 @@ class NodeInfoUpdater:
 
     def updateSymmGroup(self, group):
         try:
+            self.__logging.info("Trying to read symmetric groups from group %d" % (group.group_id))
             self.__session.add_groups([group.group_id])
             couples = msgpack.unpackb(self.__session.read_data(symmetric_groups_key))
             self.__logging.info("Read symmetric groups from group %d: %s" % (group.group_id, str(couples)))

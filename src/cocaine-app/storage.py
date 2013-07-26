@@ -4,6 +4,8 @@ import time
 import socket
 import traceback
 
+import inventory
+
 def ts_str(ts):
     return time.asctime(time.localtime(ts))
 
@@ -144,6 +146,9 @@ class Host(object):
 
     def index(self):
         return self.__str__()
+
+    def get_dc(self):
+        return inventory.get_dc_by_host(self.addr)
 
     def __eq__(self, other):
         if isinstance(other, str):
@@ -433,22 +438,28 @@ groups = Repositary(Group)
 nodes = Repositary(Node)
 couples = Repositary(Couple)
 
+from cocaine.logging import Logger
+logging = Logger()
 def update_statistics(stats):
     for stat in stats:
+        logging.info("Stats: %s %s" % (str(stat['group_id']), stat['addr']))
         try:
             if not stat['addr'] in nodes:
                 addr = stat['addr'].split(':')
                 if not addr[0] in hosts:
                     host = hosts.add(addr[0])
+                    logging.debug('Adding host %s' % (addr[0]))
                 else:
                     host = hosts[addr[0]]
 
                 if not stat['group_id'] in groups:
                     group = groups.add(stat['group_id'])
+                    logging.debug('Adding group %d' % stat['group_id'])
                 else:
                     group = groups[stat['group_id']]
 
                 n = nodes.add(host, addr[1], group)
+                logging.debug('Adding node %d -> %s:%s' % (stat['group_id'], addr[0], addr[1]))
 
             node = nodes[stat['addr']]
             if node.group.group_id != stat['group_id']:
@@ -458,7 +469,7 @@ def update_statistics(stats):
             groups[stat['group_id']].update_status()
 
         except Exception as e:
-            print 'Unable to process statictics for node %s group_id %d: %s' % (stat['addr'], stat['group_id'], traceback.format_exc())
+            logging.error('Unable to process statictics for node %s group_id %d: %s' % (stat['addr'], stat['group_id'], traceback.format_exc()))
 
 '''
 h = hosts.add('95.108.228.31')
