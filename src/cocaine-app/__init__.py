@@ -77,10 +77,11 @@ def register_handle(h):
             data = yield request.read()
             data = msgpack.unpackb(data)
             logging.info("Running handler for event %s, data=%s" % (h.__name__, str(data)))
-            msgpack.pack(h(data), response)
+            #msgpack.pack(h(data), response)
+            response.write(h(data))
         except Exception as e:
             logging.error("Balancer error: %s" % traceback.format_exc())
-            msgpack.pack({"Balancer error": str(e)}, response)
+            response.write({"Balancer error": str(e)})
         response.close()
 
     W.on(h.__name__, wrapper)

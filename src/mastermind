@@ -13,20 +13,20 @@ s = Service("mastermind")
 def bad_groups(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
     '''Get list of broken symmetric groups from balancer'''
     res = s.enqueue("get_bad_groups", "").get()
-    print msgpack.unpackb(res)
+    print res
 
 
 @command()
 def symmetric_groups(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
     '''Get list of symmetric groups from balancer'''
     res = s.enqueue("get_symmetric_groups", "").get()
-    print msgpack.unpackb(res)
+    print res
 
 @command()
 def uncoupled_groups(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
     '''Get list of uncoupled groups from balancer'''
     res = s.enqueue("get_empty_groups", "").get()
-    print msgpack.unpackb(res)
+    print res
 
 @command()
 def repair_groups(
@@ -36,7 +36,7 @@ def repair_groups(
     group = int(group)
 
     res = s.enqueue("repair_groups", msgpack.packb(group)).get()
-    print msgpack.unpackb(res)
+    print res
 
 @command()
 def group_info(
@@ -46,7 +46,7 @@ def group_info(
     group = int(group)
 
     res = s.enqueue("get_group_info", msgpack.packb(group)).get()
-    print msgpack.unpackb(res)
+    print res
 
 @command()
 def balance(
@@ -57,7 +57,7 @@ def balance(
     id = [0] * 64
 
     res = s.enqueue("balance", msgpack.packb((size, 1, id))).get()
-    print msgpack.unpackb(res)
+    print res
 
 @command()
 def couple_groups(
@@ -72,7 +72,7 @@ def couple_groups(
         groups = []
 
     res = s.enqueue("couple_groups", msgpack.packb((size, groups))).get()
-    print msgpack.unpackb(res)
+    print res
 
 @command()
 def break_couple(
@@ -84,7 +84,7 @@ def break_couple(
     groups = [int(g) for g in groups.split(':')]
 
     res = s.enqueue("break_couple", msgpack.packb((groups, confirm))).get()
-    print msgpack.unpackb(res)
+    print res
 
 @command()
 def next_group_number(
@@ -94,14 +94,14 @@ def next_group_number(
     count = int(count)
 
     res = s.enqueue("get_next_group_number", msgpack.packb(count)).get()
-    print msgpack.unpackb(res)
+    print res
 
 @command()
 def get_group_weights(
             config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
     '''Get weights for symmetric groups'''
     res = s.enqueue("get_group_weights", "").get()
-    print msgpack.unpackb(res)
+    print res
 
 if __name__ == '__main__':
     dispatch()
