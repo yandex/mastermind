@@ -4,7 +4,7 @@ DEPLOY_DIR="/usr/lib/mastermind"
 
 echo "Clean old version of combainer:"
 
-/etc/init.d/cocaine-server stop
+/etc/init.d/cocaine-runtime stop
 
 for app in 'mastermind';
 do 
@@ -14,11 +14,11 @@ do
 done
 
 echo "Deploy New Combainer:"
-cocaine-tool upload -m $DEPLOY_DIR/cocaine-app/mastermind.manifest -p $DEPLOY_DIR/cocaine-app/mastermind.tar.gz -n mastermind -c /etc/cocaine/cocaine.conf --verbos
+cocaine-tool app upload --manifest $DEPLOY_DIR/cocaine-app/mastermind.manifest --package $DEPLOY_DIR/cocaine-app/mastermind.tar.gz -n mastermind
 
 mkdir /var/log/mastermind
 chown cocaine -R /usr/lib/mastermind
 chown cocaine -R /var/log/mastermind
 
 
-/etc/init.d/cocaine-server restart
+/etc/init.d/cocaine-runtime restart
