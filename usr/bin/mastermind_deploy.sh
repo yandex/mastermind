@@ -4,8 +4,6 @@ DEPLOY_DIR="/usr/lib/mastermind"
 
 echo "Clean old version of combainer:"
 
-/etc/init.d/cocaine-runtime stop
-
 for app in 'mastermind';
 do 
 	rm -rf /var/lib/cocaine/apps/$app
