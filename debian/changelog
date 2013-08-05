@@ -1,3 +1,10 @@
+mastermind (2.1) lucid; urgency=low
+
+  * mastermind_deploy.sh updated to work with cocaine v10
+  * Added debian/*.install files
+
+ -- Anton Kortunov <toshik@yandex-team.ru>  Mon, 05 Aug 2013 20:50:00 +0400
+
 mastermind (2.0) lucid; urgency=low
 
   * New storage model
