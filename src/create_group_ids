@@ -2,7 +2,7 @@
 
 from opster import command
 from ConfigParser import *
-from cocaine.client import Client
+from cocaine.services import Service
 import time
 import re
 import os
@@ -112,20 +112,18 @@ class EllipticsUbicConfigParser(ConfigParser):
         if e:
             raise e
 
-def get_group_from_mastermind(config):
-    c = Client(config)
-    time.sleep(1)
+def get_group_from_mastermind(host):
+    s = Service("mastermind", host=host)
 
     while True:
         try:
             res = c.get('mastermind/get_next_group_number', 1)
-            res = msgpack.unpackb(res[0])[0]
             yield res
         except:
             raise StopIteration()
 
-@command(usage='-c cocaine_config.json -e elliptics_config -g group_id_start[:group_id_end]')
-def main(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config'),
+@command(usage='-h cloud.host -e elliptics_config -g group_id_start[:group_id_end]')
+def main(host=('h', 'localhost', 'cocaine server with mastermind'),
          elliptics_config=('e', '/etc/elliptics/elliptics.conf', 'Path to elliptics ubic config'),
          groups=('g', '', 'Group ids to assign instead of using mastermind')):
     ''' Create group_id files in mount points '''
@@ -144,7 +142,7 @@ def main(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config'),
         else:
             groups = iter([int(groups)])
     else:
-        groups = get_group_from_mastermind(config)
+        groups = get_group_from_mastermind(host)
 
     try:
         for l in dirs:
