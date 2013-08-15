@@ -1,3 +1,10 @@
+mastermind (2.2) lucid; urgency=low
+
+  * Updated create_group_ids to work with new mastermind
+  * Updated deploy scripts
+
+ -- Anton Kortunov <toshik@yandex-team.ru>  Thu, 15 Aug 2013 17:41:25 +0400
+
 mastermind (2.1) lucid; urgency=low
 
   * mastermind_deploy.sh updated to work with cocaine v10
