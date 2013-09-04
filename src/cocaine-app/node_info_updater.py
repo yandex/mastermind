@@ -4,7 +4,6 @@ import elliptics
 import balancelogicadapter as bla
 import timed_queue
 import threading
-import msgpack
 import traceback
 import time
 import storage
@@ -70,9 +69,10 @@ class NodeInfoUpdater:
         try:
             self.__logging.info("Trying to read symmetric groups from group %d" % (group.group_id))
             self.__session.add_groups([group.group_id])
-            couples = msgpack.unpackb(self.__session.read_data(symmetric_groups_key))
+            meta = self.__session.read_data(symmetric_groups_key)
+            group.parse_meta(meta)
+            couples = group.meta['couple']
             self.__logging.info("Read symmetric groups from group %d: %s" % (group.group_id, str(couples)))
-            group.parse_meta({'couple': couples})
             for group_id2 in couples:
                 if group_id2 != group.group_id:
                     self.__logging.info("Scheduling update for group %d" % group_id2)
@@ -83,7 +83,8 @@ class NodeInfoUpdater:
                         storage.groups.add(group_id2)
 
             couple_str = ':'.join((str(g) for g in sorted(couples)))
-            print couple_str, ' in storage.couples: ', couple_str in storage.couples
+            self.__logging.info(couple_str + ' in storage.couples: ' + str( couple_str in storage.couples))
+            self.__logging.info('Keys in storage.couples: %s' % (str([str(c) for c in storage.couples])))
             if not couple_str in storage.couples:
                 self.__logging.info("Creating couple %s" % (couple_str))
                 c = storage.couples.add([storage.groups[gid] for gid in couples])

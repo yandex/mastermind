@@ -3,6 +3,7 @@
 import time
 import socket
 import traceback
+import msgpack
 
 import inventory
 
@@ -181,7 +182,7 @@ class Node(object):
         self.destroyed = False
         self.read_only = False
         self.status = Status.INIT
-        self.status_test = "Node %s is not inititalized yet" % (self.__str__())
+        self.status_text = "Node %s is not inititalized yet" % (self.__str__())
 
 
     def get_host(self):
@@ -200,23 +201,23 @@ class Node(object):
     def update_status(self):
         if self.destroyed:
             self.status = Status.BAD
-            self.status_test = "Node %s is destroyed" % (self.__str__())
+            self.status_text = "Node %s is destroyed" % (self.__str__())
 
         elif not self.stat:
             self.status = Status.INIT
-            self.status_test = "No statistics gathered for node %s" % (self.__str__())
+            self.status_text = "No statistics gathered for node %s" % (self.__str__())
 
         elif self.stat.ts < (time.time() - 120):
             self.status = Status.STALLED
-            self.status_test = "Statistics for node %s is too old: it was gathered %d seconds ago" % (self.__str__(), int(time.time() - self.stat.ts))
+            self.status_text = "Statistics for node %s is too old: it was gathered %d seconds ago" % (self.__str__(), int(time.time() - self.stat.ts))
 
         elif self.read_only:
             self.status = Status.RO
-            self.status_test = "Node %s is in Read-Only state" % (self.__str__())
+            self.status_text = "Node %s is in Read-Only state" % (self.__str__())
 
         else:
             self.status = Status.OK
-            self.status_test = "Node %s is OK" % (self.__str__())
+            self.status_text = "Node %s is OK" % (self.__str__())
 
         #if self.group.group_id == 1:
         #    print 'Update status: ', repr(self)
@@ -262,7 +263,7 @@ class Group(object):
         self.nodes = []
         self.couple = None
         self.meta = None
-        self.status_test = "Group %s is not inititalized yet" % (self.__str__())
+        self.status_text = "Group %s is not inititalized yet" % (self.__str__())
 
         if nodes:
             for node in nodes:
@@ -278,7 +279,18 @@ class Group(object):
         self.nodes.remove(node)
 
     def parse_meta(self, meta):
-        self.meta = meta
+        if meta is None:
+            self.meta = None
+            self.status = Status.BAD
+            return
+
+        parsed = msgpack.unpackb(meta)
+        if isinstance(parsed, tuple):
+            self.meta = {'version': 1, 'couple': parsed}
+        elif isinstance(parsed, dict) and parsed['version'] == 2:
+            self.meta = parsed
+        else:
+            raise Exception('Unable to parse meta')
 
     def get_stat(self):
         return reduce(lambda res, x: res + x, [node.stat for node in self.nodes])
@@ -286,11 +298,12 @@ class Group(object):
     def update_status(self):
         if not self.nodes:
             self.status = Status.INIT
-            self.status_test = "Group %s is in INIT state because there is no nodes serving this group" % (self.__str__())
+            self.status_text = "Group %s is in INIT state because there is no nodes serving this group" % (self.__str__())
 
+        logging.info('In group %d meta = %s' % (self.group_id, str(self.meta)))
         if (not self.meta) or (not 'couple' in self.meta) or (not self.meta['couple']):
             self.status = Status.INIT
-            self.status_test = "Group %s is in INIT state because there is no coupling info" % (self.__str__())
+            self.status_text = "Group %s is in INIT state because there is no coupling info" % (self.__str__())
             return self.status
 
         statuses_dict = dict(((node, node.update_status()) for node in self.nodes))
@@ -298,23 +311,26 @@ class Group(object):
 
         if Status.RO in statuses:
             self.status = Status.RO
-            self.status_test = "Group %s is in Read-Only state because " % (self.__str__())
+            self.status_text = "Group %s is in Read-Only state because there is RO nodes" % (self.__str__())
             return self.status
 
         if not all([st == Status.OK for st in statuses]):
             self.status = Status.BAD
-            self.status_test = "Group %s is in Bad state because " % (self.__str__())
+            self.status_text = "Group %s is in Bad state because some node statuses are not OK" % (self.__str__())
             return
 
         if (not self.couple) and self.meta['couple']:
             self.status = Status.BAD
+            self.status_text = "Group %s is in Bad state because couple did not created" % (self.__str__())
             return self.status
 
         elif not self.couple.check_groups(self.meta['couple']):
             self.status = Status.BAD
+            self.status_text = "Group %s is in Bad state because couple check fails" % (self.__str__())
             return self.status
 
         self.status = Status.COUPLED
+        self.status_text = "Group %s is OK" % (self.__str__())
 
         return self.status
 
@@ -322,6 +338,7 @@ class Group(object):
         res = {}
 
         res['status'] = self.status
+        res['status_text'] = self.status_text
         res['nodes'] = [n.info() for n in self.nodes]
         if self.couple:
             res['couples'] = self.couple.as_tuple()
@@ -360,6 +377,11 @@ class Couple(object):
 
     def update_status(self):
         statuses = [group.update_status() for group in self.groups]
+
+        meta = self.groups[0].meta
+        if any([meta != group.meta for group in self.groups]):
+            self.status = Status.BAD
+            return self.status
 
         if all([st == Status.COUPLED for st in statuses]):
             self.status = Status.OK
@@ -465,7 +487,9 @@ def update_statistics(stats):
             if node.group.group_id != stat['group_id']:
                 raise Exception('Node group_id = %d, group_id from stat: %d' % (node.group.group_id, stat['group_id']))
 
+            logging.info('Updating statistics for node %s' % (str(node)))
             node.update_statistics(stat)
+            logging.info('Updating status for group %d' % (stat['group_id']))
             groups[stat['group_id']].update_status()
 
         except Exception as e:
