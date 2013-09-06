@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import elliptics
 
+import balancer
 import balancelogicadapter as bla
 import timed_queue
 import threading
@@ -8,7 +9,6 @@ import traceback
 import time
 import storage
 
-symmetric_groups_key = "metabalancer\0symmetric_groups"
 mastermind_max_group_key = "mastermind:max_group"
 
 __config = {}
@@ -68,7 +68,7 @@ class NodeInfoUpdater:
         try:
             self.__logging.info("Trying to read symmetric groups from group %d" % (group.group_id))
             self.__session.add_groups([group.group_id])
-            meta = self.__session.read_data(symmetric_groups_key)
+            meta = self.__session.read_data(balancer.symmetric_groups_key)
             group.parse_meta(meta)
             couples = group.meta['couple']
             self.__logging.info("Read symmetric groups from group %d: %s" % (group.group_id, str(couples)))
