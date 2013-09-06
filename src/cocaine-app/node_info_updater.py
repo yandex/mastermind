@@ -91,8 +91,6 @@ class NodeInfoUpdater:
             else:
                 self.__logging.info("Couple %s already exists" % (couple_str))
             storage.couples[couple_str].update_status()
-
-            group.update_status()
         except Exception as e:
             self.__logging.error("Failed to read symmetric_groups from group %d (%s), %s" % (group.group_id, str(e), traceback.format_exc()))
             group.parse_meta(None)
