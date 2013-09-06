@@ -69,8 +69,6 @@ W = Worker()
 logging.info("after creating worker")
 
 def register_handle(h):
-    global W
-
     @wraps(h)
     def wrapper(request, response):
         try:

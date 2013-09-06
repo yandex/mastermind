@@ -67,7 +67,6 @@ def get_group_weights(n):
         return {'Balancelogic error': str(e)}
 
 def balance(n, request):
-    global stats, groups, symm_groups
     try:
         logging.info("----------------------------------------")
         logging.info("New request" + str(len(request)))
@@ -129,7 +128,6 @@ def make_symm_group(n, couple):
     return (good, bad)
 
 def repair_groups(n, request):
-    global stats, groups, symm_groups, bad_groups
     try:
         logging.info("----------------------------------------")
         logging.info("New repair groups request: " + str(request))

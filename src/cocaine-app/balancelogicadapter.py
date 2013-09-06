@@ -27,7 +27,6 @@ def setConfig(mastermind_config):
     lconfig["WeightMultiplierHead"] = mastermind_config.get("multiplier_head", 1000000)
     lconfig["WeightMultiplierTail"] = mastermind_config.get("multiplier_tail", 600000)
     lconfig["MinimumWeight"] = mastermind_config.get("min_weight", 10000)
-    global __config
     with __config_lock:
         __config = lconfig
 
@@ -36,7 +35,6 @@ def getConfig():
         return copy.copy(__config)
 
 def setConfigValue(key, value):
-    global __config
     with __config_lock:
         __config[key] = value
 
