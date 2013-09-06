@@ -21,7 +21,7 @@ logging.info("balancer.py")
 symmetric_groups_key = "metabalancer\0symmetric_groups"
 
 def get_groups(n):
-    return bla.all_group_ids()
+    return tuple(group.group_id for group in storage.groups)
 
 def get_symmetric_groups(n):
     result = [couple.as_tuple() for couple in storage.couples if couple.status == storage.Status.OK]
