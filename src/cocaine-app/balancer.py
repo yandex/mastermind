@@ -76,7 +76,7 @@ def balance(n, request):
 
         target_groups = []
 
-        if manifest().get("symmetric_groups", False):
+        if manifest.get("symmetric_groups", False):
             lsymm_groups = weighted_groups[request[0]]
 
             for (gr_list, weight) in lsymm_groups:

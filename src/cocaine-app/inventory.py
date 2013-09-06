@@ -2,10 +2,9 @@
 
 import json
 
-def manifest():
-    return {'config': '/etc/elliptics/mastermind.conf'}
+manifest = {'config': '/etc/elliptics/mastermind.conf'}
 
-with open(manifest()["config"], 'r') as config_file:
+with open(manifest["config"], 'r') as config_file:
     config = json.load(config_file)
 
 if 'inventory' in config:
