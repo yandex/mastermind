@@ -134,7 +134,9 @@ def repair_groups(n, request):
         logging.info(request)
 
         group_id = int(request)
-        (good_symm_groups, bad_symm_groups) = bla.filter_symm_groups(group_id)
+
+        good_symm_groups = [couple for couple in storage.couples if couple.status == storage.Status.OK]
+        bad_symm_groups = [couple for couple in storage.couples if couple.status != storage.Status.OK]
 
         if good_symm_groups:
             logging.error("Balancer error: cannot repair, group %d is in couple %s" % (group_id, str(good_symm_groups[0])))
