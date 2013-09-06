@@ -106,9 +106,10 @@ def balance(n, request):
         logging.error("Balancer error: " + str(e) + "\n" + traceback.format_exc())
         return {'Balancer error': str(e)}
 
-def make_symm_group(n, couple):
+def make_symm_group(n, couple, namespace):
     couple = tuple(couple)
     logging.info("writing couple info: " + str(couple))
+    logging.info('groups in couple %s are being assigned namespace "%s"' % (couple, namespace))
     packed = msgpack.packb(couple)
     logging.info("packed couple: \"%s\"" % str(packed).encode("hex"))
     s = elliptics.Session(n)
@@ -157,7 +158,21 @@ def repair_groups(n, request):
             return {"Balancer error" : "cannot repair, group %d is a member of several couples: %s" % (group_id, str(bad_couples))}
 
         couple = bad_couples[0]
-        (good, bad) = make_symm_group(n, couple)
+
+        # checking namespaces in all couple groups
+        for g in couple:
+            if g.group_id == group_id:
+                continue
+            if g.meta is None:
+                logging.error('Balancer error: group %d (coupled with group %d) has no metadata' % (g.group_id, group_id))
+                return {'Balancer error': 'group %d (coupled with group %d) has no metadata' % (g.group_id, group_id)}
+
+        namespaces = [g.meta['namespace'] for g in couple if g.group_id != group_id]
+        if not all(ns == namespaces[0] for ns in namespaces):
+            logging.error('Balancer error: namespaces of groups coupled with group %d are not the same: %s' % (group_id, namespaces))
+            return {'Balancer error': 'namespaces of groups coupled with group %d are not the same: %s' % (group_id, namespaces)}
+
+        (good, bad) = make_symm_group(n, couple, namespaces[0])
         if bad:
             raise bad[1]
 
@@ -199,6 +214,7 @@ def couple_groups(n, request):
         logging.info("group_by_dc: %s" % str(group_by_dc))
         size = int(request[0])
         mandatory_groups = [int(g) for g in request[1]]
+
         # check mandatory set
         for group_id in mandatory_groups:
             if group_id not in uncoupled_groups:
@@ -217,12 +233,18 @@ def couple_groups(n, request):
         if n_groups_to_add < 0:
             raise Exception("Too many mandatory groups")
 
+        # why not use random.sample
         some_dcs = group_by_dc.keys()[:n_groups_to_add]
 
         for dc in some_dcs:
             groups_to_couple.append(group_by_dc[dc].pop())
 
-        (good, bad) = make_symm_group(n, groups_to_couple)
+        try:
+            namespace = request[2]
+        except IndexError:
+            namespace = storage.Group.DEFAULT_NAMESPACE
+
+        (good, bad) = make_symm_group(n, groups_to_couple, namespace)
         if bad:
             raise bad[1]
 

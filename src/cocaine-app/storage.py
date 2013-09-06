@@ -253,6 +253,9 @@ class Node(object):
 
 
 class Group(object):
+
+    DEFAULT_NAMESPACE = 'default'
+
     def __init__(self, group_id, nodes=None):
         self.group_id = group_id
         self.status = Status.INIT
