@@ -135,22 +135,28 @@ def repair_groups(n, request):
 
         group_id = int(request)
 
-        good_symm_groups = [couple for couple in storage.couples if couple.status == storage.Status.OK]
-        bad_symm_groups = [couple for couple in storage.couples if couple.status != storage.Status.OK]
+        if not group_id in storage.groups:
+            return {'Balancer error': 'Group %d is not found' % (group)}
 
-        if good_symm_groups:
-            logging.error("Balancer error: cannot repair, group %d is in couple %s" % (group_id, str(good_symm_groups[0])))
-            return {"Balancer error" : "cannot repair, group %d is in couple %s" % (group_id, str(good_symm_groups[0]))}
+        group = storage.groups[group_id]
 
-        if not bad_symm_groups:
+        bad_couples = []
+        for couple in storage.couples:
+            if group in couple:
+                if couple.status == storage.Status.OK:
+                    logging.error("Balancer error: cannot repair, group %d is in couple %s" % (group_id, str(couple)))
+                    return {"Balancer error" : "cannot repair, group %d is in couple %s" % (group_id, str(couple))}
+                bad_couples.append(couple)
+
+        if not bad_couples:
             logging.error("Balancer error: cannot repair, group %d is not a member of any couple" % group_id)
             return {"Balancer error" : "cannot repair, group %d is not a member of any couple" % group_id}
 
-        if len(bad_symm_groups) > 1:
-            logging.error("Balancer error: cannot repair, group %d is a member of several couples: %s" % (group_id, str(bad_symm_groups)))
-            return {"Balancer error" : "cannot repair, group %d is a member of several couples: %s" % (group_id, str(bad_symm_groups))}
+        if len(bad_couples) > 1:
+            logging.error("Balancer error: cannot repair, group %d is a member of several couples: %s" % (group_id, str(bad_couples)))
+            return {"Balancer error" : "cannot repair, group %d is a member of several couples: %s" % (group_id, str(bad_couples))}
 
-        couple = list(bad_symm_groups)[0]
+        couple = bad_couples[0]
         (good, bad) = make_symm_group(n, couple)
         if bad:
             raise bad[1]
