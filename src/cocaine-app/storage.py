@@ -11,7 +11,7 @@ def ts_str(ts):
     return time.asctime(time.localtime(ts))
 
 class Status(object):
-    INIT = 'INIT' 
+    INIT = 'INIT'
     OK = 'OK'
     COUPLED = 'COUPLED'
     BAD = 'BAD'
@@ -80,13 +80,9 @@ class NodeStat(object):
             self.write_rps = (self.last_write - prev.last_write)/dt
 
             # Disk usage should be used here instead of load average
-            self.max_read_rps = self.read_rps / self.load_average
-            if self.max_read_rps < 100:
-                self.max_read_rps = 100
+            self.max_read_rps = max(self.read_rps / self.load_average, 100)
 
-            self.max_write_rps = self.write_rps / self.load_average
-            if self.max_write_rps < 100:
-                self.max_write_rps = 100
+            self.max_write_rps = max(self.write_rps / self.load_average, 100)
 
         else:
             self.read_rps = 0
@@ -230,7 +226,7 @@ class Node(object):
         res['addr'] = self.__str__()
         res['status'] = self.status
         #res['stat'] = str(self.stat)
-        
+
         return res
 
     def __repr__(self):
@@ -244,7 +240,7 @@ class Node(object):
             raise Exception('Node object is destroyed')
 
         return '%s:%d' % (self.host.addr, self.port)
-        
+
     def __hash__(self):
         return hash(self.__str__())
 
@@ -271,7 +267,7 @@ class Group(object):
 
     def add_node(self, node):
         self.nodes.append(node)
-        
+
     def has_node(self, node):
         return node in self.nodes
 
@@ -306,8 +302,7 @@ class Group(object):
             self.status_text = "Group %s is in INIT state because there is no coupling info" % (self.__str__())
             return self.status
 
-        statuses_dict = dict(((node, node.update_status()) for node in self.nodes))
-        statuses = tuple(statuses_dict.itervalues())
+        statuses = tuple(node.update_status() for node in self.nodes)
 
         if Status.RO in statuses:
             self.status = Status.RO

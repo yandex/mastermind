@@ -7,12 +7,9 @@ manifest = {'config': '/etc/elliptics/mastermind.conf'}
 with open(manifest["config"], 'r') as config_file:
     config = json.load(config_file)
 
-if 'inventory' in config:
-    inventory = __import__(config['inventory'], globals(), locals(), ['get_dc_by_host'], 0)
-else:
-    inventory = __import__('fake_inventory')
-    
+try:
+    inv = __import__(config['inventory'])
+except (ImportError, KeyError):
+    import fake_inventory as inv
 
-def get_dc_by_host(host):
-    return inventory.get_dc_by_host(host)
-    
+get_dc_by_host = inv.get_dc_by_host

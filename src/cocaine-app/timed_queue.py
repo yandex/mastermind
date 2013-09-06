@@ -55,9 +55,9 @@ class TimedQueue:
                 time.sleep(1)
             else:
                 with self.__heap_lock:
-                    id = task.id()
-                    if id in self.__task_by_id:
-                        del self.__task_by_id[id]
+                    id_ = task.id()
+                    if id_ in self.__task_by_id:
+                        del self.__task_by_id[id_]
                 if not task.done():
                     try:
                         task.execute()
