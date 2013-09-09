@@ -14,6 +14,7 @@ __config = {}
 __config_lock = threading.Lock()
 
 def setConfig(mastermind_config):
+    global __config
     lconfig = {}
     lconfig["MinimumFreeSpaceInKbToParticipate"] = mastermind_config.get("min_free_space", 256) * 1024
     lconfig["MinimumFreeSpaceRelativeToParticipate"] = mastermind_config.get("min_free_space_relative", 0.15)
