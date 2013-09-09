@@ -277,6 +277,13 @@ class Group(object):
     def remove_node(self, node):
         self.nodes.remove(node)
 
+    def compose_meta(self, namespace):
+        return {
+            'version': 2,
+            'couple': tuple(g.group_id for g in self.couple),
+            'namespace': namespace,
+        }
+
     def parse_meta(self, meta):
         if meta is None:
             self.meta = None
@@ -285,7 +292,7 @@ class Group(object):
 
         parsed = msgpack.unpackb(meta)
         if isinstance(parsed, tuple):
-            self.meta = {'version': 1, 'couple': parsed}
+            self.meta = {'version': 1, 'couple': parsed, 'namespace': self.DEFAULT_NAMESPACE}
         elif isinstance(parsed, dict) and parsed['version'] == 2:
             self.meta = parsed
         else:
@@ -342,6 +349,7 @@ class Group(object):
             res['couples'] = self.couple.as_tuple()
         else:
             res['couples'] = None
+        res['meta'] = self.meta
 
         return res
 

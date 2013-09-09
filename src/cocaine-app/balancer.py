@@ -107,25 +107,25 @@ def balance(n, request):
         return {'Balancer error': str(e)}
 
 def make_symm_group(n, couple, namespace):
-    couple = tuple(couple)
     logging.info("writing couple info: " + str(couple))
     logging.info('groups in couple %s are being assigned namespace "%s"' % (couple, namespace))
-    packed = msgpack.packb(couple)
-    logging.info("packed couple: \"%s\"" % str(packed).encode("hex"))
+
     s = elliptics.Session(n)
     good = []
     bad = ()
-    for g in couple:
+    for gid in couple:
         try:
-            s.add_groups([g])
+            group = storage.groups[gid]
+            packed = msgpack.packb(group.compose_meta(namespace))
+            logging.info("packed couple for group %d: \"%s\"" % (gid, str(packed).encode("hex")))
+            s.add_groups([gid])
             s.write_data(symmetric_groups_key, packed)
-            good.append(g)
+            good.append(gid)
         except Exception as e:
             logging.error("Failed to write symm group info, group %d: %s\n%s"
-                          % (g, str(e), traceback.format_exc()))
-            bad = (g, e)
+                          % (gid, str(e), traceback.format_exc()))
+            bad = (gid, e)
             break
-    storage.couples.add([storage.groups[g] for g in couple])
     return (good, bad)
 
 def repair_groups(n, request):
@@ -172,11 +172,11 @@ def repair_groups(n, request):
             logging.error('Balancer error: namespaces of groups coupled with group %d are not the same: %s' % (group_id, namespaces))
             return {'Balancer error': 'namespaces of groups coupled with group %d are not the same: %s' % (group_id, namespaces)}
 
-        (good, bad) = make_symm_group(n, couple, namespaces[0])
+        (good, bad) = make_symm_group(n, [g.group_id for g in couple], namespaces[0])
         if bad:
             raise bad[1]
 
-        return {"message": "Successfully repaired couple", 'couple': couple}
+        return {"message": "Successfully repaired couple", 'couple': str(couple)}
 
     except Exception as e:
         logging.error("Balancer error: " + str(e) + "\n" + traceback.format_exc())
@@ -244,6 +244,7 @@ def couple_groups(n, request):
         except IndexError:
             namespace = storage.Group.DEFAULT_NAMESPACE
 
+        storage.couples.add([storage.groups[g] for g in groups_to_couple])
         (good, bad) = make_symm_group(n, groups_to_couple, namespace)
         if bad:
             raise bad[1]
@@ -265,7 +266,7 @@ def break_couple(n, request):
         logging.info("New break couple request: " + str(request))
         logging.info(request)
 
-        couple_str = ':'.join(sorted([int(g) for g in request[0]]))
+        couple_str = ':'.join(sorted(request[0], key=lambda x: int(x)))
         if not couple_str in storage.couples:
             raise KeyError('Couple %s was not found' % (couple_str))
 
@@ -279,7 +280,7 @@ def break_couple(n, request):
             correct_confirm += "good"
         else:
             correct_confirm += "bad"
-            
+
         correct_confirm += " couple " + couple_str
 
         if confirm != correct_confirm:
