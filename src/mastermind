@@ -1,70 +1,96 @@
 #!/usr/bin/python
-
 from time import sleep
-from opster import command, dispatch
-from cocaine.services import Service
+from functools import wraps
+
 import msgpack
-from pprint import pprint
 
-s = Service("mastermind")
-
-
-@command()
-def bad_groups(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
-    '''Get list of broken symmetric groups from balancer'''
-    res = s.enqueue("get_bad_groups", "").get()
-    print res
+from opster import command, dispatch, Dispatcher
+from cocaine.services import Service
 
 
-@command()
-def symmetric_groups(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
-    '''Get list of symmetric groups from balancer'''
-    res = s.enqueue("get_symmetric_groups", "").get()
-    print res
+SERVICE_APP_NAME = 'mastermind'
+SERVICE_DEFAULT_HOST = 'localhost'
+SERVICE_DEFAULT_PORT = 10053
 
-@command()
-def uncoupled_groups(config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
-    '''Get list of uncoupled groups from balancer'''
-    res = s.enqueue("get_empty_groups", "").get()
-    print res
+host_param = ['h',
+              'host',
+              '{host}:{port}'.format(host=SERVICE_DEFAULT_HOST,
+                                     port=SERVICE_DEFAULT_PORT),
+              'Mastermind application host[:port]']
 
-@command()
-def repair_groups(
-            group,
-            config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
-    '''Repair broken symmetric groups'''
-    group = int(group)
 
-    res = s.enqueue("repair_groups", msgpack.packb(group)).get()
-    print res
+def service(host):
+    parts = host.split(':', 1)
+    hostname, port = parts[0], len(parts) == 2 and int(parts[1]) or SERVICE_DEFAULT_PORT
+    return Service(SERVICE_APP_NAME, endpoint=hostname, port=port)
 
-@command()
-def group_info(
-            group,
-            config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
+
+# group commands
+groupDispatcher = Dispatcher(globaloptions=(host_param,))
+
+
+@groupDispatcher.command(name='info')
+def group_info(group, host=None):
     '''Get group info'''
+    s = service(host)
     group = int(group)
 
     res = s.enqueue("get_group_info", msgpack.packb(group)).get()
     print res
 
-@command()
-def balance(
-            size,
-            config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
-    '''Get group info'''
-    size = int(size)
-    id = [0] * 64
 
-    res = s.enqueue("balance", msgpack.packb((size, 1, id))).get()
+@groupDispatcher.command(name='next-number')
+def group_next_number(count, host=None):
+    '''Get unused group numbers, number of groups is an argument'''
+    s = service(host)
+    count = int(count)
+
+    res = s.enqueue("get_next_group_number", msgpack.packb(count)).get()
     print res
 
-@command()
-def couple_groups(
-            size,
-            groups=('i', '', 'Use these groups in couple (example: 1:2)'),
-            config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
+
+@groupDispatcher.command(name='repair')
+def group_repair(group, host=None):
+    '''Repair broken symmetric groups'''
+    s = service(host)
+    group = int(group)
+
+    res = s.enqueue("repair_groups", msgpack.packb(group)).get()
+    print res
+
+
+@groupDispatcher.command(name='list-bad')
+def group_list_bad(host=None):
+    '''Get list of broken symmetric groups from balancer'''
+    s = service(host)
+    res = s.enqueue("get_bad_groups", "").get()
+    print res
+
+
+@groupDispatcher.command(name='list-symmetric')
+def group_list_symmetric(host=None):
+    '''Get list of symmetric groups from balancer'''
+    s = service(host)
+    res = s.enqueue("get_symmetric_groups", "").get()
+    print res
+
+
+@groupDispatcher.command(name='list-uncoupled')
+def group_list_uncoupled(host=None):
+    '''Get list of uncoupled groups from balancer'''
+    s = service(host)
+    res = s.enqueue("get_empty_groups", "").get()
+    print res
+
+
+# couple commands
+coupleDispatcher = Dispatcher(globaloptions=(host_param,))
+
+
+@coupleDispatcher.command(name='build')
+def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:2)'), host=None):
     '''Make a couple of groups, number of groups is an argument'''
+    s = service(host)
     size = int(size)
     if groups:
         groups = [int(g) for g in groups.split(':')]
@@ -74,34 +100,41 @@ def couple_groups(
     res = s.enqueue("couple_groups", msgpack.packb((size, groups))).get()
     print res
 
-@command()
-def break_couple(
-            groups,
-            confirm,
-            config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
+
+@coupleDispatcher.command(name='break')
+def couple_break(groups, confirm, host=None):
     '''Break the couple of groups, couple is an argument
         confirm parameter is a message "Yes, I want to break (bad|good) couple [1:2:3]"'''
+    s = service(host)
     groups = [int(g) for g in groups.split(':')]
 
     res = s.enqueue("break_couple", msgpack.packb((groups, confirm))).get()
     print res
 
-@command()
-def next_group_number(
-            count,
-            config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
-    '''Get unused group numbers, number of groups is an argument'''
-    count = int(count)
 
-    res = s.enqueue("get_next_group_number", msgpack.packb(count)).get()
+@coupleDispatcher.command(name='balance')
+def couple_balance(size, host=None):
+    '''Get couple balance'''
+    s = service(host)
+    size = int(size)
+    id = [0] * 64
+
+    res = s.enqueue("balance", msgpack.packb((size, 1, id))).get()
     print res
 
-@command()
-def get_group_weights(
-            config=('c', 'cocaine_config.json', 'Path to cocaine dealer config')):
+
+@coupleDispatcher.command(name='weights')
+def couple_get_weights(host=None):
     '''Get weights for symmetric groups'''
+    s = service(host)
     res = s.enqueue("get_group_weights", "").get()
     print res
 
+
+d = Dispatcher()
+d.nest('group', groupDispatcher, 'Perform group action')
+d.nest('couple', coupleDispatcher, 'Perform couple action')
+
+
 if __name__ == '__main__':
-    dispatch()
+    d.dispatch()
