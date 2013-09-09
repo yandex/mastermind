@@ -349,7 +349,8 @@ class Group(object):
             res['couples'] = self.couple.as_tuple()
         else:
             res['couples'] = None
-        res['meta'] = self.meta
+        if self.meta:
+            res['namespace'] = self.meta['namespace']
 
         return res
 
