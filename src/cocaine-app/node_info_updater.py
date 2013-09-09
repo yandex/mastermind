@@ -68,7 +68,7 @@ class NodeInfoUpdater:
         try:
             self.__logging.info("Trying to read symmetric groups from group %d" % (group.group_id))
             self.__session.add_groups([group.group_id])
-            meta = self.__session.read_data(balancer.symmetric_groups_key)
+            meta = self.__session.read_data(balancer.SYMMETRIC_GROUPS_KEY)
             group.parse_meta(meta)
             couples = group.meta['couple']
             self.__logging.info("Read symmetric groups from group %d: %s" % (group.group_id, couples))

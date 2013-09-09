@@ -18,7 +18,8 @@ logging = Logger()
 
 logging.info("balancer.py")
 
-symmetric_groups_key = "metabalancer\0symmetric_groups"
+SYMMETRIC_GROUPS_KEY = "metabalancer\0symmetric_groups"
+
 
 def get_groups(n):
     return tuple(group.group_id for group in storage.groups)
@@ -125,7 +126,7 @@ def make_symm_group(n, couple, namespace):
             packed = msgpack.packb(group.compose_meta(namespace))
             logging.info("packed couple for group %d: \"%s\"" % (gid, str(packed).encode("hex")))
             s.add_groups([gid])
-            s.write_data(symmetric_groups_key, packed)
+            s.write_data(SYMMETRIC_GROUPS_KEY, packed)
             good.append(gid)
         except Exception as e:
             logging.error("Failed to write symm group info, group %d: %s\n%s"
@@ -264,7 +265,7 @@ def kill_symm_group(n, groups):
     logging.info("Killing symm groups: %s" % str(groups))
     s = elliptics.Session(n)
     s.add_groups(groups)
-    s.remove(symmetric_groups_key)
+    s.remove(SYMMETRIC_GROUPS_KEY)
 
 def break_couple(n, request):
     try:
