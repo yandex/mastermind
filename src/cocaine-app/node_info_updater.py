@@ -71,25 +71,25 @@ class NodeInfoUpdater:
             meta = self.__session.read_data(balancer.symmetric_groups_key)
             group.parse_meta(meta)
             couples = group.meta['couple']
-            self.__logging.info("Read symmetric groups from group %d: %s" % (group.group_id, str(couples)))
+            self.__logging.info("Read symmetric groups from group %d: %s" % (group.group_id, couples))
             for group_id2 in couples:
                 if group_id2 != group.group_id:
                     self.__logging.info("Scheduling update for group %d" % group_id2)
                     self.__tq.hurry(get_symm_group_update_task_id(group_id2))
 
                     if not group_id2 in storage.groups:
-                        self.__logging.info("Group %d doesn't exist in all_groups, add fake data with couples=%s" % (group_id2, str(couples)))
+                        self.__logging.info("Group %d doesn't exist in all_groups, add fake data with couples=%s" % (group_id2, couples))
                         storage.groups.add(group_id2)
 
             couple_str = ':'.join((str(g) for g in sorted(couples)))
-            self.__logging.info(couple_str + ' in storage.couples: ' + str( couple_str in storage.couples))
-            self.__logging.info('Keys in storage.couples: %s' % (str([str(c) for c in storage.couples])))
+            self.__logging.info('%s in storage.couples: %s' % (couple_str, couple_str in storage.couples))
+            self.__logging.info('Keys in storage.couples: %s' % [str(c) for c in storage.couples])
             if not couple_str in storage.couples:
                 self.__logging.info("Creating couple %s" % (couple_str))
                 c = storage.couples.add([storage.groups[gid] for gid in couples])
-                self.__logging.info("Created couple %s %s" % (str(c), repr(c)))
+                self.__logging.info("Created couple %s %s" % (c, repr(c)))
             else:
-                self.__logging.info("Couple %s already exists" % (couple_str))
+                self.__logging.info("Couple %s already exists" % couple_str)
             storage.couples[couple_str].update_status()
         except Exception as e:
             self.__logging.error("Failed to read symmetric_groups from group %d (%s), %s" % (group.group_id, str(e), traceback.format_exc()))
