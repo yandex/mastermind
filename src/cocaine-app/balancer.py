@@ -43,6 +43,7 @@ def get_empty_groups(n):
 def get_group_weights(n):
     try:
         sizes = set()
+        namespaces = set()
         all_symm_group_objects = []
         for couple in storage.couples:
             if couple.status != storage.Status.OK:
@@ -50,15 +51,20 @@ def get_group_weights(n):
 
             symm_group = bla.SymmGroup(couple)
             sizes.add(len(couple))
+            namespaces.add(couple.groups[0].meta['namespace'])
             all_symm_group_objects.append(symm_group)
             logging.debug(str(symm_group))
 
         result = {}
 
-        for size in sizes:
-            (group_weights, info) = balancelogic.rawBalance(all_symm_group_objects, bla.getConfig(), bla.GroupSizeEquals(size))
-            result[size] = [item for item in group_weights.items()]
-            logging.info("Cluster info: " + str(info))
+        for namespace in namespaces:
+            for size in sizes:
+                (group_weights, info) = balancelogic.rawBalance(all_symm_group_objects,
+                                                                bla.getConfig(),
+                                                                bla._and(bla.GroupSizeEquals(size),
+                                                                         bla.GroupNamespaceEquals(namespace)))
+                result.setdefault(namespace, {})[size] = [item for item in group_weights.items()]
+                logging.info("Cluster info: " + str(info))
 
         logging.info(str(result))
         return result

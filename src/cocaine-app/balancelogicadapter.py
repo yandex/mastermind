@@ -42,6 +42,21 @@ def setConfigValue(key, value):
 def GroupSizeEquals(size):
     return lambda symm_group, size=size: len(symm_group.unitId()) == size
 
+
+def GroupNamespaceEquals(namespace):
+    return lambda symm_group, namespace=namespace: symm_group.namespace() == namespace
+
+
+def _and(*lambdas):
+    def combined(x):
+        for l in lambdas:
+            if not l(x):
+                return False
+        return True
+
+    return combined
+
+
 class SymmGroup:
     def __init__(self, couple):
         self.couple = couple
@@ -71,6 +86,9 @@ class SymmGroup:
 
     def unitId(self):
         return tuple([g.group_id for g in self.couple.groups])
+
+    def namespace(self):
+        return self.couple.groups[0].meta['namespace']
 
     def inService(self):
         return False
