@@ -88,7 +88,8 @@ coupleDispatcher = Dispatcher(globaloptions=(host_param,))
 
 
 @coupleDispatcher.command(name='build')
-def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:2)'), host=None):
+def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:2)'),
+                 namespace=('n', '', 'Set custom namespace for couple'), host=None):
     '''Make a couple of groups, number of groups is an argument'''
     s = service(host)
     size = int(size)
@@ -97,7 +98,11 @@ def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:
     else:
         groups = []
 
-    res = s.enqueue("couple_groups", msgpack.packb((size, groups))).get()
+    params = [size, groups]
+    if namespace:
+        params.append(namespace)
+
+    res = s.enqueue("couple_groups", msgpack.packb(tuple(params))).get()
     print res
 
 

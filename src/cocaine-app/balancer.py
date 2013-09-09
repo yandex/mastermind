@@ -272,7 +272,7 @@ def break_couple(n, request):
         logging.info("New break couple request: " + str(request))
         logging.info(request)
 
-        couple_str = ':'.join(sorted(request[0], key=lambda x: int(x)))
+        couple_str = ':'.join(map(str, sorted(request[0], key=lambda x: int(x))))
         if not couple_str in storage.couples:
             raise KeyError('Couple %s was not found' % (couple_str))
 
