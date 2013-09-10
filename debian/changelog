@@ -1,3 +1,10 @@
+mastermind (2.3) lucid; urgency=low
+
+  * Namespaces implemented
+  * mastermind util updated
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 10 Sep 2013 15:26:33 +0400
+
 mastermind (2.2) lucid; urgency=low
 
   * Updated create_group_ids to work with new mastermind
