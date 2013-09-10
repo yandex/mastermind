@@ -315,7 +315,7 @@ class Group(object):
         if not all([st == Status.OK for st in statuses]):
             self.status = Status.BAD
             self.status_text = "Group %s is in Bad state because some node statuses are not OK" % (self.__str__())
-            return
+            return self.status
 
         if (not self.couple) and self.meta['couple']:
             self.status = Status.BAD
@@ -325,6 +325,16 @@ class Group(object):
         elif not self.couple.check_groups(self.meta['couple']):
             self.status = Status.BAD
             self.status_text = "Group %s is in Bad state because couple check fails" % (self.__str__())
+            return self.status
+
+        elif not self.meta['namespace']:
+            self.status = Status.BAD
+            self.status_text = "Group %s is in Bad state because no namespace has been assigned to it" % (self.__str__())
+            return self.status
+
+        elif self.meta['namespace'] != self.couple.namespace:
+            self.status = Status.BAD
+            self.status_text = "Group %s is in Bad state because its namespace doesn't correspond to couple namespace (%s)" % (self.__str__(), self.couple.namespace)
             return self.status
 
         self.status = Status.COUPLED
