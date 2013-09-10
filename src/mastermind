@@ -49,16 +49,6 @@ def group_next_number(count, host=None):
     print res
 
 
-@groupDispatcher.command(name='repair')
-def group_repair(group, host=None):
-    '''Repair broken symmetric groups'''
-    s = service(host)
-    group = int(group)
-
-    res = s.enqueue("repair_groups", msgpack.packb(group)).get()
-    print res
-
-
 @groupDispatcher.command(name='list-uncoupled')
 def group_list_uncoupled(host=None):
     '''Get list of uncoupled groups from balancer'''
@@ -134,6 +124,17 @@ def couple_get_weights(host=None):
     s = service(host)
     res = s.enqueue("get_group_weights", "").get()
     print res
+
+
+@coupleDispatcher.command(name='repair')
+def couple_repair(group, host=None):
+    '''Repair broken symmetric groups'''
+    s = service(host)
+    group = int(group)
+
+    res = s.enqueue("repair_groups", msgpack.packb(group)).get()
+    print res
+
 
 
 d = Dispatcher()
