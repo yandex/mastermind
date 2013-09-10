@@ -52,7 +52,7 @@ def get_group_weights(n):
 
             symm_group = bla.SymmGroup(couple)
             sizes.add(len(couple))
-            namespaces.add(couple.groups[0].meta['namespace'])
+            namespaces.add(couple.namespace)
             all_symm_group_objects.append(symm_group)
             logging.debug(str(symm_group))
 
@@ -120,18 +120,17 @@ def make_symm_group(n, couple, namespace):
     s = elliptics.Session(n)
     good = []
     bad = ()
-    for gid in couple:
+    for group in couple:
         try:
-            group = storage.groups[gid]
-            packed = msgpack.packb(group.compose_meta(namespace))
-            logging.info("packed couple for group %d: \"%s\"" % (gid, str(packed).encode("hex")))
-            s.add_groups([gid])
+            packed = msgpack.packb(couple.compose_meta(namespace))
+            logging.info("packed couple for group %d: \"%s\"" % (group.group_id, str(packed).encode("hex")))
+            s.add_groups([group.group_id])
             s.write_data(SYMMETRIC_GROUPS_KEY, packed)
-            good.append(gid)
+            good.append(group.group_id)
         except Exception as e:
             logging.error("Failed to write symm group info, group %d: %s\n%s"
-                          % (gid, str(e), traceback.format_exc()))
-            bad = (gid, e)
+                          % (group.group_id, str(e), traceback.format_exc()))
+            bad = (group.group_id, e)
             break
     return (good, bad)
 
@@ -179,7 +178,7 @@ def repair_groups(n, request):
             logging.error('Balancer error: namespaces of groups coupled with group %d are not the same: %s' % (group_id, namespaces))
             return {'Balancer error': 'namespaces of groups coupled with group %d are not the same: %s' % (group_id, namespaces)}
 
-        (good, bad) = make_symm_group(n, [g.group_id for g in couple], namespaces[0])
+        (good, bad) = make_symm_group(n, couple, namespaces[0])
         if bad:
             raise bad[1]
 
@@ -251,8 +250,8 @@ def couple_groups(n, request):
         except IndexError:
             namespace = storage.Group.DEFAULT_NAMESPACE
 
-        storage.couples.add([storage.groups[g] for g in groups_to_couple])
-        (good, bad) = make_symm_group(n, groups_to_couple, namespace)
+        couple = storage.couples.add([storage.groups[g] for g in groups_to_couple])
+        (good, bad) = make_symm_group(n, couple, namespace)
         if bad:
             raise bad[1]
 

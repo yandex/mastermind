@@ -44,7 +44,7 @@ def GroupSizeEquals(size):
 
 
 def GroupNamespaceEquals(namespace):
-    return lambda symm_group, namespace=namespace: symm_group.namespace() == namespace
+    return lambda symm_group, namespace=namespace: symm_group.namespace == namespace
 
 
 def _and(*lambdas):
@@ -87,8 +87,9 @@ class SymmGroup:
     def unitId(self):
         return tuple([g.group_id for g in self.couple.groups])
 
+    @property
     def namespace(self):
-        return self.couple.groups[0].meta['namespace']
+        return self.couple.namespace
 
     def inService(self):
         return False

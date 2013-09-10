@@ -277,13 +277,6 @@ class Group(object):
     def remove_node(self, node):
         self.nodes.remove(node)
 
-    def compose_meta(self, namespace):
-        return {
-            'version': 2,
-            'couple': tuple(g.group_id for g in self.couple),
-            'namespace': namespace,
-        }
-
     def parse_meta(self, meta):
         if meta is None:
             self.meta = None
@@ -432,8 +425,20 @@ class Couple(object):
         self.groups = []
         self.status = Status.INIT
 
+    def compose_meta(self, namespace):
+        return {
+            'version': 2,
+            'couple': self.as_tuple(),
+            'namespace': namespace,
+        }
+
+    @property
+    def namespace(self):
+        assert self.groups
+        return self.groups[0].meta['namespace']
+
     def as_tuple(self):
-        return tuple((group.group_id for group in self.groups))
+        return tuple(group.group_id for group in self.groups)
 
     def __contains__(self, group):
         return group in self.groups
