@@ -59,22 +59,6 @@ def group_repair(group, host=None):
     print res
 
 
-@groupDispatcher.command(name='list-bad')
-def group_list_bad(host=None):
-    '''Get list of broken symmetric groups from balancer'''
-    s = service(host)
-    res = s.enqueue("get_bad_groups", "").get()
-    print res
-
-
-@groupDispatcher.command(name='list-symmetric')
-def group_list_symmetric(host=None):
-    '''Get list of symmetric groups from balancer'''
-    s = service(host)
-    res = s.enqueue("get_symmetric_groups", "").get()
-    print res
-
-
 @groupDispatcher.command(name='list-uncoupled')
 def group_list_uncoupled(host=None):
     '''Get list of uncoupled groups from balancer'''
@@ -85,6 +69,22 @@ def group_list_uncoupled(host=None):
 
 # couple commands
 coupleDispatcher = Dispatcher(globaloptions=(host_param,))
+
+
+@coupleDispatcher.command(name='list-bad')
+def couple_list_bad(host=None):
+    '''Get list of broken couples from balancer'''
+    s = service(host)
+    res = s.enqueue("get_bad_groups", "").get()
+    print res
+
+
+@coupleDispatcher.command(name='list-symmetric')
+def couple_list_symmetric(host=None):
+    '''Get list of good couples from balancer'''
+    s = service(host)
+    res = s.enqueue("get_symmetric_groups", "").get()
+    print res
 
 
 @coupleDispatcher.command(name='build')
