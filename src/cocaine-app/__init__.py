@@ -1,23 +1,25 @@
 #!/usr/bin/python
 # encoding: utf-8
+from functools import wraps, partial
+import sys
+from time import sleep
+import traceback
+import types
 
 from cocaine.worker import Worker
 from cocaine.logging import Logger
-#from cocaine.services import Service
 
-from time import sleep
-from functools import wraps
-
-import traceback
-import sys
 sys.path.append('/usr/lib')
+
+import json
+import msgpack
 
 import elliptics
 
-import msgpack, json
 import balancer
 import balancelogicadapter
 import node_info_updater
+
 
 logging = Logger()
 
@@ -67,6 +69,7 @@ logging.info("trace %d" % (i.next()))
 logging.info("before creating worker")
 W = Worker()
 logging.info("after creating worker")
+
 
 def register_handle(h):
     @wraps(h)

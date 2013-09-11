@@ -1,18 +1,17 @@
 # encoding: utf-8
+import copy
+import sys
+import traceback
 
 from cocaine.worker import Worker
 from cocaine.logging import Logger
-#from cocaine.service.services import Service
+import elliptics
 import msgpack
 
-import traceback
-import sys
-import copy
-
-import elliptics
 import balancelogicadapter as bla
 import balancelogic
 import storage
+
 
 logging = Logger()
 
