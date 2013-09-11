@@ -89,55 +89,13 @@ def register_handle(h):
     logging.info("Registering handler for event %s" % h.__name__)
     return wrapper
 
-@register_handle
-def balance(request):
-    logging.info("Request: %s" % str(request))
-    return balancer.balance(n, request)
 
-@register_handle
-def get_groups(request):
-    return balancer.get_groups(n)
+b = balancer.Balancer(n)
 
-@register_handle
-def get_symmetric_groups(request):
-    return balancer.get_symmetric_groups(n)
+for handler in balancer.handlers(b):
+    logging.info("registering bounded function %s" % handler)
+    register_handle(handler)
 
-@register_handle
-def get_bad_groups(request):
-    return balancer.get_bad_groups(n)
-
-@register_handle
-def get_empty_groups(request):
-    return balancer.get_empty_groups(n)
-
-@register_handle
-def get_group_info(request):
-    logging.info("Request: %s" % str(request))
-    return balancer.get_group_info(n, request)
-
-@register_handle
-def couple_groups(request):
-    return balancer.couple_groups(n, request)
-
-@register_handle
-def break_couple(request):
-    return balancer.break_couple(n, request)
-
-@register_handle
-def repair_groups(request):
-    return balancer.repair_groups(n, request)
-
-@register_handle
-def get_next_group_number(request):
-    return balancer.get_get_next_group_number(n, request)
-
-@register_handle
-def get_dc_by_host(request):
-    return balancer.get_dc_by_host(request)
-
-@register_handle
-def get_group_weights(request):
-    return balancer.get_group_weights(n)
 
 logging.info("Starting worker")
 W.run()
