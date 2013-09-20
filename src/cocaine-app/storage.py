@@ -129,7 +129,7 @@ class NodeStat(object):
         return res
 
     def __repr__(self):
-        return '<NodeStat object: ts=%s, write_rps=%d, max_write_rps=%d, read_rps=%d, max_read_rps=%d, total_space=%d, free_space=%d>' % (ts_str(self.ts), self.write_rps, self.max_write_rps, self.read_rps, self.max_read_rps, self.total_space, self.free_space)
+        return '<NodeStat object: ts=%s, write_rps=%d, max_write_rps=%d, read_rps=%d, max_read_rps=%d, total_space=%d, free_space=%d, load_average=%d>' % (ts_str(self.ts), self.write_rps, self.max_write_rps, self.read_rps, self.max_read_rps, self.total_space, self.free_space, self.load_average)
 
 
 class Host(object):

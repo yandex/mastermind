@@ -18,6 +18,7 @@ import elliptics
 
 import balancer
 import balancelogicadapter
+import cache
 import node_info_updater
 
 
@@ -88,6 +89,20 @@ def register_handle(h):
     W.on(h.__name__, wrapper)
     logging.info("Registering handler for event %s" % h.__name__)
     return wrapper
+
+
+def init_cache():
+    cache_config = config.setdefault('cache', {})
+    manager = cache.CacheManager(n.meta_session, index_prefix=cache_config.get('index_prefix', 'cached_files_'))
+    [manager.add_namespace(ns) for ns in cache_config.get('namespaces', [])]
+
+    # registering cache handlers
+    register_handle(manager.get_cached_keys)
+    register_handle(manager.upload_list)
+
+    return manager
+
+init_cache()
 
 
 b = balancer.Balancer(n)
