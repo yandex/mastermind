@@ -130,7 +130,7 @@ class CacheManager(object):
         except Exception as e:
             logging.error("Error while updating cache list: %s\n%s" % (str(e), traceback.format_exc()))
         finally:
-            cache_list_update_period = config.get('list_update_period', 30)
+            cache_list_update_period = config['cache'].get('list_update_period', 30)
             self.__tq.add_task_in('cache_list_update', cache_list_update_period, self.update_cache_list)
             logging.info('Cache list updated')
 
@@ -366,7 +366,7 @@ class CacheManager(object):
         except Exception as e:
             logging.error("Error while updating cache bandwidth: %s\n%s" % (str(e), traceback.format_exc()))
         finally:
-            cache_status_update_period = config.get('status_update_period', 60)
+            cache_status_update_period = config['cache'].get('status_update_period', 60)
             self.__tq.add_task_in('bandwidth_update', cache_status_update_period, self.cache_status_update)
 
 
