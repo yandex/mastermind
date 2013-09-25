@@ -46,7 +46,7 @@ class CacheManager(object):
         self.__tq = timed_queue.TimedQueue()
         self.__tq.start()
 
-        self.__bw_degradation_threshold = 0.5
+        self.__bw_degradation_threshold = 5
 
         # reload_period = get_config_value("nodes_reload_period", 60)
         cache_status_update_period = 10
