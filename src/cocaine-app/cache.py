@@ -289,22 +289,22 @@ class CacheManager(object):
                 logging.info('Failed to upload file %s: %s' % (f, e))
                 continue
 
-            for key in keys_to_remove:
-                try:
-                    # remove key, never met it in the list
-                    logging.info('Key %s is not on the list' % key)
-                    remove_key = self.keys[ns][key]
-                    groups = [storage.groups[gid] for gid in remove_key['dgroups']]
-                    cis = [self.instances[g] for g in groups]
-                    logging.info('Removing key %s from cache instances' % (cis,))
-                    self.__remove_file(ns, cis, remove_key)
+        for key in keys_to_remove:
+            try:
+                # remove key, never met it in the list
+                logging.info('Key %s is not on the list' % key)
+                remove_key = self.keys[ns][key]
+                groups = [storage.groups[gid] for gid in remove_key['dgroups']]
+                cis = [self.instances[g] for g in groups]
+                logging.info('Removing key %s from cache instances' % (cis,))
+                self.__remove_file(ns, cis, remove_key)
 
-                    self.__upstream_remove_key(ns, remove_key)
-                    del self.keys[ns][key]
+                self.__upstream_remove_key(ns, remove_key)
+                del self.keys[ns][key]
 
-                except Exception as e:
-                    logging.info('Failed to remove key %s: %s' % (key, e))
-                    continue
+            except Exception as e:
+                logging.info('Failed to remove key %s: %s' % (key, e))
+                continue
 
         return 'processed'
 
