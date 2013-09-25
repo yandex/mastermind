@@ -91,8 +91,7 @@ def register_handle(h):
     return wrapper
 
 
-def init_cache():
-    cache_config = config.setdefault('cache', {})
+def init_cache(cache_config):
     manager = cache.CacheManager(n.meta_session, index_prefix=cache_config.get('index_prefix', 'cached_files_'))
     [manager.add_namespace(ns) for ns in cache_config.get('namespaces', [])]
 
@@ -102,7 +101,9 @@ def init_cache():
 
     return manager
 
-init_cache()
+
+if 'cache' in config:
+    init_cache(config['cache'])
 
 
 b = balancer.Balancer(n)
