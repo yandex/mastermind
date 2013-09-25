@@ -209,9 +209,16 @@ class CacheManager(object):
         gids = set([ci.group.group_id for ci in cis])
         existing_key['dgroups'] = list(set(existing_key['dgroups']) - gids)
 
-        # create task for file distribution
         for ci in cis:
             ci.remove_file(existing_key[self.ITEM_SIZE_KEY])
+
+        # elimination task
+        task = {
+            'key': existing_key['key'],
+            'dgroups': list(gids),
+            'action': 'remove'
+        }
+        transport.put(json.dumps(task))
 
         return existing_key
 
