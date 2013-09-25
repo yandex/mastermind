@@ -9,6 +9,7 @@ import elliptics
 import timed_queue
 
 import storage
+from cache_transport.transport import transport
 
 
 logging = Logger()
@@ -191,9 +192,16 @@ class CacheManager(object):
         updated_key['dgroups'] = list(set(updated_key['dgroups'] + [ci.group.group_id for ci in cis]))
         updated_key['namespace'] = namespace
 
-        # create task for file distribution
         for ci in cis:
             ci.add_file(key[self.ITEM_SIZE_KEY])
+
+        # distribution task
+        # TODO: Exclude already existing groups from dgroups
+        task = {}
+        for k in ('key', 'sgroups', 'dgroups'):
+            task[k] = updated_key[k]
+        task['action'] = 'add'
+        transport.put(json.dumps(task))
 
         return updated_key
 
@@ -210,9 +218,10 @@ class CacheManager(object):
 
     @update_lock
     def upload_list(self, request):
+        data = request['request']
         logging.info('request: %s ' % request)
-        files = request['files']
-        ns = request['namespace']
+        files = json.loads(data['files'])
+        ns = data['namespace']
 
         if not ns in self.__namespaces:
             logging.info('Invalid cache namespace: %s' % ns)
@@ -324,7 +333,8 @@ class CacheManager(object):
 
     def __bandwidth_degrade(self, la):
         """Returns the performance degradation coefficient"""
-        return 1 - ((la - self.__bw_degradation_threshold) / (1 - self.__bw_degradation_threshold)) ** 1.5
+        la_ = min(la, 10)
+        return 1.0 - ((la_ - self.__bw_degradation_threshold) / (10 - self.__bw_degradation_threshold)) ** 1.5
 
     def cache_groups(self):
         couples = filter(lambda c: c.status == storage.Status.OK and c.namespace == 'cache', storage.couples)
