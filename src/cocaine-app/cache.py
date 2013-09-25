@@ -70,8 +70,6 @@ class CacheManager(object):
         of already cached files"""
         try:
             logging.info('Updating cache list')
-            import time
-            time.sleep(10)
 
             if not self.instances:
                 logging.info('Cache instances are not yet fetched')
