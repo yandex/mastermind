@@ -20,6 +20,7 @@ import balancer
 import balancelogicadapter
 import cache
 import node_info_updater
+from config import config
 
 
 logging = Logger()
@@ -27,8 +28,6 @@ logging = Logger()
 i = iter(xrange(100))
 logging.info("trace %d" % (i.next()))
 
-with open('/etc/elliptics/mastermind.conf', 'r') as config_file:
-    config = json.load(config_file)
 logging.debug("config: %s" % str(config["elliptics_nodes"]))
 
 logging.info("trace %d" % (i.next()))
