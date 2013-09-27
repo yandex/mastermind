@@ -142,10 +142,20 @@ cacheDispatcher = Dispatcher(globaloptions=(host_param,))
 
 @cacheDispatcher.command(name='keys')
 def cache_keys(host=None):
-    '''Repair broken symmetric groups'''
+    '''Fetch cached keys'''
     s = service(host)
 
     res = s.enqueue('get_cached_keys', '').get()
+    print res
+
+
+@cacheDispatcher.command(name='keys-by-group')
+def cache_keys_by_group(group, host=None):
+    '''Fetch cached keys for certain group id'''
+    s = service(host)
+    group = int(group)
+
+    res = s.enqueue('get_cached_keys_by_group', msgpack.packb(group)).get()
     print res
 
 

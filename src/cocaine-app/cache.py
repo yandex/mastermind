@@ -166,6 +166,35 @@ class CacheManager(object):
                 res.append((key, tuple(groups)))
         return res
 
+    def get_cached_keys_by_group(self, request):
+
+        group_id = int(request)
+
+        res = []
+
+        indexes = [(self.__index_prefix + ns).encode('utf-8') for ns in self.__namespaces]
+        for item in self.__session.find_any_indexes(indexes):
+            try:
+                item = json.loads(item.indexes[0].data)
+            except Exception as e:
+                logging.info('Failed to load cache item: %s' % e)
+                continue
+
+            if group_id in item['dgroups']:
+                res.append(self.__transport_key(item))
+
+        return res
+
+    def __transport_key(self, key, action=None, dgroups=None):
+        task = {
+            'key': key['key'],
+            'dgroups': dgroups if dgroups else list(key['dgroups']),
+            'sgroups': [] if action == 'remove' else list(key['sgroups']),
+        }
+        if action:
+            task['action'] = action
+        return task
+
     def __need_space(self, namespace, req_ci_num, filesize):
         ns_stat = self.__namespaces[namespace]
         return (ns_stat['total_space'] - ns_stat['cache_size']) > (filesize * req_ci_num)
@@ -192,10 +221,7 @@ class CacheManager(object):
 
         # distribution task
         # TODO: Exclude already existing groups from dgroups
-        task = {}
-        for k in ('key', 'sgroups', 'dgroups'):
-            task[k] = updated_key[k]
-        task['action'] = 'add'
+        task = self.__transport_key(updated_key, action='add')
         transport.put(json.dumps(task))
 
         return updated_key
@@ -208,11 +234,7 @@ class CacheManager(object):
             ci.remove_file(existing_key[self.ITEM_SIZE_KEY])
 
         # elimination task
-        task = {
-            'key': existing_key['key'],
-            'dgroups': list(gids),
-            'action': 'remove'
-        }
+        task = __transport_key(existing_key, action='remove', dgroups=list(gids))
         transport.put(json.dumps(task))
 
         return existing_key

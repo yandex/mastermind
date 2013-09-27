@@ -96,6 +96,7 @@ def init_cache(cache_config):
 
     # registering cache handlers
     register_handle(manager.get_cached_keys)
+    register_handle(manager.get_cached_keys_by_group)
     register_handle(manager.upload_list)
 
     return manager
