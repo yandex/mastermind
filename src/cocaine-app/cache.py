@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from functools import wraps
+from itertools import imap
 import json
 import random
 import threading
@@ -39,15 +40,13 @@ class CacheManager(object):
         self.__index_prefix = index_prefix
         self.__namespaces = {}
 
-        # initial value, should be updated according to current
-        # workload of cache instances (in Megabytes per second)
-        self.__base_bandwidth_per_instance = 50
-        self.__bandwidth_per_instance = 50
+        # bandwidth settings
+        self.__base_bw_per_instance = 50 * 1024 * 1024  # 50 Mb/sec
+        self.__bw_per_instance = self.__base_bw_per_instance
+        self.__bw_degradation_threshold = 5
 
         self.__tq = timed_queue.TimedQueue()
         self.__tq.start()
-
-        self.__bw_degradation_threshold = 5
 
         self.__tq.add_task_in('cache_status_update', 10, self.cache_status_update)
         self.__tq.add_task_in('cache_list_update', 15, self.update_cache_list)
@@ -61,10 +60,15 @@ class CacheManager(object):
                                                  'cache_size': 0.0})
         self.keys[namespace] = {}
 
+    def __loads(self, item):
+        try:
+            return json.loads(item.indexes[0].data)
+        except Exception as e:
+            logging.info('Failed to load cache item: %s' % e)
+            return None
+
     @update_lock
     def update_cache_list(self):
-        """Periodic task for initializing and updating the list
-        of already cached files"""
         try:
             logging.info('Updating cache list')
 
@@ -72,60 +76,9 @@ class CacheManager(object):
                 logging.info('Cache instances are not yet fetched')
                 return
 
-            ns_cache_sizes = dict([(ns, 0) for ns in self.__namespaces])
             indexes = [(self.__index_prefix + ns).encode('utf-8') for ns in self.__namespaces]
 
-            keys_to_remove = {}
-            for ns in self.__namespaces:
-                keys_to_remove[ns] = set(self.keys[ns].keys())
-
-            # updating existing files state
-            for item in self.__session.find_any_indexes(indexes):
-                try:
-                    item = json.loads(item.indexes[0].data)
-                except Exception as e:
-                    logging.info('Failed to load cache item: %s' % e)
-                    continue
-
-                logging.info('Updating cache key %s' % item['key'])
-
-                namespace = item['namespace']
-
-                keys_to_remove[namespace].discard(item['key'])
-
-                ext_groups = set(item['dgroups'])
-                cur_groups = set()
-
-                if item['key'] in self.keys[namespace]:
-
-                    existing_key = self.keys[namespace][item['key']]
-                    cur_groups = set(existing_key['dgroups'])
-
-                for gid in cur_groups - ext_groups:
-                    group = storage.groups[gid]
-                    self.instances[group].remove_file(item[self.ITEM_SIZE_KEY])
-                for gid in ext_groups - cur_groups:
-                    group = storage.groups[gid]
-                    self.instances[group].add_file(item[self.ITEM_SIZE_KEY])
-
-                self.keys[namespace][item['key']] = item
-
-                ns_cache_sizes[namespace] += item[self.ITEM_SIZE_KEY] * len(ext_groups)
-
-            # removing deleted files from self state
-            for ns in self.__namespaces:
-                for key in keys_to_remove[ns]:
-                    existing_key = self.keys[ns][key]
-
-                    for gid in existing_key['dgroups']:
-                        group = storage.groups[gid]
-                        self.instances[group].remove_file(item[self.ITEM_SIZE_KEY])
-
-                    del self.keys[ns][key]
-
-            for ns, ns_stat in self.__namespaces.iteritems():
-                ns_stat['cache_size'] = ns_cache_sizes[ns]
-                logging.info('Cache size for cache namespace %s: %s kb' % (ns, ns_stat['cache_size'] / 1024.0))
+            self.__sync(imap(self.__loads, self.__session.find_any_indexes(indexes)))
 
         except Exception as e:
             logging.error("Error while updating cache list: %s\n%s" % (str(e), traceback.format_exc()))
@@ -134,6 +87,135 @@ class CacheManager(object):
             self.__tq.add_task_in('cache_list_update', cache_list_update_period, self.update_cache_list)
             logging.info('Cache list updated')
 
+    @update_lock
+    def upload_list(self, request):
+        data = request['request']
+        logging.info('request: %s ' % request)
+        files = json.loads(data['files'])
+        ns = data['namespace']
+
+        if not ns in self.__namespaces:
+            logging.info('Invalid cache namespace: %s' % ns)
+
+        logging.info('Files to upload: %s' % (files,))
+
+        files = sorted(files, key=lambda f: f['traffic'], reverse=True)
+
+        self.__sync(files, namespace=ns, with_update=True)
+
+        return 'processed'
+
+    def __sync(self, items, namespace=None, with_update=False):
+
+        keys_to_remove = {}
+
+        if namespace and namespace in self.__namespaces:
+            namespaces = [namespace]
+        else:
+            namespaces = self.__namespaces
+
+        if not namespaces:
+            logging.info('No valid namespaces for synchronizing cache')
+            return
+
+        for ns in namespaces:
+            keys_to_remove[ns] = set(self.keys[ns].keys())
+
+        for item in items:
+            logging.info('Updating cache key %s' % item['key'])
+
+            ns = namespace or item.get('namespace')
+            if not ns:
+                logging.info('No namespace for key %s' % item['key'])
+                continue
+
+            keys_to_remove[ns].discard(item['key'])
+
+            existing_key = self.keys[ns].get(item['key'])
+
+            ext_groups = set(item.get('dgroups') or [])
+            cur_groups = set(existing_key and existing_key['dgroups'] or [])
+
+            if existing_key:
+                logging.info('Existing key: %s' % item['key'])
+
+            if with_update:
+                req_ci_num = self.__cache_instances_num(item['traffic'])
+
+                req_ci_num -= len(cur_groups)
+                logging.info('Key %s already dispatched %s cache instances, %s more required' % (item['key'], len(cur_groups), req_ci_num))
+
+                if req_ci_num == 0:
+                    ext_groups = cur_groups
+                elif req_ci_num < 0:
+                    cis = self.__cis_choose_remove(abs(req_ci_num), existing_key['dgroups'])
+
+                    gids = set([ci.group.group_id for ci in cis])
+                    ext_groups = cur_groups - gids
+                    # TODO: maybe move to outer level
+                    existing_key['dgroups'] = list(ext_groups)
+
+                    task = __transport_key(existing_key, action='remove', dgroups=list(gids))
+                    transport.put(json.dumps(task))
+
+                    self.__upstream_update_key(ns, existing_key)
+                else:
+                    space_needed = self.__need_space(ns, req_ci_num, item[self.ITEM_SIZE_KEY])
+                    if space_needed:
+                        freed_space = self.__pop_least_popular_keys(self, ns, item['traffic'], space_needed)
+                        if freed_space < space_needed:
+                            logging.info('Not enough space for key %s (size: %s, require add.space: %s kb)' % (item['key'], item[self.ITEM_SIZE_KEY] / 1024.0, space_needed / 1024.0))
+                            continue
+
+                    cis = self.__cis_choose_add(req_ci_num, item['sgroups'], item['traffic'], item[self.ITEM_SIZE_KEY])
+
+                    key = {}
+                    for k in ('key', self.ITEM_SIZE_KEY, 'traffic', 'sgroups'):
+                        key[k] = item[k]
+
+                    updated_key = self.keys[ns].setdefault(key['key'], {'dgroups': []})
+                    updated_key.update(key)
+                    ext_groups = set(updated_key['dgroups'] + [ci.group.group_id for ci in cis])
+                    updated_key['dgroups'] = list(ext_groups)
+                    updated_key['namespace'] = ns
+
+                    # TODO: exclude existing dgroups from task
+                    task = self.__transport_key(updated_key, action='add')
+                    logging.info('Put task for cache distribution: %s' % task)
+                    transport.put(json.dumps(task))
+
+                    self.__upstream_update_key(ns, updated_key)
+
+            if not with_update:
+                self.keys[ns][item['key']] = item
+
+            for gid in cur_groups - ext_groups:
+                group = storage.groups[gid]
+                self.instances[group].remove_file(item[self.ITEM_SIZE_KEY])
+            for gid in ext_groups - cur_groups:
+                group = storage.groups[gid]
+                self.instances[group].add_file(item[self.ITEM_SIZE_KEY])
+
+            # ns_cache_sizes[namespace] += item[self.ITEM_SIZE_KEY] * len(ext_groups)
+
+        for ns in namespaces:
+            for key in keys_to_remove[ns]:
+                existing_key = self.keys[ns][key]
+
+                if with_update:
+                    task = self.__transport_key(existing_key, action='remove', dgroups=existing_key['dgroups'])
+                    transport.put(json.dumps(task))
+                    self.__upstream_remove_key(ns, existing_key)
+
+                for gid in existing_key['dgroups']:
+                    group = storage.groups[gid]
+                    self.instances[group].remove_file(item[self.ITEM_SIZE_KEY])
+
+                del self.keys[ns][key]
+
+        # for ns, ns_stat in self.__namespaces.iteritems():
+        #     ns_stat['cache_size'] = ns_cache_sizes[ns]
+        #     logging.info('Cache size for cache namespace %s: %s kb' % (ns, ns_stat['cache_size'] / 1024.0))
 
     def __upstream_update_key(self, namespace, key):
         key_ = key['key']
@@ -204,135 +286,6 @@ class CacheManager(object):
         self.__namespaces[namespace]['cache_size'] -= space
         return space
 
-    def __upload_file(self, namespace, cis, upload_key):
-
-        key = {}
-        for k in ('key', self.ITEM_SIZE_KEY, 'traffic', 'sgroups'):
-            key[k] = upload_key[k]
-        # key['dgroups'] = [ci.group.group_id for ci in cis]
-
-        updated_key = self.keys[namespace].setdefault(key['key'], {'dgroups': []})
-        updated_key.update(key)
-        updated_key['dgroups'] = list(set(updated_key['dgroups'] + [ci.group.group_id for ci in cis]))
-        updated_key['namespace'] = namespace
-
-        for ci in cis:
-            ci.add_file(key[self.ITEM_SIZE_KEY])
-
-        # distribution task
-        # TODO: Exclude already existing groups from dgroups
-        task = self.__transport_key(updated_key, action='add')
-        transport.put(json.dumps(task))
-
-        return updated_key
-
-    def __remove_file(self, namespace, cis, existing_key):
-        gids = set([ci.group.group_id for ci in cis])
-        existing_key['dgroups'] = list(set(existing_key['dgroups']) - gids)
-
-        for ci in cis:
-            ci.remove_file(existing_key[self.ITEM_SIZE_KEY])
-
-        # elimination task
-        task = __transport_key(existing_key, action='remove', dgroups=list(gids))
-        transport.put(json.dumps(task))
-
-        return existing_key
-
-
-    @update_lock
-    def upload_list(self, request):
-        data = request['request']
-        logging.info('request: %s ' % request)
-        files = json.loads(data['files'])
-        ns = data['namespace']
-
-        if not ns in self.__namespaces:
-            logging.info('Invalid cache namespace: %s' % ns)
-
-        logging.info('Files to upload: %s' % (files,))
-
-        files = sorted(files, key=lambda f: f['traffic'], reverse=True)
-
-        keys_to_remove = set(self.keys[ns].keys())
-
-        for f in files:
-            try:
-                # check file size
-                filesize = f[self.ITEM_SIZE_KEY]  # in bytes
-
-                keys_to_remove.discard(f['key'])
-
-                existing_key = self.keys[ns].get(f['key'])
-
-                req_ci_num = self.__cache_instances_num(f['traffic'])
-                logging.info('Number of cache instances required for key %s: %s' % (f['key'], req_ci_num))
-
-                sgroups = f['sgroups']
-
-                if existing_key:
-                    req_ci_num -= len(existing_key['dgroups'])
-                    logging.info('Existing key: %s' % f['key'])
-                    logging.info('Key %s already dispatched to %s cache instances' % (f['key'], len(existing_key['dgroups'])))
-                    logging.info('%s %s' % (f['sgroups'], existing_key['dgroups']))
-                    sgroups = list(f['sgroups']) + existing_key['dgroups']
-                    # if req_ci_num < 0:
-                        # remove from req_ci_num cache instances
-                        # pass
-
-                if req_ci_num == 0:
-                    # do not need additional storage
-                    logging.info('Key %s needs NO additinal storage' % f['key'])
-                    continue
-                elif req_ci_num < 0:
-                    # can be removed from some cache instances, traffic decreased
-                    logging.info('Key %s would be removed from %s cache instances' % (f['key'], abs(req_ci_num)))
-
-                    # come on, remove it!
-                    cis = self.__cis_choose_remove(abs(req_ci_num), existing_key['dgroups'])
-                    removed_key = self.__remove_file(ns, cis, existing_key)
-
-                    self.__upstream_update_key(ns, removed_key)
-                else:
-                    space_needed = self.__need_space(ns, req_ci_num, filesize)
-
-                    # creating new key
-
-                    if space_needed:
-                        freed_space = self.__pop_least_popular_keys(self, ns, f['traffic'], space_needed)
-                        if freed_space < space_needed:
-                            logging.info('Not enough space for key %s (size: %s, require add.space: %s kb)' % (f['key'], f[self.ITEM_SIZE_KEY] / 1024.0, space_needed / 1024.0))
-                            continue
-
-                    cis = self.__cis_choose_add(req_ci_num, sgroups, f['traffic'], f[self.ITEM_SIZE_KEY])
-
-                    uploaded_key = self.__upload_file(ns, cis, f)
-                    self.__upstream_update_key(ns, uploaded_key)
-
-            except Exception as e:
-                logging.info('Failed to upload file %s: %s' % (f, e))
-                continue
-
-        for key in keys_to_remove:
-            try:
-                # remove key, never met it in the list
-                logging.info('Key %s is not on the list' % key)
-                remove_key = self.keys[ns][key]
-                groups = [storage.groups[gid] for gid in remove_key['dgroups']]
-                cis = [self.instances[g] for g in groups]
-                logging.info('Removing key %s from cache instances' % (cis,))
-                self.__remove_file(ns, cis, remove_key)
-
-                self.__upstream_remove_key(ns, remove_key)
-                del self.keys[ns][key]
-
-            except Exception as e:
-                logging.info('Failed to remove key %s: %s' % (key, e))
-                continue
-
-        return 'processed'
-
-
     def __pop_least_popular_keys(self, namespace, ts_traffic, space_needed=0):
         sorted_keys = sorted(self.keys[namespace], key=lambda k: k['traffic'], reverse=True)
         l_key, sorted_keys = sorted_keys[-1], sorted_keys[:-1]
@@ -381,10 +334,10 @@ class CacheManager(object):
             median = las[len(las) / 2]
             logging.info('Current LA median: %s' % median)
 
-            self.__bandwidth_per_instance = (self.__base_bandwidth_per_instance
-                                             if median <= self.__bw_degradation_threshold else
-                                             self.__bandwidth_degrade(median) * self.__base_bandwidth_per_instance)
-            logging.info('Node bandwidth was set to %s Mbytes/sec' % self.__bandwidth_per_instance)
+            self.__bw_per_instance = (self.__base_bw_per_instance
+                                      if median <= self.__bw_degradation_threshold else
+                                      self.__bandwidth_degrade(median) * self.__base_bw_per_instance)
+            logging.info('Node bandwidth was set to %s Mbytes/sec' % self.__bw_per_instance)
         except Exception as e:
             logging.error("Error while updating cache bandwidth: %s\n%s" % (str(e), traceback.format_exc()))
         finally:
@@ -393,7 +346,7 @@ class CacheManager(object):
 
 
     def __cache_instances_num(self, traffic):
-        return min(len(self.instances), int(traffic / (self.__bandwidth_per_instance * 1024 * 1024)) + 1)
+        return min(len(self.instances), int(traffic / self.__bw_per_instance) + 1)
 
     def __cache_instances_rnd_choice(self, cis, num):
         # bad algorithm: weights sum is calculated for every cache instance
