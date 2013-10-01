@@ -2,6 +2,9 @@
 from copy import deepcopy
 import json
 
+from importer import import_object
+
+
 manifest = {'config': '/etc/elliptics/mastermind.conf'}
 
 with open(manifest["config"], 'r') as config_file:
@@ -11,16 +14,13 @@ params = {}
 
 try:
     params = deepcopy(config['cache']['transport'])
-    mod, obj = params.pop('class').rsplit('.', 1)
-    transport = __import__(mod, fromlist=[obj])
-    Transport = getattr(transport, obj)
-
+    Transport = import_object(params.pop('class'))
 except (ImportError, KeyError):
     from fake_transport import Transport
 
-for k, v in params.iteritems():
-    if isinstance(v, unicode):
-        params[k] = v.encode('utf-8')
 
+def encode_dict(params):
+    return dict([(k, v if not isinstance(v, unicode) else v.encode('utf-8'))
+                 for k, v in params.iteritems()])
 
-transport = Transport(**params)
+transport = Transport(**encode_dict(params))
