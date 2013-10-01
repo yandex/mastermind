@@ -168,8 +168,9 @@ class CacheManager(object):
                     self.__upstream_update_key(ns, existing_key)
                 else:
                     space_needed = self.__need_space(ns, req_ci_num, item[self.ITEM_SIZE_KEY])
-                    if space_needed:
-                        freed_space = self.__pop_least_popular_keys(self, ns, item['traffic'], space_needed)
+                    if space_needed > 0:
+                        logging.info('Additional space for namespaces required: %s' % mb(space_needed))
+                        freed_space = self.__pop_least_popular_keys(ns, item['traffic'], space_needed)
                         if freed_space < space_needed:
                             logging.info('Not enough space for key %s (size: %s, require add.space: %s kb)' % (item['key'], item[self.ITEM_SIZE_KEY] / 1024.0, space_needed / 1024.0))
                             continue
@@ -202,12 +203,19 @@ class CacheManager(object):
             for gid in cur_groups - ext_groups:
                 group = storage.groups[gid]
                 self.instances[group].remove_file(item[self.ITEM_SIZE_KEY])
+                self.__namespaces[ns]['cache_size'] -= item[self.ITEM_SIZE_KEY]
+                logging.info('Namespace %s: cache size changed -%s = %s' %
+                             (ns, mb(item[self.ITEM_SIZE_KEY]), mb(self.__namespaces[ns]['cache_size'])))
             for gid in ext_groups - cur_groups:
                 group = storage.groups[gid]
                 self.instances[group].add_file(item[self.ITEM_SIZE_KEY])
+                self.__namespaces[ns]['cache_size'] += item[self.ITEM_SIZE_KEY]
+                logging.info('Namespace %s: cache size changed +%s = %s' %
+                             (ns, mb(item[self.ITEM_SIZE_KEY]), mb(self.__namespaces[ns]['cache_size'])))
 
-            # ns_cache_sizes[namespace] += item[self.ITEM_SIZE_KEY] * len(ext_groups)
+        self.__sync_removed(keys_to_remove, namespaces, passive=passive)
 
+    def __sync_removed(self, keys_to_remove, namespaces, passive=True):
         for ns in namespaces:
             for key in keys_to_remove[ns]:
                 existing_key = self.keys[ns][key]
@@ -218,14 +226,12 @@ class CacheManager(object):
                     self.__upstream_remove_key(ns, existing_key)
 
                 for gid in existing_key['dgroups']:
-                    group = storage.groups[gid]
-                    self.instances[group].remove_file(existing_key[self.ITEM_SIZE_KEY])
+                    self.instances[gid].remove_file(existing_key[self.ITEM_SIZE_KEY])
+                    self.__namespaces[ns]['cache_size'] -= existing_key[self.ITEM_SIZE_KEY]
+                    logging.info('Namespace %s: cache size changed -%s = %s' %
+                                 (ns, mb(existing_key[self.ITEM_SIZE_KEY]), mb(self.__namespaces[ns]['cache_size'])))
 
                 del self.keys[ns][key]
-
-        # for ns, ns_stat in self.__namespaces.iteritems():
-        #     ns_stat['cache_size'] = ns_cache_sizes[ns]
-        #     logging.info('Cache size for cache namespace %s: %s kb' % (ns, ns_stat['cache_size'] / 1024.0))
 
     def __upstream_update_key(self, namespace, key):
         key_ = key['key']
@@ -291,34 +297,26 @@ class CacheManager(object):
 
     def __need_space(self, namespace, req_ci_num, filesize):
         ns_stat = self.__namespaces[namespace]
-        return (ns_stat['total_space'] - ns_stat['cache_size']) > (filesize * req_ci_num)
+        return (filesize * req_ci_num) - (ns_stat['total_space'] - ns_stat['cache_size'])
 
-    def __clear_ns_space(self, namespace, cis, key):
-        space = len(cis) * key[self.ITEM_SIZE_KEY]
-        self.__namespaces[namespace]['cache_size'] -= space
-        return space
-
-    def __pop_least_popular_keys(self, namespace, ts_traffic, space_needed=0):
+    def __pop_least_popular_keys(self, namespace, traffic, space_needed=0):
         sorted_keys = sorted(self.keys[namespace], key=lambda k: k['traffic'], reverse=True)
         l_key, sorted_keys = sorted_keys[-1], sorted_keys[:-1]
 
         freed_space = 0
 
-        while freed_space < space_needed and ts_traffic > lkey['traffic']:
+        keys_to_remove = {namespace: set()}
 
-            # create task on removal
+        while freed_space < space_needed and traffic > l_key['traffic']:
 
-            del self.keys[namespace][l_key['key']]
+            keys_to_remove[namespace].add(l_key['key'])
 
-            space = self.__clear_ns_space(l_key['dgroups'], l_key)
-            for gid in l_key['dgroups']:
-                self.instances[gid].remove_file(l_key[self.ITEM_SIZE_KEY])
-
-            freed_space += space
+            freed_space += len(l_key['dgroups']) * l_key[self.ITEM_SIZE_KEY]
             l_key, sorted_keys = sorted_keys[-1], sorted_keys[:-1]
 
-        return freed_space
+        self.__sync_removed(keys_to_remove, [namespace], passive=False)
 
+        return freed_space
 
     def __bandwidth_degrade(self, la):
         """Returns the performance degradation coefficient"""
@@ -337,7 +335,7 @@ class CacheManager(object):
                 logging.info('Adding new cache instance (group %s)' % g)
                 ci = CacheInstance(g)
                 self.instances[ci] = ci
-
+                self.__update_namespaces_size(ci)
 
             logging.info('Current cache instances: %s' % self.instances.keys())
 
@@ -356,6 +354,11 @@ class CacheManager(object):
             cache_status_update_period = config['cache'].get('status_update_period', 60)
             self.__tq.add_task_in('bandwidth_update', cache_status_update_period, self.cache_status_update)
 
+    def __update_namespaces_size(self, ci):
+        for ns, ns_stat in self.__namespaces.iteritems():
+            ns_stat['total_space'] += ci.total_space
+            logging.info('Total space of namespace %s increased by %s, total %s' %
+                         (ns, mb(ci.total_space), mb(ns_stat['total_space'])))
 
     def __cache_instances_num(self, traffic):
         return min(len(self.instances), int(traffic / self.__bw_per_instance) + 1)
@@ -429,6 +432,9 @@ class CacheManager(object):
         return sorted(cis, key=lambda ci: ci.weight, reverse=True)[:req_num]
 
 
+def mb(bytes):
+    return '%.2f Mb' % (float(bytes) / (1024 * 1024))
+
 class CacheInstance(object):
 
     LA_THRESHOLD = 10.0
@@ -436,12 +442,17 @@ class CacheInstance(object):
 
     def __init__(self, group):
         self.group = group
-        self.total_space = group.get_stat().total_space
+        # self.total_space = 40000000
+        #self.total_space = group.get_stat().total_space
         self.cache_size = 0
 
     @property
     def free_space(self):
         return self.total_space - self.cache_size
+
+    @property
+    def total_space(self):
+        return self.group.get_stat().total_space
 
     @property
     def load_average(self):
