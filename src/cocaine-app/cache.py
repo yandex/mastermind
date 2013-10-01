@@ -219,7 +219,7 @@ class CacheManager(object):
 
                 for gid in existing_key['dgroups']:
                     group = storage.groups[gid]
-                    self.instances[group].remove_file(item[self.ITEM_SIZE_KEY])
+                    self.instances[group].remove_file(existing_key[self.ITEM_SIZE_KEY])
 
                 del self.keys[ns][key]
 
