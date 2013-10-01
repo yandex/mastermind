@@ -425,6 +425,7 @@ class CacheManager(object):
 class CacheInstance(object):
 
     LA_THRESHOLD = 10.0
+    MAX_LA = 10.0
 
     def __init__(self, group):
         self.group = group
@@ -437,7 +438,7 @@ class CacheInstance(object):
 
     @property
     def load_average(self):
-        return self.group.get_stat().load_average
+        return min(self.group.get_stat().load_average, self.MAX_LA)
 
     @property
     def status(self):
@@ -445,7 +446,7 @@ class CacheInstance(object):
 
     @property
     def weight(self):
-        return ((1 - (self.load_average / self.LA_THRESHOLD)) +
+        return (2 ** (1 - (self.load_average / self.LA_THRESHOLD)) +
                 (self.free_space / self.total_space))
 
     def add_file(self, filesize):
