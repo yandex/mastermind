@@ -445,7 +445,7 @@ class Couple(object):
     @property
     def namespace(self):
         assert self.groups
-        return self.groups[0].meta['namespace']
+        return self.groups[0].meta and self.groups[0].meta['namespace'] or None
 
     def as_tuple(self):
         return tuple(group.group_id for group in self.groups)

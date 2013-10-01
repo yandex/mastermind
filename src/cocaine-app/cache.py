@@ -3,6 +3,7 @@ from functools import wraps
 from itertools import imap
 import json
 import random
+import traceback
 import threading
 
 from cocaine.logging import Logger
@@ -191,9 +192,13 @@ class CacheManager(object):
 
             for gid in cur_groups - ext_groups:
                 group = storage.groups[gid]
+                if not group in self.instances:
+                    continue
                 self.instances[group].remove_file(item[self.ITEM_SIZE_KEY])
             for gid in ext_groups - cur_groups:
                 group = storage.groups[gid]
+                if not group in self.instances:
+                    continue
                 self.instances[group].add_file(item[self.ITEM_SIZE_KEY])
 
             # ns_cache_sizes[namespace] += item[self.ITEM_SIZE_KEY] * len(ext_groups)
@@ -314,7 +319,7 @@ class CacheManager(object):
         return 1.0 - ((la_ - self.__bw_degradation_threshold) / (10 - self.__bw_degradation_threshold)) ** 1.5
 
     def cache_groups(self):
-        couples = filter(lambda c: c.status == storage.Status.OK and c.namespace == 'cache', storage.couples)
+        couples = filter(lambda c: c.namespace == 'cache', storage.couples)
         return set([g for c in couples for g in c.groups])
 
     def cache_status_update(self):
