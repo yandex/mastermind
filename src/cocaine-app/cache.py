@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import copy
 from functools import wraps
 from itertools import imap
 import json
@@ -102,12 +103,13 @@ class CacheManager(object):
 
         files = sorted(files, key=lambda f: f['traffic'], reverse=True)
 
-        self.__sync(files, namespace=ns, with_update=True)
+        self.__sync(files, namespace=ns, passive=False)
 
         return 'processed'
 
-    def __sync(self, items, namespace=None, with_update=False):
-
+    def __sync(self, items, namespace=None, passive=True):
+        """Keeps the internal state up with remote meta state.
+        Updates current state along with remote meta state when passive=False"""
         keys_to_remove = {}
 
         if namespace and namespace in self.__namespaces:
@@ -134,13 +136,18 @@ class CacheManager(object):
 
             existing_key = self.keys[ns].get(item['key'])
 
-            ext_groups = set(item.get('dgroups') or [])
+            ext_groups = set()
+            for gid in (item.get('dgroups') or []):
+                group = storage.groups[gid]
+                if not group in self.instances:
+                    continue
+                ext_groups.add(gid)
             cur_groups = set(existing_key and existing_key['dgroups'] or [])
 
             if existing_key:
                 logging.info('Existing key: %s' % item['key'])
 
-            if with_update:
+            if not passive:
                 req_ci_num = self.__cache_instances_num(item['traffic'])
 
                 req_ci_num -= len(cur_groups)
@@ -153,7 +160,6 @@ class CacheManager(object):
 
                     gids = set([ci.group.group_id for ci in cis])
                     ext_groups = cur_groups - gids
-                    # TODO: maybe move to outer level
                     existing_key['dgroups'] = list(ext_groups)
 
                     task = __transport_key(existing_key, action='remove', dgroups=list(gids))
@@ -187,18 +193,17 @@ class CacheManager(object):
 
                     self.__upstream_update_key(ns, updated_key)
 
-            if not with_update:
-                self.keys[ns][item['key']] = item
+            if passive:
+                updated_key = copy.copy(item)
+                # dgroups should contain only groups that are in our cache instances
+                updated_key['dgroups'] = list(ext_groups)
+                self.keys[ns][item['key']] = updated_key
 
             for gid in cur_groups - ext_groups:
                 group = storage.groups[gid]
-                if not group in self.instances:
-                    continue
                 self.instances[group].remove_file(item[self.ITEM_SIZE_KEY])
             for gid in ext_groups - cur_groups:
                 group = storage.groups[gid]
-                if not group in self.instances:
-                    continue
                 self.instances[group].add_file(item[self.ITEM_SIZE_KEY])
 
             # ns_cache_sizes[namespace] += item[self.ITEM_SIZE_KEY] * len(ext_groups)
@@ -207,7 +212,7 @@ class CacheManager(object):
             for key in keys_to_remove[ns]:
                 existing_key = self.keys[ns][key]
 
-                if with_update:
+                if not passive:
                     task = self.__transport_key(existing_key, action='remove', dgroups=existing_key['dgroups'])
                     transport.put(json.dumps(task))
                     self.__upstream_remove_key(ns, existing_key)
@@ -249,8 +254,10 @@ class CacheManager(object):
         res = []
         for ns_keys in self.keys.itervalues():
             for key, item in ns_keys.iteritems():
-                groups = item['dgroups']
-                res.append((key, tuple(groups)))
+                gids = item['dgroups']
+                cis = [self.instances[storage.groups[gid]] for gid in gids]
+                good_cis = filter(lambda ci: ci.is_ok(), cis)
+                res.append((key, tuple([ci.group.group_id for ci in good_cis])))
         return res
 
     def get_cached_keys_by_group(self, request):
@@ -443,6 +450,9 @@ class CacheInstance(object):
     @property
     def status(self):
         return self.group.status
+
+    def is_ok(self):
+        return self.status == storage.Status.COUPLED
 
     @property
     def weight(self):
