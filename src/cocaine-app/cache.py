@@ -56,12 +56,6 @@ class CacheManager(object):
         self.keys = {}
         self.instances = {}
 
-    def add_namespace(self, namespace):
-        total_space = sum(map(lambda g: g.get_stat().total_space, self.cache_groups()))
-        self.__namespaces.setdefault(namespace, {'total_space': total_space,
-                                                 'cache_size': 0.0})
-        self.keys[namespace] = {}
-
     def __loads(self, item):
         try:
             return json.loads(item.indexes[0].data)
@@ -153,46 +147,47 @@ class CacheManager(object):
                 req_ci_num -= len(cur_groups)
                 logging.info('Key %s already dispatched %s cache instances, %s more required' % (item['key'], len(cur_groups), req_ci_num))
 
+                key = {}
+                for k in ('key', self.ITEM_SIZE_KEY, 'traffic', 'sgroups'):
+                    key[k] = item[k]
+
+                updated_key = self.keys[ns].setdefault(key['key'], {'dgroups': []})
+                updated_key.update(key)
+                updated_key['namespace'] = ns
+
                 if req_ci_num == 0:
                     ext_groups = cur_groups
                 elif req_ci_num < 0:
-                    cis = self.__cis_choose_remove(abs(req_ci_num), existing_key['dgroups'])
+                    cis = self.__cis_choose_remove(abs(req_ci_num), updated_key['dgroups'])
 
                     gids = set([ci.group.group_id for ci in cis])
                     ext_groups = cur_groups - gids
-                    existing_key['dgroups'] = list(ext_groups)
+                    updated_key['dgroups'] = list(ext_groups)
 
-                    task = __transport_key(existing_key, action='remove', dgroups=list(gids))
+                    task = __transport_key(updated_key, action='remove', dgroups=list(gids))
                     transport.put(json.dumps(task))
-
-                    self.__upstream_update_key(ns, existing_key)
                 else:
                     space_needed = self.__need_space(ns, req_ci_num, item[self.ITEM_SIZE_KEY])
                     if space_needed > 0:
                         logging.info('Additional space for namespaces required: %s' % mb(space_needed))
-                        freed_space = self.__pop_least_popular_keys(ns, item['traffic'], space_needed)
+
+                        keys_removed, freed_space = self.__pop_least_popular_keys(ns, item['traffic'], space_needed)
+                        keys_to_remove[ns] = keys_to_remove[ns] - keys_removed[ns]
                         if freed_space < space_needed:
                             logging.info('Not enough space for key %s (size: %s, require add.space: %s kb)' % (item['key'], item[self.ITEM_SIZE_KEY] / 1024.0, space_needed / 1024.0))
                             continue
 
                     cis = self.__cis_choose_add(req_ci_num, item['sgroups'], item['traffic'], item[self.ITEM_SIZE_KEY])
 
-                    key = {}
-                    for k in ('key', self.ITEM_SIZE_KEY, 'traffic', 'sgroups'):
-                        key[k] = item[k]
-
-                    updated_key = self.keys[ns].setdefault(key['key'], {'dgroups': []})
-                    updated_key.update(key)
                     ext_groups = set(updated_key['dgroups'] + [ci.group.group_id for ci in cis])
                     updated_key['dgroups'] = list(ext_groups)
-                    updated_key['namespace'] = ns
 
                     # TODO: exclude existing dgroups from task
                     task = self.__transport_key(updated_key, action='add')
                     logging.info('Put task for cache distribution: %s' % task)
                     transport.put(json.dumps(task))
 
-                    self.__upstream_update_key(ns, updated_key)
+                self.__upstream_update_key(ns, updated_key)
 
             if passive:
                 updated_key = copy.copy(item)
@@ -300,7 +295,8 @@ class CacheManager(object):
         return (filesize * req_ci_num) - (ns_stat['total_space'] - ns_stat['cache_size'])
 
     def __pop_least_popular_keys(self, namespace, traffic, space_needed=0):
-        sorted_keys = sorted(self.keys[namespace], key=lambda k: k['traffic'], reverse=True)
+        sorted_keys = sorted(self.keys[namespace].itervalues(),
+                             key=lambda k: k['traffic'], reverse=True)
         l_key, sorted_keys = sorted_keys[-1], sorted_keys[:-1]
 
         freed_space = 0
@@ -314,9 +310,10 @@ class CacheManager(object):
             freed_space += len(l_key['dgroups']) * l_key[self.ITEM_SIZE_KEY]
             l_key, sorted_keys = sorted_keys[-1], sorted_keys[:-1]
 
+        logging.info('Keys to be removed to free space: %s' % (keys_to_remove,))
         self.__sync_removed(keys_to_remove, [namespace], passive=False)
 
-        return freed_space
+        return keys_to_remove, freed_space
 
     def __bandwidth_degrade(self, la):
         """Returns the performance degradation coefficient"""
@@ -326,6 +323,12 @@ class CacheManager(object):
     def cache_groups(self):
         couples = filter(lambda c: c.namespace == 'cache', storage.couples)
         return set([g for c in couples for g in c.groups])
+
+    def add_namespace(self, namespace):
+        total_space = sum(map(lambda g: g.get_stat().total_space, self.cache_groups()))
+        self.__namespaces.setdefault(namespace, {'total_space': total_space,
+                                                 'cache_size': 0.0})
+        self.keys[namespace] = {}
 
     def cache_status_update(self):
         try:
@@ -434,6 +437,7 @@ class CacheManager(object):
 
 def mb(bytes):
     return '%.2f Mb' % (float(bytes) / (1024 * 1024))
+
 
 class CacheInstance(object):
 
