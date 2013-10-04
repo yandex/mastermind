@@ -26,7 +26,6 @@ def update_lock(func):
     @wraps(func)
     def wrapped(*args, **kwargs):
         with __update_lock:
-            logging.info('Lock acquired')
             return func(*args, **kwargs)
 
     return wrapped
@@ -174,7 +173,7 @@ class CacheManager(object):
                         keys_removed, freed_space = self.__pop_least_popular_keys(ns, item['traffic'], space_needed)
                         keys_to_remove[ns] = keys_to_remove[ns] - keys_removed[ns]
                         if freed_space < space_needed:
-                            logging.info('Not enough space for key %s (size: %s, require add.space: %s kb)' % (item['key'], item[self.ITEM_SIZE_KEY] / 1024.0, space_needed / 1024.0))
+                            logging.info('Not enough space for key %s (size: %s, require add.space: %s)' % (item['key'], mb(item[self.ITEM_SIZE_KEY]), mb(space_needed)))
                             continue
 
                     cis = self.__cis_choose_add(req_ci_num, item['sgroups'], item['traffic'], item[self.ITEM_SIZE_KEY])
@@ -194,6 +193,7 @@ class CacheManager(object):
                 # dgroups should contain only groups that are in our cache instances
                 updated_key['dgroups'] = list(ext_groups)
                 self.keys[ns][item['key']] = updated_key
+                logging.info('External key %s' % (updated_key,))
 
             for gid in cur_groups - ext_groups:
                 group = storage.groups[gid]
@@ -217,6 +217,7 @@ class CacheManager(object):
 
                 if not passive:
                     task = self.__transport_key(existing_key, action='remove', dgroups=existing_key['dgroups'])
+                    logging.info('Put task for cache distribution: %s' % task)
                     transport.put(json.dumps(task))
                     self.__upstream_remove_key(ns, existing_key)
 
@@ -303,6 +304,7 @@ class CacheManager(object):
 
         keys_to_remove = {namespace: set()}
 
+        logging.info('Traffic checking %s > %s' % (traffic, l_key['traffic']))
         while freed_space < space_needed and traffic > l_key['traffic']:
 
             keys_to_remove[namespace].add(l_key['key'])
@@ -446,8 +448,6 @@ class CacheInstance(object):
 
     def __init__(self, group):
         self.group = group
-        # self.total_space = 40000000
-        #self.total_space = group.get_stat().total_space
         self.cache_size = 0
 
     @property
@@ -476,13 +476,13 @@ class CacheInstance(object):
 
     def add_file(self, filesize):
         self.cache_size += filesize
-        logging.info('Added file to cache instance %s: +%s kb = %s kb' % (
-                     self, filesize / 1024.0, self.cache_size / 1024.0))
+        logging.info('Added file to cache instance %s: +%s = %s' % (
+                     self, mb(filesize), mb(self.cache_size )))
 
     def remove_file(self, filesize):
         self.cache_size = max(self.cache_size - filesize, 0)
-        logging.info('Removed file from cache instance %s: -%s kb = %s kb' % (
-                     self, filesize / 1024.0, self.cache_size / 1024.0))
+        logging.info('Removed file from cache instance %s: -%s = %s' % (
+                     self, mb(filesize), mb(self.cache_size)))
 
     def __eq__(self, other):
         if isinstance(other, storage.Group):
