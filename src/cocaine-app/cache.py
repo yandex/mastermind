@@ -259,7 +259,8 @@ class CacheManager(object):
                 gids = item['dgroups']
                 cis = [self.instances[storage.groups[gid]] for gid in gids]
                 good_cis = filter(lambda ci: ci.is_ok(), cis)
-                res.append((key, tuple([ci.group.group_id for ci in good_cis])))
+                if good_cis:
+                    res.append((key, tuple([ci.group.group_id for ci in good_cis])))
         return res
 
     def get_cached_keys_by_group(self, request):
@@ -346,7 +347,7 @@ class CacheManager(object):
 
             las = sorted([c.load_average for c in self.instances])
             logging.info(las)
-            median = las[len(las) / 2]
+            median = len(las) and las[len(las) / 2] or 0.0
             logging.info('Current LA median: %s' % median)
 
             self.__bw_per_instance = (self.__base_bw_per_instance
