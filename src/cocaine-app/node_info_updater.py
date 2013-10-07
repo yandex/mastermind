@@ -1,29 +1,35 @@
 # -*- coding: utf-8 -*-
+import threading
+import time
+import traceback
+
 import elliptics
 
 import balancer
 import balancelogicadapter as bla
 import timed_queue
-import threading
-import traceback
-import time
 import storage
 
-mastermind_max_group_key = "mastermind:max_group"
+
+MASTERMIND_MAX_GROUP_KEY = 'mastermind:max_group'
 
 __config = {}
 __config_lock = threading.Lock()
 
+
 def get_symm_group_update_task_id(group_id):
     return "update_symms_for_group_%s" % str(group_id)
+
 
 def set_config_value(key, value):
     with __config_lock:
         __config[key] = value
 
+
 def get_config_value(key, default):
     with __config_lock:
         return __config.get(key, default)
+
 
 class NodeInfoUpdater:
     def __init__(self, logging, node):
@@ -50,12 +56,12 @@ class NodeInfoUpdater:
                     self.updateSymmGroup,
                     group)
             try:
-                max_group = int(self.__node.meta_session.read_data(mastermind_max_group_key))
+                max_group = int(self.__node.meta_session.read_data(MASTERMIND_MAX_GROUP_KEY))
             except:
                 max_group = 0
             curr_max_group = max((g.group_id for g in storage.groups))
             if curr_max_group > max_group:
-                self.__node.meta_session.write_data(mastermind_max_group_key, str(curr_max_group))
+                self.__node.meta_session.write_data(MASTERMIND_MAX_GROUP_KEY, str(curr_max_group))
         except Exception as e:
             self.__logging.error("Error while loading node stats: %s\n%s" % (str(e), traceback.format_exc()))
         finally:
