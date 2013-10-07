@@ -22,7 +22,7 @@ host_param = ['h',
 def service(host):
     parts = host.split(':', 1)
     hostname, port = parts[0], len(parts) == 2 and int(parts[1]) or SERVICE_DEFAULT_PORT
-    return Service(SERVICE_APP_NAME, endpoint=hostname, port=port)
+    return Service(SERVICE_APP_NAME, host=hostname, port=port)
 
 
 # group commands

@@ -1,3 +1,9 @@
+mastermind (2.4) lucid; urgency=low
+
+  * Compatibility with cocaine 0.10.6 
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 07 Oct 2013 13:19:17 +0400
+
 mastermind (2.3) lucid; urgency=low
 
   * Namespaces implemented
