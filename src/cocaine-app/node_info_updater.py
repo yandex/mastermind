@@ -7,11 +7,10 @@ import elliptics
 
 import balancer
 import balancelogicadapter as bla
+import keys
 import timed_queue
 import storage
 
-
-MASTERMIND_MAX_GROUP_KEY = 'mastermind:max_group'
 
 __config = {}
 __config_lock = threading.Lock()
@@ -56,12 +55,12 @@ class NodeInfoUpdater:
                     self.updateSymmGroup,
                     group)
             try:
-                max_group = int(self.__node.meta_session.read_data(MASTERMIND_MAX_GROUP_KEY))
+                max_group = int(self.__node.meta_session.read_data(keys.MASTERMIND_MAX_GROUP_KEY))
             except:
                 max_group = 0
             curr_max_group = max((g.group_id for g in storage.groups))
             if curr_max_group > max_group:
-                self.__node.meta_session.write_data(MASTERMIND_MAX_GROUP_KEY, str(curr_max_group))
+                self.__node.meta_session.write_data(keys.MASTERMIND_MAX_GROUP_KEY, str(curr_max_group))
         except Exception as e:
             self.__logging.error("Error while loading node stats: %s\n%s" % (str(e), traceback.format_exc()))
         finally:
