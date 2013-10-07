@@ -95,11 +95,17 @@ class NodeInfoUpdater:
         except Exception as e:
             self.__logging.error("Failed to read symmetric_groups from group %d (%s), %s" % (group.group_id, str(e), traceback.format_exc()))
             group.parse_meta(None)
-            group.update_status()
+            if group.couple:
+                group.couple.update_status()
+            else:
+                group.update_status()
         except:
             self.__logging.error("Failed2 to read symmetric_groups from group %d (%s), %s" % (group.group_id, sys.exc_info()[0], traceback.format_exc()))
             group.parse_meta(None)
-            group.update_status()
+            if group.couple:
+                group.couple.update_status()
+            else:
+                group.update_status()
 
     def stop(self):
         self.__tq.shutdown()
