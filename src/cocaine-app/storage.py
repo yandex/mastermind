@@ -17,6 +17,7 @@ class Status(object):
     BAD = 'BAD'
     RO = 'RO'
     STALLED = 'STALLED'
+    FROZEN = 'FROZEN'
 
 class Repositary(object):
     def __init__(self, constructor):
@@ -373,6 +374,7 @@ class Couple(object):
     def __init__(self, groups):
         self.status = Status.INIT
         self.groups = sorted(groups, key=lambda group: group.group_id)
+        self.meta = None
         for group in self.groups:
             if group.couple:
                 raise Exception('Group %s is already in couple' % (repr(group)))
@@ -387,6 +389,10 @@ class Couple(object):
 
     def update_status(self):
         statuses = [group.update_status() for group in self.groups]
+
+        if self.meta and self.meta.get('frozen', False):
+            self.status = Status.FROZEN
+            return self.status
 
         meta = self.groups[0].meta
         if any([meta != group.meta for group in self.groups]):
@@ -426,6 +432,31 @@ class Couple(object):
 
         return True
 
+    def parse_meta(self, meta):
+        if meta is None:
+            self.meta = None
+            return
+
+        meta = msgpack.unpackb(meta)
+        if meta['version'] == 1:
+            self.meta = meta
+        else:
+            raise ValueError('Unable to parse couple meta')
+
+    def freeze(self):
+        if not self.meta:
+            self.meta = self.compose_meta()
+        self.meta['frozen'] = True
+
+    def unfreeze(self):
+        if not self.meta:
+            self.meta = self.compose_meta()
+        self.meta['frozen'] = False
+
+    @property
+    def frozen(self):
+        return self.meta and self.meta['frozen']
+
     def destroy(self):
         for group in self.groups:
             group.couple = None
@@ -435,7 +466,13 @@ class Couple(object):
         self.groups = []
         self.status = Status.INIT
 
-    def compose_meta(self, namespace):
+    def compose_meta(self, frozen=False):
+        meta = {'version': 1}
+        if frozen:
+            meta['frozen'] = True
+        return meta
+
+    def compose_group_meta(self, namespace):
         return {
             'version': 2,
             'couple': self.as_tuple(),

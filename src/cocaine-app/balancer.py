@@ -10,6 +10,7 @@ import msgpack
 
 import balancelogicadapter as bla
 import balancelogic
+import keys
 import storage
 
 
@@ -17,10 +18,11 @@ logging = Logger()
 
 logging.info("balancer.py")
 
-SYMMETRIC_GROUPS_KEY = "metabalancer\0symmetric_groups"
-
 
 class Balancer(object):
+
+    NOT_BAD_STATUSES = set([storage.Status.OK, storage.Status.FROZEN])
+
     def __init__(self, n):
         self.node = n
 
@@ -33,8 +35,13 @@ class Balancer(object):
         return result
 
     def get_bad_groups(self, request):
-        result = [couple.as_tuple() for couple in storage.couples if couple.status != storage.Status.OK]
+        result = [couple.as_tuple() for couple in storage.couples if couple.status not in self.NOT_BAD_STATUSES]
         logging.debug("bad_symm_groups: " + str(result))
+        return result
+
+    def get_frozen_groups(self, request):
+        result = [couple.as_tuple() for couple in storage.couples if couple.status == storage.Status.FROZEN]
+        logging.debug("frozen_couples: " + str(result))
         return result
 
     def get_empty_groups(self, request):
@@ -287,14 +294,72 @@ class Balancer(object):
                 raise Exception('Incorrect groups count')
 
             try:
-                max_group = int(self.node.meta_session.read_data("mastermind:max_group"))
+                max_group = int(self.node.meta_session.read_data(keys.MASTERMIND_MAX_GROUP_KEY))
             except:
                 max_group = 0
 
             new_max_group = max_group + groups_count
-            self.node.meta_session.write_data("mastermind:max_group", str(new_max_group))
+            self.node.meta_session.write_data(keys.MASTERMIND_MAX_GROUP_KEY, str(new_max_group))
 
             return range(max_group+1, max_group+1 + groups_count)
+
+        except Exception as e:
+            logging.error("Mastermind error: " + str(e) + "\n" + traceback.format_exc())
+            return {'Mastermind error': str(e)}
+
+    def __get_couple(self, groups):
+        couple_str = ':'.join(map(str, sorted(groups, key=lambda x: int(x))))
+        try:
+            couple = storage.couples[couple_str]
+        except KeyError:
+            raise ValueError('Couple %s not found' % couple_str)
+        return couple
+
+    def __sync_couple_meta(self, couple):
+
+        key = keys.MASTERMIND_COUPLE_META_KEY % str(couple)
+
+        try:
+            meta = self.node.meta_session.read_latest(key)
+        except elliptics.NotFoundError:
+            meta = None
+        couple.parse_meta(meta)
+
+    def __update_couple_meta(self, couple):
+
+        key = keys.MASTERMIND_COUPLE_META_KEY % str(couple)
+
+        packed = msgpack.packb(couple.meta)
+        logging.info('packed meta for couple %s: \"%s\"' % (couple, str(packed).encode("hex")))
+        self.node.meta_session.write_data(key, packed)
+
+        couple.update_status()
+
+    def freeze_couple(self, request):
+        try:
+            logging.info('freezing couple %s' % str(request))
+            couple = self.__get_couple(request)
+
+            self.__sync_couple_meta(couple)
+            if couple.frozen:
+                raise ValueError('Couple %s is already frozen' % couple)
+            couple.freeze()
+            self.__update_couple_meta(couple)
+
+        except Exception as e:
+            logging.error("Mastermind error: " + str(e) + "\n" + traceback.format_exc())
+            return {'Mastermind error': str(e)}
+
+    def unfreeze_couple(self, request):
+        try:
+            logging.info('unfreezing couple %s' % str(request))
+            couple = self.__get_couple(request)
+
+            self.__sync_couple_meta(couple)
+            if not couple.frozen:
+                raise ValueError('Couple %s is not frozen' % couple)
+            couple.unfreeze()
+            self.__update_couple_meta(couple)
 
         except Exception as e:
             logging.error("Mastermind error: " + str(e) + "\n" + traceback.format_exc())
@@ -314,7 +379,7 @@ def kill_symm_group(n, groups):
     logging.info("Killing symm groups: %s" % str(groups))
     s = elliptics.Session(n)
     s.add_groups(groups)
-    s.remove(SYMMETRIC_GROUPS_KEY)
+    s.remove(keys.SYMMETRIC_GROUPS_KEY)
 
 
 def make_symm_group(n, couple, namespace):
@@ -326,10 +391,10 @@ def make_symm_group(n, couple, namespace):
     bad = ()
     for group in couple:
         try:
-            packed = msgpack.packb(couple.compose_meta(namespace))
+            packed = msgpack.packb(couple.compose_group_meta(namespace))
             logging.info("packed couple for group %d: \"%s\"" % (group.group_id, str(packed).encode("hex")))
             s.add_groups([group.group_id])
-            s.write_data(SYMMETRIC_GROUPS_KEY, packed)
+            s.write_data(keys.SYMMETRIC_GROUPS_KEY, packed)
             good.append(group.group_id)
         except Exception as e:
             logging.error("Failed to write symm group info, group %d: %s\n%s"
