@@ -350,6 +350,8 @@ class Balancer(object):
             logging.error("Mastermind error: " + str(e) + "\n" + traceback.format_exc())
             return {'Mastermind error': str(e)}
 
+        return True
+
     def unfreeze_couple(self, request):
         try:
             logging.info('unfreezing couple %s' % str(request))
@@ -364,6 +366,8 @@ class Balancer(object):
         except Exception as e:
             logging.error("Mastermind error: " + str(e) + "\n" + traceback.format_exc())
             return {'Mastermind error': str(e)}
+
+        return True
 
 
 def handlers(b):
