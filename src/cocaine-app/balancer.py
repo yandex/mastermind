@@ -295,7 +295,7 @@ class Balancer(object):
 
             try:
                 max_group = int(self.node.meta_session.read_data(keys.MASTERMIND_MAX_GROUP_KEY))
-            except:
+            except elliptics.NotFoundError:
                 max_group = 0
 
             new_max_group = max_group + groups_count
