@@ -444,7 +444,7 @@ class Couple(object):
 
     @property
     def namespace(self):
-        assert self.groups
+        assert self.groups, "Couple %s has empty group list (id: %s)" % (repr(self), id(self))
         return self.groups[0].meta and self.groups[0].meta['namespace'] or None
 
     def as_tuple(self):
