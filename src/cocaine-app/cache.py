@@ -163,7 +163,7 @@ class CacheManager(object):
                     ext_groups = cur_groups - gids
                     updated_key['dgroups'] = list(ext_groups)
 
-                    task = __transport_key(updated_key, action='remove', dgroups=list(gids))
+                    task = self.__transport_key(updated_key, action='remove', dgroups=list(gids))
                     transport.put(json.dumps(task))
                 else:
                     space_needed = self.__need_space(ns, req_ci_num, item[self.ITEM_SIZE_KEY])
