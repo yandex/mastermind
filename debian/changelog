@@ -1,3 +1,9 @@
+mastermind (2.5) lucid; urgency=low
+
+  * New feature: frozen couples
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 08 Oct 2013 18:10:01 +0400
+
 mastermind (2.4) lucid; urgency=low
 
   * Compatibility with cocaine 0.10.6 

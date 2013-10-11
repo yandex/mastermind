@@ -77,6 +77,14 @@ def couple_list_symmetric(host=None):
     print res
 
 
+@coupleDispatcher.command(name='list-frozen')
+def couple_list_frozen(host=None):
+    '''Get list of good couples from balancer'''
+    s = service(host)
+    res = s.enqueue("get_frozen_groups", "").get()
+    print res
+
+
 @coupleDispatcher.command(name='build')
 def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:2)'),
                  namespace=('n', '', 'Set custom namespace for couple'), host=None):
@@ -156,6 +164,24 @@ def cache_keys_by_group(group, host=None):
     group = int(group)
 
     res = s.enqueue('get_cached_keys_by_group', msgpack.packb(group)).get()
+
+@coupleDispatcher.command(name='freeze')
+def couple_freeze(couple, host=None):
+    '''Freeze symmetric group (freeze couples are excluded from balancing)'''
+    s = service(host)
+    groups = [int(g) for g in couple.split(':')]
+
+    res = s.enqueue('freeze_couple', msgpack.packb(groups)).get()
+    print res
+
+
+@coupleDispatcher.command(name='unfreeze')
+def couple_unfreeze(couple, host=None):
+    '''Unfreeze symmetric group'''
+    s = service(host)
+    groups = [int(g) for g in couple.split(':')]
+
+    res = s.enqueue('unfreeze_couple', msgpack.packb(groups)).get()
     print res
 
 
