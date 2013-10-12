@@ -53,22 +53,21 @@ class Balancer(object):
 
     def get_group_weights(self, request):
         try:
-            sizes = set()
-            namespaces = set()
+            namespaces = {}
             all_symm_group_objects = []
             for couple in storage.couples:
                 if couple.status != storage.Status.OK:
                     continue
 
                 symm_group = bla.SymmGroup(couple)
-                sizes.add(len(couple))
-                namespaces.add(couple.namespace)
+                namespaces.setdefault(couple.namespace, set())
+                namespaces[couple.namespace].add(len(couple))
                 all_symm_group_objects.append(symm_group)
                 logging.debug(str(symm_group))
 
             result = {}
 
-            for namespace in namespaces:
+            for namespace, sizes in namespaces.iteritems():
                 for size in sizes:
                     (group_weights, info) = balancelogic.rawBalance(all_symm_group_objects,
                                                                     bla.getConfig(),
