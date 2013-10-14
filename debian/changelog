@@ -1,3 +1,9 @@
+mastermind (2.6.1) lucid; urgency=low
+
+  * Fix for couple weights with different couple sizes
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 14 Oct 2013 18:55:46 +0400
+
 mastermind (2.6.0) lucid; urgency=low
 
   * Cache using gatlinggun
