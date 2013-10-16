@@ -81,7 +81,7 @@ def register_handle(h):
             #msgpack.pack(h(data), response)
             response.write(h(data))
         except Exception as e:
-            logging.error("Balancer error: %s" % traceback.format_exc())
+            logging.error("Balancer error: %s" % traceback.format_exc().replace('\n', '    '))
             response.write({"Balancer error": str(e)})
         response.close()
 

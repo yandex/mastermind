@@ -250,6 +250,7 @@ class CacheManager(object):
             if key['key'] in self.keys[ns]:
                 updated_indexes.append((self.__index_prefix + ns).encode('utf-8'))
                 updated_datas.append(json.dumps(self.keys[ns][key['key']]))
+        logging.info('Updated indexes for key %s: %s %s' % (key_, updated_indexes, updated_datas))
         self.__session.set_indexes(eid, updated_indexes, updated_datas)
 
     def get_cached_keys(self, request):
@@ -320,8 +321,8 @@ class CacheManager(object):
 
     def __bandwidth_degrade(self, la):
         """Returns the performance degradation coefficient"""
-        la_ = min(la, 10)
-        return 1.0 - ((la_ - self.__bw_degradation_threshold) / (10 - self.__bw_degradation_threshold)) ** 1.5
+        la_ = min(la, CacheInstance.MAX_LA - 1)
+        return 1.0 - ((la_ - self.__bw_degradation_threshold) / (CacheInstance.MAX_LA - self.__bw_degradation_threshold)) ** 1.5
 
     def cache_groups(self):
         couples = filter(lambda c: c.namespace == 'cache', storage.couples)
