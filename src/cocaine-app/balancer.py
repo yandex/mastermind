@@ -10,6 +10,7 @@ import msgpack
 
 import balancelogicadapter as bla
 import balancelogic
+from config import config
 import keys
 import storage
 
@@ -42,6 +43,28 @@ class Balancer(object):
     def get_frozen_groups(self, request):
         result = [couple.as_tuple() for couple in storage.couples if couple.status == storage.Status.FROZEN]
         logging.debug("frozen_couples: " + str(result))
+        return result
+
+    def get_closed_groups(self, request):
+        result = []
+        min_free_space = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
+        min_rel_space = config['balancer_config'].get('min_free_space_relative', 0.15)
+
+        logging.debug('configured min_free_space: %s bytes' % min_free_space)
+        logging.debug('configured min_rel_space: %s' % min_rel_space)
+
+        for couple in storage.couples:
+            if couple.status != storage.Status.OK:
+                continue
+
+            stats = couple.get_stat()
+            logging.debug('couple %s: free_space: %s' % (couple, stats.free_space))
+            logging.debug('couple %s: rel_space: %s' % (couple, stats.rel_space))
+            if (stats.free_space >= min_free_space and stats.rel_space >= min_rel_space):
+                continue
+            result.append(couple.as_tuple())
+
+        logging.debug('closed couples: ' + str(result))
         return result
 
     def get_empty_groups(self, request):

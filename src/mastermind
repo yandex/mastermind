@@ -85,6 +85,14 @@ def couple_list_frozen(host=None):
     print res
 
 
+@coupleDispatcher.command(name='list-closed')
+def couple_list_closed(host=None):
+    '''Get list of couples closed to balancer'''
+    s = service(host)
+    res = s.enqueue('get_closed_groups', '').get()
+    print res
+
+
 @coupleDispatcher.command(name='build')
 def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:2)'),
                  namespace=('n', '', 'Set custom namespace for couple'), host=None):
