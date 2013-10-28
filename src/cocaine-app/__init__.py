@@ -62,8 +62,7 @@ logging.info("trace %d" % (i.next()))
 n.meta_session = meta_session
 
 balancelogicadapter.setConfig(config["balancer_config"])
-logging.info("trace node info updater %d" % (i.next()))
-niu = node_info_updater.NodeInfoUpdater(logging, n)
+
 
 logging.info("trace %d" % (i.next()))
 logging.info("before creating worker")
@@ -90,6 +89,11 @@ def register_handle(h):
     return wrapper
 
 
+def init_node_info_updater():
+    logging.info("trace node info updater %d" % (i.next()))
+    niu = node_info_updater.NodeInfoUpdater(logging, n)
+
+
 def init_cache(cache_config):
     manager = cache.CacheManager(n.meta_session, index_prefix=cache_config.get('index_prefix', 'cached_files_'))
     [manager.add_namespace(ns) for ns in cache_config.get('namespaces', [])]
@@ -102,9 +106,9 @@ def init_cache(cache_config):
     return manager
 
 
+
 if 'cache' in config:
     init_cache(config['cache'])
-
 
 b = balancer.Balancer(n)
 
@@ -112,6 +116,7 @@ for handler in balancer.handlers(b):
     logging.info("registering bounded function %s" % handler)
     register_handle(handler)
 
+init_node_info_updater()
 
 logging.info("Starting worker")
 W.run()

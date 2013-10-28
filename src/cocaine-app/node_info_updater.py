@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
+import json
 import threading
 import time
 import traceback
 
+from cocaine.services import Service
 import elliptics
 
 import balancer
@@ -16,10 +18,7 @@ __config = {}
 __config_lock = threading.Lock()
 
 
-def get_symm_group_update_task_id(group_id):
-    return "update_symms_for_group_%s" % str(group_id)
-
-
+GROUP_META_UPDATE_TASK_ID = 'update_symms_for_group_%d'
 COUPLE_META_UPDATE_TASK_ID = 'update_meta_for_couple_%s'
 
 
@@ -34,6 +33,10 @@ def get_config_value(key, default):
 
 
 class NodeInfoUpdater:
+
+    STORAGE_STATE_CACHE_KEY = 'mastermind_storage'
+    STORAGE_STATE_VERSION = '1'
+
     def __init__(self, logging, node):
         logging.info("Created NodeInfoUpdater")
         self.__logging = logging
@@ -42,27 +45,58 @@ class NodeInfoUpdater:
         self.__tq.start()
         self.__session = elliptics.Session(self.__node)
         self.__nodeUpdateTimestamps = (time.time(), time.time())
-        self.loadNodes()
+        self.__cache = Service('cache')
+        delayed = self.try_restore_from_cache()
+        self.loadNodes(delayed=delayed)
 
-    def loadNodes(self):
-        self.__logging.info("Start loading units")
+    def try_restore_from_cache(self):
         try:
-            raw_stats = self.__session.stat_log()
+            cached_state = self.__cache.get(self.STORAGE_STATE_CACHE_KEY).get()
+            if cached_state[0] == False:
+                raise ValueError('No cached state available')
+            self.restore_state(cached_state[1])
+            self.__logging.info('Successfully restored from cache')
+        except Exception as e:
+            self.__logging.info('Failed to restore state from cache: %s\n%s' % (str(e), traceback.format_exc()))
+            return False
+        return True
 
+    def execute_tasks(self, delayed):
+        try:
+
+            raw_stats = self.__session.stat_log()
             storage.update_statistics(raw_stats)
 
             for group in storage.groups:
-                self.__tq.add_task_in(
-                    get_symm_group_update_task_id(group.group_id),
-                    get_config_value("symm_group_read_gap", 1),
-                    self.updateSymmGroup,
-                    group)
+                if delayed:
+                    self.__tq.add_task_in(
+                        GROUP_META_UPDATE_TASK_ID % group.group_id,
+                        get_config_value("symm_group_read_gap", 1),
+                        self.updateSymmGroup,
+                        group)
+                else:
+                    self.updateSymmGroup(group)
+
             for couple in storage.couples:
-                self.__tq.add_task_in(
-                    COUPLE_META_UPDATE_TASK_ID % str(couple),
-                    get_config_value('couple_read_gap', 1),
-                    self.updateCoupleMeta,
-                    couple)
+                if delayed:
+                    self.__tq.add_task_in(
+                        COUPLE_META_UPDATE_TASK_ID % str(couple),
+                        get_config_value('couple_read_gap', 1),
+                        self.updateCoupleMeta,
+                        couple)
+                else:
+                    self.updateCoupleMeta(couple)
+
+        except Exception as e:
+            self.__logging.info('Failed to initialize node updater: %s\n%s' % (str(e), traceback.format_exc()))
+            pass
+
+    def loadNodes(self, delayed=True):
+        self.__logging.info("Start loading units")
+        try:
+
+            self.execute_tasks(delayed)
+
             try:
                 max_group = int(self.__node.meta_session.read_data(keys.MASTERMIND_MAX_GROUP_KEY))
             except:
@@ -70,6 +104,9 @@ class NodeInfoUpdater:
             curr_max_group = max((g.group_id for g in storage.groups))
             if curr_max_group > max_group:
                 self.__node.meta_session.write_data(keys.MASTERMIND_MAX_GROUP_KEY, str(curr_max_group))
+
+            self.store_state()
+
         except Exception as e:
             self.__logging.error("Error while loading node stats: %s\n%s" % (str(e), traceback.format_exc()))
         finally:
@@ -89,7 +126,7 @@ class NodeInfoUpdater:
             for group_id2 in couples:
                 if group_id2 != group.group_id:
                     self.__logging.info("Scheduling update for group %s" % group_id2)
-                    self.__tq.hurry(get_symm_group_update_task_id(group_id2))
+                    self.__tq.hurry(GROUP_META_UPDATE_TASK_ID % group_id2)
 
             couple_str = ':'.join((str(g) for g in sorted(couples)))
             self.__logging.info('%s in storage.couples: %s' % (couple_str, couple_str in storage.couples))
@@ -144,6 +181,47 @@ class NodeInfoUpdater:
             couple.parse_meta(None)
 
         couple.update_status()
+
+    def restore_state(self, state):
+        state = json.loads(state)
+        if state['version'] != self.STORAGE_STATE_VERSION:
+            raise ValueError('Unsupported storage state version: %s, required: %s' %
+                             (state['version'], self.STORAGE_STATE_VERSION))
+
+        for g in state['state']['groups']:
+            group = storage.groups.add(g['group_id'])
+            for n in g['nodes']:
+                addr = n['host'].encode('utf-8')
+                if not addr in storage.hosts:
+                    storage.hosts.add(addr)
+                    self.__logging.info('Adding host %s' % (addr))
+                host = storage.hosts[addr]
+                node = storage.nodes.add(host, n['port'], group)
+                node.destroyed = n['destroyed']
+                node.read_only = n['read_only']
+                stat = storage.NodeStat.unserialize(n['stat'])
+                self.__logging.info('stat: %s' % stat)
+                node.stat = stat
+            group.meta = g['meta']
+
+        for c in state['state']['couples']:
+            groups = [storage.groups[g] for g in c['groups']]
+            couple = storage.couples.add(groups)
+            couple.meta = c['meta']
+            couple.update_status()
+
+        self.__logging.info('%s' % ([couple for couple in storage.couples],))
+
+    def store_state(self):
+        state = json.dumps({
+            'version': self.STORAGE_STATE_VERSION,
+            'state': {
+                'groups': [g.serialize() for g in storage.groups],
+                'couples': [c.serialize() for c in storage.couples],
+            }
+        })
+        self.__logging.info('Saving cached state')
+        self.__cache.put(self.STORAGE_STATE_CACHE_KEY, state)
 
     def stop(self):
         self.__tq.shutdown()
