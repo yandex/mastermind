@@ -202,6 +202,7 @@ class NodeInfoUpdater:
                 stat = storage.NodeStat.unserialize(n['stat'])
                 self.__logging.info('stat: %s' % stat)
                 node.stat = stat
+                node.update_status()
             group.meta = g['meta']
 
         for c in state['state']['couples']:
