@@ -143,12 +143,17 @@ def couple_get_weights(host=None):
 
 
 @coupleDispatcher.command(name='repair')
-def couple_repair(group, host=None):
+def couple_repair(group,
+                  namespace=('n', '', 'Use namespace for couple if there are '
+                                      'no neighbour groups to fetch definite namespace'),
+                  host=None):
     '''Repair broken symmetric groups'''
     s = service(host)
-    group = int(group)
+    params = [int(group)]
+    if namespace:
+        params.append(namespace)
 
-    res = s.enqueue("repair_groups", msgpack.packb(group)).get()
+    res = s.enqueue("repair_groups", msgpack.packb(tuple(params))).get()
     print res
 
 

@@ -153,7 +153,11 @@ class Balancer(object):
             logging.info("New repair groups request: " + str(request))
             logging.info(request)
 
-            group_id = int(request)
+            group_id = int(request[0])
+            try:
+                force_namespace = request[1]
+            except IndexError:
+                force_namespace = None
 
             if not group_id in storage.groups:
                 return {'Balancer error': 'Group %d is not found' % (group)}
@@ -191,7 +195,12 @@ class Balancer(object):
                 logging.error('Balancer error: namespaces of groups coupled with group %d are not the same: %s' % (group_id, namespaces))
                 return {'Balancer error': 'namespaces of groups coupled with group %d are not the same: %s' % (group_id, namespaces)}
 
-            (good, bad) = make_symm_group(self.node, couple, g.meta['namespace'])
+            namespace_to_use = namespaces and namespaces[0] or force_namespace
+            if not namespace_to_use:
+                logging.error('Balancer error: cannot identify a namespace to use for group %d' % (group_id,))
+                return {'Balancer error': 'cannot identify a namespace to use for group %d' % (group_id,)}
+
+            (good, bad) = make_symm_group(self.node, couple, namespace_to_use)
             if bad:
                 raise bad[1]
 
