@@ -9,7 +9,7 @@ import elliptics
 
 import balancer
 import balancelogicadapter as bla
-import config import config
+from config import config
 import keys
 import timed_queue
 import storage
