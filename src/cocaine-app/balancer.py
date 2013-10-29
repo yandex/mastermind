@@ -191,7 +191,7 @@ class Balancer(object):
                 logging.error('Balancer error: namespaces of groups coupled with group %d are not the same: %s' % (group_id, namespaces))
                 return {'Balancer error': 'namespaces of groups coupled with group %d are not the same: %s' % (group_id, namespaces)}
 
-            (good, bad) = make_symm_group(self.node, couple, namespaces[0])
+            (good, bad) = make_symm_group(self.node, couple, g.meta['namespace'])
             if bad:
                 raise bad[1]
 
