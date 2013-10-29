@@ -9,6 +9,7 @@ import elliptics
 
 import balancer
 import balancelogicadapter as bla
+import config import config
 import keys
 import timed_queue
 import storage
@@ -36,6 +37,7 @@ class NodeInfoUpdater:
 
     STORAGE_STATE_CACHE_KEY = 'mastermind_storage'
     STORAGE_STATE_VERSION = '1'
+    DEFAULT_STORAGE_STATE_VALID_TIME = 300
 
     def __init__(self, logging, node):
         logging.info("Created NodeInfoUpdater")
@@ -188,6 +190,10 @@ class NodeInfoUpdater:
             raise ValueError('Unsupported storage state version: %s, required: %s' %
                              (state['version'], self.STORAGE_STATE_VERSION))
 
+        if time.time() - state['timestamp'] > config.get('storage_cache_valid_time',
+                                                         self.DEFAULT_STORAGE_STATE_VALID_TIME):
+            raise ValueError('Cache is stale and cannot be used')
+
         for g in state['state']['groups']:
             group = storage.groups.add(g['group_id'])
             for n in g['nodes']:
@@ -216,6 +222,7 @@ class NodeInfoUpdater:
     def store_state(self):
         state = json.dumps({
             'version': self.STORAGE_STATE_VERSION,
+            'timestamp': time.time(),
             'state': {
                 'groups': [g.serialize() for g in storage.groups],
                 'couples': [c.serialize() for c in storage.couples],
