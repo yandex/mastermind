@@ -15,29 +15,15 @@ import timed_queue
 import storage
 
 
-__config = {}
-__config_lock = threading.Lock()
-
-
 GROUP_META_UPDATE_TASK_ID = 'update_symms_for_group_%d'
 COUPLE_META_UPDATE_TASK_ID = 'update_meta_for_couple_%s'
-
-
-def set_config_value(key, value):
-    with __config_lock:
-        __config[key] = value
-
-
-def get_config_value(key, default):
-    with __config_lock:
-        return __config.get(key, default)
 
 
 class NodeInfoUpdater:
 
     STORAGE_STATE_CACHE_KEY = 'mastermind_storage'
     STORAGE_STATE_VERSION = '1'
-    DEFAULT_STORAGE_STATE_VALID_TIME = 300
+    DEFAULT_STORAGE_STATE_VALID_TIME = 600
 
     def __init__(self, logging, node):
         logging.info("Created NodeInfoUpdater")
@@ -69,11 +55,13 @@ class NodeInfoUpdater:
             raw_stats = self.__session.stat_log()
             storage.update_statistics(raw_stats)
 
-            for group in storage.groups:
+            # need to use keys method to avoid runtime error when
+            # storage.groups changes (when 'delayed' is False)
+            for group in storage.groups.keys():
                 if delayed:
                     self.__tq.add_task_in(
                         GROUP_META_UPDATE_TASK_ID % group.group_id,
-                        get_config_value("symm_group_read_gap", 1),
+                        config.get('symm_group_read_gap', 1),
                         self.updateSymmGroup,
                         group)
                 else:
@@ -83,7 +71,7 @@ class NodeInfoUpdater:
                 if delayed:
                     self.__tq.add_task_in(
                         COUPLE_META_UPDATE_TASK_ID % str(couple),
-                        get_config_value('couple_read_gap', 1),
+                        config.get('couple_read_gap', 1),
                         self.updateCoupleMeta,
                         couple)
                 else:
@@ -112,7 +100,7 @@ class NodeInfoUpdater:
         except Exception as e:
             self.__logging.error("Error while loading node stats: %s\n%s" % (str(e), traceback.format_exc()))
         finally:
-            reload_period = get_config_value("nodes_reload_period", 60)
+            reload_period = config.get('nodes_reload_period', 60)
             self.__tq.add_task_in("load_nodes", reload_period, self.loadNodes)
             self.__nodeUpdateTimestamps = self.__nodeUpdateTimestamps[1:] + (time.time(),)
             bla.setConfigValue("dynamic_too_old_age", max(time.time() - self.__nodeUpdateTimestamps[0], reload_period*3))
@@ -143,7 +131,7 @@ class NodeInfoUpdater:
                 c = storage.couples.add([storage.groups[gid] for gid in couples])
                 self.__logging.info("Created couple %s %s" % (c, repr(c)))
                 self.__tq.add_task_in(COUPLE_META_UPDATE_TASK_ID % str(c),
-                                      get_config_value('couple_read_gap', 1),
+                                      config.get('couple_read_gap', 1),
                                       self.updateCoupleMeta,
                                       c)
             else:
@@ -190,8 +178,12 @@ class NodeInfoUpdater:
             raise ValueError('Unsupported storage state version: %s, required: %s' %
                              (state['version'], self.STORAGE_STATE_VERSION))
 
-        if time.time() - state['timestamp'] > config.get('storage_cache_valid_time',
-                                                         self.DEFAULT_STORAGE_STATE_VALID_TIME):
+        cache_age = time.time() - state['timestamp']
+        cache_valid_age = config.get('storage_cache_valid_time',
+                                      self.DEFAULT_STORAGE_STATE_VALID_TIME)
+        if cache_age > cache_valid_age:
+            self.__logging.debug('Cache age is %s seconds, valid age is %s seconds' %
+                                 (cache_age, cache_valid_age))
             raise ValueError('Cache is stale and cannot be used')
 
         for g in state['state']['groups']:
