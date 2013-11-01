@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 import time
 import socket
 import traceback
@@ -7,8 +6,10 @@ import msgpack
 
 import inventory
 
+
 def ts_str(ts):
     return time.asctime(time.localtime(ts))
+
 
 class Status(object):
     INIT = 'INIT'
@@ -18,6 +19,7 @@ class Status(object):
     RO = 'RO'
     STALLED = 'STALLED'
     FROZEN = 'FROZEN'
+
 
 class Repositary(object):
     def __init__(self, constructor):
@@ -77,8 +79,8 @@ class NodeStat(object):
         if prev:
             dt = self.ts - prev.ts
 
-            self.read_rps = (self.last_read - prev.last_read)/dt
-            self.write_rps = (self.last_write - prev.last_write)/dt
+            self.read_rps = (self.last_read - prev.last_read) / dt
+            self.write_rps = (self.last_write - prev.last_write) / dt
 
             # Disk usage should be used here instead of load average
             self.max_read_rps = max(self.read_rps / self.load_average, 100)
@@ -141,7 +143,6 @@ class Host(object):
     def hostname(self):
         return socket.gethostbyaddr(self.addr)[0]
 
-
     def index(self):
         return self.__str__()
 
@@ -166,6 +167,7 @@ class Host(object):
     def __str__(self):
         return self.addr
 
+
 class Node(object):
     def __init__(self, host, port, group):
         self.host = host
@@ -180,7 +182,6 @@ class Node(object):
         self.read_only = False
         self.status = Status.INIT
         self.status_text = "Node %s is not inititalized yet" % (self.__str__())
-
 
     def get_host(self):
         return self.host
@@ -370,6 +371,7 @@ class Group(object):
     def __eq__(self, other):
         return self.group_id == other
 
+
 class Couple(object):
     def __init__(self, groups):
         self.status = Status.INIT
@@ -513,14 +515,16 @@ class Couple(object):
         return '<Couple object: status=%s, groups=[%s] >' % (self.status, ', '.join([repr(g) for g in self.groups]))
 
 
-
 hosts = Repositary(Host)
 groups = Repositary(Group)
 nodes = Repositary(Node)
 couples = Repositary(Couple)
 
+
 from cocaine.logging import Logger
 logging = Logger()
+
+
 def update_statistics(stats):
     for stat in stats:
         logging.info("Stats: %s %s" % (str(stat['group_id']), stat['addr']))

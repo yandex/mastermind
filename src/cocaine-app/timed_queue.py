@@ -3,24 +3,31 @@ import threading
 import heapq
 import time
 
+
 class Task:
+
     def __init__(self, task_id, function, args, kwargs):
         self.__id = task_id
         self.__function = function
         self.__args = args
         self.__kwargs = kwargs
         self.__done = False
+
     def execute(self):
         try:
             self.__function(*self.__args, **self.__kwargs)
         finally:
             self.__done = True
+
     def done(self):
         return self.__done
+
     def id(self):
         return self.__id
 
+
 class TimedQueue:
+
     def __init__(self):
         self.__shutting_down = False
         self.__shutdown_lock = threading.Lock()
@@ -28,7 +35,7 @@ class TimedQueue:
         self.__hurry = []
         self.__task_by_id = {}
         self.__heap_lock = threading.Lock()
-        self.__loop_thread = threading.Thread(target = TimedQueue.loop, args=(self,))
+        self.__loop_thread = threading.Thread(target=TimedQueue.loop, args=(self,))
         self.__loop_thread.setDaemon(True)
 
     def start(self):
@@ -78,7 +85,7 @@ class TimedQueue:
             task = Task(task_id, function, args, kwargs)
             heapq.heappush(self.__heap, (at, task))
             self.__task_by_id[task_id] = task
-    
+
     def hurry(self, task_id):
         with self.__heap_lock:
             if task_id in self.__task_by_id:

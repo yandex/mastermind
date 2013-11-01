@@ -123,8 +123,6 @@ class Balancer(object):
             logging.error("Balancer error: " + str(e) + "\n" + traceback.format_exc())
             return {'Balancer error': str(e)}
 
-
-
     def repair_groups(self, request):
         try:
             logging.info("----------------------------------------")
@@ -143,16 +141,16 @@ class Balancer(object):
                 if group in couple:
                     if couple.status == storage.Status.OK:
                         logging.error("Balancer error: cannot repair, group %d is in couple %s" % (group_id, str(couple)))
-                        return {"Balancer error" : "cannot repair, group %d is in couple %s" % (group_id, str(couple))}
+                        return {"Balancer error": "cannot repair, group %d is in couple %s" % (group_id, str(couple))}
                     bad_couples.append(couple)
 
             if not bad_couples:
                 logging.error("Balancer error: cannot repair, group %d is not a member of any couple" % group_id)
-                return {"Balancer error" : "cannot repair, group %d is not a member of any couple" % group_id}
+                return {"Balancer error": "cannot repair, group %d is not a member of any couple" % group_id}
 
             if len(bad_couples) > 1:
                 logging.error("Balancer error: cannot repair, group %d is a member of several couples: %s" % (group_id, str(bad_couples)))
-                return {"Balancer error" : "cannot repair, group %d is a member of several couples: %s" % (group_id, str(bad_couples))}
+                return {"Balancer error": "cannot repair, group %d is a member of several couples: %s" % (group_id, str(bad_couples))}
 
             couple = bad_couples[0]
 
@@ -251,7 +249,6 @@ class Balancer(object):
             logging.error("Balancer error: " + str(e) + "\n" + traceback.format_exc())
             return {'Balancer error': str(e)}
 
-
     def break_couple(self, request):
         try:
             logging.info("----------------------------------------")
@@ -301,7 +298,7 @@ class Balancer(object):
             new_max_group = max_group + groups_count
             self.node.meta_session.write_data(keys.MASTERMIND_MAX_GROUP_KEY, str(new_max_group))
 
-            return range(max_group+1, max_group+1 + groups_count)
+            return range(max_group + 1, max_group + 1 + groups_count)
 
         except Exception as e:
             logging.error("Mastermind error: " + str(e) + "\n" + traceback.format_exc())
@@ -379,6 +376,7 @@ def handlers(b):
         handlers.append(attr)
     return handlers
 
+
 def kill_symm_group(n, groups):
     logging.info("Killing symm groups: %s" % str(groups))
     s = elliptics.Session(n)
@@ -406,4 +404,3 @@ def make_symm_group(n, couple, namespace):
             bad = (group.group_id, e)
             break
     return (good, bad)
-

@@ -76,7 +76,7 @@ class NodeInfoUpdater:
             reload_period = get_config_value("nodes_reload_period", 60)
             self.__tq.add_task_in("load_nodes", reload_period, self.loadNodes)
             self.__nodeUpdateTimestamps = self.__nodeUpdateTimestamps[1:] + (time.time(),)
-            bla.setConfigValue("dynamic_too_old_age", max(time.time() - self.__nodeUpdateTimestamps[0], reload_period*3))
+            bla.setConfigValue("dynamic_too_old_age", max(time.time() - self.__nodeUpdateTimestamps[0], reload_period * 3))
 
     def updateSymmGroup(self, group):
         try:
