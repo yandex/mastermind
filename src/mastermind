@@ -210,10 +210,33 @@ def couple_unfreeze(couple, host=None):
     print res
 
 
+# cmd commands
+cmdDispatcher = Dispatcher(globaloptions=(host_param,))
+
+
+@cmdDispatcher.command(name='restore')
+def restore_group(group, host=None):
+    '''Fetch cached keys'''
+    s = service(host)
+    group = int(group)
+
+    res = s.enqueue('restore_group_cmd', msgpack.packb([group])).get()
+    if isinstance(res, dict):
+        print res
+        return
+
+    cmd, warns = res
+    for warn in warns:
+        print "WARNING: %s" % warn
+
+    print cmd
+
+
 d = Dispatcher()
 d.nest('group', groupDispatcher, 'Perform group action')
 d.nest('couple', coupleDispatcher, 'Perform couple action')
 d.nest('cache', cacheDispatcher, 'Perform cache action')
+d.nest('cmd', cmdDispatcher, 'Some useful commands')
 
 
 if __name__ == '__main__':

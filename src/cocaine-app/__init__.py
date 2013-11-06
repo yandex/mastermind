@@ -95,6 +95,7 @@ def register_handle(h):
 
 def init_infrastructure():
     infstruct = infrastructure.Infrastructure(n)
+    register_handle(infstruct.restore_group_cmd)
     b.set_infrastructure(infstruct)
 
 

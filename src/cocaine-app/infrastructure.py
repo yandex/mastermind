@@ -14,10 +14,16 @@ import timed_queue
 logging = Logger()
 
 
+BASE_PORT = config.get('elliptics_base_port', 1024)
+CACHE_DEFAULT_PORT = 9999
+
+
 class Infrastructure(object):
 
     TASK_SYNC = 'infrastructure_sync'
     TASK_UPDATE = 'infrastructure_update'
+
+    RSYNC_CMD = 'rsync -rlHpogDt --progress {src_host}:{src_path} {dst_path}'
 
     def __init__(self, node):
         self.node = node
@@ -129,3 +135,78 @@ class Infrastructure(object):
         logging.info('Updating state for group %s' % group_id)
         self.meta_session.update_indexes(eid, [keys.MM_GROUPS_IDX],
                                               [self.serialize(group)])
+
+    def restore_group_cmd(self, request):
+        group_id = int(request[0])
+
+        empty_cmd = ''
+
+        # defining symmetric groups to restore from
+        candidates = set()
+        warns = []
+
+        group = storage.groups[group_id]
+        if group.couple:
+            candidates.add(group.couple)
+            for g in group.couple:
+                if g == group:
+                    continue
+                if not group in g.couple:
+                    warns.append('Group %s is not found in couple of group %s' %
+                                 (group.group_id, g.group_id))
+                else:
+                    candidates.add(g.couple)
+        else:
+            candidates.update(c for c in storage.couples if group in c)
+
+        if not candidates:
+            warns.append('Couples containing group being restored not found')
+            return empty_cmd, warns
+
+        couple = candidates.pop()
+        if len(candidates) > 1:
+            warns.append('More than one couple candidate '
+                         'for group restoration: %s' % (candidates,))
+            warns.append('Selected couple: %s' % (couple,))
+
+        group_candidates = []
+        for g in couple:
+            if g == group:
+                continue
+            if g.status == storage.Status.INIT:
+                warns.append('Cannot use group %s, status: %s' %
+                             (g.group_id, g.status))
+            else:
+                group_candidates.append(g)
+
+        if not group_candidates:
+            warns.append('No symmetric groups to restore from')
+            return empty_cmd, warns
+
+        source_group = group_candidates[0]
+        if len(source_group.nodes) > 1:
+            warns.append('Do not know how to restore group '
+                         'with more than one node')
+            return empty_cmd, warns
+
+        source_node = source_group.nodes[0]
+
+        state = self.get_group_history(group.group_id)[-1]
+        if len(state) > 1:
+            warns.append('Do not know how to restore group '
+                         'with more than one node')
+            return empty_cmd, warns
+
+        logging.info('state: %s' % state)
+
+        cmd = self.RSYNC_CMD.format(src_host=source_node.host.addr,
+                                    src_path=port_to_srv(source_node.port),
+                                    dst_path=port_to_srv(state['set'][0][1]))
+
+        return cmd, warns
+
+def port_to_srv(port):
+    assert port >= BASE_PORT + 1
+    if port == CACHE_DEFAULT_PORT:
+        return '/srv/cache'
+    return '/srv/%d' % (port - BASE_PORT)
