@@ -1,4 +1,5 @@
 
+
 def import_object(s):
     parts = s.rsplit('.', 1)
     if len(parts) == 1:

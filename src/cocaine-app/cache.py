@@ -389,7 +389,6 @@ class CacheManager(object):
             del cis[idx]
         return choice
 
-
     def __cis_choose_add(self, req_num, sgroups, traffic, filesize):
         cis = self.instances.keys()
 
@@ -479,7 +478,7 @@ class CacheInstance(object):
     def add_file(self, filesize):
         self.cache_size += filesize
         logging.info('Added file to cache instance %s: +%s = %s' % (
-                     self, mb(filesize), mb(self.cache_size )))
+                     self, mb(filesize), mb(self.cache_size)))
 
     def remove_file(self, filesize):
         self.cache_size = max(self.cache_size - filesize, 0)

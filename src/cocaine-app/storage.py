@@ -193,6 +193,7 @@ class Host(object):
             'addr': self.addr,
         }
 
+
 class Node(object):
     def __init__(self, host, port, group):
         self.host = host
@@ -411,6 +412,7 @@ class Group(object):
             'meta': self.meta,
             'nodes': [n.serialize() for n in self.nodes],
         }
+
 
 class Couple(object):
     def __init__(self, groups):

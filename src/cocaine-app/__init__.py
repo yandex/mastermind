@@ -97,6 +97,7 @@ def init_infrastructure():
     infstruct = infrastructure.Infrastructure(n)
     b.set_infrastructure(infstruct)
 
+
 def init_node_info_updater():
     logging.info("trace node info updater %d" % (i.next()))
     niu = node_info_updater.NodeInfoUpdater(logging, n)
