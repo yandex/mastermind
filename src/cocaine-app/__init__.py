@@ -18,6 +18,7 @@ import elliptics
 
 import balancer
 import balancelogicadapter
+import infrastructure
 import node_info_updater
 
 
@@ -71,6 +72,9 @@ W = Worker()
 logging.info("after creating worker")
 
 
+b = balancer.Balancer(n)
+
+
 def register_handle(h):
     @wraps(h)
     def wrapper(request, response):
@@ -90,12 +94,16 @@ def register_handle(h):
     return wrapper
 
 
-b = balancer.Balancer(n)
+def init_infrastructure():
+    infstruct = infrastructure.Infrastructure(n)
+    b.set_infrastructure(infstruct)
+
 
 for handler in balancer.handlers(b):
     logging.info("registering bounded function %s" % handler)
     register_handle(handler)
 
+init_infrastructure()
 
 logging.info("Starting worker")
 W.run()

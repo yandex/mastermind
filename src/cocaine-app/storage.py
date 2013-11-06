@@ -49,6 +49,9 @@ class Repositary(object):
     def __repr__(self):
         return '<Repositary object: [%s] >' % (', '.join((repr(e) for e in self.elements.itervalues())))
 
+    def keys(self):
+        return self.elements.keys()
+
 
 class NodeStat(object):
     def __init__(self, raw_stat=None, prev=None):

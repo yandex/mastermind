@@ -1,5 +1,6 @@
 # encoding: utf-8
 import copy
+from datetime import datetime
 import sys
 import traceback
 
@@ -22,9 +23,14 @@ logging.info("balancer.py")
 class Balancer(object):
 
     NOT_BAD_STATUSES = set([storage.Status.OK, storage.Status.FROZEN])
+    DT_FORMAT = '%Y-%m-%d %H:%M:%S'
 
     def __init__(self, n):
         self.node = n
+        self.infrastructure = None
+
+    def set_infrastructure(self, infrastructure):
+        self.infrastructure = infrastructure
 
     def get_groups(self, request):
         return tuple(group.group_id for group in storage.groups)
@@ -186,6 +192,23 @@ class Balancer(object):
                 return {'Balancer error': 'Group %d is not found' % (group)}
 
             return storage.groups[group].info()
+
+        except Exception as e:
+            logging.error("Balancer error: " + str(e) + "\n" + traceback.format_exc())
+            return {'Balancer error': str(e)}
+
+    def get_group_history(self, request):
+        try:
+            group = int(request[0])
+            group_history = []
+
+            if self.infrastructure:
+                for nodes_data in self.infrastructure.get_group_history(group):
+                    dt = datetime.fromtimestamp(nodes_data['timestamp'])
+                    group_history.append({'set': nodes_data['set'],
+                                          'timestamp': dt.strftime(self.DT_FORMAT)})
+
+            return group_history
 
         except Exception as e:
             logging.error("Balancer error: " + str(e) + "\n" + traceback.format_exc())

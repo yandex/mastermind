@@ -30,13 +30,25 @@ groupDispatcher = Dispatcher(globaloptions=(host_param,))
 
 
 @groupDispatcher.command(name='info')
-def group_info(group, host=None):
+def group_info(group, history=('l', False, 'History of group nodes'), host=None):
     '''Get group info'''
     s = service(host)
     group = int(group)
 
     res = s.enqueue("get_group_info", msgpack.packb(group)).get()
     print res
+
+    if history:
+
+        print "\nHistory:"
+
+        group_history = s.enqueue('get_group_history', msgpack.packb([group])).get()
+        if isinstance(group_history, dict):
+            # exception returned
+            print group_history
+        else:
+            for entry in group_history:
+                print '[%s] %s' % (entry['timestamp'], entry['set'])
 
 
 @groupDispatcher.command(name='next-number')
