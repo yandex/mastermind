@@ -6,6 +6,7 @@ from cocaine.logging import Logger
 import elliptics
 import msgpack
 
+from config import config
 import storage
 import timed_queue
 
@@ -26,8 +27,10 @@ class Infrastructure(object):
         self.__tq = timed_queue.TimedQueue()
         self.__tq.start()
 
-        self.__tq.add_task_in(self.TASK_SYNC, 10, self.sync_state)
-        self.__tq.add_task_in(self.TASK_UPDATE, 60, self.update_state)
+        self.sync_state()
+        self.__tq.add_task_in(self.TASK_UPDATE,
+            config.get('infrastructure_update_period', 300),
+            self.update_state)
 
     def get_group_history(self, group_id):
         return self.state[group_id]['nodes']
@@ -59,7 +62,9 @@ class Infrastructure(object):
         except BaseException as e:
             logging.error('Bad infrastructure shit: %s' % (e,))
         finally:
-            self.__tq.add_task_in(self.TASK_SYNC, 10, self.sync_state)
+            self.__tq.add_task_in(self.TASK_SYNC,
+                config.get('infrastructure_sync_period', 60),
+                self.sync_state)
 
     @staticmethod
     def serialize(data):
@@ -111,7 +116,9 @@ class Infrastructure(object):
                           (e, traceback.format_exc()))
             # maybe add some tiny weeny random?
         finally:
-            self.__tq.add_task_in(self.TASK_UPDATE, 60, self.update_state)
+            self.__tq.add_task_in(self.TASK_UPDATE,
+                config.get('infrastructure_update_period', 300),
+                self.update_state)
 
     def update_group(self, group_id, new_nodes):
         group = self.state[group_id]
