@@ -1,3 +1,33 @@
+mastermind (2.6.4) lucid; urgency=low
+
+  * Feature: storage cached state via cacaine cache storage
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 30 Oct 2013 13:23:20 +0400
+
+mastermind (2.6.3) lucid; urgency=low
+
+  * List of balancer closed groups feature
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 24 Oct 2013 18:39:54 +0400
+
+mastermind (2.6.2) lucid; urgency=low
+
+  * Fix for zero bandwidth bug
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 16 Oct 2013 16:33:44 +0400
+
+mastermind (2.6.1) lucid; urgency=low
+
+  * Fix for couple weights with different couple sizes
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 14 Oct 2013 18:55:46 +0400
+
+mastermind (2.6.0) lucid; urgency=low
+
+  * Cache using gatlinggun
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 11 Oct 2013 19:58:40 +0400
+
 mastermind (2.5) lucid; urgency=low
 
   * New feature: frozen couples

@@ -86,9 +86,9 @@ class NodeStat(object):
             self.write_rps = (self.last_write - prev.last_write) / dt
 
             # Disk usage should be used here instead of load average
-            self.max_read_rps = max(self.read_rps / self.load_average, 100)
+            self.max_read_rps = max(self.read_rps / max(self.load_average, 0.01), 100)
 
-            self.max_write_rps = max(self.write_rps / self.load_average, 100)
+            self.max_write_rps = max(self.write_rps / max(self.load_average, 0.01), 100)
 
         else:
             self.read_rps = 0
@@ -135,7 +135,25 @@ class NodeStat(object):
         return res
 
     def __repr__(self):
-        return '<NodeStat object: ts=%s, write_rps=%d, max_write_rps=%d, read_rps=%d, max_read_rps=%d, total_space=%d, free_space=%d>' % (ts_str(self.ts), self.write_rps, self.max_write_rps, self.read_rps, self.max_read_rps, self.total_space, self.free_space)
+        return '<NodeStat object: ts=%s, write_rps=%d, max_write_rps=%d, read_rps=%d, max_read_rps=%d, total_space=%d, free_space=%d, load_average=%d>' % (ts_str(self.ts), self.write_rps, self.max_write_rps, self.read_rps, self.max_read_rps, self.total_space, self.free_space, self.load_average)
+
+    def serialize(self):
+        return {
+            'ts': self.ts,
+            'last_read': self.last_read,
+            'last_write': self.last_write,
+            'total_space': self.total_space,
+            'free_space': self.free_space,
+            'rel_space': self.rel_space,
+            'load_average': self.load_average,
+        }
+
+    @classmethod
+    def unserialize(cls, stat):
+        obj = cls()
+        for k, v in stat.iteritems():
+            setattr(obj, k, v)
+        return obj
 
 
 class Host(object):
@@ -170,6 +188,10 @@ class Host(object):
     def __str__(self):
         return self.addr
 
+    def serialize(self):
+        return {
+            'addr': self.addr,
+        }
 
 class Node(object):
     def __init__(self, host, port, group):
@@ -255,6 +277,15 @@ class Node(object):
 
         if isinstance(other, Node):
             return self.addr == other.addr and self.port == other.port
+
+    def serialize(self):
+        return {
+            'host': self.host.addr,
+            'port': self.port,
+            'destroyed': self.destroyed,
+            'read_only': self.read_only,
+            'stat': self.stat.serialize(),
+        }
 
 
 class Group(object):
@@ -374,6 +405,12 @@ class Group(object):
     def __eq__(self, other):
         return self.group_id == other
 
+    def serialize(self):
+        return {
+            'group_id': self.group_id,
+            'meta': self.meta,
+            'nodes': [n.serialize() for n in self.nodes],
+        }
 
 class Couple(object):
     def __init__(self, groups):
@@ -486,8 +523,8 @@ class Couple(object):
 
     @property
     def namespace(self):
-        assert self.groups
-        return self.groups[0].meta['namespace']
+        assert self.groups, "Couple %s has empty group list (id: %s)" % (repr(self), id(self))
+        return self.groups[0].meta and self.groups[0].meta['namespace'] or None
 
     def as_tuple(self):
         return tuple(group.group_id for group in self.groups)
@@ -517,6 +554,11 @@ class Couple(object):
     def __repr__(self):
         return '<Couple object: status=%s, groups=[%s] >' % (self.status, ', '.join([repr(g) for g in self.groups]))
 
+    def serialize(self):
+        return {
+            'groups': [g.group_id for g in self.groups],
+            'meta': self.meta
+        }
 
 hosts = Repositary(Host)
 groups = Repositary(Group)

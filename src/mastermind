@@ -97,6 +97,14 @@ def couple_list_frozen(host=None):
     print res
 
 
+@coupleDispatcher.command(name='list-closed')
+def couple_list_closed(host=None):
+    '''Get list of couples closed to balancer'''
+    s = service(host)
+    res = s.enqueue('get_closed_groups', '').get()
+    print res
+
+
 @coupleDispatcher.command(name='build')
 def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:2)'),
                  namespace=('n', '', 'Set custom namespace for couple'), host=None):
@@ -147,14 +155,40 @@ def couple_get_weights(host=None):
 
 
 @coupleDispatcher.command(name='repair')
-def couple_repair(group, host=None):
+def couple_repair(group,
+                  namespace=('n', '', 'Use namespace for couple if there are '
+                                      'no neighbour groups to fetch definite namespace'),
+                  host=None):
     '''Repair broken symmetric groups'''
+    s = service(host)
+    params = [int(group)]
+    if namespace:
+        params.append(namespace)
+
+    res = s.enqueue("repair_groups", msgpack.packb(tuple(params))).get()
+    print res
+
+
+# cache commands
+cacheDispatcher = Dispatcher(globaloptions=(host_param,))
+
+
+@cacheDispatcher.command(name='keys')
+def cache_keys(host=None):
+    '''Fetch cached keys'''
+    s = service(host)
+
+    res = s.enqueue('get_cached_keys', '').get()
+    print res
+
+
+@cacheDispatcher.command(name='keys-by-group')
+def cache_keys_by_group(group, host=None):
+    '''Fetch cached keys for certain group id'''
     s = service(host)
     group = int(group)
 
-    res = s.enqueue("repair_groups", msgpack.packb(group)).get()
-    print res
-
+    res = s.enqueue('get_cached_keys_by_group', msgpack.packb(group)).get()
 
 @coupleDispatcher.command(name='freeze')
 def couple_freeze(couple, host=None):
@@ -179,6 +213,7 @@ def couple_unfreeze(couple, host=None):
 d = Dispatcher()
 d.nest('group', groupDispatcher, 'Perform group action')
 d.nest('couple', coupleDispatcher, 'Perform couple action')
+d.nest('cache', cacheDispatcher, 'Perform cache action')
 
 
 if __name__ == '__main__':

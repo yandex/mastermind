@@ -11,6 +11,7 @@ import msgpack
 
 import balancelogicadapter as bla
 import balancelogic
+from config import config
 import keys
 import storage
 
@@ -50,6 +51,28 @@ class Balancer(object):
         logging.debug("frozen_couples: " + str(result))
         return result
 
+    def get_closed_groups(self, request):
+        result = []
+        min_free_space = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
+        min_rel_space = config['balancer_config'].get('min_free_space_relative', 0.15)
+
+        logging.debug('configured min_free_space: %s bytes' % min_free_space)
+        logging.debug('configured min_rel_space: %s' % min_rel_space)
+
+        for couple in storage.couples:
+            if couple.status != storage.Status.OK:
+                continue
+
+            stats = couple.get_stat()
+            logging.debug('couple %s: free_space: %s' % (couple, stats.free_space))
+            logging.debug('couple %s: rel_space: %s' % (couple, stats.rel_space))
+            if (stats.free_space >= min_free_space and stats.rel_space >= min_rel_space):
+                continue
+            result.append(couple.as_tuple())
+
+        logging.debug('closed couples: ' + str(result))
+        return result
+
     def get_empty_groups(self, request):
         logging.info("len(storage.groups) = %d" % (len(storage.groups.elements)))
         logging.info("groups: %s" % str([(group.group_id, group.couple) for group in storage.groups if group.couple is None]))
@@ -59,22 +82,21 @@ class Balancer(object):
 
     def get_group_weights(self, request):
         try:
-            sizes = set()
-            namespaces = set()
+            namespaces = {}
             all_symm_group_objects = []
             for couple in storage.couples:
                 if couple.status != storage.Status.OK:
                     continue
 
                 symm_group = bla.SymmGroup(couple)
-                sizes.add(len(couple))
-                namespaces.add(couple.namespace)
+                namespaces.setdefault(couple.namespace, set())
+                namespaces[couple.namespace].add(len(couple))
                 all_symm_group_objects.append(symm_group)
                 logging.debug(str(symm_group))
 
             result = {}
 
-            for namespace in namespaces:
+            for namespace, sizes in namespaces.iteritems():
                 for size in sizes:
                     (group_weights, info) = balancelogic.rawBalance(all_symm_group_objects,
                                                                     bla.getConfig(),
@@ -135,7 +157,11 @@ class Balancer(object):
             logging.info("New repair groups request: " + str(request))
             logging.info(request)
 
-            group_id = int(request)
+            group_id = int(request[0])
+            try:
+                force_namespace = request[1]
+            except IndexError:
+                force_namespace = None
 
             if not group_id in storage.groups:
                 return {'Balancer error': 'Group %d is not found' % (group)}
@@ -173,7 +199,12 @@ class Balancer(object):
                 logging.error('Balancer error: namespaces of groups coupled with group %d are not the same: %s' % (group_id, namespaces))
                 return {'Balancer error': 'namespaces of groups coupled with group %d are not the same: %s' % (group_id, namespaces)}
 
-            (good, bad) = make_symm_group(self.node, couple, namespaces[0])
+            namespace_to_use = namespaces and namespaces[0] or force_namespace
+            if not namespace_to_use:
+                logging.error('Balancer error: cannot identify a namespace to use for group %d' % (group_id,))
+                return {'Balancer error': 'cannot identify a namespace to use for group %d' % (group_id,)}
+
+            (good, bad) = make_symm_group(self.node, couple, namespace_to_use)
             if bad:
                 raise bad[1]
 
