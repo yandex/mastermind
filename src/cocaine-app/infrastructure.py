@@ -162,7 +162,8 @@ class Infrastructure(object):
                 candidates.update(c for c in storage.couples if group in c)
 
             if not candidates:
-                raise ValueError('Couples containing group being restored not found')
+                raise ValueError('Couples containing group %s are not found' %
+                                 group_id)
 
             couple = candidates.pop()
             if len(candidates) > 1:
@@ -199,13 +200,14 @@ class Infrastructure(object):
                              'history %s, current %s' %
                              (state, group.nodes[0]))
 
-            warns.append('%s' % len(source_group.nodes))
-            warns.append('%s' % state)
             if len(source_group.nodes) > 1 or len(state) > 1:
                 raise ValueError('Do not know how to restore group '
                                  'with more than one node')
 
-            logging.info('state: %s' % state)
+            logging.info('Constructing restore cmd for group %s '
+                         ' from group %s, (%s)' %
+                         (group.group_id, source_group, source_node))
+            warns.append('Source group %s (%s)' % (source_group, source_node))
 
             cmd = self.RSYNC_CMD.format(src_host=source_node.host.addr,
                                         src_path=port_to_srv(source_node.port),
