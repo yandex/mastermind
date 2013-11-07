@@ -139,71 +139,80 @@ class Infrastructure(object):
     def restore_group_cmd(self, request):
         group_id = int(request[0])
 
-        empty_cmd = ''
-
-        # defining symmetric groups to restore from
         candidates = set()
         warns = []
 
-        group = storage.groups[group_id]
-        if group.couple:
-            candidates.add(group.couple)
-            for g in group.couple:
+        try:
+            group = storage.groups[group_id]
+            if group.couple:
+                candidates.add(group.couple)
+                for g in group.couple:
+                    if g == group:
+                        continue
+                    if not group in g.couple:
+                        warns.append('Group %s is not found in couple of group %s' %
+                                     (group.group_id, g.group_id))
+                    else:
+                        candidates.add(g.couple)
+            else:
+                candidates.update(c for c in storage.couples if group in c)
+
+            if not candidates:
+                raise ValueError('Couples containing group being restored not found')
+
+            couple = candidates.pop()
+            if len(candidates) > 1:
+                warns.append('More than one couple candidate '
+                             'for group restoration: %s' % (candidates,))
+                warns.append('Selected couple: %s' % (couple,))
+
+            group_candidates = []
+            for g in couple:
                 if g == group:
                     continue
-                if not group in g.couple:
-                    warns.append('Group %s is not found in couple of group %s' %
-                                 (group.group_id, g.group_id))
+                if g.status == storage.Status.INIT:
+                    warns.append('Cannot use group %s, status: %s' %
+                                 (g.group_id, g.status))
                 else:
-                    candidates.add(g.couple)
-        else:
-            candidates.update(c for c in storage.couples if group in c)
+                    group_candidates.append(g)
 
-        if not candidates:
-            warns.append('Couples containing group being restored not found')
-            return empty_cmd, warns
+            if not group_candidates:
+                raise ValueError('No symmetric groups to restore from')
 
-        couple = candidates.pop()
-        if len(candidates) > 1:
-            warns.append('More than one couple candidate '
-                         'for group restoration: %s' % (candidates,))
-            warns.append('Selected couple: %s' % (couple,))
+            source_group = group_candidates[0]
+            source_node = source_group.nodes[0]
+            logging.info('Group %s is restored from group %s' %
+                         (group, source_group))
 
-        group_candidates = []
-        for g in couple:
-            if g == group:
-                continue
-            if g.status == storage.Status.INIT:
-                warns.append('Cannot use group %s, status: %s' %
-                             (g.group_id, g.status))
-            else:
-                group_candidates.append(g)
+            state = self.get_group_history(group.group_id)[-1]['set']
+            if (group.nodes[0].host.addr != state[0][0] or
+                group.nodes[0].port != int(state[0][1])):
+                warns.append('%s == %s, %s' % (group.nodes[0].host.addr, state[0][0], group.nodes[0].port != state[0][0]))
+                warns.append('%s' % (type(group.nodes[0].host),))
+                warns.append('%s' % (type(state[0][0]),))
+                warns.append('Last history state does not match '
+                             'current state, history will be used: '
+                             'history %s, current %s' %
+                             (state, group.nodes[0]))
 
-        if not group_candidates:
-            warns.append('No symmetric groups to restore from')
-            return empty_cmd, warns
+            warns.append('%s' % len(source_group.nodes))
+            warns.append('%s' % state)
+            if len(source_group.nodes) > 1 or len(state) > 1:
+                raise ValueError('Do not know how to restore group '
+                                 'with more than one node')
 
-        source_group = group_candidates[0]
-        if len(source_group.nodes) > 1:
-            warns.append('Do not know how to restore group '
-                         'with more than one node')
-            return empty_cmd, warns
+            logging.info('state: %s' % state)
 
-        source_node = source_group.nodes[0]
+            cmd = self.RSYNC_CMD.format(src_host=source_node.host.addr,
+                                        src_path=port_to_srv(source_node.port),
+                                        dst_path=port_to_srv(state[0][1]))
 
-        state = self.get_group_history(group.group_id)[-1]
-        if len(state) > 1:
-            warns.append('Do not know how to restore group '
-                         'with more than one node')
-            return empty_cmd, warns
-
-        logging.info('state: %s' % state)
-
-        cmd = self.RSYNC_CMD.format(src_host=source_node.host.addr,
-                                    src_path=port_to_srv(source_node.port),
-                                    dst_path=port_to_srv(state['set'][0][1]))
+        except ValueError as e:
+            warns.append(e.message)
+            return '', warns
 
         return cmd, warns
+
 
 def port_to_srv(port):
     assert port >= BASE_PORT + 1
