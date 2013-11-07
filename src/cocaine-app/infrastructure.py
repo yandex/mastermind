@@ -1,4 +1,5 @@
 import keys
+import os.path
 import time
 import traceback
 
@@ -16,6 +17,9 @@ logging = Logger()
 
 BASE_PORT = config.get('elliptics_base_port', 1024)
 CACHE_DEFAULT_PORT = 9999
+
+BASE_STORAGE_PATH = config.get('elliptics_base_storage_path', '/srv/storage')
+CACHE_DEFAULT_PATH = '/srv/cache'
 
 
 class Infrastructure(object):
@@ -217,5 +221,5 @@ class Infrastructure(object):
 def port_to_srv(port):
     assert port >= BASE_PORT + 1
     if port == CACHE_DEFAULT_PORT:
-        return '/srv/cache'
-    return '/srv/%d' % (port - BASE_PORT)
+        return CACHE_DEFAULT_PATH
+    return os.path.join(BASE_STORAGE_PATH, str(port - BASE_PORT))
