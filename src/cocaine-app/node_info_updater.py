@@ -39,7 +39,7 @@ class NodeInfoUpdater:
 
     def try_restore_from_cache(self):
         try:
-            cached_state = self.__cache.get(self.STORAGE_STATE_CACHE_KEY).get()
+            cached_state = self.__cache.perform_sync('get', self.STORAGE_STATE_CACHE_KEY).next()
             if cached_state[0] == False:
                 raise ValueError('No cached state available')
             self.restore_state(cached_state[1])
