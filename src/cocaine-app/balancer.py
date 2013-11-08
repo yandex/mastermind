@@ -400,6 +400,14 @@ class Balancer(object):
 
         return True
 
+    def get_namespaces(self, request):
+        try:
+            namespaces = [c.namespace for c in storage.couples]
+            return tuple(set(filter(None, namespaces)))
+        except Exception as e:
+            logging.error('Mastermind error: ' + str(e) + '\n' + traceback.format_exc())
+            return {'Mastermind error': str(e)}
+
 
 def handlers(b):
     handlers = []

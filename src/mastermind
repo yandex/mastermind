@@ -157,6 +157,14 @@ def couple_repair(group,
     print res
 
 
+@coupleDispatcher.command(name='list-namespaces')
+def couple_repair(host=None):
+    '''List all couple namespaces'''
+    s = service(host)
+    res = s.enqueue('get_namespaces', '').get()
+    print res
+
+
 # cache commands
 cacheDispatcher = Dispatcher(globaloptions=(host_param,))
 
