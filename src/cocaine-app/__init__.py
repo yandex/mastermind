@@ -118,13 +118,13 @@ def init_cache(cache_config):
 
 if 'cache' in config:
     init_cache(config['cache'])
+init_infrastructure()
+init_node_info_updater()
 
 for handler in balancer.handlers(b):
     logging.info("registering bounded function %s" % handler)
     register_handle(handler)
 
-init_infrastructure()
-init_node_info_updater()
 
 logging.info("Starting worker")
 W.run()

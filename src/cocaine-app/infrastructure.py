@@ -18,8 +18,8 @@ logging = Logger()
 BASE_PORT = config.get('elliptics_base_port', 1024)
 CACHE_DEFAULT_PORT = 9999
 
-BASE_STORAGE_PATH = config.get('elliptics_base_storage_path', '/srv/storage')
-CACHE_DEFAULT_PATH = '/srv/cache'
+BASE_STORAGE_PATH = config.get('elliptics_base_storage_path', '/srv/storage/')
+CACHE_DEFAULT_PATH = '/srv/cache/'
 
 
 class Infrastructure(object):
@@ -27,7 +27,8 @@ class Infrastructure(object):
     TASK_SYNC = 'infrastructure_sync'
     TASK_UPDATE = 'infrastructure_update'
 
-    RSYNC_CMD = 'rsync -rlHpogDt --progress {src_host}:{src_path} {dst_path}'
+    RSYNC_CMD = ('rsync -rlHpogDt --progress {user}@{src_host}:{src_path}'
+                 ' {dst_path}')
 
     def __init__(self, node):
         self.node = node
@@ -142,6 +143,7 @@ class Infrastructure(object):
 
     def restore_group_cmd(self, request):
         group_id = int(request[0])
+        user = request[1]
 
         candidates = set()
         warns = []
@@ -209,7 +211,8 @@ class Infrastructure(object):
                          (group.group_id, source_group, source_node))
             warns.append('Source group %s (%s)' % (source_group, source_node))
 
-            cmd = self.RSYNC_CMD.format(src_host=source_node.host.addr,
+            cmd = self.RSYNC_CMD.format(user=user,
+                                        src_host=source_node.host.addr,
                                         src_path=port_to_srv(source_node.port),
                                         dst_path=port_to_srv(state[0][1]))
 
@@ -224,4 +227,4 @@ def port_to_srv(port):
     assert port >= BASE_PORT + 1
     if port == CACHE_DEFAULT_PORT:
         return CACHE_DEFAULT_PATH
-    return os.path.join(BASE_STORAGE_PATH, str(port - BASE_PORT))
+    return os.path.join(BASE_STORAGE_PATH, str(port - BASE_PORT) + '/')

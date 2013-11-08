@@ -1,4 +1,6 @@
 #!/usr/bin/python
+import os
+import subprocess
 from time import sleep
 from functools import wraps
 
@@ -214,22 +216,66 @@ def couple_unfreeze(couple, host=None):
 cmdDispatcher = Dispatcher(globaloptions=(host_param,))
 
 
+DEFAULT = '\033[0m'
+RED = '\033[1;31m'
+GREEN = '\033[1;32m'
+
+def warn(s):
+    return '{color}{text}{coloroff}'.format(color=RED,
+                                            text=s, coloroff=DEFAULT)
+
+def highlight(s):
+    return '{color}{text}{coloroff}'.format(color=GREEN,
+                                            text=s, coloroff=DEFAULT)
+
+
 @cmdDispatcher.command(name='restore')
-def restore_group(group, host=None):
+def restore_group(group, user=('u', os.getlogin(), 'rsync command user'),
+                  host=None):
     '''Fetch cached keys'''
     s = service(host)
     group = int(group)
 
-    res = s.enqueue('restore_group_cmd', msgpack.packb([group])).get()
+    res = s.enqueue('restore_group_cmd', msgpack.packb([group, user])).get()
     if isinstance(res, dict):
         print res
         return
 
-    cmd, warns = res
-    for warn in warns:
-        print "WARNING: %s" % warn
+    cmd, messages = res
+    for msg in messages:
+        print '{prefix} {msg}'.format(prefix=warn('WARNING:'), msg=msg)
 
-    print cmd
+    if not cmd:
+        return
+
+    print
+    print '=' * 8 + ' Command ' + '=' * 43
+    print highlight(cmd)
+    print '=' * 60
+    print
+
+    try:
+        answer = raw_input('Do you want the glorious mastermind '
+                           'to execute this command for you? [yes/no]: ')
+    except KeyboardInterrupt:
+        answer = 'no'
+        print
+
+    if answer != 'yes':
+        print 'Like a pussy...'
+        return
+
+    try:
+        retval = subprocess.call(cmd.split(' '))
+    except KeyboardInterrupt:
+        print 'Command execution was manually interrupted'
+        return
+
+    if retval:
+        print 'Failed to execute command, return value: %s' % retval
+        return
+
+    print "Good boy!"
 
 
 d = Dispatcher()
