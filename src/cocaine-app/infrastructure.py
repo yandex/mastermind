@@ -27,8 +27,8 @@ class Infrastructure(object):
     TASK_SYNC = 'infrastructure_sync'
     TASK_UPDATE = 'infrastructure_update'
 
-    RSYNC_CMD = ('rsync -rlHpogDt --progress {user}@{src_host}:{src_path}'
-                 ' {dst_path}')
+    RSYNC_CMD = ('rsync -rlHpogDt --progress {user}@{src_host}:{src_path} '
+                 '{dst_path}')
 
     def __init__(self, node):
         self.node = node
@@ -47,7 +47,12 @@ class Infrastructure(object):
             self.update_state)
 
     def get_group_history(self, group_id):
-        return self.state[group_id]['nodes']
+        history = []
+        for node_set in self.state[group_id]['nodes']:
+            history.append({'set': [node + (port_to_srv(node[1]),)
+                                    for node in node_set['set']],
+                            'timestamp': node_set['timestamp']})
+        return history
 
     def sync_state(self):
         try:
@@ -139,7 +144,6 @@ class Infrastructure(object):
         except Exception as e:
             logging.error('Failed to update infrastructure state: %s\n%s' %
                           (e, traceback.format_exc()))
-            # maybe add some tiny weeny random?
         finally:
             self.__tq.add_task_in(self.TASK_UPDATE,
                 config.get('infrastructure_update_period', 300),
