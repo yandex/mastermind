@@ -149,6 +149,9 @@ class Infrastructure(object):
         warns = []
 
         try:
+            if not group_id in storage.groups:
+                raise ValueError('Group %d is not found' % group_id)
+
             group = storage.groups[group_id]
             if group.couple:
                 candidates.add(group.couple)
@@ -168,7 +171,7 @@ class Infrastructure(object):
                                  group_id)
 
             couple = candidates.pop()
-            if len(candidates) > 1:
+            if len(candidates) > 0:
                 warns.append('More than one couple candidate '
                              'for group restoration: %s' % (candidates,))
                 warns.append('Selected couple: %s' % (couple,))
@@ -177,9 +180,9 @@ class Infrastructure(object):
             for g in couple:
                 if g == group:
                     continue
-                if g.status == storage.Status.INIT:
-                    warns.append('Cannot use group %s, status: %s' %
-                                 (g.group_id, g.status))
+                if g.status != storage.Status.BAD:
+                    warns.append('Cannot use group %s, status: %s (expected %s)' %
+                                 (g.group_id, g.status, storage.Status.BAD))
                 else:
                     group_candidates.append(g)
 
@@ -207,7 +210,7 @@ class Infrastructure(object):
                                  'with more than one node')
 
             logging.info('Constructing restore cmd for group %s '
-                         ' from group %s, (%s)' %
+                         'from group %s, (%s)' %
                          (group.group_id, source_group, source_node))
             warns.append('Source group %s (%s)' % (source_group, source_node))
 
@@ -218,8 +221,12 @@ class Infrastructure(object):
 
         except ValueError as e:
             warns.append(e.message)
+            logging.info('Restore cmd for group %s failed, warns: %s' %
+                         (group_id, warns))
             return '', warns
 
+        logging.info('Restore cmd for group %s, warns: %s, cmd %s' %
+                     (group_id, warns, cmd))
         return cmd, warns
 
 
