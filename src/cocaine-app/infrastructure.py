@@ -34,6 +34,9 @@ class Infrastructure(object):
         self.node = node
         self.meta_session = self.node.meta_session
         self.state = {}
+        self.sync_ts = None
+        self.state_valid_time = config.get('infrastructure_state_valid_time',
+                                           120)
 
         self.__tq = timed_queue.TimedQueue()
         self.__tq.start()
@@ -65,6 +68,8 @@ class Infrastructure(object):
                 logging.info('Group %d is not found in infrastructure state, '
                              'removing' % gid)
                 del self.state[gid]
+
+            self.sync_ts = time.time()
 
             logging.info('Finished syncing infrastructure state')
         except Exception as e:
@@ -98,6 +103,15 @@ class Infrastructure(object):
         groups_to_update = []
         try:
             logging.info('Updating infrastructure state')
+
+            if self.sync_ts is None:
+                raise ValueError('Nothing to update')
+            state_time = time.time() - self.sync_ts
+            if state_time > self.state_valid_time:
+                raise ValueError(
+                    'State was not updated for %s seconds, '
+                    'considered stale' % (time.time() - self.sync_ts))
+
             for g in storage.groups.keys():
 
                 self.state.setdefault(g.group_id,
@@ -159,8 +173,8 @@ class Infrastructure(object):
                     if g == group:
                         continue
                     if not group in g.couple:
-                        warns.append('Group %s is not found in couple of group %s' %
-                                     (group.group_id, g.group_id))
+                        warns.append('Group %s is not found in couple of '
+                                     'group %s' % (group.group_id, g.group_id))
                     else:
                         candidates.add(g.couple)
             else:
@@ -181,7 +195,8 @@ class Infrastructure(object):
                 if g == group:
                     continue
                 if g.status != storage.Status.BAD:
-                    warns.append('Cannot use group %s, status: %s (expected %s)' %
+                    warns.append('Cannot use group %s, status: %s '
+                                 '(expected %s)' %
                                  (g.group_id, g.status, storage.Status.BAD))
                 else:
                     group_candidates.append(g)
@@ -191,15 +206,10 @@ class Infrastructure(object):
 
             source_group = group_candidates[0]
             source_node = source_group.nodes[0]
-            logging.info('Group %s is restored from group %s' %
-                         (group, source_group))
 
             state = self.get_group_history(group.group_id)[-1]['set']
             if (group.nodes[0].host.addr != state[0][0] or
                 group.nodes[0].port != int(state[0][1])):
-                warns.append('%s == %s, %s' % (group.nodes[0].host.addr, state[0][0], group.nodes[0].port != state[0][0]))
-                warns.append('%s' % (type(group.nodes[0].host),))
-                warns.append('%s' % (type(state[0][0]),))
                 warns.append('Last history state does not match '
                              'current state, history will be used: '
                              'history %s, current %s' %
