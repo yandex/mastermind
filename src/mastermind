@@ -1,5 +1,6 @@
 #!/usr/bin/python
 import os
+import re
 import subprocess
 from time import sleep
 from functools import wraps
@@ -228,6 +229,24 @@ def highlight(s):
     return '{color}{text}{coloroff}'.format(color=GREEN,
                                             text=s, coloroff=DEFAULT)
 
+def box(text, caption=None):
+    print
+    print '=' * 8 + (' %s ' % caption) + '=' * (60 - (len(caption) + 10))
+    print highlight(text)
+    print '=' * 60
+    print
+
+
+PATH_RE = re.compile('/[^\s]*')
+MIN_PATH_LENGTH = 7
+
+
+def danger(cmd):
+    for path in PATH_RE.findall(cmd):
+        if len(path) < MIN_PATH_LENGTH:
+            return True
+    return False
+
 
 @cmdDispatcher.command(name='restore')
 def restore_group(group, user=('u', os.getlogin(), 'rsync command user'),
@@ -248,11 +267,7 @@ def restore_group(group, user=('u', os.getlogin(), 'rsync command user'),
     if not cmd:
         return
 
-    print
-    print '=' * 8 + ' Command ' + '=' * 43
-    print highlight(cmd)
-    print '=' * 60
-    print
+    box(cmd, caption='Command')
 
     try:
         answer = raw_input('Do you want the glorious mastermind '
@@ -264,6 +279,22 @@ def restore_group(group, user=('u', os.getlogin(), 'rsync command user'),
     if answer != 'yes':
         print 'Like a pussy...'
         return
+
+    if danger(cmd):
+        test_msg = 'God please forgive me'
+        print 'Hmm... The command seems pretty strange to me.'
+
+        try:
+            answer = raw_input('I will execute it for you, though, if you type "%s": ' % test_msg)
+        except KeyboardInterrupt:
+            answer = ''
+            print
+
+        if answer != test_msg:
+             print 'I thought so...'
+             return
+
+        print 'Well if you say so...\n'
 
     try:
         retval = subprocess.call(cmd.split(' '))
