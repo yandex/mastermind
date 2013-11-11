@@ -248,6 +248,19 @@ def danger(cmd):
     return False
 
 
+def confirm(prompt, answer, prefix=''):
+    if prefix:
+        print prefix
+
+    try:
+        s = raw_input(prompt)
+    except KeyboardInterrupt:
+        s = ''
+        print
+
+    return s == answer
+
+
 @cmdDispatcher.command(name='restore')
 def restore_group(group, user=('u', os.getlogin(), 'rsync command user'),
                   host=None):
@@ -269,28 +282,18 @@ def restore_group(group, user=('u', os.getlogin(), 'rsync command user'),
 
     box(cmd, caption='Command')
 
-    try:
-        answer = raw_input('Do you want the glorious mastermind '
-                           'to execute this command for you? [yes/no]: ')
-    except KeyboardInterrupt:
-        answer = 'no'
-        print
-
-    if answer != 'yes':
+    if not confirm('Do you want the glorious mastermind '
+                   'to execute this command for you? [yes/no]: ', 'yes'):
         print 'Like a pussy...'
         return
 
     if danger(cmd):
+
         test_msg = 'God please forgive me'
-        print 'Hmm... The command seems pretty strange to me.'
 
-        try:
-            answer = raw_input('I will execute it for you, though, if you type "%s": ' % test_msg)
-        except KeyboardInterrupt:
-            answer = ''
-            print
-
-        if answer != test_msg:
+        if not confirm('I will execute it for you, though, '
+                       'if you type "%s": ' % test_msg, test_msg,
+                       prefix='Hmm... The command seems pretty strange to me.'):
              print 'I thought so...'
              return
 
