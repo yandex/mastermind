@@ -609,7 +609,7 @@ def update_statistics(stats):
             groups[stat['group_id']].update_status()
 
         except Exception as e:
-            logging.error('Unable to process statictics for node %s group_id %d: %s' % (stat['addr'], stat['group_id'], traceback.format_exc()))
+            logging.error('Unable to process statictics for node %s group_id %d (%s): %s' % (stat['addr'], stat['group_id'], e, traceback.format_exc()))
 
     try:
         for gid in remove_group_nodes:
