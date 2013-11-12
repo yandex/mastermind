@@ -617,7 +617,7 @@ def update_statistics(stats):
     try:
         for gid in remove_group_nodes:
             group = groups[gid]
-            for n in node:
+            for n in group.nodes:
                 group.remove_node(n)
     except Exception as e:
         logging.error('Failed to unlink nodes from group: %s %s' %
