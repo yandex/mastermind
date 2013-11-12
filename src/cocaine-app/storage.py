@@ -273,7 +273,7 @@ class Node(object):
             return self.__str__() == other
 
         if isinstance(other, Node):
-            return self.addr == other.addr and self.port == other.port
+            return self.host.addr == other.host.addr and self.port == other.port
 
     def serialize(self):
         return {
