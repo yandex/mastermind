@@ -593,6 +593,8 @@ def update_statistics(stats):
             else:
                 group = groups[stat['group_id']]
 
+            logging.info('Stats for node %s' % stat['group_id'])
+
             node = nodes[stat['addr']]
 
             remove_nodes = remove_group_nodes.setdefault(stat['group_id'], set())
@@ -600,8 +602,9 @@ def update_statistics(stats):
 
             if not node in group.nodes:
                 group.add_node(node)
+                logging.debug('Adding node %d -> %s:%s' %
+                              (stat['group_id'], node.host.addr, node.port))
 
-            logging.debug('Adding node %d -> %s:%s' % (stat['group_id'], addr[0], addr[1]))
 
             logging.info('Updating statistics for node %s' % (str(node)))
             node.update_statistics(stat)
