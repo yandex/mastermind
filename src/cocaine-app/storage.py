@@ -578,7 +578,7 @@ def update_statistics(stats):
 
             gid = stat['group_id']
             if gid in groups:
-                remove_group_nodes[gid] = set(groups[gid])
+                remove_group_nodes[gid] = set(groups[gid].nodes)
 
             if not stat['addr'] in nodes:
                 addr = stat['addr'].split(':')
