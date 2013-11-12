@@ -194,7 +194,8 @@ class NodeInfoUpdater:
                     storage.hosts.add(addr)
                     self.__logging.info('Adding host %s' % (addr))
                 host = storage.hosts[addr]
-                node = storage.nodes.add(host, n['port'], group)
+                node = storage.nodes.add(host, n['port'])
+                group.add_node(node)
                 node.destroyed = n['destroyed']
                 node.read_only = n['read_only']
                 stat = storage.NodeStat.unserialize(n['stat'])

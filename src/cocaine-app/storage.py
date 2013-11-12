@@ -195,12 +195,10 @@ class Host(object):
 
 
 class Node(object):
-    def __init__(self, host, port, group):
+    def __init__(self, host, port):
         self.host = host
         self.port = int(port)
-        self.group = group
         self.host.nodes.append(self)
-        self.group.add_node(self)
 
         self.stat = None
 
@@ -216,7 +214,8 @@ class Node(object):
         self.destroyed = True
         self.host.nodes.remove(self)
         self.host = None
-        self.group.remove_node(self)
+        # if there is a group using this node, remove node from the list
+        # self.group.remove_node(self)
 
     def update_statistics(self, new_stat):
         stat = NodeStat(new_stat, self.stat)
@@ -243,9 +242,6 @@ class Node(object):
             self.status = Status.OK
             self.status_text = "Node %s is OK" % (self.__str__())
 
-        #if self.group.group_id == 1:
-        #    print 'Update status: ', repr(self)
-
         return self.status
 
     def info(self):
@@ -261,7 +257,7 @@ class Node(object):
         if self.destroyed:
             return '<Node object: DESTROYED!>'
 
-        return '<Node object: host=%s, port=%d, group=%s, status=%s, read_only=%s, stat=%s>' % (str(self.host), self.port, str(self.group), self.status, str(self.read_only), repr(self.stat))
+        return '<Node object: host=%s, port=%d, status=%s, read_only=%s, stat=%s>' % (str(self.host), self.port, self.status, str(self.read_only), repr(self.stat))
 
     def __str__(self):
         if self.destroyed:
@@ -573,6 +569,11 @@ logging = Logger()
 
 
 def update_statistics(stats):
+
+    remove_group_nodes = {}
+    for g in groups:
+        remove_group_nodes[g.group_id] = set(g.nodes)
+
     for stat in stats:
         logging.info("Stats: %s %s" % (str(stat['group_id']), stat['addr']))
         try:
@@ -584,18 +585,23 @@ def update_statistics(stats):
                 else:
                     host = hosts[addr[0]]
 
-                if not stat['group_id'] in groups:
-                    group = groups.add(stat['group_id'])
-                    logging.debug('Adding group %d' % stat['group_id'])
-                else:
-                    group = groups[stat['group_id']]
+                nodes.add(host, addr[1])
 
-                n = nodes.add(host, addr[1], group)
-                logging.debug('Adding node %d -> %s:%s' % (stat['group_id'], addr[0], addr[1]))
+            if not stat['group_id'] in groups:
+                group = groups.add(stat['group_id'])
+                logging.debug('Adding group %d' % stat['group_id'])
+            else:
+                group = groups[stat['group_id']]
 
             node = nodes[stat['addr']]
-            if node.group.group_id != stat['group_id']:
-                raise Exception('Node group_id = %d, group_id from stat: %d' % (node.group.group_id, stat['group_id']))
+
+            remove_nodes = remove_group_nodes.setdefault(stat['group_id'], set())
+            remove_nodes.discard(node)
+
+            if not node in group.nodes:
+                group.add_node(node)
+
+            logging.debug('Adding node %d -> %s:%s' % (stat['group_id'], addr[0], addr[1]))
 
             logging.info('Updating statistics for node %s' % (str(node)))
             node.update_statistics(stat)
@@ -605,13 +611,24 @@ def update_statistics(stats):
         except Exception as e:
             logging.error('Unable to process statictics for node %s group_id %d: %s' % (stat['addr'], stat['group_id'], traceback.format_exc()))
 
+    try:
+        for gid in remove_group_nodes:
+            group = storage.groups[gid]
+            for n in node:
+                group.remove(n)
+    except Exception as e:
+        logging.error('Failed to unlink nodes from group: %s %s' %
+                      (e, traceback.format_exc()))
+
 '''
 h = hosts.add('95.108.228.31')
 g = groups.add(1)
-n = nodes.add(hosts['95.108.228.31'], 1025, groups[1])
+n = nodes.add(hosts['95.108.228.31'], 1025)
+g.add_node(n)
 
 g2 = groups.add(2)
-nodes.add(h, 1026, g2)
+n2 = nodes.add(h, 1026)
+g2.add_node(n2)
 
 couple = couples.add([g, g2])
 
