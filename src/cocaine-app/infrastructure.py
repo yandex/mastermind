@@ -131,6 +131,11 @@ class Infrastructure(object):
                 storage_nodes = tuple((node.host.addr, node.port)
                                       for node in g.nodes)
 
+                if not storage_nodes:
+                    logging.info('Storage nodes list for group %d is empty, '
+                                 'skipping' % (g.group_id,))
+                    continue
+
                 logging.debug('Comparing %s and %s' %
                               (storage_nodes, state_nodes))
 

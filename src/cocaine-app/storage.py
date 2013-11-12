@@ -571,12 +571,15 @@ logging = Logger()
 def update_statistics(stats):
 
     remove_group_nodes = {}
-    for g in groups:
-        remove_group_nodes[g.group_id] = set(g.nodes)
 
     for stat in stats:
         logging.info("Stats: %s %s" % (str(stat['group_id']), stat['addr']))
         try:
+
+            gid = stat['group_id']
+            if gid in groups:
+                remove_group_nodes[gid] = set(groups[gid])
+
             if not stat['addr'] in nodes:
                 addr = stat['addr'].split(':')
                 if not addr[0] in hosts:
@@ -587,29 +590,29 @@ def update_statistics(stats):
 
                 nodes.add(host, addr[1])
 
-            if not stat['group_id'] in groups:
-                group = groups.add(stat['group_id'])
+            if not gid in groups:
+                group = groups.add(gid)
                 logging.debug('Adding group %d' % stat['group_id'])
             else:
-                group = groups[stat['group_id']]
+                group = groups[gid]
 
-            logging.info('Stats for node %s' % stat['group_id'])
+            logging.info('Stats for node %s' % gid)
 
             node = nodes[stat['addr']]
 
-            remove_nodes = remove_group_nodes.setdefault(stat['group_id'], set())
+            remove_nodes = remove_group_nodes.setdefault(gid, set())
             remove_nodes.discard(node)
 
             if not node in group.nodes:
                 group.add_node(node)
                 logging.debug('Adding node %d -> %s:%s' %
-                              (stat['group_id'], node.host.addr, node.port))
+                              (gid, node.host.addr, node.port))
 
 
             logging.info('Updating statistics for node %s' % (str(node)))
             node.update_statistics(stat)
-            logging.info('Updating status for group %d' % (stat['group_id']))
-            groups[stat['group_id']].update_status()
+            logging.info('Updating status for group %d' % gid)
+            groups[gid].update_status()
 
         except Exception as e:
             logging.error('Unable to process statictics for node %s group_id %d (%s): %s' % (stat['addr'], stat['group_id'], e, traceback.format_exc()))
