@@ -615,9 +615,11 @@ def update_statistics(stats):
             logging.error('Unable to process statictics for node %s group_id %d (%s): %s' % (stat['addr'], stat['group_id'], e, traceback.format_exc()))
 
     try:
-        for gid in remove_group_nodes:
+        for gid, remove_nodes in remove_group_nodes.iteritems():
             group = groups[gid]
-            for n in group.nodes:
+            for n in remove_nodes:
+                logging.info('Removing node %s:%d from group %s nodes' %
+                             (n.host.addr, n.port, gid))
                 group.remove_node(n)
     except Exception as e:
         logging.error('Failed to unlink nodes from group: %s %s' %
