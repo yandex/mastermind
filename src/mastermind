@@ -310,8 +310,9 @@ def restore_group(group, user=('u', os.getlogin(), 'rsync command user'),
         print 'Failed to execute command, return value: %s' % retval
         return
 
-    print "Good boy!"
-
+    print warn('Don\'t forget to change group id of the restored group '
+               'back to %s' % group)
+    print "All done!"
 
 d = Dispatcher()
 d.nest('group', groupDispatcher, 'Perform group action')
