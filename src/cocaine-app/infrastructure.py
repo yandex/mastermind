@@ -162,6 +162,10 @@ class Infrastructure(object):
     def restore_group_cmd(self, request):
         group_id = int(request[0])
         user = request[1]
+        try:
+            dest = request[2]
+        except IndexError:
+            dest = None
 
         candidates = set()
         warns = []
@@ -231,7 +235,7 @@ class Infrastructure(object):
             cmd = self.RSYNC_CMD.format(user=user,
                                         src_host=source_node.host.addr,
                                         src_path=port_to_srv(source_node.port),
-                                        dst_path=port_to_srv(state[0][1]))
+                                        dst_path=dest or port_to_srv(state[0][1]))
 
         except ValueError as e:
             warns.append(e.message)

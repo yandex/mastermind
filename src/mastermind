@@ -263,12 +263,13 @@ def confirm(prompt, answer, prefix=''):
 
 @cmdDispatcher.command(name='restore')
 def restore_group(group, user=('u', os.getlogin(), 'rsync command user'),
+                  dest=('d', '', 'Destination path on current host for rsync command'),
                   host=None):
     '''Fetch cached keys'''
     s = service(host)
     group = int(group)
 
-    res = s.enqueue('restore_group_cmd', msgpack.packb([group, user])).get()
+    res = s.enqueue('restore_group_cmd', msgpack.packb([group, user, dest])).get()
     if isinstance(res, dict):
         print res
         return
