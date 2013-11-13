@@ -1,6 +1,6 @@
 
 def import_object(s):
-    parts = s.rsplit('.', 1)
+    parts = [p.encode('utf-8') for p in s.rsplit('.', 1)]
     if len(parts) == 1:
         return __import__(s)
     else:
