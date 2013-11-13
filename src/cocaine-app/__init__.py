@@ -18,6 +18,7 @@ import elliptics
 
 import balancer
 import balancelogicadapter
+import infrastructure
 import cache
 import node_info_updater
 from config import config
@@ -70,6 +71,9 @@ W = Worker()
 logging.info("after creating worker")
 
 
+b = balancer.Balancer(n)
+
+
 def register_handle(h):
     @wraps(h)
     def wrapper(request, response):
@@ -89,6 +93,12 @@ def register_handle(h):
     return wrapper
 
 
+def init_infrastructure():
+    infstruct = infrastructure.Infrastructure(n)
+    register_handle(infstruct.restore_group_cmd)
+    b.set_infrastructure(infstruct)
+
+
 def init_node_info_updater():
     logging.info("trace node info updater %d" % (i.next()))
     niu = node_info_updater.NodeInfoUpdater(logging, n)
@@ -106,17 +116,15 @@ def init_cache(cache_config):
     return manager
 
 
-
 if 'cache' in config:
     init_cache(config['cache'])
-
-b = balancer.Balancer(n)
+init_infrastructure()
+init_node_info_updater()
 
 for handler in balancer.handlers(b):
     logging.info("registering bounded function %s" % handler)
     register_handle(handler)
 
-init_node_info_updater()
 
 logging.info("Starting worker")
 W.run()

@@ -104,7 +104,7 @@ class NodeInfoUpdater:
             reload_period = config.get('nodes_reload_period', 60)
             self.__tq.add_task_in("load_nodes", reload_period, self.loadNodes)
             self.__nodeUpdateTimestamps = self.__nodeUpdateTimestamps[1:] + (time.time(),)
-            bla.setConfigValue("dynamic_too_old_age", max(time.time() - self.__nodeUpdateTimestamps[0], reload_period*3))
+            bla.setConfigValue("dynamic_too_old_age", max(time.time() - self.__nodeUpdateTimestamps[0], reload_period * 3))
 
     def updateSymmGroup(self, group):
         try:
@@ -195,7 +195,8 @@ class NodeInfoUpdater:
                     storage.hosts.add(addr)
                     self.__logging.info('Adding host %s' % (addr))
                 host = storage.hosts[addr]
-                node = storage.nodes.add(host, n['port'], group)
+                node = storage.nodes.add(host, n['port'])
+                group.add_node(node)
                 node.destroyed = n['destroyed']
                 node.read_only = n['read_only']
                 stat = storage.NodeStat.unserialize(n['stat'])

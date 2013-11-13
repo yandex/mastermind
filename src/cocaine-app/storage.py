@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 import time
 import socket
 import traceback
@@ -7,8 +6,10 @@ import msgpack
 
 import inventory
 
+
 def ts_str(ts):
     return time.asctime(time.localtime(ts))
+
 
 class Status(object):
     INIT = 'INIT'
@@ -18,6 +19,7 @@ class Status(object):
     RO = 'RO'
     STALLED = 'STALLED'
     FROZEN = 'FROZEN'
+
 
 class Repositary(object):
     def __init__(self, constructor):
@@ -80,8 +82,8 @@ class NodeStat(object):
         if prev:
             dt = self.ts - prev.ts
 
-            self.read_rps = (self.last_read - prev.last_read)/dt
-            self.write_rps = (self.last_write - prev.last_write)/dt
+            self.read_rps = (self.last_read - prev.last_read) / dt
+            self.write_rps = (self.last_write - prev.last_write) / dt
 
             # Disk usage should be used here instead of load average
             self.max_read_rps = max(self.read_rps / max(self.load_average, 0.01), 100)
@@ -162,7 +164,6 @@ class Host(object):
     def hostname(self):
         return socket.gethostbyaddr(self.addr)[0]
 
-
     def index(self):
         return self.__str__()
 
@@ -192,13 +193,12 @@ class Host(object):
             'addr': self.addr,
         }
 
+
 class Node(object):
-    def __init__(self, host, port, group):
+    def __init__(self, host, port):
         self.host = host
         self.port = int(port)
-        self.group = group
         self.host.nodes.append(self)
-        self.group.add_node(self)
 
         self.stat = None
 
@@ -207,7 +207,6 @@ class Node(object):
         self.status = Status.INIT
         self.status_text = "Node %s is not inititalized yet" % (self.__str__())
 
-
     def get_host(self):
         return self.host
 
@@ -215,7 +214,8 @@ class Node(object):
         self.destroyed = True
         self.host.nodes.remove(self)
         self.host = None
-        self.group.remove_node(self)
+        # if there is a group using this node, remove node from the list
+        # self.group.remove_node(self)
 
     def update_statistics(self, new_stat):
         stat = NodeStat(new_stat, self.stat)
@@ -242,9 +242,6 @@ class Node(object):
             self.status = Status.OK
             self.status_text = "Node %s is OK" % (self.__str__())
 
-        #if self.group.group_id == 1:
-        #    print 'Update status: ', repr(self)
-
         return self.status
 
     def info(self):
@@ -260,7 +257,7 @@ class Node(object):
         if self.destroyed:
             return '<Node object: DESTROYED!>'
 
-        return '<Node object: host=%s, port=%d, group=%s, status=%s, read_only=%s, stat=%s>' % (str(self.host), self.port, str(self.group), self.status, str(self.read_only), repr(self.stat))
+        return '<Node object: host=%s, port=%d, status=%s, read_only=%s, stat=%s>' % (str(self.host), self.port, self.status, str(self.read_only), repr(self.stat))
 
     def __str__(self):
         if self.destroyed:
@@ -276,7 +273,7 @@ class Node(object):
             return self.__str__() == other
 
         if isinstance(other, Node):
-            return self.addr == other.addr and self.port == other.port
+            return self.host.addr == other.host.addr and self.port == other.port
 
     def serialize(self):
         return {
@@ -411,6 +408,7 @@ class Group(object):
             'meta': self.meta,
             'nodes': [n.serialize() for n in self.nodes],
         }
+
 
 class Couple(object):
     def __init__(self, groups):
@@ -560,18 +558,28 @@ class Couple(object):
             'meta': self.meta
         }
 
-
 hosts = Repositary(Host)
 groups = Repositary(Group)
 nodes = Repositary(Node)
 couples = Repositary(Couple)
 
+
 from cocaine.logging import Logger
 logging = Logger()
+
+
 def update_statistics(stats):
+
+    remove_group_nodes = {}
+
     for stat in stats:
         logging.info("Stats: %s %s" % (str(stat['group_id']), stat['addr']))
         try:
+
+            gid = stat['group_id']
+            if gid in groups:
+                remove_group_nodes.setdefault(gid, set(groups[gid].nodes))
+
             if not stat['addr'] in nodes:
                 addr = stat['addr'].split(':')
                 if not addr[0] in hosts:
@@ -580,34 +588,55 @@ def update_statistics(stats):
                 else:
                     host = hosts[addr[0]]
 
-                if not stat['group_id'] in groups:
-                    group = groups.add(stat['group_id'])
-                    logging.debug('Adding group %d' % stat['group_id'])
-                else:
-                    group = groups[stat['group_id']]
+                nodes.add(host, addr[1])
 
-                n = nodes.add(host, addr[1], group)
-                logging.debug('Adding node %d -> %s:%s' % (stat['group_id'], addr[0], addr[1]))
+            if not gid in groups:
+                group = groups.add(gid)
+                logging.debug('Adding group %d' % stat['group_id'])
+            else:
+                group = groups[gid]
+
+            logging.info('Stats for node %s' % gid)
 
             node = nodes[stat['addr']]
-            if node.group.group_id != stat['group_id']:
-                raise Exception('Node group_id = %d, group_id from stat: %d' % (node.group.group_id, stat['group_id']))
+
+            remove_nodes = remove_group_nodes.setdefault(gid, set())
+            remove_nodes.discard(node)
+
+            if not node in group.nodes:
+                group.add_node(node)
+                logging.debug('Adding node %d -> %s:%s' %
+                              (gid, node.host.addr, node.port))
+
 
             logging.info('Updating statistics for node %s' % (str(node)))
             node.update_statistics(stat)
-            logging.info('Updating status for group %d' % (stat['group_id']))
-            groups[stat['group_id']].update_status()
+            logging.info('Updating status for group %d' % gid)
+            groups[gid].update_status()
 
         except Exception as e:
-            logging.error('Unable to process statictics for node %s group_id %d: %s' % (stat['addr'], stat['group_id'], traceback.format_exc()))
+            logging.error('Unable to process statictics for node %s group_id %d (%s): %s' % (stat['addr'], stat['group_id'], e, traceback.format_exc()))
+
+    try:
+        for gid, remove_nodes in remove_group_nodes.iteritems():
+            group = groups[gid]
+            for n in remove_nodes:
+                logging.info('Removing node %s:%d from group %s nodes' %
+                             (n.host.addr, n.port, gid))
+                group.remove_node(n)
+    except Exception as e:
+        logging.error('Failed to unlink nodes from group: %s %s' %
+                      (e, traceback.format_exc()))
 
 '''
 h = hosts.add('95.108.228.31')
 g = groups.add(1)
-n = nodes.add(hosts['95.108.228.31'], 1025, groups[1])
+n = nodes.add(hosts['95.108.228.31'], 1025)
+g.add_node(n)
 
 g2 = groups.add(2)
-nodes.add(h, 1026, g2)
+n2 = nodes.add(h, 1026)
+g2.add_node(n2)
 
 couple = couples.add([g, g2])
 

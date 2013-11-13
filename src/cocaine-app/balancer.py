@@ -1,5 +1,6 @@
 # encoding: utf-8
 import copy
+from datetime import datetime
 import sys
 import traceback
 
@@ -18,15 +19,20 @@ import storage
 
 logging = Logger()
 
-logging.info("balancer.py")
+logging.info('balancer.py')
 
 
 class Balancer(object):
 
     NOT_BAD_STATUSES = set([storage.Status.OK, storage.Status.FROZEN])
+    DT_FORMAT = '%Y-%m-%d %H:%M:%S'
 
     def __init__(self, n):
         self.node = n
+        self.infrastructure = None
+
+    def set_infrastructure(self, infrastructure):
+        self.infrastructure = infrastructure
 
     def get_groups(self, request):
         return tuple(group.group_id for group in storage.groups)
@@ -34,19 +40,19 @@ class Balancer(object):
     @h.handler
     def get_symmetric_groups(self, request):
         result = [couple.as_tuple() for couple in storage.couples if couple.status == storage.Status.OK]
-        logging.debug("good_symm_groups: " + str(result))
+        logging.debug('good_symm_groups: ' + str(result))
         return result
 
     @h.handler
     def get_bad_groups(self, request):
         result = [couple.as_tuple() for couple in storage.couples if couple.status not in self.NOT_BAD_STATUSES]
-        logging.debug("bad_symm_groups: " + str(result))
+        logging.debug('bad_symm_groups: ' + str(result))
         return result
 
     @h.handler
     def get_frozen_groups(self, request):
         result = [couple.as_tuple() for couple in storage.couples if couple.status == storage.Status.FROZEN]
-        logging.debug("frozen_couples: " + str(result))
+        logging.debug('frozen_couples: ' + str(result))
         return result
 
     @h.handler
@@ -74,10 +80,10 @@ class Balancer(object):
 
     @h.handler
     def get_empty_groups(self, request):
-        logging.info("len(storage.groups) = %d" % (len(storage.groups.elements)))
-        logging.info("groups: %s" % str([(group.group_id, group.couple) for group in storage.groups if group.couple is None]))
+        logging.info('len(storage.groups) = %d' % (len(storage.groups.elements)))
+        logging.info('groups: %s' % str([(group.group_id, group.couple) for group in storage.groups if group.couple is None]))
         result = [group.group_id for group in storage.groups if group.couple is None]
-        logging.debug("uncoupled groups: " + str(result))
+        logging.debug('uncoupled groups: ' + str(result))
         return result
 
     @h.handler
@@ -103,31 +109,31 @@ class Balancer(object):
                                                                 bla._and(bla.GroupSizeEquals(size),
                                                                          bla.GroupNamespaceEquals(namespace)))
                 result.setdefault(namespace, {})[size] = [item for item in group_weights.items()]
-                logging.info("Cluster info: " + str(info))
+                logging.info('Cluster info: ' + str(info))
 
         logging.info(str(result))
         return result
 
     @h.handler
     def balance(self, request):
-        logging.info("----------------------------------------")
-        logging.info("New request" + str(len(request)))
+        logging.info('----------------------------------------')
+        logging.info('New request' + str(len(request)))
         logging.info(request)
 
         weighted_groups = self.get_group_weights(self.node)
 
         target_groups = []
 
-        if manifest.get("symmetric_groups", False):
+        if manifest.get('symmetric_groups', False):
             lsymm_groups = weighted_groups[request[0]]
 
             for (gr_list, weight) in lsymm_groups:
-                logging.info("gr_list: %s %d" % (str(gr_list), request[0]))
+                logging.info('gr_list: %s %d' % (str(gr_list), request[0]))
                 grl = {'rating': weight, 'groups': gr_list}
-                logging.info("grl: %s" % str(grl))
+                logging.info('grl: %s' % str(grl))
                 target_groups.append(grl)
 
-            logging.info("target_groups: %s" % str(target_groups))
+            logging.info('target_groups: %s' % str(target_groups))
             if target_groups:
                 sorted_groups = sorted(target_groups, key=lambda gr: gr['rating'], reverse=True)[0]
                 logging.info(sorted_groups)
@@ -142,13 +148,13 @@ class Balancer(object):
             logging.info(sorted_groups)
             result = ([g.groupId() for g in sorted_groups], request[1])
 
-        logging.info("result: %s" % str(result))
+        logging.info('result: %s' % str(result))
         return result
 
     @h.handler
     def repair_groups(self, request):
-        logging.info("----------------------------------------")
-        logging.info("New repair groups request: " + str(request))
+        logging.info('----------------------------------------')
+        logging.info('New repair groups request: ' + str(request))
         logging.info(request)
 
         group_id = int(request[0])
@@ -166,17 +172,17 @@ class Balancer(object):
         for couple in storage.couples:
             if group in couple:
                 if couple.status == storage.Status.OK:
-                    logging.error("Balancer error: cannot repair, group %d is in couple %s" % (group_id, str(couple)))
-                    return {"Balancer error" : "cannot repair, group %d is in couple %s" % (group_id, str(couple))}
+                    logging.error('Balancer error: cannot repair, group %d is in couple %s' % (group_id, str(couple)))
+                    return {'Balancer error' : 'cannot repair, group %d is in couple %s' % (group_id, str(couple))}
                 bad_couples.append(couple)
 
         if not bad_couples:
-            logging.error("Balancer error: cannot repair, group %d is not a member of any couple" % group_id)
-            return {"Balancer error" : "cannot repair, group %d is not a member of any couple" % group_id}
+            logging.error('Balancer error: cannot repair, group %d is not a member of any couple' % group_id)
+            return {'Balancer error' : 'cannot repair, group %d is not a member of any couple' % group_id}
 
         if len(bad_couples) > 1:
-            logging.error("Balancer error: cannot repair, group %d is a member of several couples: %s" % (group_id, str(bad_couples)))
-            return {"Balancer error" : "cannot repair, group %d is a member of several couples: %s" % (group_id, str(bad_couples))}
+            logging.error('Balancer error: cannot repair, group %d is a member of several couples: %s' % (group_id, str(bad_couples)))
+            return {'Balancer error' : 'cannot repair, group %d is a member of several couples: %s' % (group_id, str(bad_couples))}
 
         couple = bad_couples[0]
 
@@ -202,7 +208,7 @@ class Balancer(object):
         if bad:
             raise bad[1]
 
-        return {"message": "Successfully repaired couple", 'couple': str(couple)}
+        return {'message': 'Successfully repaired couple', 'couple': str(couple)}
 
     @h.handler
     def get_group_info(self, request):
@@ -217,9 +223,22 @@ class Balancer(object):
         return storage.groups[group].info()
 
     @h.handler
+    def get_group_history(self, request):
+        group = int(request[0])
+        group_history = []
+
+        if self.infrastructure:
+            for nodes_data in self.infrastructure.get_group_history(group):
+                dt = datetime.fromtimestamp(nodes_data['timestamp'])
+                group_history.append({'set': nodes_data['set'],
+                                      'timestamp': dt.strftime(self.DT_FORMAT)})
+
+        return group_history
+
+    @h.handler
     def couple_groups(self, request):
-        logging.info("----------------------------------------")
-        logging.info("New couple groups request: " + str(request))
+        logging.info('----------------------------------------')
+        logging.info('New couple groups request: ' + str(request))
         logging.info(request)
         uncoupled_groups = self.get_empty_groups(self.node)
         dc_by_group_id = {}
@@ -230,18 +249,18 @@ class Balancer(object):
             dc_by_group_id[group_id] = dc
             groups_in_dc = group_by_dc.setdefault(dc, [])
             groups_in_dc.append(group_id)
-        logging.info("dc by group: %s" % str(dc_by_group_id))
-        logging.info("group_by_dc: %s" % str(group_by_dc))
+        logging.info('dc by group: %s' % str(dc_by_group_id))
+        logging.info('group_by_dc: %s' % str(group_by_dc))
         size = int(request[0])
         mandatory_groups = [int(g) for g in request[1]]
 
         # check mandatory set
         for group_id in mandatory_groups:
             if group_id not in uncoupled_groups:
-                raise Exception("group %d is coupled" % group_id)
+                raise Exception('group %d is coupled' % group_id)
             dc = dc_by_group_id[group_id]
             if dc not in group_by_dc:
-                raise Exception("groups must be in different dcs")
+                raise Exception('groups must be in different dcs')
             del group_by_dc[dc]
 
         groups_to_couple = copy.copy(mandatory_groups)
@@ -249,9 +268,9 @@ class Balancer(object):
         # need better algorithm for this. For a while - only 1 try and random selection
         n_groups_to_add = size - len(groups_to_couple)
         if n_groups_to_add > len(group_by_dc):
-            raise Exception("Not enough dcs")
+            raise Exception('Not enough dcs')
         if n_groups_to_add < 0:
-            raise Exception("Too many mandatory groups")
+            raise Exception('Too many mandatory groups')
 
         # why not use random.sample
         some_dcs = group_by_dc.keys()[:n_groups_to_add]
@@ -273,8 +292,8 @@ class Balancer(object):
 
     @h.handler
     def break_couple(self, request):
-        logging.info("----------------------------------------")
-        logging.info("New break couple request: " + str(request))
+        logging.info('----------------------------------------')
+        logging.info('New break couple request: ' + str(request))
         logging.info(request)
 
         couple_str = ':'.join(map(str, sorted(request[0], key=lambda x: int(x))))
@@ -284,15 +303,15 @@ class Balancer(object):
         couple = storage.couples[couple_str]
         confirm = request[1]
 
-        logging.info("groups: %s; confirmation: \"%s\"" % (couple_str, confirm))
+        logging.info('groups: %s; confirmation: "%s"' % (couple_str, confirm))
 
-        correct_confirm = "Yes, I want to break "
+        correct_confirm = 'Yes, I want to break '
         if couple.status == storage.Status.OK:
-            correct_confirm += "good"
+            correct_confirm += 'good'
         else:
-            correct_confirm += "bad"
+            correct_confirm += 'bad'
 
-        correct_confirm += " couple " + couple_str
+        correct_confirm += ' couple ' + couple_str
 
         if confirm != correct_confirm:
             raise Exception('Incorrect confirmation string')
@@ -316,7 +335,7 @@ class Balancer(object):
         new_max_group = max_group + groups_count
         self.node.meta_session.write_data(keys.MASTERMIND_MAX_GROUP_KEY, str(new_max_group))
 
-        return range(max_group+1, max_group+1 + groups_count)
+        return range(max_group + 1, max_group + 1 + groups_count)
 
     def __get_couple(self, groups):
         couple_str = ':'.join(map(str, sorted(groups, key=lambda x: int(x))))
@@ -341,7 +360,7 @@ class Balancer(object):
         key = keys.MASTERMIND_COUPLE_META_KEY % str(couple)
 
         packed = msgpack.packb(couple.meta)
-        logging.info('packed meta for couple %s: \"%s\"' % (couple, str(packed).encode("hex")))
+        logging.info('packed meta for couple %s: "%s"' % (couple, str(packed).encode('hex')))
         self.node.meta_session.write_data(key, packed)
 
         couple.update_status()
@@ -387,15 +406,16 @@ def handlers(b):
         handlers.append(attr)
     return handlers
 
+
 def kill_symm_group(n, groups):
-    logging.info("Killing symm groups: %s" % str(groups))
+    logging.info('Killing symm groups: %s' % str(groups))
     s = elliptics.Session(n)
     s.add_groups(groups)
     s.remove(keys.SYMMETRIC_GROUPS_KEY)
 
 
 def make_symm_group(n, couple, namespace):
-    logging.info("writing couple info: " + str(couple))
+    logging.info('writing couple info: ' + str(couple))
     logging.info('groups in couple %s are being assigned namespace "%s"' % (couple, namespace))
 
     s = elliptics.Session(n)
@@ -404,14 +424,13 @@ def make_symm_group(n, couple, namespace):
     for group in couple:
         try:
             packed = msgpack.packb(couple.compose_group_meta(namespace))
-            logging.info("packed couple for group %d: \"%s\"" % (group.group_id, str(packed).encode("hex")))
+            logging.info('packed couple for group %d: "%s"' % (group.group_id, str(packed).encode('hex')))
             s.add_groups([group.group_id])
             s.write_data(keys.SYMMETRIC_GROUPS_KEY, packed)
             good.append(group.group_id)
         except Exception as e:
-            logging.error("Failed to write symm group info, group %d: %s\n%s"
+            logging.error('Failed to write symm group info, group %d: %s\n%s'
                           % (group.group_id, str(e), traceback.format_exc()))
             bad = (group.group_id, e)
             break
     return (good, bad)
-
