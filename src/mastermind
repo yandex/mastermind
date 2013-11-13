@@ -1,5 +1,6 @@
 #!/usr/bin/python
 import os
+import os.path
 import re
 import subprocess
 from time import sleep
@@ -269,9 +270,16 @@ def confirm(prompt, answer, prefix=''):
     return s == answer
 
 
+def cmd_dest(cmd):
+    return cmd.split(' ')[-1]
+
+
 @cmdDispatcher.command(name='restore')
 def restore_group(group, user=('u', os.getlogin(), 'rsync command user'),
                   dest=('d', '', 'Destination path on current host for rsync command'),
+                  group_file=('f', '', 'Write group id to specified file, '
+                     'absolute or relative to destination path '
+                     '(will be overriten if exists)'),
                   host=None):
     '''Fetch cached keys'''
     s = service(host)
@@ -318,8 +326,18 @@ def restore_group(group, user=('u', os.getlogin(), 'rsync command user'),
         print 'Failed to execute command, return value: %s' % retval
         return
 
-    print warn('\nDon\'t forget to change group id of the restored group '
-               'back to %s!' % group)
+    if group_file:
+        try:
+            group_file_path = os.path.join(dest or cmd_dest(cmd), group_file)
+            print 'Writing id %s to group file %s' % (group, group_file_path)
+            with open(group_file, 'w') as f:
+                f.write(group)
+        except Exception as e:
+            print warn('Failed to write to group file: %s' % e)
+            return
+    else:
+        print warn('\nDon\'t forget to change group id of the restored group '
+                   'back to %s!' % group)
     print 'All done!'
 
 d = Dispatcher()
