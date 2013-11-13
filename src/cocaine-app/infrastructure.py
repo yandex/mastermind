@@ -49,7 +49,7 @@ class Infrastructure(object):
     def get_group_history(self, group_id):
         history = []
         for node_set in self.state[group_id]['nodes']:
-            history.append({'set': [node + (port_to_srv(node[1]),)
+            history.append({'set': [node + (port_to_path(node[1]),)
                                     for node in node_set['set']],
                             'timestamp': node_set['timestamp']})
         return history
@@ -221,8 +221,10 @@ class Infrastructure(object):
             source_node = source_group.nodes[0]
 
             state = self.get_group_history(group.group_id)[-1]['set']
-            if (group.nodes[0].host.addr != state[0][0] or
-                group.nodes[0].port != int(state[0][1])):
+            addr, port = state[0]
+
+            if (group.nodes[0].host.addr != addr or
+                group.nodes[0].port != port):
                 warns.append('Last history state does not match '
                              'current state, history will be used: '
                              'history %s, current %s' %
@@ -238,9 +240,9 @@ class Infrastructure(object):
             warns.append('Source group %s (%s)' % (source_group, source_node))
 
             cmd = self.RSYNC_CMD.format(user=user,
-                                        src_host=source_node.host.addr,
-                                        src_path=port_to_srv(source_node.port),
-                                        dst_path=dest or port_to_srv(state[0][1]))
+                src_host=source_node.host.addr,
+                src_path=port_to_path(source_node.port),
+                dst_path=dest or port_to_path(port))
 
         except ValueError as e:
             warns.append(e.message)
@@ -253,7 +255,7 @@ class Infrastructure(object):
         return cmd, warns
 
 
-def port_to_srv(port):
+def port_to_path(port):
     assert port >= BASE_PORT + 1
     if port == CACHE_DEFAULT_PORT:
         return CACHE_DEFAULT_PATH
