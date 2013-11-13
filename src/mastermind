@@ -333,7 +333,7 @@ def restore_group(group, user=('u', os.getlogin(), 'rsync command user'),
             group_file_dir = os.path.dirname(group_file_path)
             if not os.path.exists(group_file_dir):
                 os.makedirs(group_file_dir, 0755)
-            with open(group_file, 'w') as f:
+            with open(group_file_path, 'w') as f:
                 f.write(group)
         except Exception as e:
             print warn('Failed to write to group file: %s' % e)
