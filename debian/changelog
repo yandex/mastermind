@@ -4,6 +4,18 @@ mastermind (2.6.5) lucid; urgency=low
 
  -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 08 Nov 2013 16:01:26 +0400
 
+mastermind (2.6.4+2elliptics2.20) lucid; urgency=low
+
+  * Fix: inventory import
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 13 Nov 2013 14:03:47 +0400
+
+mastermind (2.6.4+1elliptics2.20) lucid; urgency=low
+
+  * Feature: compatibility with elliptics 2.20
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 30 Oct 2013 13:24:30 +0400
+
 mastermind (2.6.4) lucid; urgency=low
 
   * Feature: storage cached state via cocaine cache storage
