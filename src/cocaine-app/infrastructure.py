@@ -223,12 +223,13 @@ class Infrastructure(object):
             state = self.get_group_history(group.group_id)[-1]['set']
             addr, port = state[0]
 
-            if (group.nodes[0].host.addr != addr or
-                group.nodes[0].port != port):
-                warns.append('Last history state does not match '
-                             'current state, history will be used: '
-                             'history %s, current %s' %
-                             (state, group.nodes[0]))
+            if (dest and
+                (group.nodes[0].host.addr != addr or
+                 group.nodes[0].port != port)):
+                warns.append('Restoring group history state does not match '
+                             'current state, history will be used for '
+                             'path construction: history %s:%s, current %s' %
+                             (addr, port, group.nodes[0]))
 
             if len(source_group.nodes) > 1 or len(state) > 1:
                 raise ValueError('Do not know how to restore group '
