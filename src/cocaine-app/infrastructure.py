@@ -221,7 +221,7 @@ class Infrastructure(object):
             source_node = source_group.nodes[0]
 
             state = self.get_group_history(group.group_id)[-1]['set']
-            addr, port = state[0]
+            addr, port = state[0][:2]
 
             if (dest and
                 (group.nodes[0].host.addr != addr or
