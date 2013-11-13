@@ -27,8 +27,8 @@ class Infrastructure(object):
     TASK_SYNC = 'infrastructure_sync'
     TASK_UPDATE = 'infrastructure_update'
 
-    RSYNC_CMD = ('rsync -rlHpogDt --progress {user}@{src_host}:{src_path} '
-                 '{dst_path}')
+    RSYNC_CMD = ('rsync -rlHpogDt --progress '
+                 '{user}@{src_host}:{src_path}data* {dst_path}')
 
     def __init__(self, node):
         self.node = node
