@@ -275,13 +275,14 @@ def cmd_dest(cmd):
 
 
 @cmdDispatcher.command(name='restore')
-def restore_group(group, user=('u', os.getlogin(), 'rsync command user'),
-                  dest=('d', '', 'Destination path on current host for rsync command'),
+def restore_group(group, user=('u', os.getlogin(),
+                               'rsync command user for source path'),
+                  dest=('d', '', 'Destination path on current host'),
                   group_file=('f', '', 'Write group id to specified file, '
                      'absolute or relative to destination path '
                      '(will be overriten if exists)'),
                   host=None):
-    '''Fetch cached keys'''
+    '''Get command for restoring group from good symmetric group'''
     s = service(host)
     group = int(group)
 
@@ -339,8 +340,8 @@ def restore_group(group, user=('u', os.getlogin(), 'rsync command user'),
             print warn('Failed to write to group file: %s' % e)
             return
     else:
-        print warn('\nDon\'t forget to change group id of the restored group '
-                   'back to %s!' % group)
+        print warn("\nDon't forget to change group id of the restored group "
+                   "back to %s!" % group)
     print 'All done!'
 
 d = Dispatcher()
