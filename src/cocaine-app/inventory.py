@@ -1,11 +1,8 @@
-# encoding: utf-8
-from importer import import_object
 import json
 
-manifest = {'config': '/etc/elliptics/mastermind.conf'}
+from config import config
+from importer import import_object
 
-with open(manifest["config"], 'r') as config_file:
-    config = json.load(config_file)
 
 try:
     inv = import_object(config['inventory'])
