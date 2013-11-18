@@ -119,15 +119,9 @@ class Infrastructure(object):
 
             for g in storage.groups.keys():
 
-                self.state.setdefault(g.group_id,
-                                      self.new_group_state(g.group_id))
+                group_state = self.state.get(g.group_id,
+                                             self.new_group_state(g.group_id))
 
-                cur_group_state = (self.state[g.group_id]['nodes'] and
-                                   self.state[g.group_id]['nodes'][-1]
-                                   or {'set': []})
-
-                state_nodes = tuple(nodes
-                                    for nodes in cur_group_state['set'])
                 storage_nodes = tuple((node.host.addr, node.port)
                                       for node in g.nodes)
 
@@ -135,6 +129,17 @@ class Infrastructure(object):
                     logging.info('Storage nodes list for group %d is empty, '
                                  'skipping' % (g.group_id,))
                     continue
+
+                if not g.group_id in self.state:
+                    # add group to state only if checks succeeded
+                    self.state[g.group_id] = group_state
+
+                cur_group_state = (group_state['nodes'] and
+                                   group_state['nodes'][-1]
+                                   or {'set': []})
+
+                state_nodes = tuple(nodes
+                                    for nodes in cur_group_state['set'])
 
                 logging.debug('Comparing %s and %s' %
                               (storage_nodes, state_nodes))
