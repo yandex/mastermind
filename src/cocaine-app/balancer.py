@@ -245,7 +245,11 @@ class Balancer(object):
         group_by_dc = {}
         for group_id in uncoupled_groups:
             group = storage.groups[group_id]
-            dc = group.nodes[0].host.get_dc()
+            try:
+                dc = group.nodes[0].host.get_dc()
+            except IndexError:
+                logging.error('Empty nodes list for group %s' % group_id)
+                continue
             dc_by_group_id[group_id] = dc
             groups_in_dc = group_by_dc.setdefault(dc, [])
             groups_in_dc.append(group_id)
