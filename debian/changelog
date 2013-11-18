@@ -1,3 +1,10 @@
+mastermind (2.7.2) lucid; urgency=low
+
+  * Fix: couple creation using groups with empty nodes list
+  * Fix: unnecessary infrastructure state update removed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 18 Nov 2013 19:15:12 +0400
+
 mastermind (2.7.1) lucid; urgency=low
 
   * Feature: history of group nodes
