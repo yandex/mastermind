@@ -126,8 +126,8 @@ class Infrastructure(object):
                                       for node in g.nodes)
 
                 if not storage_nodes:
-                    logging.info('Storage nodes list for group %d is empty, '
-                                 'skipping' % (g.group_id,))
+                    logging.debug('Storage nodes list for group %d is empty, '
+                                  'skipping' % (g.group_id,))
                     continue
 
                 if not g.group_id in self.state:
