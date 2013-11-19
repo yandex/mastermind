@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from contextlib import contextmanager
 import json
 import sys
 import threading
@@ -11,6 +12,7 @@ import elliptics
 import balancer
 import balancelogicadapter as bla
 from config import config
+import errors
 import keys
 import timed_queue
 import storage
@@ -18,6 +20,7 @@ import storage
 
 GROUP_META_UPDATE_TASK_ID = 'update_symms_for_group_%d'
 COUPLE_META_UPDATE_TASK_ID = 'update_meta_for_couple_%s'
+RESET_HOST_REQUESTS_TASK_ID = 'reset_host_requests'
 
 
 class NodeInfoUpdater:
@@ -37,6 +40,10 @@ class NodeInfoUpdater:
         self.__cache = Service('cache')
         delayed = self.try_restore_from_cache()
         self.loadNodes(delayed=delayed)
+
+        self._host_tolerable_timeouts = 1
+        self._host_requests = {}
+        self.__host_requests_lock = threading.Lock()
 
     def try_restore_from_cache(self):
         try:
@@ -78,6 +85,10 @@ class NodeInfoUpdater:
                 else:
                     self.updateCoupleMeta(couple)
 
+            self.__tq.add_task_in(RESET_HOST_REQUESTS_TASK_ID,
+                                  config.get('symm_group_read_gap', 1) + 1,
+                                  self.reset_host_requests)
+
         except Exception as e:
             self.__logging.info('Failed to initialize node updater: %s\n%s' % (str(e), traceback.format_exc()))
             pass
@@ -109,8 +120,15 @@ class NodeInfoUpdater:
     def updateSymmGroup(self, group):
         try:
             self.__logging.info("Trying to read symmetric groups from group %d" % (group.group_id))
+
             self.__session.add_groups([group.group_id])
-            meta = self.__session.read_data(keys.SYMMETRIC_GROUPS_KEY)
+
+            if not group.nodes:
+                raise errors.OrphanGroupError
+
+            with self.node_request(group.nodes[0]):
+                meta = self.__session.read_data(keys.SYMMETRIC_GROUPS_KEY)
+
             group.parse_meta(meta)
             couples = group.meta['couple']
             self.__logging.info("Read symmetric groups from group %d: %s" % (group.group_id, couples))
@@ -120,8 +138,8 @@ class NodeInfoUpdater:
                     self.__tq.hurry(GROUP_META_UPDATE_TASK_ID % group_id2)
 
             couple_str = ':'.join((str(g) for g in sorted(couples)))
-            self.__logging.info('%s in storage.couples: %s' % (couple_str, couple_str in storage.couples))
-            self.__logging.info('Keys in storage.couples: %s' % [str(c) for c in storage.couples])
+            self.__logging.debug('%s in storage.couples: %s' % (couple_str, couple_str in storage.couples))
+            self.__logging.debug('Keys in storage.couples: %s' % [str(c) for c in storage.couples])
 
             if not couple_str in storage.couples:
                 self.__logging.info("Creating couple %s" % (couple_str))
@@ -136,19 +154,21 @@ class NodeInfoUpdater:
                                       self.updateCoupleMeta,
                                       c)
             else:
-                self.__logging.info("Couple %s already exists" % couple_str)
+                self.__logging.debug("Couple %s already exists" % couple_str)
 
             storage.couples[couple_str].update_status()
+        except errors.OrphanGroupError:
+            self.__logging.info('Skipping group %d, nodes data is unavailable' % group.group_id)
+        except errors.SkipHostError:
+            pass
         except Exception as e:
             self.__logging.error("Failed to read symmetric_groups from group %d (%s), %s" % (group.group_id, str(e), traceback.format_exc()))
             group.parse_meta(None)
-            if group.couple:
-                group.couple.update_status()
-            else:
-                group.update_status()
         except:
             self.__logging.error("Failed2 to read symmetric_groups from group %d (%s), %s" % (group.group_id, sys.exc_info()[0], traceback.format_exc()))
             group.parse_meta(None)
+
+        finally:
             if group.couple:
                 group.couple.update_status()
             else:
@@ -172,6 +192,10 @@ class NodeInfoUpdater:
             couple.parse_meta(None)
 
         couple.update_status()
+
+    def reset_host_requests(self):
+        with self.__host_requests_lock:
+            self._host_requests = {}
 
     def restore_state(self, state):
         state = json.loads(state)
@@ -224,6 +248,34 @@ class NodeInfoUpdater:
         })
         self.__logging.info('Saving cached state')
         self.__cache.put(self.STORAGE_STATE_CACHE_KEY, state)
+
+    @contextmanager
+    def node_request(self, node):
+        with self.__host_requests_lock:
+            host_requests = self._host_requests.setdefault(node.host,
+                {'skip': 0, 'timeouts': 0})
+            self.__logging.info('skip counter: %s' % (host_requests,))
+            skip = host_requests['skip']
+            if skip > 0:
+                self.__logging.info('Skipping request to host {0}, '
+                    'skip counter for host: {1}'.format(
+                        node.host, skip))
+                host_requests['skip'] = skip - 1
+                raise errors.SkipHostError
+
+        try:
+            yield
+        except elliptics.TimeoutError:
+            with self.__host_requests_lock:
+                host_requests = self._host_requests[node.host]
+                host_requests['timeouts'] += 1
+                if host_requests['timeouts'] > self._host_tolerable_timeouts:
+                    timeouts = host_requests['timeouts'] - self._host_tolerable_timeouts
+                    skip = 2 ** (timeouts - 1)
+                    host_requests['skip'] = skip
+                    self.__logging.info('Setting skip counter '
+                        'for host {0}: {1}'.format(node.host, skip))
+                raise
 
     def stop(self):
         self.__tq.shutdown()
