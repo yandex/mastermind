@@ -182,14 +182,17 @@ class NodeInfoUpdater:
             try:
                 data = self.__node.meta_session.read_latest(keys.MASTERMIND_COUPLE_META_KEY % str(couple))
             except elliptics.NotFoundError:
-                self.__logging.info('No meta data found for couple %s' % couple)
+                self.__logging.debug('No metadata (frozen) found '
+                                     'for couple %s' % couple)
                 couple.parse_meta(None)
                 couple.update_status()
                 return
             couple.parse_meta(data)
-            self.__logging.info('Parsed meta for couple %s' % couple)
+            self.__logging.info('Parsed metadata for couple %s' % couple)
         except BaseException as e:
-            self.__logging.error('Failed to read meta for couple %s (%s), %s' % (couple, str(e), traceback.format_exc()))
+            self.__logging.error('Failed to read meta for couple %s (%s), '
+                                 '%s' % (couple, str(e),
+                                         traceback.format_exc()))
             couple.parse_meta(None)
 
         couple.update_status()
