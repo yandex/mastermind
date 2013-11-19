@@ -38,12 +38,13 @@ class NodeInfoUpdater:
         self.__session = elliptics.Session(self.__node)
         self.__nodeUpdateTimestamps = (time.time(), time.time())
         self.__cache = Service('cache')
-        delayed = self.try_restore_from_cache()
-        self.loadNodes(delayed=delayed)
 
         self._host_tolerable_timeouts = 1
         self._host_requests = {}
         self.__host_requests_lock = threading.Lock()
+
+        delayed = self.try_restore_from_cache()
+        self.loadNodes(delayed=delayed)
 
     def try_restore_from_cache(self):
         try:
