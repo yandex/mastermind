@@ -1,3 +1,9 @@
+mastermind (2.7.3) lucid; urgency=low
+
+  * Feature: degradational requests frequency for nodes with constant timeout experiences
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 19 Nov 2013 20:27:20 +0400
+
 mastermind (2.7.2) lucid; urgency=low
 
   * Fix: couple creation using groups with empty nodes list
