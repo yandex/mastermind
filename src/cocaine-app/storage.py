@@ -332,13 +332,14 @@ class Group(object):
             self.status = Status.INIT
             self.status_text = "Group %s is in INIT state because there is no nodes serving this group" % (self.__str__())
 
+        # node statuses should be updated before group status is set
+        statuses = tuple(node.update_status() for node in self.nodes)
+
         logging.info('In group %d meta = %s' % (self.group_id, str(self.meta)))
         if (not self.meta) or (not 'couple' in self.meta) or (not self.meta['couple']):
             self.status = Status.INIT
             self.status_text = "Group %s is in INIT state because there is no coupling info" % (self.__str__())
             return self.status
-
-        statuses = tuple(node.update_status() for node in self.nodes)
 
         if Status.RO in statuses:
             self.status = Status.RO

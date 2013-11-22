@@ -245,12 +245,25 @@ class Balancer(object):
         group_by_dc = {}
         for group_id in uncoupled_groups:
             group = storage.groups[group_id]
+
+            suitable = True
+            for node in group.nodes:
+                if node.status != storage.Status.OK:
+                    logging.info('Group {0} cannot be used, node {1} status '
+                                 'is {2} (not OK)'.format(group.group_id,
+                                     node, node.status))
+                    suitable = False
+                    break
+            if not suitable:
+                continue
+
             try:
                 logging.info('Fetching dc for group {0}'.format(group.group_id))
                 dc = group.nodes[0].host.get_dc()
             except IndexError:
                 logging.error('Empty nodes list for group %s' % group_id)
                 continue
+
             dc_by_group_id[group_id] = dc
             groups_in_dc = group_by_dc.setdefault(dc, [])
             groups_in_dc.append(group_id)
@@ -416,7 +429,10 @@ def kill_symm_group(n, groups):
     logging.info('Killing symm groups: %s' % str(groups))
     s = elliptics.Session(n)
     s.add_groups(groups)
-    s.remove(keys.SYMMETRIC_GROUPS_KEY)
+    try:
+        s.remove(keys.SYMMETRIC_GROUPS_KEY)
+    except elliptics.NotFoundError:
+        pass
 
 
 def make_symm_group(n, couple, namespace):
