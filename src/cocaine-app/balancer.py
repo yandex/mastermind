@@ -246,6 +246,7 @@ class Balancer(object):
         for group_id in uncoupled_groups:
             group = storage.groups[group_id]
             try:
+                logging.info('Fetching dc for group {0}'.format(group.group_id))
                 dc = group.nodes[0].host.get_dc()
             except IndexError:
                 logging.error('Empty nodes list for group %s' % group_id)
