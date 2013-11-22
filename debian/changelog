@@ -1,3 +1,10 @@
+mastermind (2.7.4) lucid; urgency=low
+
+  * Feature: async node statistics requests
+  * Fix: do not create couples from bad groups
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 22 Nov 2013 16:32:28 +0400
+
 mastermind (2.7.3) lucid; urgency=low
 
   * Feature: degradational requests frequency for nodes with constant timeout experiences
