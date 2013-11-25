@@ -1,3 +1,11 @@
+mastermind (2.7.5) lucid; urgency=low
+
+  * Feature: removed cached state usage
+  * Fix: balancer load average counter
+  * Fix: do not unlink nodes from group automatically
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 25 Nov 2013 16:55:21 +0400
+
 mastermind (2.7.4) lucid; urgency=low
 
   * Feature: async node statistics requests
