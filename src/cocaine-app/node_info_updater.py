@@ -39,20 +39,7 @@ class NodeInfoUpdater:
         self.__nodeUpdateTimestamps = (time.time(), time.time())
         self.__cache = Service('cache')
 
-        delayed = self.try_restore_from_cache()
-        self.loadNodes(delayed=delayed)
-
-    def try_restore_from_cache(self):
-        try:
-            cached_state = self.__cache.perform_sync('get', self.STORAGE_STATE_CACHE_KEY).next()
-            if cached_state[0] == False:
-                raise ValueError('No cached state available')
-            self.restore_state(cached_state[1])
-            self.__logging.info('Successfully restored from cache')
-        except Exception as e:
-            self.__logging.info('Failed to restore state from cache: %s\n%s' % (str(e), traceback.format_exc()))
-            return False
-        return True
+        self.loadNodes(delayed=False)
 
     def execute_tasks(self, delayed):
         try:
@@ -90,8 +77,6 @@ class NodeInfoUpdater:
             curr_max_group = max((g.group_id for g in storage.groups))
             if curr_max_group > max_group:
                 self.__node.meta_session.write_data(keys.MASTERMIND_MAX_GROUP_KEY, str(curr_max_group))
-
-            self.store_state()
 
         except Exception as e:
             self.__logging.error("Error while loading node stats: %s\n%s" % (str(e), traceback.format_exc()))
@@ -264,58 +249,6 @@ class NodeInfoUpdater:
             result = str(entry.data)
 
         return processor(result, *args)
-
-    def restore_state(self, state):
-        state = json.loads(state)
-        if state['version'] != self.STORAGE_STATE_VERSION:
-            raise ValueError('Unsupported storage state version: %s, required: %s' %
-                             (state['version'], self.STORAGE_STATE_VERSION))
-
-        cache_age = time.time() - state['timestamp']
-        cache_valid_age = config.get('storage_cache_valid_time',
-                                      self.DEFAULT_STORAGE_STATE_VALID_TIME)
-        if cache_age > cache_valid_age:
-            self.__logging.debug('Cache age is %s seconds, valid age is %s seconds' %
-                                 (cache_age, cache_valid_age))
-            raise ValueError('Cache is stale and cannot be used')
-
-        for g in state['state']['groups']:
-            group = storage.groups.add(g['group_id'])
-            for n in g['nodes']:
-                addr = n['host'].encode('utf-8')
-                if not addr in storage.hosts:
-                    storage.hosts.add(addr)
-                    self.__logging.info('Adding host %s' % (addr))
-                host = storage.hosts[addr]
-                node = storage.nodes.add(host, n['port'])
-                group.add_node(node)
-                node.destroyed = n['destroyed']
-                node.read_only = n['read_only']
-                stat = storage.NodeStat.unserialize(n['stat'])
-                self.__logging.info('stat: %s' % stat)
-                node.stat = stat
-                node.update_status()
-            group.meta = g['meta']
-
-        for c in state['state']['couples']:
-            groups = [storage.groups[g] for g in c['groups']]
-            couple = storage.couples.add(groups)
-            couple.meta = c['meta']
-            couple.update_status()
-
-        self.__logging.info('%s' % ([couple for couple in storage.couples],))
-
-    def store_state(self):
-        state = json.dumps({
-            'version': self.STORAGE_STATE_VERSION,
-            'timestamp': time.time(),
-            'state': {
-                'groups': [g.serialize() for g in storage.groups],
-                'couples': [c.serialize() for c in storage.couples],
-            }
-        })
-        self.__logging.info('Saving cached state')
-        self.__cache.put(self.STORAGE_STATE_CACHE_KEY, state)
 
     def stop(self):
         self.__tq.shutdown()
