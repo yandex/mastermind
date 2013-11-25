@@ -571,15 +571,12 @@ logging = Logger()
 
 def update_statistics(stats):
 
-    remove_group_nodes = {}
-
     for stat in stats:
         logging.info("Stats: %s %s" % (str(stat['group_id']), stat['addr']))
+
         try:
 
             gid = stat['group_id']
-            if gid in groups:
-                remove_group_nodes.setdefault(gid, set(groups[gid].nodes))
 
             if not stat['addr'] in nodes:
                 addr = stat['addr'].split(':')
@@ -601,9 +598,6 @@ def update_statistics(stats):
 
             node = nodes[stat['addr']]
 
-            remove_nodes = remove_group_nodes.setdefault(gid, set())
-            remove_nodes.discard(node)
-
             if not node in group.nodes:
                 group.add_node(node)
                 logging.debug('Adding node %d -> %s:%s' %
@@ -617,17 +611,6 @@ def update_statistics(stats):
 
         except Exception as e:
             logging.error('Unable to process statictics for node %s group_id %d (%s): %s' % (stat['addr'], stat['group_id'], e, traceback.format_exc()))
-
-    try:
-        for gid, remove_nodes in remove_group_nodes.iteritems():
-            group = groups[gid]
-            for n in remove_nodes:
-                logging.info('Removing node %s:%d from group %s nodes' %
-                             (n.host.addr, n.port, gid))
-                group.remove_node(n)
-    except Exception as e:
-        logging.error('Failed to unlink nodes from group: %s %s' %
-                      (e, traceback.format_exc()))
 
 '''
 h = hosts.add('95.108.228.31')
