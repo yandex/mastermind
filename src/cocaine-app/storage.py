@@ -77,7 +77,9 @@ class NodeStat(object):
         self.total_space = float(raw_stat['counters']['DNET_CNTR_BLOCKS'][0]) * raw_stat['counters']['DNET_CNTR_BSIZE'][0]
         self.free_space = float(raw_stat['counters']['DNET_CNTR_BAVAIL'][0]) * raw_stat['counters']['DNET_CNTR_BSIZE'][0]
         self.rel_space = float(raw_stat['counters']['DNET_CNTR_BAVAIL'][0]) / raw_stat['counters']['DNET_CNTR_BLOCKS'][0]
-        self.load_average = float((raw_stat['counters'].get('DNET_CNTR_DU1') or raw_stat['counters']["DNET_CNTR_LA1"])[0]) / 100
+        self.load_average = (float(raw_stat['counters']['DNET_CNTR_DU1'][0]) / 100
+                             if raw_stat['counters'].get('DNET_CNTR_DU1') else
+                             float(raw_stat['counters']['DNET_CNTR_LA1'][0]) / 100 / 100)
 
         if prev:
             dt = self.ts - prev.ts
