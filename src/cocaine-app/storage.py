@@ -88,9 +88,9 @@ class NodeStat(object):
             self.write_rps = (self.last_write - prev.last_write) / dt
 
             # Disk usage should be used here instead of load average
-            self.max_read_rps = max(self.read_rps / max(self.load_average, 0.01), 100)
+            self.max_read_rps = max(self.read_rps, 1) / max(self.load_average, 0.01)
 
-            self.max_write_rps = max(self.write_rps / max(self.load_average, 0.01), 100)
+            self.max_write_rps = max(self.write_rps, 1) / max(self.load_average, 0.01)
 
         else:
             self.read_rps = 0
