@@ -1,3 +1,9 @@
+mastermind (2.7.6) lucid; urgency=low
+
+  * Fix: removed lower threshold of 100 IOPS for maximum node performance
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 26 Nov 2013 13:15:22 +0400
+
 mastermind (2.7.5) lucid; urgency=low
 
   * Feature: removed cached state usage
