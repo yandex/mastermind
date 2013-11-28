@@ -1,10 +1,15 @@
 # -*- coding: utf-8 -*-
-import time
 import socket
+import time
 import traceback
+
 import msgpack
 
 import inventory
+from config import config
+
+
+RPS_FORMULA_VARIANT = config.get('rps_formula', 0)
 
 
 def ts_str(ts):
@@ -68,6 +73,27 @@ class NodeStat(object):
             self.max_read_rps = 0
             self.max_write_rps = 0
 
+    def max_rps(self, rps, load_avg, variant=RPS_FORMULA_VARIANT):
+
+        if variant == 0:
+            return max(rps / max(load_avg, 0.01), 100)
+
+        rps = max(rps, 1)
+        max_avg_norm = 10.0
+        avg = max(min(float(load_avg), 100.0), 0.0) / max_avg_norm
+        avg_inverted = 10.0 - avg
+
+        if variant == 1:
+            max_rps = ((rps + avg_inverted) ** 2) / rps
+        elif variant == 2:
+            max_rps = ((avg_inverted) ** 2) / rps
+        else:
+            raise ValueError('Unknown max_rps option: %s' % variant)
+
+        return max_rps
+
+
+
     def init(self, raw_stat, prev=None):
         self.ts = time.time()
 
@@ -79,7 +105,7 @@ class NodeStat(object):
         self.rel_space = float(raw_stat['counters']['DNET_CNTR_BAVAIL'][0]) / raw_stat['counters']['DNET_CNTR_BLOCKS'][0]
         self.load_average = (float(raw_stat['counters']['DNET_CNTR_DU1'][0]) / 100
                              if raw_stat['counters'].get('DNET_CNTR_DU1') else
-                             float(raw_stat['counters']['DNET_CNTR_LA1'][0]) / 100 / 100)
+                             float(raw_stat['counters']['DNET_CNTR_LA1'][0]) / 100)
 
         if prev:
             dt = self.ts - prev.ts
@@ -88,9 +114,11 @@ class NodeStat(object):
             self.write_rps = (self.last_write - prev.last_write) / dt
 
             # Disk usage should be used here instead of load average
-            self.max_read_rps = max(self.read_rps, 1) / max(self.load_average, 0.01)
+            # self.max_read_rps = max(self.read_rps / max(self.load_average, 0.01), 100)
+            self.max_read_rps = self.max_rps(self.read_rps, self.load_average)
 
-            self.max_write_rps = max(self.write_rps, 1) / max(self.load_average, 0.01)
+            # self.max_write_rps = max(self.write_rps / max(self.load_average, 0.01), 100)
+            self.max_write_rps = self.max_rps(self.write_rps, self.load_average)
 
         else:
             self.read_rps = 0
@@ -137,7 +165,7 @@ class NodeStat(object):
         return res
 
     def __repr__(self):
-        return '<NodeStat object: ts=%s, write_rps=%d, max_write_rps=%d, read_rps=%d, max_read_rps=%d, total_space=%d, free_space=%d, load_average=%d>' % (ts_str(self.ts), self.write_rps, self.max_write_rps, self.read_rps, self.max_read_rps, self.total_space, self.free_space, self.load_average)
+        return '<NodeStat object: ts=%s, write_rps=%d, max_write_rps=%d, read_rps=%d, max_read_rps=%d, total_space=%d, free_space=%d, load_average=%s>' % (ts_str(self.ts), self.write_rps, self.max_write_rps, self.read_rps, self.max_read_rps, self.total_space, self.free_space, self.load_average)
 
     def serialize(self):
         return {
