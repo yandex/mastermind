@@ -1,3 +1,9 @@
+mastermind (2.7.7) lucid; urgency=low
+
+  * Feature: elliptics async api compatibility (2.24.14.29)
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 28 Nov 2013 19:07:56 +0400
+
 mastermind (2.7.6) lucid; urgency=low
 
   * Fix: removed lower threshold of 100 IOPS for maximum node performance
