@@ -1,10 +1,15 @@
 # -*- coding: utf-8 -*-
-import time
 import socket
+import time
 import traceback
+
 import msgpack
 
 import inventory
+from config import config
+
+
+RPS_FORMULA_VARIANT = config.get('rps_formula', 0)
 
 
 def ts_str(ts):
@@ -68,6 +73,27 @@ class NodeStat(object):
             self.max_read_rps = 0
             self.max_write_rps = 0
 
+    def max_rps(self, rps, load_avg, variant=RPS_FORMULA_VARIANT):
+
+        if variant == 0:
+            return max(rps / max(load_avg, 0.01), 100)
+
+        rps = max(rps, 1)
+        max_avg_norm = 10.0
+        avg = max(min(float(load_avg), 100.0), 0.0) / max_avg_norm
+        avg_inverted = 10.0 - avg
+
+        if variant == 1:
+            max_rps = ((rps + avg_inverted) ** 2) / rps
+        elif variant == 2:
+            max_rps = ((avg_inverted) ** 2) / rps
+        else:
+            raise ValueError('Unknown max_rps option: %s' % variant)
+
+        return max_rps
+
+
+
     def init(self, raw_stat, prev=None):
         self.ts = time.time()
 
@@ -77,7 +103,9 @@ class NodeStat(object):
         self.total_space = float(raw_stat['counters']['DNET_CNTR_BLOCKS'][0]) * raw_stat['counters']['DNET_CNTR_BSIZE'][0]
         self.free_space = float(raw_stat['counters']['DNET_CNTR_BAVAIL'][0]) * raw_stat['counters']['DNET_CNTR_BSIZE'][0]
         self.rel_space = float(raw_stat['counters']['DNET_CNTR_BAVAIL'][0]) / raw_stat['counters']['DNET_CNTR_BLOCKS'][0]
-        self.load_average = float((raw_stat['counters'].get('DNET_CNTR_DU1') or raw_stat['counters']["DNET_CNTR_LA1"])[0]) / 100
+        self.load_average = (float(raw_stat['counters']['DNET_CNTR_DU1'][0]) / 100
+                             if raw_stat['counters'].get('DNET_CNTR_DU1') else
+                             float(raw_stat['counters']['DNET_CNTR_LA1'][0]) / 100)
 
         if prev:
             dt = self.ts - prev.ts
@@ -86,9 +114,11 @@ class NodeStat(object):
             self.write_rps = (self.last_write - prev.last_write) / dt
 
             # Disk usage should be used here instead of load average
-            self.max_read_rps = max(self.read_rps / max(self.load_average, 0.01), 100)
+            # self.max_read_rps = max(self.read_rps / max(self.load_average, 0.01), 100)
+            self.max_read_rps = self.max_rps(self.read_rps, self.load_average)
 
-            self.max_write_rps = max(self.write_rps / max(self.load_average, 0.01), 100)
+            # self.max_write_rps = max(self.write_rps / max(self.load_average, 0.01), 100)
+            self.max_write_rps = self.max_rps(self.write_rps, self.load_average)
 
         else:
             self.read_rps = 0
@@ -135,7 +165,7 @@ class NodeStat(object):
         return res
 
     def __repr__(self):
-        return '<NodeStat object: ts=%s, write_rps=%d, max_write_rps=%d, read_rps=%d, max_read_rps=%d, total_space=%d, free_space=%d, load_average=%d>' % (ts_str(self.ts), self.write_rps, self.max_write_rps, self.read_rps, self.max_read_rps, self.total_space, self.free_space, self.load_average)
+        return '<NodeStat object: ts=%s, write_rps=%d, max_write_rps=%d, read_rps=%d, max_read_rps=%d, total_space=%d, free_space=%d, load_average=%s>' % (ts_str(self.ts), self.write_rps, self.max_write_rps, self.read_rps, self.max_read_rps, self.total_space, self.free_space, self.load_average)
 
     def serialize(self):
         return {
@@ -332,13 +362,14 @@ class Group(object):
             self.status = Status.INIT
             self.status_text = "Group %s is in INIT state because there is no nodes serving this group" % (self.__str__())
 
+        # node statuses should be updated before group status is set
+        statuses = tuple(node.update_status() for node in self.nodes)
+
         logging.info('In group %d meta = %s' % (self.group_id, str(self.meta)))
         if (not self.meta) or (not 'couple' in self.meta) or (not self.meta['couple']):
             self.status = Status.INIT
             self.status_text = "Group %s is in INIT state because there is no coupling info" % (self.__str__())
             return self.status
-
-        statuses = tuple(node.update_status() for node in self.nodes)
 
         if Status.RO in statuses:
             self.status = Status.RO
@@ -568,17 +599,39 @@ from cocaine.logging import Logger
 logging = Logger()
 
 
+
+def stat_result_entry_to_dict(sre):
+    cnt = sre.statistics.counters
+    return {'group_id': sre.address.group_id,
+            'addr': '{0}:{1}'.format(sre.address.host, sre.address.port),
+            'storage_commands': {
+                'READ': [cnt[STORAGE_DNET_CMD_READ].counter],
+                'WRITE': [cnt[STORAGE_DNET_CMD_WRITE].counter],
+            },
+            'proxy_commands': {
+                'READ': [cnt[PROXY_DNET_CMD_READ].counter],
+                'WRITE': [cnt[PROXY_DNET_CMD_WRITE].counter],
+            },
+            'counters': {
+                'DNET_CNTR_BLOCKS': [cnt[DNET_CNTR_BLOCKS].counter],
+                'DNET_CNTR_BSIZE': [cnt[DNET_CNTR_BSIZE].counter],
+                'DNET_CNTR_BAVAIL': [cnt[DNET_CNTR_BAVAIL].counter],
+                'DNET_CNTR_LA1': [cnt[DNET_CNTR_LA1].counter],
+            }
+    }
+
+
 def update_statistics(stats):
 
-    remove_group_nodes = {}
+    if getattr(stats, 'get', None):
+        stats = [stat_result_entry_to_dict(sre) for sre in stats.get()]
 
     for stat in stats:
         logging.info("Stats: %s %s" % (str(stat['group_id']), stat['addr']))
+
         try:
 
             gid = stat['group_id']
-            if gid in groups:
-                remove_group_nodes.setdefault(gid, set(groups[gid].nodes))
 
             if not stat['addr'] in nodes:
                 addr = stat['addr'].split(':')
@@ -600,9 +653,6 @@ def update_statistics(stats):
 
             node = nodes[stat['addr']]
 
-            remove_nodes = remove_group_nodes.setdefault(gid, set())
-            remove_nodes.discard(node)
-
             if not node in group.nodes:
                 group.add_node(node)
                 logging.debug('Adding node %d -> %s:%s' %
@@ -617,16 +667,86 @@ def update_statistics(stats):
         except Exception as e:
             logging.error('Unable to process statictics for node %s group_id %d (%s): %s' % (stat['addr'], stat['group_id'], e, traceback.format_exc()))
 
-    try:
-        for gid, remove_nodes in remove_group_nodes.iteritems():
-            group = groups[gid]
-            for n in remove_nodes:
-                logging.info('Removing node %s:%d from group %s nodes' %
-                             (n.host.addr, n.port, gid))
-                group.remove_node(n)
-    except Exception as e:
-        logging.error('Failed to unlink nodes from group: %s %s' %
-                      (e, traceback.format_exc()))
+
+(
+STORAGE_DNET_CMD_LOOKUP,
+STORAGE_DNET_CMD_REVERSE_LOOKUP,
+STORAGE_DNET_CMD_JOIN,
+STORAGE_DNET_CMD_WRITE,
+STORAGE_DNET_CMD_READ,
+STORAGE_DNET_CMD_LIST_DEPRECATED,
+STORAGE_DNET_CMD_EXEC,
+STORAGE_DNET_CMD_ROUTE_LIST,
+STORAGE_DNET_CMD_STAT,
+STORAGE_DNET_CMD_NOTIFY,
+STORAGE_DNET_CMD_DEL,
+STORAGE_DNET_CMD_STAT_COUNT,
+STORAGE_DNET_CMD_STATUS,
+STORAGE_DNET_CMD_READ_RANGE,
+STORAGE_DNET_CMD_DEL_RANGE,
+STORAGE_DNET_CMD_AUTH,
+STORAGE_DNET_CMD_BULK_READ,
+STORAGE_DNET_CMD_DEFRAG,
+STORAGE_DNET_CMD_ITERATOR,
+STORAGE_DNET_CMD_INDEXES_UPDATE,
+STORAGE_DNET_CMD_INDEXES_INTERNAL,
+STORAGE_DNET_CMD_INDEXES_FIND,
+STORAGE_DNET_CMD_UNKNOWN,
+__STORAGE_DNET_CMD_MAX,
+
+PROXY_DNET_CMD_LOOKUP,
+PROXY_DNET_CMD_REVERSE_LOOKUP,
+PROXY_DNET_CMD_JOIN,
+PROXY_DNET_CMD_WRITE,
+PROXY_DNET_CMD_READ,
+PROXY_DNET_CMD_LIST_DEPRECATED,
+PROXY_DNET_CMD_EXEC,
+PROXY_DNET_CMD_ROUTE_LIST,
+PROXY_DNET_CMD_STAT,
+PROXY_DNET_CMD_NOTIFY,
+PROXY_DNET_CMD_DEL,
+PROXY_DNET_CMD_STAT_COUNT,
+PROXY_DNET_CMD_STATUS,
+PROXY_DNET_CMD_READ_RANGE,
+PROXY_DNET_CMD_DEL_RANGE,
+PROXY_DNET_CMD_AUTH,
+PROXY_DNET_CMD_BULK_READ,
+PROXY_DNET_CMD_DEFRAG,
+PROXY_DNET_CMD_ITERATOR,
+PROXY_DNET_CMD_INDEXES_UPDATE,
+PROXY_DNET_CMD_INDEXES_INTERNAL,
+PROXY_DNET_CMD_INDEXES_FIND,
+PROXY_DNET_CMD_UNKNOWN,
+
+DNET_CNTR_LA1,
+DNET_CNTR_LA5,
+DNET_CNTR_LA15,
+DNET_CNTR_BSIZE,
+DNET_CNTR_FRSIZE,
+DNET_CNTR_BLOCKS,
+DNET_CNTR_BFREE,
+DNET_CNTR_BAVAIL,
+DNET_CNTR_FILES,
+DNET_CNTR_FFREE,
+DNET_CNTR_FAVAIL,
+DNET_CNTR_FSID,
+DNET_CNTR_VM_ACTIVE,
+DNET_CNTR_VM_INACTIVE,
+DNET_CNTR_VM_TOTAL,
+DNET_CNTR_VM_FREE,
+DNET_CNTR_VM_CACHED,
+DNET_CNTR_VM_BUFFERS,
+DNET_CNTR_NODE_FILES,
+DNET_CNTR_NODE_FILES_REMOVED,
+DNET_CNTR_RESERVED2,
+DNET_CNTR_RESERVED3,
+DNET_CNTR_RESERVED4,
+DNET_CNTR_RESERVED5,
+DNET_CNTR_RESERVED6,
+DNET_CNTR_RESERVED7,
+DNET_CNTR_UNKNOWN,
+__DNET_CNTR_MAX) = range(1, 76)
+
 
 '''
 h = hosts.add('95.108.228.31')

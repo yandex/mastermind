@@ -1,3 +1,43 @@
+mastermind (2.7.7) lucid; urgency=low
+
+  * Feature: elliptics async api compatibility (2.24.14.29)
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 28 Nov 2013 19:07:56 +0400
+
+mastermind (2.7.6) lucid; urgency=low
+
+  * Fix: removed lower threshold of 100 IOPS for maximum node performance
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 26 Nov 2013 13:15:22 +0400
+
+mastermind (2.7.5) lucid; urgency=low
+
+  * Feature: removed cached state usage
+  * Fix: balancer load average counter
+  * Fix: do not unlink nodes from group automatically
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 25 Nov 2013 16:55:21 +0400
+
+mastermind (2.7.4) lucid; urgency=low
+
+  * Feature: async node statistics requests
+  * Fix: do not create couples from bad groups
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 22 Nov 2013 16:32:28 +0400
+
+mastermind (2.7.3) lucid; urgency=low
+
+  * Feature: degradational requests frequency for nodes with constant timeout experiences
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 19 Nov 2013 20:27:20 +0400
+
+mastermind (2.7.2) lucid; urgency=low
+
+  * Fix: couple creation using groups with empty nodes list
+  * Fix: unnecessary infrastructure state update removed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 18 Nov 2013 19:15:12 +0400
+
 mastermind (2.7.1) lucid; urgency=low
 
   * Feature: history of group nodes
