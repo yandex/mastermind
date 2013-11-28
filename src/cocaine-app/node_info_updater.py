@@ -12,6 +12,7 @@ import elliptics
 
 import balancer
 import balancelogicadapter as bla
+from compat import EllAsyncResult, EllReadResult, EllLookupResult
 from config import config
 import errors
 import keys
@@ -44,8 +45,9 @@ class NodeInfoUpdater:
     def execute_tasks(self, delayed):
         try:
 
-            raw_stats = self.__session.stat_log()
-            storage.update_statistics(raw_stats)
+            stat = getattr(self.__session, 'stat_log_count',
+                           self.__session.stat_log)
+            storage.update_statistics(stat())
 
             if delayed:
                 self.__tq.add_task_in(
@@ -71,12 +73,16 @@ class NodeInfoUpdater:
             self.execute_tasks(delayed)
 
             try:
-                max_group = int(self.__node.meta_session.read_data(keys.MASTERMIND_MAX_GROUP_KEY))
+                max_group = int(str(EllAsyncResult(
+                    self.__node.meta_session.read_data(keys.MASTERMIND_MAX_GROUP_KEY),
+                    EllReadResult).get()[0].data))
             except:
                 max_group = 0
             curr_max_group = max((g.group_id for g in storage.groups))
             if curr_max_group > max_group:
-                self.__node.meta_session.write_data(keys.MASTERMIND_MAX_GROUP_KEY, str(curr_max_group))
+                EllAsyncResult(self.__node.meta_session.write_data(
+                    keys.MASTERMIND_MAX_GROUP_KEY, str(curr_max_group)),
+                    EllLookupResult).get()
 
         except Exception as e:
             self.__logging.error("Error while loading node stats: %s\n%s" % (str(e), traceback.format_exc()))

@@ -11,6 +11,7 @@ import msgpack
 
 import balancelogicadapter as bla
 import balancelogic
+from compat import EllAsyncResult, EllReadResult, EllLookupResult
 from config import config
 import helpers as h
 import keys
@@ -346,12 +347,17 @@ class Balancer(object):
             raise Exception('Incorrect groups count')
 
         try:
-            max_group = int(self.node.meta_session.read_data(keys.MASTERMIND_MAX_GROUP_KEY))
+            max_group = int(str(EllAsyncResult(
+                self.node.meta_session.read_data(keys.MASTERMIND_MAX_GROUP_KEY),
+                EllReadResult
+            ).get()[0].data))
         except elliptics.NotFoundError:
             max_group = 0
 
         new_max_group = max_group + groups_count
-        self.node.meta_session.write_data(keys.MASTERMIND_MAX_GROUP_KEY, str(new_max_group))
+        EllAsyncResult(self.node.meta_session.write_data(
+            keys.MASTERMIND_MAX_GROUP_KEY, str(new_max_group)),
+            EllLookupResult).get()
 
         return range(max_group + 1, max_group + 1 + groups_count)
 
@@ -368,7 +374,8 @@ class Balancer(object):
         key = keys.MASTERMIND_COUPLE_META_KEY % str(couple)
 
         try:
-            meta = self.node.meta_session.read_latest(key)
+            meta = str(EllAsyncResult(self.node.meta_session.read_latest(key),
+                                      EllReadResult).get()[0].data)
         except elliptics.NotFoundError:
             meta = None
         couple.parse_meta(meta)
@@ -379,7 +386,8 @@ class Balancer(object):
 
         packed = msgpack.packb(couple.meta)
         logging.info('packed meta for couple %s: "%s"' % (couple, str(packed).encode('hex')))
-        self.node.meta_session.write_data(key, packed)
+        EllAsyncResult(self.node.meta_session.write_data(key, packed),
+                       EllLookupResult).get()
 
         couple.update_status()
 
@@ -447,7 +455,8 @@ def make_symm_group(n, couple, namespace):
             packed = msgpack.packb(couple.compose_group_meta(namespace))
             logging.info('packed couple for group %d: "%s"' % (group.group_id, str(packed).encode('hex')))
             s.add_groups([group.group_id])
-            s.write_data(keys.SYMMETRIC_GROUPS_KEY, packed)
+            EllAsyncResult(s.write_data(keys.SYMMETRIC_GROUPS_KEY, packed),
+                           EllLookupResult).get()
             good.append(group.group_id)
         except Exception as e:
             logging.error('Failed to write symm group info, group %d: %s\n%s'
