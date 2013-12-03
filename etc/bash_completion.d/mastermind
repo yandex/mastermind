@@ -1,0 +1,50 @@
+# mastermind(1) completion
+
+_mastermind()
+{
+    local cur prev
+
+    HELPER="mastermind "
+    COMP_CWORD_PREV=`expr ${COMP_CWORD} - 1`
+    for opt in `seq 1 ${COMP_CWORD_PREV}`
+    do
+        HELPER=${HELPER}" "${COMP_WORDS[opt]}
+    done
+    HELPER=$HELPER" --commands"
+
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    if [[ ${COMP_CWORD} -le 2 ]] ; then 
+        COMPREPLY=( $(compgen -W "`$HELPER`" -- ${cur}) )
+        return 0
+    fi
+
+    if [[ ${COMP_WORDS[1]} = 'cmd' ]] ; then 
+
+        if [[ ${COMP_WORDS[2]} = 'restore' ]] ; then 
+
+            case "$prev" in
+            -u|--user)
+                COMPREPLY=( $(compgen -W "`lastlog | cut -d' ' -f1`" -- ${cur}) )
+                return 0
+                ;;
+            -f|--group-file|-d|--dest)
+                _filedir
+                return 0
+                ;;
+            esac
+        fi
+    fi
+
+} &&
+complete -F _mastermind mastermind
+
+# Local variables:
+# mode: shell-script
+# sh-basic-offset: 4
+# sh-indent-comment: t
+# indent-tabs-mode: nil
+# End:
+# ex: ts=4 sw=4 et filetype=sh

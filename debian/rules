@@ -10,3 +10,5 @@ pre-build::
 	cp $(CURDIR)/usr/bin/mastermind_deploy.sh $(CURDIR)/debian/tmp/usr/bin/mastermind_deploy.sh
 	$(CURDIR)/make_tree.sh $(CURDIR)
 
+install/mastermind-utils::
+	dh_bash-completion

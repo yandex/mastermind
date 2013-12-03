@@ -3,6 +3,7 @@ import os
 import os.path
 import re
 import subprocess
+import sys
 from time import sleep
 from functools import wraps
 
@@ -340,5 +341,25 @@ d.nest('cache', cacheDispatcher, 'Perform cache action')
 d.nest('cmd', cmdDispatcher, 'Some useful commands')
 
 
+def command_helper(argv):
+    cmdtable = d.cmdtable
+    for opt in sys.argv[1:]:
+
+        if opt == '--commands':
+            for c in cmdtable:
+                print c
+            return
+
+        command = cmdtable.get(opt, None) and cmdtable[opt][0]
+        if not isinstance(command, Dispatcher):
+            return
+        cmdtable = command.cmdtable
+
+
 if __name__ == '__main__':
+
+    if '--commands' in sys.argv:
+        command_helper(sys.argv)
+        sys.exit(0)
+
     d.dispatch()
