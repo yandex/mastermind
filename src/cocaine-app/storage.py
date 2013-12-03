@@ -602,24 +602,10 @@ logging = Logger()
 
 def stat_result_entry_to_dict(sre):
     cnt = sre.statistics.counters
-    return {'group_id': sre.address.group_id,
-            'addr': '{0}:{1}'.format(sre.address.host, sre.address.port),
-            'storage_commands': {
-                'READ': [cnt[STORAGE_DNET_CMD_READ].counter],
-                'WRITE': [cnt[STORAGE_DNET_CMD_WRITE].counter],
-            },
-            'proxy_commands': {
-                'READ': [cnt[PROXY_DNET_CMD_READ].counter],
-                'WRITE': [cnt[PROXY_DNET_CMD_WRITE].counter],
-            },
-            'counters': {
-                'DNET_CNTR_BLOCKS': [cnt[DNET_CNTR_BLOCKS].counter],
-                'DNET_CNTR_BSIZE': [cnt[DNET_CNTR_BSIZE].counter],
-                'DNET_CNTR_BAVAIL': [cnt[DNET_CNTR_BAVAIL].counter],
-                'DNET_CNTR_LA1': [cnt[DNET_CNTR_LA1].counter],
-            }
-    }
-
+    stat = {'group_id': sre.address.group_id,
+            'addr': '{0}:{1}'.format(sre.address.host, sre.address.port)}
+    stat.update(sre.statistics.counters)
+    return stat
 
 def update_statistics(stats):
 
@@ -666,86 +652,6 @@ def update_statistics(stats):
 
         except Exception as e:
             logging.error('Unable to process statictics for node %s group_id %d (%s): %s' % (stat['addr'], stat['group_id'], e, traceback.format_exc()))
-
-
-(
-STORAGE_DNET_CMD_LOOKUP,
-STORAGE_DNET_CMD_REVERSE_LOOKUP,
-STORAGE_DNET_CMD_JOIN,
-STORAGE_DNET_CMD_WRITE,
-STORAGE_DNET_CMD_READ,
-STORAGE_DNET_CMD_LIST_DEPRECATED,
-STORAGE_DNET_CMD_EXEC,
-STORAGE_DNET_CMD_ROUTE_LIST,
-STORAGE_DNET_CMD_STAT,
-STORAGE_DNET_CMD_NOTIFY,
-STORAGE_DNET_CMD_DEL,
-STORAGE_DNET_CMD_STAT_COUNT,
-STORAGE_DNET_CMD_STATUS,
-STORAGE_DNET_CMD_READ_RANGE,
-STORAGE_DNET_CMD_DEL_RANGE,
-STORAGE_DNET_CMD_AUTH,
-STORAGE_DNET_CMD_BULK_READ,
-STORAGE_DNET_CMD_DEFRAG,
-STORAGE_DNET_CMD_ITERATOR,
-STORAGE_DNET_CMD_INDEXES_UPDATE,
-STORAGE_DNET_CMD_INDEXES_INTERNAL,
-STORAGE_DNET_CMD_INDEXES_FIND,
-STORAGE_DNET_CMD_UNKNOWN,
-__STORAGE_DNET_CMD_MAX,
-
-PROXY_DNET_CMD_LOOKUP,
-PROXY_DNET_CMD_REVERSE_LOOKUP,
-PROXY_DNET_CMD_JOIN,
-PROXY_DNET_CMD_WRITE,
-PROXY_DNET_CMD_READ,
-PROXY_DNET_CMD_LIST_DEPRECATED,
-PROXY_DNET_CMD_EXEC,
-PROXY_DNET_CMD_ROUTE_LIST,
-PROXY_DNET_CMD_STAT,
-PROXY_DNET_CMD_NOTIFY,
-PROXY_DNET_CMD_DEL,
-PROXY_DNET_CMD_STAT_COUNT,
-PROXY_DNET_CMD_STATUS,
-PROXY_DNET_CMD_READ_RANGE,
-PROXY_DNET_CMD_DEL_RANGE,
-PROXY_DNET_CMD_AUTH,
-PROXY_DNET_CMD_BULK_READ,
-PROXY_DNET_CMD_DEFRAG,
-PROXY_DNET_CMD_ITERATOR,
-PROXY_DNET_CMD_INDEXES_UPDATE,
-PROXY_DNET_CMD_INDEXES_INTERNAL,
-PROXY_DNET_CMD_INDEXES_FIND,
-PROXY_DNET_CMD_UNKNOWN,
-
-DNET_CNTR_LA1,
-DNET_CNTR_LA5,
-DNET_CNTR_LA15,
-DNET_CNTR_BSIZE,
-DNET_CNTR_FRSIZE,
-DNET_CNTR_BLOCKS,
-DNET_CNTR_BFREE,
-DNET_CNTR_BAVAIL,
-DNET_CNTR_FILES,
-DNET_CNTR_FFREE,
-DNET_CNTR_FAVAIL,
-DNET_CNTR_FSID,
-DNET_CNTR_VM_ACTIVE,
-DNET_CNTR_VM_INACTIVE,
-DNET_CNTR_VM_TOTAL,
-DNET_CNTR_VM_FREE,
-DNET_CNTR_VM_CACHED,
-DNET_CNTR_VM_BUFFERS,
-DNET_CNTR_NODE_FILES,
-DNET_CNTR_NODE_FILES_REMOVED,
-DNET_CNTR_RESERVED2,
-DNET_CNTR_RESERVED3,
-DNET_CNTR_RESERVED4,
-DNET_CNTR_RESERVED5,
-DNET_CNTR_RESERVED6,
-DNET_CNTR_RESERVED7,
-DNET_CNTR_UNKNOWN,
-__DNET_CNTR_MAX) = range(1, 76)
 
 
 '''
