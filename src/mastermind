@@ -139,17 +139,6 @@ def couple_break(groups, confirm, host=None):
     print res
 
 
-@coupleDispatcher.command(name='balance')
-def couple_balance(size, host=None):
-    '''Get couple balance'''
-    s = service(host)
-    size = int(size)
-    id = [0] * 64
-
-    res = s.enqueue("balance", msgpack.packb((size, 1, id))).get()
-    print res
-
-
 @coupleDispatcher.command(name='weights')
 def couple_get_weights(host=None):
     '''Get weights for symmetric groups'''

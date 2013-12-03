@@ -116,43 +116,6 @@ class Balancer(object):
         return result
 
     @h.handler
-    def balance(self, request):
-        logging.info('----------------------------------------')
-        logging.info('New request' + str(len(request)))
-        logging.info(request)
-
-        weighted_groups = self.get_group_weights(self.node)
-
-        target_groups = []
-
-        if manifest.get('symmetric_groups', False):
-            lsymm_groups = weighted_groups[request[0]]
-
-            for (gr_list, weight) in lsymm_groups:
-                logging.info('gr_list: %s %d' % (str(gr_list), request[0]))
-                grl = {'rating': weight, 'groups': gr_list}
-                logging.info('grl: %s' % str(grl))
-                target_groups.append(grl)
-
-            logging.info('target_groups: %s' % str(target_groups))
-            if target_groups:
-                sorted_groups = sorted(target_groups, key=lambda gr: gr['rating'], reverse=True)[0]
-                logging.info(sorted_groups)
-                result = (sorted_groups['groups'], request[1])
-            else:
-                result = ([], request[1])
-
-        else:
-            for group_id in bla.all_group_ids():
-                target_groups.append(bla.get_group(int(group_id)))
-            sorted_groups = sorted(target_groups, key=lambda gr: gr.freeSpaceInKb(), reverse=True)[:int(request[0])]
-            logging.info(sorted_groups)
-            result = ([g.groupId() for g in sorted_groups], request[1])
-
-        logging.info('result: %s' % str(result))
-        return result
-
-    @h.handler
     def repair_groups(self, request):
         logging.info('----------------------------------------')
         logging.info('New repair groups request: ' + str(request))
