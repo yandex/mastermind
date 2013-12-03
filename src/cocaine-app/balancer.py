@@ -310,10 +310,10 @@ class Balancer(object):
             raise Exception('Incorrect groups count')
 
         try:
-            max_group = int(str(EllAsyncResult(
+            max_group = int(EllAsyncResult(
                 self.node.meta_session.read_data(keys.MASTERMIND_MAX_GROUP_KEY),
                 EllReadResult
-            ).get()[0].data))
+            ).get()[0].data)
         except elliptics.NotFoundError:
             max_group = 0
 
@@ -337,8 +337,8 @@ class Balancer(object):
         key = keys.MASTERMIND_COUPLE_META_KEY % str(couple)
 
         try:
-            meta = str(EllAsyncResult(self.node.meta_session.read_latest(key),
-                                      EllReadResult).get()[0].data)
+            meta = (EllAsyncResult(self.node.meta_session.read_latest(key),
+                                   EllReadResult).get()[0].data)
         except elliptics.NotFoundError:
             meta = None
         couple.parse_meta(meta)

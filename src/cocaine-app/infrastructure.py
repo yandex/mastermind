@@ -60,7 +60,7 @@ class Infrastructure(object):
             group_ids = set()
             idxs = self.meta_session.find_all_indexes([keys.MM_GROUPS_IDX])
             for idx in idxs:
-                data = str(idx.indexes[0].data)
+                data = idx.indexes[0].data
 
                 state_group = self.unserialize(data)
                 logging.debug('Fetched infrastructure item: %s' %

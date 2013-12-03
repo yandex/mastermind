@@ -73,9 +73,9 @@ class NodeInfoUpdater:
             self.execute_tasks(delayed)
 
             try:
-                max_group = int(str(EllAsyncResult(
+                max_group = int(EllAsyncResult(
                     self.__node.meta_session.read_data(keys.MASTERMIND_MAX_GROUP_KEY),
-                    EllReadResult).get()[0].data))
+                    EllReadResult).get()[0].data)
             except:
                 max_group = 0
             curr_max_group = max((g.group_id for g in storage.groups))
@@ -252,7 +252,7 @@ class NodeInfoUpdater:
             if getattr(entry, 'error', None) and entry.error.code:
                 raise ValueError('result code {0}, msg {1}'.format(
                     entry.error.code, entry.error.message))
-            result = str(entry.data)
+            result = entry.data
 
         return processor(result, *args)
 

@@ -57,7 +57,7 @@ class CacheManager(object):
 
     def __loads(self, item):
         try:
-            return json.loads(str(item.indexes[0].data))
+            return json.loads(item.indexes[0].data)
         except Exception as e:
             logging.info('Failed to load cache item: %s' % e)
             return None
@@ -273,7 +273,7 @@ class CacheManager(object):
         indexes = [(self.__index_prefix + ns).encode('utf-8') for ns in self.__namespaces]
         for item in self.__session.find_any_indexes(indexes):
             try:
-                item = json.loads(str(item.indexes[0].data))
+                item = json.loads(item.indexes[0].data)
             except Exception as e:
                 logging.info('Failed to load cache item: %s' % e)
                 continue
