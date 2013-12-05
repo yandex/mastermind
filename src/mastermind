@@ -130,13 +130,14 @@ def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:
 
 
 @coupleDispatcher.command(name='break')
-def couple_break(groups, confirm, host=None):
+def couple_break(groups, confirm=None,
+                 force=('f', None, ''), host=None):
     '''Break the couple of groups, couple is an argument
         confirm parameter is a message "Yes, I want to break (bad|good) couple [1:2:3]"'''
     s = service(host)
     groups = [int(g) for g in groups.split(':')]
 
-    res = s.enqueue("break_couple", msgpack.packb((groups, confirm))).get()
+    res = s.enqueue('break_couple', msgpack.packb((groups, confirm, force))).get()
     print res
 
 
@@ -191,6 +192,7 @@ def cache_keys_by_group(group, host=None):
     group = int(group)
 
     res = s.enqueue('get_cached_keys_by_group', msgpack.packb(group)).get()
+
 
 @coupleDispatcher.command(name='freeze')
 def couple_freeze(couple, host=None):

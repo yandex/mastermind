@@ -284,8 +284,10 @@ class Balancer(object):
 
         couple = storage.couples[couple_str]
         confirm = request[1]
+        force = request[2]
 
-        logging.info('groups: %s; confirmation: "%s"' % (couple_str, confirm))
+        logging.info('groups: %s; confirmation: "%s"; forced: %s' %
+            (couple_str, confirm, force))
 
         correct_confirm = 'Yes, I want to break '
         if couple.status == storage.Status.OK:
@@ -295,7 +297,7 @@ class Balancer(object):
 
         correct_confirm += ' couple ' + couple_str
 
-        if confirm != correct_confirm:
+        if not force and confirm != correct_confirm:
             raise Exception('Incorrect confirmation string')
 
         kill_symm_group(self.node, [group.group_id for group in couple])
