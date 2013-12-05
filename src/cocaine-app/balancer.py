@@ -223,7 +223,7 @@ class Balancer(object):
 
             try:
                 logging.info('Fetching dc for group {0}'.format(group.group_id))
-                dc = group.nodes[0].host.get_dc()
+                dc = group.nodes[0].host.dc
             except IndexError:
                 logging.error('Empty nodes list for group %s' % group_id)
                 continue

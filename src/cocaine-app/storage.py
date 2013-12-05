@@ -1,12 +1,17 @@
 # -*- coding: utf-8 -*-
+import datetime
 import socket
 import time
 import traceback
 
+from cocaine.logging import Logger
 import msgpack
 
 import inventory
 from config import config
+
+
+logging = Logger()
 
 
 RPS_FORMULA_VARIANT = config.get('rps_formula', 0)
@@ -91,8 +96,6 @@ class NodeStat(object):
             raise ValueError('Unknown max_rps option: %s' % variant)
 
         return max_rps
-
-
 
     def init(self, raw_stat, prev=None):
         self.ts = time.time()
@@ -190,15 +193,13 @@ class Host(object):
     def __init__(self, addr):
         self.addr = addr
         self.nodes = []
+        self.dc = inventory.get_dc_by_host(self.addr)
 
     def hostname(self):
         return socket.gethostbyaddr(self.addr)[0]
 
     def index(self):
         return self.__str__()
-
-    def get_dc(self):
-        return inventory.get_dc_by_host(self.addr)
 
     def __eq__(self, other):
         if isinstance(other, str):
@@ -213,7 +214,8 @@ class Host(object):
         return hash(self.__str__())
 
     def __repr__(self):
-        return '<Host object: addr=%s, nodes=[%s] >' % (self.addr, ', '.join((repr(n) for n in self.nodes)))
+        return ('<Host object: addr=%s, dc=%s, nodes=[%s] >' %
+                (self.addr, self.dc, ', '.join((repr(n) for n in self.nodes))))
 
     def __str__(self):
         return self.addr
@@ -279,6 +281,10 @@ class Node(object):
 
         res['addr'] = self.__str__()
         res['status'] = self.status
+        res['dc'] = self.host.dc
+        res['last_stat_update'] = (self.stat and
+            datetime.datetime.fromtimestamp(self.stat.ts).strftime('%Y-%m-%d %H:%M:%S') or
+            'unknown')
         #res['stat'] = str(self.stat)
 
         return res
@@ -287,7 +293,7 @@ class Node(object):
         if self.destroyed:
             return '<Node object: DESTROYED!>'
 
-        return '<Node object: host=%s, port=%d, status=%s, read_only=%s, stat=%s>' % (str(self.host), self.port, self.status, str(self.read_only), repr(self.stat))
+        return '<Node object: host=%s, port=%d, dc=%s, status=%s, read_only=%s, stat=%s>' % (str(self.host), self.port, self.host.dc, self.status, str(self.read_only), repr(self.stat))
 
     def __str__(self):
         if self.destroyed:
@@ -589,15 +595,11 @@ class Couple(object):
             'meta': self.meta
         }
 
+
 hosts = Repositary(Host)
 groups = Repositary(Group)
 nodes = Repositary(Node)
 couples = Repositary(Couple)
-
-
-from cocaine.logging import Logger
-logging = Logger()
-
 
 
 def stat_result_entry_to_dict(sre):
@@ -606,6 +608,7 @@ def stat_result_entry_to_dict(sre):
             'addr': '{0}:{1}'.format(sre.address.host, sre.address.port)}
     stat.update(sre.statistics.counters)
     return stat
+
 
 def update_statistics(stats):
 
