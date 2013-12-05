@@ -14,6 +14,7 @@ import balancelogic
 from compat import EllAsyncResult, EllReadResult, EllLookupResult
 from config import config
 import helpers as h
+import infrastructure
 import keys
 import storage
 
@@ -86,6 +87,63 @@ class Balancer(object):
         result = [group.group_id for group in storage.groups if group.couple is None]
         logging.debug('uncoupled groups: ' + str(result))
         return result
+
+    @h.handler
+    def groups_by_dc(self, request):
+        groups = request[0]
+        logging.info('Groups: %s' % (groups,))
+        groups_by_dcs = {}
+        for g in groups:
+
+            if not g in storage.groups:
+                logging.info('Group %s not found' % (g,))
+                continue
+
+            group = storage.groups[g]
+            group_data = {
+                'group': group.group_id,
+                'nodes': [n.info() for n in group.nodes],
+            }
+            for node in group_data['nodes']:
+                node['path'] = infrastructure.port_to_path(
+                    int(node['addr'].split(':')[1]))
+            if group.couple:
+                group_data.update({
+                    'couple': str(group.couple),
+                    'couple_status': group.couple.status})
+
+            if not group.nodes:
+                dc_groups = groups_by_dcs.setdefault('unknown', {})
+                dc_groups[group.group_id] = group_data
+                continue
+
+            for node in group.nodes:
+                dc_groups = groups_by_dcs.setdefault(node.host.dc, {})
+                dc_groups[group.group_id] = group_data
+
+        return groups_by_dcs
+
+    @h.handler
+    def couples_by_namespace(self, request):
+        couples = request[0]
+        logging.info('Couples: %s' % (couples,))
+
+        couples_by_nss = {}
+
+        for c in couples:
+            couple_str = ':'.join([str(i) for i in sorted(c)])
+            if not couple_str in storage.couples:
+                logging.info('Couple %s not found' % couple_str)
+            couple = storage.couples[couple_str]
+
+            couple_data = {
+                'couple': str(couple),
+                'couple_status': couple.status,
+                'nodes': [n.info() for g in couple for n in g.nodes]
+            }
+            couples_by_nss.setdefault(couple.namespace, []).append(couple_data)
+
+        return couples_by_nss
 
     @h.handler
     def get_group_weights(self, request):

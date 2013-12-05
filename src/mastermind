@@ -1,4 +1,5 @@
 #!/usr/bin/python
+import json
 import os
 import os.path
 import re
@@ -67,11 +68,21 @@ def group_next_number(count, host=None):
 
 
 @groupDispatcher.command(name='list-uncoupled')
-def group_list_uncoupled(host=None):
+def group_list_uncoupled(by_dc=('', None, 'Group by dc and provide some useful data'),
+                         json=('', None, 'Format additional data as json'),
+                         host=None):
     '''Get list of uncoupled groups from balancer'''
     s = service(host)
     res = s.enqueue("get_empty_groups", "").get()
-    print res
+
+    if not by_dc:
+        print res
+
+    if by_dc:
+        groups_by_dcs = s.enqueue('groups_by_dc',
+            msgpack.packb((res,))).get()
+        print_by_dcs(groups_by_dcs, json)
+
 
 
 # couple commands
@@ -79,35 +90,91 @@ coupleDispatcher = Dispatcher(globaloptions=(host_param,))
 
 
 @coupleDispatcher.command(name='list-bad')
-def couple_list_bad(host=None):
+def couple_list_bad(by_dc=('', None, 'Group by dc and provide some useful data'),
+                    by_ns=('', None, 'Group by namespaces'),
+                    json=('', None, 'Format additional data as json'),
+                    host=None):
     '''Get list of broken couples from balancer'''
     s = service(host)
-    res = s.enqueue("get_bad_groups", "").get()
-    print res
+    res = s.enqueue('get_bad_groups', '').get()
+
+    if not by_dc and not by_ns:
+        print res
+
+    if by_dc:
+        groups_by_dcs = s.enqueue('groups_by_dc',
+            msgpack.packb(([g for c in res for g in c],))).get()
+        print_by_dcs(groups_by_dcs, json)
+    if by_ns:
+        couples_by_nss = s.enqueue('couples_by_namespace',
+            msgpack.packb((res,))).get()
+        print_by_namespaces(couples_by_nss, json)
 
 
 @coupleDispatcher.command(name='list-symmetric')
-def couple_list_symmetric(host=None):
+def couple_list_symmetric(by_dc=('', None, 'Group by dc and provide some useful data'),
+                          by_ns=('', None, 'Group by namespaces'),
+                          json=('', None, 'Format additional data as json'),
+                          host=None):
     '''Get list of good couples from balancer'''
     s = service(host)
     res = s.enqueue("get_symmetric_groups", "").get()
-    print res
+
+    if not by_dc and not by_ns:
+        print res
+
+    if by_dc:
+        groups_by_dcs = s.enqueue('groups_by_dc',
+            msgpack.packb(([g for c in res for g in c],))).get()
+        print_by_dcs(groups_by_dcs, json)
+    if by_ns:
+        couples_by_nss = s.enqueue('couples_by_namespace',
+            msgpack.packb((res,))).get()
+        print_by_namespaces(couples_by_nss, json)
 
 
 @coupleDispatcher.command(name='list-frozen')
-def couple_list_frozen(host=None):
+def couple_list_frozen(by_dc=('', None, 'Group by dc and provide some useful data'),
+                       by_ns=('', None, 'Group by namespaces'),
+                       json=('', None, 'Format additional data as json'),
+                       host=None):
     '''Get list of good couples from balancer'''
     s = service(host)
     res = s.enqueue("get_frozen_groups", "").get()
-    print res
+
+    if not by_dc and not by_ns:
+        print res
+
+    if by_dc:
+        groups_by_dcs = s.enqueue('groups_by_dc',
+            msgpack.packb(([g for c in res for g in c],))).get()
+        print_by_dcs(groups_by_dcs, json)
+    if by_ns:
+        couples_by_nss = s.enqueue('couples_by_namespace',
+            msgpack.packb((res,))).get()
+        print_by_namespaces(couples_by_nss, json)
 
 
 @coupleDispatcher.command(name='list-closed')
-def couple_list_closed(host=None):
+def couple_list_closed(by_dc=('', None, 'Group by dc and provide some useful data'),
+                       by_ns=('', None, 'Group by namespaces'),
+                       json=('', None, 'Format additional data as json'),
+                       host=None):
     '''Get list of couples closed to balancer'''
     s = service(host)
     res = s.enqueue('get_closed_groups', '').get()
-    print res
+
+    if not by_dc and not by_ns:
+        print res
+
+    if by_dc:
+        groups_by_dcs = s.enqueue('groups_by_dc',
+            msgpack.packb(([g for c in res for g in c],))).get()
+        print_by_dcs(groups_by_dcs, json)
+    if by_ns:
+        couples_by_nss = s.enqueue('couples_by_namespace',
+            msgpack.packb((res,))).get()
+        print_by_namespaces(couples_by_nss, json)
 
 
 @coupleDispatcher.command(name='build')
@@ -219,15 +286,19 @@ cmdDispatcher = Dispatcher(globaloptions=(host_param,))
 
 
 DEFAULT = '\033[0m'
+DEFAULT_BOLD = '\033[1m'
 RED = '\033[1;31m'
 GREEN = '\033[1;32m'
+YELLOW = '\033[1;33m'
 
 def warn(s):
-    return '{color}{text}{coloroff}'.format(color=RED,
-                                            text=s, coloroff=DEFAULT)
+    return color(s, RED)
 
 def highlight(s):
-    return '{color}{text}{coloroff}'.format(color=GREEN,
+    return color(s, GREEN)
+
+def color(s, color):
+    return '{color}{text}{coloroff}'.format(color=color,
                                             text=s, coloroff=DEFAULT)
 
 def box(text, caption=None):
@@ -335,6 +406,105 @@ def restore_group(group, user=('u', os.getlogin(),
         print warn("\nDon't forget to change group id of the restored group "
                    "back to %s!" % group)
     print 'All done!'
+
+
+# display-me-pretty formatters
+
+def print_by_dcs(groups_by_dc, as_json):
+
+    for dc in groups_by_dc:
+        groups_by_dc[dc] = groups_by_dc[dc].values()
+
+    if as_json:
+        print json.dumps(groups_by_dc, indent=4)
+        return
+
+    field_order = dict((y, x) for x, y in enumerate(['group', 'nodes', 'couple']))
+
+    for dc, groups in sorted(groups_by_dc.iteritems(), key=lambda x: '' if x[0] == 'unknown' else x[0]):
+        print '\n' + '=' * 30
+        print 'DC: {0}'.format(color(dc, YELLOW))
+        print '=' * 30
+
+        for group in groups:
+
+            couple_status = group.get('couple_status', 'NOT IN COUPLE')
+            group['couple'] = '{0}, status {1}'.format(group.get('couple'),
+                couple_status if couple_status == 'OK' else warn(couple_status))
+
+            nodes = []
+            for node in sorted(group['nodes'], key=lambda x: x['addr']):
+                node_status = (node['status']
+                               if node['status'] == 'OK' else
+                               warn(node['status']))
+                nodes.append('{0}, status {1}, path {2} ({3})'.format(
+                             node['addr'], node_status, node['path'],
+                             node['last_stat_update']))
+            group['nodes'] = nodes
+
+            for k, v in sorted(group.iteritems(),
+                               key=lambda x: field_order.get(x[0], x[0])):
+                if not k in field_order:
+                    continue
+
+                if k == 'nodes':
+                    for node in v[:1]:
+                        print '{0:15}: {1}'.format(k, node)
+                    for node in v[1:]:
+                        print '{0:15}  {1}'.format('', node)
+                    continue
+
+                print '{0:15}: {1}'.format(k, v)
+
+            print '-' * 30
+
+
+def print_by_namespaces(couples_by_nss, as_json):
+
+    if as_json:
+        print json.dumps(couples_by_nss, indent=4)
+        return
+
+    field_order = dict((y, x) for x, y in enumerate(['couple', 'nodes']))
+
+    for ns, couples in sorted(couples_by_nss.iteritems(), key=lambda x: '' if x[0] == None else x[0]):
+        print '\n' + '=' * 30
+        print 'Namespace: {0}'.format(color(ns, YELLOW))
+        print '=' * 30
+
+        for couple in sorted(couples,
+                        key=lambda x: (len(x['couple'].split(':')), x['couple'])):
+
+            couple_status = couple['couple_status']
+            couple['couple'] = '{0}, status {1}'.format(couple.get('couple'),
+                couple_status if couple_status == 'OK' else warn(couple_status))
+
+            nodes = []
+            for node in sorted(couple['nodes'], key=lambda x: x['addr']):
+                node_status = (node['status']
+                               if node['status'] == 'OK' else
+                               warn(node['status']))
+                nodes.append('{0}, status {1}, dc {2}, updated {3}'.format(
+                             node['addr'], node_status,
+                             color(node['dc'], DEFAULT_BOLD),
+                             node['last_stat_update']))
+            couple['nodes'] = nodes
+
+            for k, v in sorted(couple.iteritems()):
+                if not k in field_order:
+                    continue
+
+                if k == 'nodes':
+                    for node in v[:1]:
+                        print '{0:15}: {1}'.format(k, node)
+                    for node in v[1:]:
+                        print '{0:15}  {1}'.format('', node)
+                    continue
+
+                print '{0:15}: {1}'.format(k, v)
+
+            print '-' * 30
+
 
 d = Dispatcher()
 d.nest('group', groupDispatcher, 'Perform group action')
