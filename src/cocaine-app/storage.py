@@ -100,8 +100,8 @@ class NodeStat(object):
     def init(self, raw_stat, prev=None):
         self.ts = time.time()
 
-        self.last_read = raw_stat["storage_commands"]["READ"][0] + raw_stat["proxy_commands"]["READ"][0]
-        self.last_write = raw_stat["storage_commands"]["WRITE"][0] + raw_stat["proxy_commands"]["WRITE"][0]
+        self.last_read = raw_stat['storage_commands']['READ'][0] + raw_stat['proxy_commands']['READ'][0]
+        self.last_write = raw_stat['storage_commands']['WRITE'][0] + raw_stat['proxy_commands']['WRITE'][0]
 
         self.total_space = float(raw_stat['counters']['DNET_CNTR_BLOCKS'][0]) * raw_stat['counters']['DNET_CNTR_BSIZE'][0]
         self.free_space = float(raw_stat['counters']['DNET_CNTR_BAVAIL'][0]) * raw_stat['counters']['DNET_CNTR_BSIZE'][0]
@@ -109,6 +109,10 @@ class NodeStat(object):
         self.load_average = (float(raw_stat['counters']['DNET_CNTR_DU1'][0]) / 100
                              if raw_stat['counters'].get('DNET_CNTR_DU1') else
                              float(raw_stat['counters']['DNET_CNTR_LA1'][0]) / 100)
+
+        self.fragmentation = (float(raw_stat['counters']['DNET_CNTR_NODE_FILES_REMOVED'][0]) /
+                                 ((raw_stat['counters']['DNET_CNTR_NODE_FILES'][0] +
+                                   raw_stat['counters']['DNET_CNTR_NODE_FILES_REMOVED'][0]) or 1))
 
         if prev:
             dt = self.ts - prev.ts
@@ -168,7 +172,12 @@ class NodeStat(object):
         return res
 
     def __repr__(self):
-        return '<NodeStat object: ts=%s, write_rps=%d, max_write_rps=%d, read_rps=%d, max_read_rps=%d, total_space=%d, free_space=%d, load_average=%s>' % (ts_str(self.ts), self.write_rps, self.max_write_rps, self.read_rps, self.max_read_rps, self.total_space, self.free_space, self.load_average)
+        return ('<NodeStat object: ts=%s, write_rps=%d, max_write_rps=%d, read_rps=%d, '
+                'max_read_rps=%d, total_space=%d, free_space=%d, fragmentation=%s, '
+                'load_average=%s>' % (
+                    ts_str(self.ts), self.write_rps, self.max_write_rps, self.read_rps,
+                    self.max_read_rps, self.total_space, self.free_space, self.fragmentation,
+                    self.load_average))
 
     def serialize(self):
         return {
