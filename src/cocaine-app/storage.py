@@ -113,6 +113,7 @@ class NodeStat(object):
         self.fragmentation = (float(raw_stat['counters']['DNET_CNTR_NODE_FILES_REMOVED'][0]) /
                                  ((raw_stat['counters']['DNET_CNTR_NODE_FILES'][0] +
                                    raw_stat['counters']['DNET_CNTR_NODE_FILES_REMOVED'][0]) or 1))
+        self.files_removed = raw_stat['counters']['DNET_CNTR_NODE_FILES_REMOVED'][0]
 
         if prev:
             dt = self.ts - prev.ts
@@ -173,11 +174,11 @@ class NodeStat(object):
 
     def __repr__(self):
         return ('<NodeStat object: ts=%s, write_rps=%d, max_write_rps=%d, read_rps=%d, '
-                'max_read_rps=%d, total_space=%d, free_space=%d, fragmentation=%s, '
-                'load_average=%s>' % (
+                'max_read_rps=%d, total_space=%d, free_space=%d, files_removed=%s, '
+                'fragmentation=%s, load_average=%s>' % (
                     ts_str(self.ts), self.write_rps, self.max_write_rps, self.read_rps,
-                    self.max_read_rps, self.total_space, self.free_space, self.fragmentation,
-                    self.load_average))
+                    self.max_read_rps, self.total_space, self.free_space, self.files_removed,
+                    self.fragmentation, self.load_average))
 
     def serialize(self):
         return {
