@@ -338,7 +338,7 @@ def cmd_dest(cmd):
 
 
 @cmdDispatcher.command(name='restore')
-def restore_group(group, user=('u', os.getlogin(),
+def restore_group(group, user=('u', os.environ['USER'],
                                'rsync command user for source path'),
                   dest=('d', '', 'Destination path on current host'),
                   group_file=('f', '', 'Write group id to specified file, '
