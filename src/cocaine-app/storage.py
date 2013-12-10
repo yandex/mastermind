@@ -203,7 +203,8 @@ class Host(object):
     def __init__(self, addr):
         self.addr = addr
         self.nodes = []
-        self.dc = inventory.get_dc_by_host(self.addr)
+        # self.dc = inventory.get_dc_by_host(self.addr)
+        self.dc = None
 
     def hostname(self):
         return socket.gethostbyaddr(self.addr)[0]

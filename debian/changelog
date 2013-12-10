@@ -1,3 +1,9 @@
+mastermind (2.7.10) lucid; urgency=low
+
+  * Disabled inventory (temp)
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 11 Dec 2013 02:05:53 +0400
+
 mastermind (2.7.9) lucid; urgency=low
 
   * Removed node info updating on start
