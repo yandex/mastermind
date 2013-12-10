@@ -141,14 +141,21 @@ class Infrastructure(object):
                 state_nodes = tuple(nodes
                                     for nodes in cur_group_state['set'])
 
-                logging.debug('Comparing %s and %s' %
-                              (storage_nodes, state_nodes))
+                state_nodes_set = set(state_nodes)
 
-                if set(storage_nodes) != set(state_nodes):
+                # extended storage nodes set which includes newly seen nodes,
+                # do not discard lost nodes
+                ext_storage_nodes = (state_nodes + tuple(
+                    n for n in storage_nodes if n not in state_nodes_set))
+
+                logging.debug('Comparing %s and %s' %
+                              (ext_storage_nodes, state_nodes))
+
+                if set(ext_storage_nodes) != state_nodes_set:
                     logging.info('Group %d info does not match,'
                                  'last state: %s, current state: %s' %
-                                 (g.group_id, state_nodes, storage_nodes))
-                    self.update_group(g.group_id, storage_nodes)
+                                 (g.group_id, state_nodes, ext_storage_nodes))
+                    self.update_group(g.group_id, ext_storage_nodes)
 
             logging.info('Finished updating infrastructure state')
         except Exception as e:
