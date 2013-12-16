@@ -130,11 +130,11 @@ def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:
 
 
 @coupleDispatcher.command(name='break')
-def couple_break(groups, confirm, host=None):
+def couple_break(couple, confirm, host=None):
     '''Break the couple of groups, couple is an argument
         confirm parameter is a message "Yes, I want to break (bad|good) couple [1:2:3]"'''
     s = service(host)
-    groups = [int(g) for g in groups.split(':')]
+    groups = [int(g) for g in couple.split(':')]
 
     res = s.enqueue("break_couple", msgpack.packb((groups, confirm))).get()
     print res
