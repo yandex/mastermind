@@ -1,3 +1,9 @@
+mastermind (2.7.11) lucid; urgency=low
+
+  * node info updater delayed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 11 Dec 2013 02:18:07 +0400
+
 mastermind (2.7.10) lucid; urgency=low
 
   * Disabled inventory (temp)
