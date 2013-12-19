@@ -78,6 +78,11 @@ class NodeStat(object):
             self.max_read_rps = 0
             self.max_write_rps = 0
 
+            self.fragmentation = 0.0
+            self.files_removed = 0
+
+            self.fsid = None
+
     def max_rps(self, rps, load_avg, variant=RPS_FORMULA_VARIANT):
 
         if variant == 0:
@@ -114,6 +119,8 @@ class NodeStat(object):
                                  ((raw_stat['counters']['DNET_CNTR_NODE_FILES'][0] +
                                    raw_stat['counters']['DNET_CNTR_NODE_FILES_REMOVED'][0]) or 1))
         self.files_removed = raw_stat['counters']['DNET_CNTR_NODE_FILES_REMOVED'][0]
+
+        self.fsid = raw_stat['counters']['DNET_CNTR_FSID'][0]
 
         if prev:
             dt = self.ts - prev.ts
@@ -203,8 +210,8 @@ class Host(object):
     def __init__(self, addr):
         self.addr = addr
         self.nodes = []
-        # self.dc = inventory.get_dc_by_host(self.addr)
-        self.dc = None
+        self.dc = inventory.get_dc_by_host(self.addr)
+        # self.dc = None
 
     def hostname(self):
         return socket.gethostbyaddr(self.addr)[0]

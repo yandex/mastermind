@@ -269,7 +269,7 @@ class Infrastructure(object):
 
 
 def port_to_path(port):
-    assert port >= BASE_PORT + 1
+    assert port >= BASE_PORT
     if port == CACHE_DEFAULT_PORT:
         return CACHE_DEFAULT_PATH
     return os.path.join(BASE_STORAGE_PATH, str(port - BASE_PORT) + '/')

@@ -21,6 +21,7 @@ import balancelogicadapter
 import infrastructure
 import cache
 import node_info_updater
+import statistics
 from config import config
 
 
@@ -116,10 +117,17 @@ def init_cache(cache_config):
     return manager
 
 
+def init_statistics():
+    stat = statistics.Statistics()
+    register_handle(stat.get_flow_stats)
+    return stat
+
+
 if 'cache' in config:
     init_cache(config['cache'])
 init_infrastructure()
 init_node_info_updater()
+init_statistics()
 
 for handler in balancer.handlers(b):
     logging.info("registering bounded function %s" % handler)
