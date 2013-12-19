@@ -38,6 +38,7 @@ class Statistics(object):
             'uncoupled_space': 0.0,
 
             'open_couples': 0,
+            'frozen_couples': 0,
             'total_couples': 0,
             'uncoupled_groups': 0,
         })
@@ -58,6 +59,8 @@ class Statistics(object):
                         by_dc[node.host.dc]['total_couples'] += 1
                         if group.couple.status == storage.Status.OK:
                             by_dc[node.host.dc]['open_couples'] += 1
+                        elif group.couple.status == storage.Status.FROZEN:
+                            by_dc[node.host.dc]['frozen_couples'] += 1
                     else:
                         by_dc[node.host.dc]['uncoupled_groups'] += 1
 
@@ -85,7 +88,7 @@ class Statistics(object):
         return dict(by_dc)
 
     def total_stats(self, per_dc_stat):
-        return reduce(self.dict_keys_sum, per_dc_stat.values())
+        return dict(reduce(self.dict_keys_sum, per_dc_stat.values()))
 
     def get_flow_stats(self, request):
 
@@ -155,7 +158,7 @@ class Statistics(object):
 
         per_dc_stat = self.per_dc_stat()
 
-        res = dict(self.total_stats(per_dc_stat))
+        res = self.total_stats(per_dc_stat)
         res.update({'dc': per_dc_stat})
 
         return res
