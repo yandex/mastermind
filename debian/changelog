@@ -1,3 +1,11 @@
+mastermind (2.7.12) lucid; urgency=low
+
+  * Fix: dc data cache in metastorage for inventory failovers
+  * Feature: flowmastermind statistics export handler
+  * Feature: configurable cocaine worker disown timeout
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 20 Dec 2013 14:45:47 +0400
+
 mastermind (2.7.11) lucid; urgency=low
 
   * node info updater delayed
