@@ -68,7 +68,7 @@ balancelogicadapter.setConfig(config["balancer_config"])
 
 logging.info("trace %d" % (i.next()))
 logging.info("before creating worker")
-W = Worker()
+W = Worker(disown_timeout=config.get('disown_timeout', 2))
 logging.info("after creating worker")
 
 
