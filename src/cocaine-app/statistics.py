@@ -11,6 +11,9 @@ logging = Logger()
 
 class Statistics(object):
 
+    def __init__(self, balancer):
+        self.balancer = balancer
+
     MIN_FREE_SPACE = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
     MIN_FREE_SPACE_REL = config['balancer_config'].get('min_free_space_relative', 0.15)
 
@@ -90,6 +93,19 @@ class Statistics(object):
     def total_stats(self, per_dc_stat):
         return dict(reduce(self.dict_keys_sum, per_dc_stat.values()))
 
+    def get_couple_stats(self):
+        symmetric_couples = self.balancer.get_symmetric_groups(None)
+        bad_couples = self.balancer.get_bad_groups(None)
+        closed_couples = self.balancer.get_closed_groups(None)
+        frozen_couples = self.balancer.get_frozen_groups(None)
+        uncoupled_groups = self.balancer.get_empty_groups(None)
+
+        return {'open_couples': len(symmetric_couples) - len(closed_couples),
+                'frozen_couples': len(frozen_couples),
+                'total_couples': len(symmetric_couples) + len(frozen_couples) + len(bad_couples),
+                'uncoupled_groups': len(uncoupled_groups)}
+
+
     def get_flow_stats(self, request):
 
         # total_space = 0.0
@@ -160,5 +176,7 @@ class Statistics(object):
 
         res = self.total_stats(per_dc_stat)
         res.update({'dc': per_dc_stat})
+
+        res.update(self.get_couple_stats())
 
         return res

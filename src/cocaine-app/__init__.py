@@ -119,7 +119,7 @@ def init_cache(cache_config):
 
 
 def init_statistics():
-    stat = statistics.Statistics()
+    stat = statistics.Statistics(b)
     register_handle(stat.get_flow_stats)
     return stat
 
