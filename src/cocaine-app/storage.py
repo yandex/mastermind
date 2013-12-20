@@ -211,11 +211,15 @@ class Host(object):
     def __init__(self, addr):
         self.addr = addr
         self.nodes = []
-        self.dc = inventory.get_dc_by_host(self.addr)
-        # self.dc = None
+        # self.dc = inventory.get_dc_by_host(self.addr)
+        self._dc = None
 
     def hostname(self):
         return socket.gethostbyaddr(self.addr)[0]
+
+    @property
+    def dc(self):
+        return infrastructure.get_dc_by_host(self.addr)
 
     def index(self):
         return self.__str__()
@@ -233,8 +237,8 @@ class Host(object):
         return hash(self.__str__())
 
     def __repr__(self):
-        return ('<Host object: addr=%s, dc=%s, nodes=[%s] >' %
-                (self.addr, self.dc, ', '.join((repr(n) for n in self.nodes))))
+        return ('<Host object: addr=%s, nodes=[%s] >' %
+                (self.addr, ', '.join((repr(n) for n in self.nodes))))
 
     def __str__(self):
         return self.addr
@@ -312,7 +316,7 @@ class Node(object):
         if self.destroyed:
             return '<Node object: DESTROYED!>'
 
-        return '<Node object: host=%s, port=%d, dc=%s, status=%s, read_only=%s, stat=%s>' % (str(self.host), self.port, self.host.dc, self.status, str(self.read_only), repr(self.stat))
+        return '<Node object: host=%s, port=%d, status=%s, read_only=%s, stat=%s>' % (str(self.host), self.port, self.status, str(self.read_only), repr(self.stat))
 
     def __str__(self):
         if self.destroyed:

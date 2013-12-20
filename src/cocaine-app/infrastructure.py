@@ -7,6 +7,7 @@ from cocaine.logging import Logger
 import elliptics
 import msgpack
 
+import inventory
 from config import config
 import storage
 import timed_queue
@@ -27,6 +28,8 @@ class Infrastructure(object):
     TASK_SYNC = 'infrastructure_sync'
     TASK_UPDATE = 'infrastructure_update'
 
+    TASK_DC_CACHE_SYNC = 'infrastructure_dc_cache_sync'
+
     RSYNC_CMD = ('rsync -rlHpogDt --progress '
                  '{user}@{src_host}:{src_path}data* {dst_path}')
 
@@ -42,6 +45,7 @@ class Infrastructure(object):
         self.sync_ts = None
         self.state_valid_time = config.get('infrastructure_state_valid_time',
                                            120)
+        self.dc_cache = {}
 
         self.__tq = timed_queue.TimedQueue()
         self.__tq.start()
@@ -51,6 +55,7 @@ class Infrastructure(object):
         self.meta_session = self.node.meta_session
 
         self.sync_state()
+        self.sync_dc_cache()
         self.__tq.add_task_in(self.TASK_UPDATE,
             config.get('infrastructure_update_period', 300),
             self.update_state)
@@ -89,8 +94,6 @@ class Infrastructure(object):
         except Exception as e:
             logging.error('Failed to sync infrastructure state: %s\n%s' %
                           (e, traceback.format_exc()))
-        except BaseException as e:
-            logging.error('Bad infrastructure shit: %s' % (e,))
         finally:
             self.__tq.add_task_in(self.TASK_SYNC,
                 config.get('infrastructure_sync_period', 60),
@@ -275,6 +278,55 @@ class Infrastructure(object):
         logging.info('Restore cmd for group %s, warns: %s, cmd %s' %
                      (group_id, warns, cmd))
         return cmd, warns
+
+    def sync_dc_cache(self):
+        try:
+            logging.info('Syncing infrastructure dc cache')
+            idxs = self.meta_session.find_all_indexes([keys.MM_DC_CACHE_IDX])
+            for idx in idxs:
+                data = msgpack.unpackb(idx.indexes[0].data)
+
+                logging.debug('Fetched infrastructure dc cache item: %s' %
+                              (data,))
+
+                self.dc_cache[data['host']] = data
+
+            logging.info('Finished syncing infrastructure dc cache')
+        except Exception as e:
+            logging.error('Failed to sync infrastructure dc cache: %s\n%s' %
+                          (e, traceback.format_exc()))
+        finally:
+            self.__tq.add_task_in(self.TASK_DC_CACHE_SYNC,
+                config.get('infrastructure_dc_cache_update_period', 150),
+                self.sync_dc_cache)
+
+    def update_dc_cache_item(self, host, dc):
+        eid = elliptics.Id(keys.MM_DC_CACHE_HOST % host)
+        dc_cache_item = {'host': host,
+                         'dc': dc,
+                         'ts': time.time()}
+        logging.info('Updating dc cache item for host %s' % (host,))
+        self.meta_session.update_indexes(eid, [keys.MM_DC_CACHE_IDX],
+                                              [msgpack.packb(dc_cache_item)])
+
+    def get_dc_by_host(self, host):
+        expire_ts = config.get('infrastructure_dc_cache_valid_time', 604800)
+        try:
+            dc_cache_item = self.dc_cache[host]
+            if dc_cache_item['ts'] + expire_ts < time.time():
+                logging.debug('Infrastructure DC cache item for host %s expired' % (host,))
+                raise KeyError
+            logging.debug('Using dc data for host %s from cache' % (host,))
+            dc = dc_cache_item['dc']
+        except KeyError:
+            logging.debug('Fetching dc for host %s from inventory' % (host,))
+            dc = inventory.get_dc_by_host(host)
+            self.update_dc_cache_item(host, dc)
+
+        return dc
+
+
+infrastructure = Infrastructure()
 
 
 def port_to_path(port):

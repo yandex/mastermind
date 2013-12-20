@@ -6,3 +6,6 @@ MASTERMIND_COUPLE_META_KEY = 'mastermind:couple_meta:%s'
 
 MM_GROUPS_IDX = 'mastermind:groups_idx'
 MM_ISTRUCT_GROUP = 'mastermind:group_%d'
+
+MM_DC_CACHE_IDX = 'mastermind:dc_cache'
+MM_DC_CACHE_HOST = 'mastermind:dc_cache_%s'
