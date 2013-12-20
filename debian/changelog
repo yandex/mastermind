@@ -1,3 +1,9 @@
+mastermind (2.7.13) lucid; urgency=low
+
+  * Fix: flowmastermind total counters fix
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 20 Dec 2013 17:10:37 +0400
+
 mastermind (2.7.12) lucid; urgency=low
 
   * Fix: dc data cache in metastorage for inventory failovers
