@@ -30,9 +30,14 @@ class Infrastructure(object):
     RSYNC_CMD = ('rsync -rlHpogDt --progress '
                  '{user}@{src_host}:{src_path}data* {dst_path}')
 
-    def __init__(self, node):
-        self.node = node
-        self.meta_session = self.node.meta_session
+    def __init__(self):
+
+        # actual init happens in 'init' method
+        # TODO: return node back to constructor after wrapping
+        #       all the code in a 'mastermind' package
+        self.node = None
+        self.meta_session = None
+
         self.state = {}
         self.sync_ts = None
         self.state_valid_time = config.get('infrastructure_state_valid_time',
@@ -40,6 +45,10 @@ class Infrastructure(object):
 
         self.__tq = timed_queue.TimedQueue()
         self.__tq.start()
+
+    def init(self, node):
+        self.node = node
+        self.meta_session = self.node.meta_session
 
         self.sync_state()
         self.__tq.add_task_in(self.TASK_UPDATE,

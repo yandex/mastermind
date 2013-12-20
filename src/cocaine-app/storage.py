@@ -8,6 +8,7 @@ from cocaine.logging import Logger
 import msgpack
 
 import inventory
+from infrastructure import infrastructure
 from config import config
 
 
