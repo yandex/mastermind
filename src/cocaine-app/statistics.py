@@ -56,18 +56,20 @@ class Statistics(object):
                           if group.couple else
                           str(group.group_id))
 
-                if not node.host.dc in couple_dc_map[couple]:
+                dc = node.host.dc
+
+                if not dc in couple_dc_map[couple]:
 
                     if group.couple:
-                        by_dc[node.host.dc]['total_couples'] += 1
+                        by_dc[dc]['total_couples'] += 1
                         if group.couple.status == storage.Status.OK:
-                            by_dc[node.host.dc]['open_couples'] += 1
+                            by_dc[dc]['open_couples'] += 1
                         elif group.couple.status == storage.Status.FROZEN:
-                            by_dc[node.host.dc]['frozen_couples'] += 1
+                            by_dc[dc]['frozen_couples'] += 1
                     else:
-                        by_dc[node.host.dc]['uncoupled_groups'] += 1
+                        by_dc[dc]['uncoupled_groups'] += 1
 
-                    couple_dc_map[couple].add(node.host.dc)
+                    couple_dc_map[couple].add(dc)
 
                 if not node.stat:
                     logging.debug('No stats available for node %s' % str(node))
@@ -79,15 +81,14 @@ class Statistics(object):
                 host_fsid_map[node.host].add(node.stat.fsid)
 
                 if group.couple:
-                    logging.info('adding free space %s gb for node %s' % (node.stat.free_space / 1024.0 / 1024 / 1024, node))
-                    by_dc[node.host.dc]['free_space'] += node.stat.free_space
-                    by_dc[node.host.dc]['total_space'] += node.stat.total_space
+                    by_dc[dc]['free_space'] += node.stat.free_space
+                    by_dc[dc]['total_space'] += node.stat.total_space
                     node_eff_space = max(min(node.stat.total_space - self.MIN_FREE_SPACE,
                                              node.stat.total_space * (1 - self.MIN_FREE_SPACE_REL)), 0.0)
-                    by_dc[node.host.dc]['effective_space'] += node_eff_space
-                    by_dc[node.host.dc]['effective_free_space'] += max(node.stat.free_space - (node.stat.total_space - node_eff_space), 0.0)
+                    by_dc[dc]['effective_space'] += node_eff_space
+                    by_dc[dc]['effective_free_space'] += max(node.stat.free_space - (node.stat.total_space - node_eff_space), 0.0)
                 else:
-                    by_dc[node.host.dc]['uncoupled_space'] += node.stat.total_space
+                    by_dc[dc]['uncoupled_space'] += node.stat.total_space
         return dict(by_dc)
 
     def total_stats(self, per_dc_stat):

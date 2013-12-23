@@ -308,6 +308,7 @@ class Infrastructure(object):
         logging.info('Updating dc cache item for host %s' % (host,))
         self.meta_session.update_indexes(eid, [keys.MM_DC_CACHE_IDX],
                                               [msgpack.packb(dc_cache_item)])
+        self.dc_cache[host] = dc_cache_item
 
     def get_dc_by_host(self, host):
         expire_ts = config.get('infrastructure_dc_cache_valid_time', 604800)
@@ -320,7 +321,14 @@ class Infrastructure(object):
             dc = dc_cache_item['dc']
         except KeyError:
             logging.debug('Fetching dc for host %s from inventory' % (host,))
-            dc = inventory.get_dc_by_host(host)
+            try:
+                req_start = time.time()
+                dc = inventory.get_dc_by_host(host)
+            except Exception as e:
+                req_time = time.time() - req_start
+                logging.info('Failed to fetch dc for host {0} (time: {1:.5f}s): {2}\n{3}'.format(
+                    host, req_time, str(e), traceback.format_exc()))
+                raise
             self.update_dc_cache_item(host, dc)
 
         return dc
