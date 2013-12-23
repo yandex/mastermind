@@ -126,6 +126,7 @@ def init_statistics():
 
 if 'cache' in config:
     init_cache(config['cache'])
+
 init_infrastructure()
 init_node_info_updater()
 init_statistics()

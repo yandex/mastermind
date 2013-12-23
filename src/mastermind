@@ -2,6 +2,7 @@
 import json
 import os
 import os.path
+from pprint import pprint
 import re
 import subprocess
 import sys
@@ -42,7 +43,7 @@ def group_info(group, history=('l', False, 'History of group nodes'), host=None)
     group = int(group)
 
     res = s.enqueue("get_group_info", msgpack.packb(group)).get()
-    print res
+    pprint(res)
 
     if history:
 

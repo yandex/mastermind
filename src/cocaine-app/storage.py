@@ -443,6 +443,7 @@ class Group(object):
         res['nodes'] = [n.info() for n in self.nodes]
         if self.couple:
             res['couples'] = self.couple.as_tuple()
+            res['writable'] = not self.couple.closed
         else:
             res['couples'] = None
         if self.meta:
@@ -556,6 +557,16 @@ class Couple(object):
     @property
     def frozen(self):
         return self.meta and self.meta['frozen']
+
+    @property
+    def closed(self):
+        min_free_space = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
+        min_rel_space = config['balancer_config'].get('min_free_space_relative', 0.15)
+
+        stats = self.get_stat()
+        return (self.status == Status.OK and (
+                stats.free_space < min_free_space or
+                stats.rel_space < min_rel_space))
 
     def destroy(self):
         for group in self.groups:
