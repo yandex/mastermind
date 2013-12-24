@@ -32,8 +32,29 @@ class Statistics(object):
             host_space[k] -= min_val
             couple_space[k] -= min_val
 
-    def per_dc_stat(self):
-        by_dc = defaultdict(lambda: {
+    def account_couples(self, data, group):
+        if group.couple:
+            data['total_couples'] += 1
+            if group.couple.status == storage.Status.OK:
+                data['open_couples'] += 1
+            elif group.couple.status == storage.Status.FROZEN:
+                data['frozen_couples'] += 1
+        else:
+            data['uncoupled_groups'] += 1
+
+    def account_memory(self, data, group, stat):
+        if group.couple:
+            data['free_space'] += stat.free_space
+            data['total_space'] += stat.total_space
+            node_eff_space = max(min(stat.total_space - self.MIN_FREE_SPACE,
+                                     stat.total_space * (1 - self.MIN_FREE_SPACE_REL)), 0.0)
+            data['effective_space'] += node_eff_space
+            data['effective_free_space'] += max(stat.free_space - (stat.total_space - node_eff_space), 0.0)
+        else:
+            data['uncoupled_space'] += stat.total_space
+
+    def per_entity_stat(self):
+        default = lambda: {
             'free_space': 0.0,
             'total_space': 0.0,
             'effective_space': 0.0,
@@ -44,10 +65,16 @@ class Statistics(object):
             'frozen_couples': 0,
             'total_couples': 0,
             'uncoupled_groups': 0,
-        })
+        }
+
+        by_dc = defaultdict(default)
+        by_ns = defaultdict(lambda: defaultdict(default))
+
+        dc_couple_map = defaultdict(set)
+        ns_dc_couple_map = defaultdict(lambda: defaultdict(set))
 
         host_fsid_map = defaultdict(set)
-        couple_dc_map = defaultdict(set)
+        ns_host_fsid_map = defaultdict(lambda: defaultdict(set))
 
         for group in sorted(storage.groups, key=lambda g: not bool(g.couple)):
             for node in group.nodes:
@@ -57,39 +84,27 @@ class Statistics(object):
                           str(group.group_id))
 
                 dc = node.host.dc
+                ns = group.couple and group.couple.namespace or None
 
-                if not dc in couple_dc_map[couple]:
-
-                    if group.couple:
-                        by_dc[dc]['total_couples'] += 1
-                        if group.couple.status == storage.Status.OK:
-                            by_dc[dc]['open_couples'] += 1
-                        elif group.couple.status == storage.Status.FROZEN:
-                            by_dc[dc]['frozen_couples'] += 1
-                    else:
-                        by_dc[dc]['uncoupled_groups'] += 1
-
-                    couple_dc_map[couple].add(dc)
+                if not couple in dc_couple_map[dc]:
+                    self.account_couples(by_dc[dc], group)
+                    dc_couple_map[dc].add(couple)
+                if ns and not couple in ns_dc_couple_map[ns][dc]:
+                    self.account_couples(by_ns[ns][dc], group)
+                    ns_dc_couple_map[ns][dc].add(couple)
 
                 if not node.stat:
                     logging.debug('No stats available for node %s' % str(node))
                     continue
 
-                if node.stat.fsid in host_fsid_map[node.host]:
-                    continue
+                if not node.stat.fsid in host_fsid_map[node.host]:
+                    self.account_memory(by_dc[dc], group, node.stat)
+                    host_fsid_map[node.host].add(node.stat.fsid)
+                if ns and not node.stat.fsid in ns_host_fsid_map[ns][node.host]:
+                    self.account_memory(by_ns[ns][dc], group, node.stat)
+                    ns_host_fsid_map[ns][node.host].add(node.stat.fsid)
 
-                host_fsid_map[node.host].add(node.stat.fsid)
-
-                if group.couple:
-                    by_dc[dc]['free_space'] += node.stat.free_space
-                    by_dc[dc]['total_space'] += node.stat.total_space
-                    node_eff_space = max(min(node.stat.total_space - self.MIN_FREE_SPACE,
-                                             node.stat.total_space * (1 - self.MIN_FREE_SPACE_REL)), 0.0)
-                    by_dc[dc]['effective_space'] += node_eff_space
-                    by_dc[dc]['effective_free_space'] += max(node.stat.free_space - (node.stat.total_space - node_eff_space), 0.0)
-                else:
-                    by_dc[dc]['uncoupled_space'] += node.stat.total_space
-        return dict(by_dc)
+        return dict(by_dc), dict((k, dict(v)) for k, v in by_ns.iteritems())
 
     def total_stats(self, per_dc_stat):
         return dict(reduce(self.dict_keys_sum, per_dc_stat.values()))
@@ -173,10 +188,11 @@ class Statistics(object):
         #                               couple_top_stats)
 
 
-        per_dc_stat = self.per_dc_stat()
+        per_dc_stat, per_ns_stat = self.per_entity_stat()
 
         res = self.total_stats(per_dc_stat)
-        res.update({'dc': per_dc_stat})
+        res.update({'dc': per_dc_stat,
+                    'namespaces': per_ns_stat})
 
         res.update(self.get_couple_stats())
 
