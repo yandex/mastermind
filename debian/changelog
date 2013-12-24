@@ -1,3 +1,11 @@
+mastermind (2.7.14) lucid; urgency=low
+
+  * Feature: added per namespace statistics for flowmastermind
+  * Feature: closed couple marker for group info request
+  * Fix: inventory queries logging
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 24 Dec 2013 20:30:13 +0400
+
 mastermind (2.7.13) lucid; urgency=low
 
   * Fix: flowmastermind total counters fix
