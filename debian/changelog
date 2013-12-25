@@ -1,3 +1,9 @@
+mastermind (2.7.16) lucid; urgency=low
+
+  * Fix: couple break handler
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 25 Dec 2013 19:53:28 +0400
+
 mastermind (2.7.15) lucid; urgency=low
 
   * Feature: data memory availability feature for flowmastermind
