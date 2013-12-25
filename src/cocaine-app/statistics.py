@@ -4,6 +4,7 @@ from cocaine.logging import Logger
 
 import storage
 from config import config
+import copy
 
 
 logging = Logger()
@@ -22,7 +23,7 @@ class Statistics(object):
         return dict((k, st1[k] + st2[k]) for k in st1)
 
     @staticmethod
-    def reduce_top_group_stats(st1, st2):
+    def dict_keys_min(st1, st2):
         return dict((k, min(st1[k], st2[k])) for k in st1)
 
     @staticmethod
@@ -32,7 +33,8 @@ class Statistics(object):
             host_space[k] -= min_val
             couple_space[k] -= min_val
 
-    def account_couples(self, data, group):
+    @staticmethod
+    def account_couples(data, group):
         if group.couple:
             data['total_couples'] += 1
             if group.couple.status == storage.Status.OK:
@@ -121,72 +123,65 @@ class Statistics(object):
                 'total_couples': len(symmetric_couples) + len(frozen_couples) + len(bad_couples),
                 'uncoupled_groups': len(uncoupled_groups)}
 
+    def get_data_space(self):
+        """Returns the space actually available for writing data, therefore
+        excluding space occupied by replicas, accounts for groups residing
+        on the same file systems, etc."""
+
+        host_fsid_memory_map = {}
+
+        res = {
+            'free_space': 0.0,
+            'total_space': 0.0,
+            'effective_space': 0.0,
+            'effective_free_space': 0.0,
+        }
+
+        for group in storage.groups:
+            for node in group.nodes:
+                if not node.stat:
+                    continue
+
+                if not (node.host.addr, node.stat.fsid) in host_fsid_memory_map:
+                    eff_space = max(min(node.stat.total_space - self.MIN_FREE_SPACE,
+                                        node.stat.total_space * (1 - self.MIN_FREE_SPACE_REL)), 0.0)
+                    host_fsid_memory_map[(node.host.addr, node.stat.fsid)] = {
+                        'total_space': node.stat.total_space,
+                        'free_space': node.stat.free_space,
+                        'effective_space': eff_space,
+                        'effective_free_space': max(node.stat.free_space - (node.stat.total_space - eff_space), 0.0),
+                    }
+
+        for couple in storage.couples:
+
+            stat = couple.get_stat()
+
+            if not stat:
+                continue
+
+            group_top_stats = []
+            for group in couple.groups:
+                # space is summed through all the group nodes
+                group_top_stats.append(reduce(self.dict_keys_sum,
+                       [host_fsid_memory_map[(node.host.addr, node.stat.fsid)] for node in group.nodes]))
+
+            # max space available for the couple
+            couple_top_stats = reduce(self.dict_keys_min, group_top_stats)
+
+            #increase storage stats
+            res = reduce(self.dict_keys_sum, [res, couple_top_stats])
+
+            for group in couple.groups:
+                couple_top_stats_copy = copy.copy(couple_top_stats)
+                for node in group.nodes:
+                    # decrease filesystems space counters
+                    self.redeem_space(host_fsid_memory_map[(node.host.addr, node.stat.fsid)],
+                                      couple_top_stats_copy)
+
+        return res
+
 
     def get_flow_stats(self, request):
-
-        # total_space = 0.0
-        # free_space = 0.0
-        # eff_space = 0.0
-        # eff_free_space = 0.0
-
-        # open_couples = 0
-        # total_couples = 0
-
-        # host_fsid_memory_map = {}
-
-        # for group in storage.groups:
-        #     for node in group.nodes:
-        #         if not node.stat:
-        #             continue
-
-        #         if not (node.host.addr, node.stat.fsid) in host_fsid_memory_map:
-        #             eff_space = max(min(node.stat.total_space - self.MIN_FREE_SPACE,
-        #                                 node.stat.total_space * (1 - self.MIN_FREE_SPACE_REL)), 0.0)
-        #             host_fsid_memory_map[(node.host.addr, node.stat.fsid)] = {
-        #                 'total_space': node.stat.total_space,
-        #                 'free_space': node.stat.free_space,
-        #                 'eff_space': eff_space,
-        #                 'eff_free_space': max(node.stat.free_space - (node.stat.total_space - eff_space), 0.0),
-        #             }
-
-        # logging.info('addr-fsid map: %s' % (host_fsid_memory_map,))
-
-
-        # for couple in storage.couples:
-
-        #     if couple.status == storage.Status.OK:
-        #         open_couples += 1
-
-        #     total_couples += 1
-
-        #     stat = couple.get_stat()
-
-        #     if not stat:
-        #         logging.debug('No stats available for couple %s' % (couple,))
-        #         continue
-
-        #     group_top_stats = []
-        #     for group in couple.groups:
-        #         group_top_stats.append(reduce(self.dict_keys_sum,
-        #                [host_fsid_memory_map[(node.host.addr, node.stat.fsid)] for node in group.nodes]))
-
-        #     couple_top_stats = reduce(self.reduce_top_group_stats, group_top_stats)
-
-
-        #     #increase storage stats
-        #     total_space += couple_top_stats['total_space']
-        #     free_space += couple_top_stats['free_space']
-        #     eff_space += couple_top_stats['eff_space']
-        #     eff_free_space += couple_top_stats['eff_free_space']
-
-        #     for group in couple.groups:
-
-        #         for node in group.nodes:
-
-        #             # decrease free and total space counters of fs
-        #             self.redeem_space(host_fsid_memory_map[(node.host.addr, node.stat.fsid)],
-        #                               couple_top_stats)
-
 
         per_dc_stat, per_ns_stat = self.per_entity_stat()
 
@@ -194,6 +189,7 @@ class Statistics(object):
         res.update({'dc': per_dc_stat,
                     'namespaces': per_ns_stat})
 
+        res.update({'real_data': self.get_data_space()})
         res.update(self.get_couple_stats())
 
         return res
