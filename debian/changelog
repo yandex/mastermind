@@ -1,3 +1,9 @@
+mastermind (2.7.15) lucid; urgency=low
+
+  * Feature: data memory availability feature for flowmastermind
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 25 Dec 2013 18:47:50 +0400
+
 mastermind (2.7.14) lucid; urgency=low
 
   * Feature: added per namespace statistics for flowmastermind
