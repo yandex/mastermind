@@ -188,24 +188,6 @@ class NodeStat(object):
                     self.max_read_rps, self.total_space, self.free_space, self.files_removed,
                     self.fragmentation, self.load_average))
 
-    def serialize(self):
-        return {
-            'ts': self.ts,
-            'last_read': self.last_read,
-            'last_write': self.last_write,
-            'total_space': self.total_space,
-            'free_space': self.free_space,
-            'rel_space': self.rel_space,
-            'load_average': self.load_average,
-        }
-
-    @classmethod
-    def unserialize(cls, stat):
-        obj = cls()
-        for k, v in stat.iteritems():
-            setattr(obj, k, v)
-        return obj
-
 
 class Host(object):
     def __init__(self, addr):
@@ -242,11 +224,6 @@ class Host(object):
 
     def __str__(self):
         return self.addr
-
-    def serialize(self):
-        return {
-            'addr': self.addr,
-        }
 
 
 class Node(object):
@@ -333,15 +310,6 @@ class Node(object):
 
         if isinstance(other, Node):
             return self.host.addr == other.host.addr and self.port == other.port
-
-    def serialize(self):
-        return {
-            'host': self.host.addr,
-            'port': self.port,
-            'destroyed': self.destroyed,
-            'read_only': self.read_only,
-            'stat': self.stat.serialize(),
-        }
 
 
 class Group(object):
@@ -462,13 +430,6 @@ class Group(object):
 
     def __eq__(self, other):
         return self.group_id == other
-
-    def serialize(self):
-        return {
-            'group_id': self.group_id,
-            'meta': self.meta,
-            'nodes': [n.serialize() for n in self.nodes],
-        }
 
 
 class Couple(object):
@@ -622,12 +583,6 @@ class Couple(object):
 
     def __repr__(self):
         return '<Couple object: status=%s, groups=[%s] >' % (self.status, ', '.join([repr(g) for g in self.groups]))
-
-    def serialize(self):
-        return {
-            'groups': [g.group_id for g in self.groups],
-            'meta': self.meta
-        }
 
 
 hosts = Repositary(Host)
