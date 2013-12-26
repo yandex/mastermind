@@ -285,7 +285,8 @@ class Node(object):
         res['last_stat_update'] = (self.stat and
             datetime.datetime.fromtimestamp(self.stat.ts).strftime('%Y-%m-%d %H:%M:%S') or
             'unknown')
-        #res['stat'] = str(self.stat)
+        if self.stat:
+            res['free_space'] = '{0:.3f} Gb'.format(self.stat.free_space / (1024.0 * 1024.0 * 1024.0))
 
         return res
 
