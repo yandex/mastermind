@@ -168,7 +168,6 @@ class Balancer(object):
     def repair_groups(self, request):
         logging.info('----------------------------------------')
         logging.info('New repair groups request: ' + str(request))
-        logging.info(request)
 
         group_id = int(request[0])
         try:
@@ -252,7 +251,6 @@ class Balancer(object):
     def couple_groups(self, request):
         logging.info('----------------------------------------')
         logging.info('New couple groups request: ' + str(request))
-        logging.info(request)
         uncoupled_groups = self.get_empty_groups(self.node)
         dc_by_group_id = {}
         group_by_dc = {}
@@ -325,7 +323,6 @@ class Balancer(object):
     def break_couple(self, request):
         logging.info('----------------------------------------')
         logging.info('New break couple request: ' + str(request))
-        logging.info(request)
 
         couple_str = ':'.join(map(str, sorted(request[0], key=lambda x: int(x))))
         if not couple_str in storage.couples:
