@@ -15,7 +15,6 @@ import timed_queue
 
 logging = Logger()
 
-
 BASE_PORT = config.get('elliptics_base_port', 1024)
 CACHE_DEFAULT_PORT = 9999
 
@@ -54,11 +53,11 @@ class Infrastructure(object):
         self.node = node
         self.meta_session = self.node.meta_session
 
-        self.sync_state()
-        self.sync_dc_cache()
+        self._sync_state()
+        self._sync_dc_cache()
         self.__tq.add_task_in(self.TASK_UPDATE,
             config.get('infrastructure_update_period', 300),
-            self.update_state)
+            self._update_state)
 
     def get_group_history(self, group_id):
         history = []
@@ -68,7 +67,7 @@ class Infrastructure(object):
                             'timestamp': node_set['timestamp']})
         return history
 
-    def sync_state(self):
+    def _sync_state(self):
         try:
             logging.info('Syncing infrastructure state')
             group_ids = set()
@@ -97,14 +96,14 @@ class Infrastructure(object):
         finally:
             self.__tq.add_task_in(self.TASK_SYNC,
                 config.get('infrastructure_sync_period', 60),
-                self.sync_state)
+                self._sync_state)
 
     @staticmethod
-    def serialize(data):
+    def _serialize(data):
         return msgpack.packb(data)
 
     @staticmethod
-    def unserialize(data):
+    def _unserialize(data):
         group_state = msgpack.unpackb(data)
         group_state['nodes'] = list(group_state['nodes'])
         return group_state
@@ -116,7 +115,7 @@ class Infrastructure(object):
             'nodes': [],
         }
 
-    def update_state(self):
+    def _update_state(self):
         groups_to_update = []
         try:
             logging.info('Updating infrastructure state')
@@ -167,7 +166,7 @@ class Infrastructure(object):
                     logging.info('Group %d info does not match,'
                                  'last state: %s, current state: %s' %
                                  (g.group_id, state_nodes, ext_storage_nodes))
-                    self.update_group(g.group_id, ext_storage_nodes)
+                    self._update_group(g.group_id, ext_storage_nodes)
 
             logging.info('Finished updating infrastructure state')
         except Exception as e:
@@ -176,9 +175,9 @@ class Infrastructure(object):
         finally:
             self.__tq.add_task_in(self.TASK_UPDATE,
                 config.get('infrastructure_update_period', 300),
-                self.update_state)
+                self._update_state)
 
-    def update_group(self, group_id, new_nodes):
+    def _update_group(self, group_id, new_nodes):
         group = self.state[group_id]
         group['nodes'].append({'set': new_nodes,
                                'timestamp': time.time()})
@@ -186,7 +185,7 @@ class Infrastructure(object):
         eid = elliptics.Id(keys.MM_ISTRUCT_GROUP % group_id)
         logging.info('Updating state for group %s' % group_id)
         self.meta_session.update_indexes(eid, [keys.MM_GROUPS_IDX],
-                                              [self.serialize(group)])
+                                              [self._serialize(group)])
 
     def restore_group_cmd(self, request):
         group_id = int(request[0])
@@ -279,7 +278,7 @@ class Infrastructure(object):
                      (group_id, warns, cmd))
         return cmd, warns
 
-    def sync_dc_cache(self):
+    def _sync_dc_cache(self):
         try:
             logging.info('Syncing infrastructure dc cache')
             idxs = self.meta_session.find_all_indexes([keys.MM_DC_CACHE_IDX])
@@ -298,9 +297,9 @@ class Infrastructure(object):
         finally:
             self.__tq.add_task_in(self.TASK_DC_CACHE_SYNC,
                 config.get('infrastructure_dc_cache_update_period', 150),
-                self.sync_dc_cache)
+                self._sync_dc_cache)
 
-    def update_dc_cache_item(self, host, dc):
+    def _update_dc_cache_item(self, host, dc):
         eid = elliptics.Id(keys.MM_DC_CACHE_HOST % host)
         dc_cache_item = {'host': host,
                          'dc': dc,
@@ -329,7 +328,7 @@ class Infrastructure(object):
                 logging.info('Failed to fetch dc for host {0} (time: {1:.5f}s): {2}\n{3}'.format(
                     host, req_time, str(e), traceback.format_exc()))
                 raise
-            self.update_dc_cache_item(host, dc)
+            self._update_dc_cache_item(host, dc)
 
         return dc
 
