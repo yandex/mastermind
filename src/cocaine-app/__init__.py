@@ -106,9 +106,11 @@ def init_node_info_updater():
     niu = node_info_updater.NodeInfoUpdater(logging, n)
 
 
-def init_cache(cache_config):
-    manager = cache.CacheManager(n.meta_session, index_prefix=cache_config.get('index_prefix', 'cached_files_'))
-    [manager.add_namespace(ns) for ns in cache_config.get('namespaces', [])]
+def init_cache():
+    manager = cache.CacheManager()
+    if 'cache' in config:
+        manager.setup(n.meta_session, config['cache'].get('index_prefix', 'cached_files_'))
+        [manager.add_namespace(ns) for ns in config['cache'].get('namespaces', [])]
 
     # registering cache handlers
     register_handle(manager.get_cached_keys)
@@ -124,9 +126,7 @@ def init_statistics():
     return stat
 
 
-if 'cache' in config:
-    init_cache(config['cache'])
-
+init_cache()
 init_infrastructure()
 init_node_info_updater()
 init_statistics()

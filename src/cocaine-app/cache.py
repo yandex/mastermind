@@ -35,10 +35,12 @@ class CacheManager(object):
 
     ITEM_SIZE_KEY = 'size'
 
-    def __init__(self, session, index_prefix):
-        self.__session = session
+    def __init__(self):
 
-        self.__index_prefix = index_prefix
+        self.enabled = False
+
+        self.__session = None
+        self.__index_prefix = ''
         self.__namespaces = {}
 
         # bandwidth settings
@@ -46,14 +48,20 @@ class CacheManager(object):
         self.__bw_per_instance = self.__base_bw_per_instance
         self.__bw_degradation_threshold = 5
 
+        self.keys = {}
+        self.instances = {}
+
+    def setup(self, session, index_prefix):
+        self.__session = session
+        self.__index_prefix = index_prefix
+
         self.__tq = timed_queue.TimedQueue()
         self.__tq.start()
 
         self.__tq.add_task_in('cache_status_update', 10, self.cache_status_update)
         self.__tq.add_task_in('cache_list_update', 15, self.update_cache_list)
 
-        self.keys = {}
-        self.instances = {}
+        self.enabled = True
 
     def __loads(self, item):
         try:
@@ -84,6 +92,11 @@ class CacheManager(object):
 
     @update_lock
     def upload_list(self, request):
+
+        if not self.enabled:
+            raise RuntimeError('Cache list uploading is not available: '
+                               'cache is not set up')
+
         data = request['request']
         logging.info('request: %s ' % request)
         files = json.loads(data['files'])
@@ -269,6 +282,9 @@ class CacheManager(object):
         group_id = int(request)
 
         res = []
+
+        if not self.enabled:
+            return res
 
         indexes = [(self.__index_prefix + ns).encode('utf-8') for ns in self.__namespaces]
         for item in self.__session.find_any_indexes(indexes):
