@@ -243,9 +243,37 @@ class Balancer(object):
             for nodes_data in self.infrastructure.get_group_history(group):
                 dt = datetime.fromtimestamp(nodes_data['timestamp'])
                 group_history.append({'set': nodes_data['set'],
-                                      'timestamp': dt.strftime(self.DT_FORMAT)})
+                                      'timestamp': dt.strftime(self.DT_FORMAT),
+                                      'manual': nodes_data['manual']})
 
         return group_history
+
+    @h.handler
+    def group_detach_node(self, request):
+        group_id = int(request[0])
+        node_str = request[1]
+
+        if not group_id in storage.groups:
+            raise ValueError('Group %d is not found' % group_id)
+
+        group = storage.groups[group_id]
+        node = storage.nodes.get(node_str)
+        try:
+            host, port = node_str.split(':')
+            port = int(port)
+        except ValueError:
+            raise ValueError('Node should have form <host>:<port>')
+
+        if node and node in group.nodes:
+            group.remove_node(node)
+            if group.couple:
+                group.couple.update_status()
+            else:
+                group.update_status()
+
+        self.infrastructure.detach_node(group, host, port)
+
+        return True
 
     @h.handler
     def couple_groups(self, request):

@@ -55,7 +55,11 @@ def group_info(group, history=('l', False, 'History of group nodes'), host=None)
             print group_history
         else:
             for entry in group_history:
-                print '[%s] %s' % (entry['timestamp'], entry['set'])
+                record = '[{timestamp}] {set}'.format(**entry)
+                if entry['manual']:
+                    record += ', MANUAL'
+                    record = color(record, YELLOW)
+                print record
 
 
 @groupDispatcher.command(name='next-number')
@@ -84,6 +88,24 @@ def group_list_uncoupled(by_dc=('', None, 'Group by dc and provide some useful d
             msgpack.packb((res,))).get()
         print_by_dcs(groups_by_dcs, json)
 
+
+@groupDispatcher.command(name='detach-node')
+def group_detach_node(group, node=None,
+                      host=None):
+    '''Detach node from a group. Used when elliptics instance is
+       transferred to another host and/or port.
+
+       Node parameter is <host>:<port>'''
+    s = service(host)
+
+    if not node:
+        res = s.enqueue('get_group_info', msgpack.packb(group)).get()
+        pprint(res)
+        print 'You have to select node to be detached (<host>:<port>)'
+        return
+
+    res = s.enqueue('group_detach_node', msgpack.packb([group, node])).get()
+    print res
 
 
 # couple commands

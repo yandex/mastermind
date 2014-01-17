@@ -1,5 +1,6 @@
 import keys
 import os.path
+import threading
 import time
 import traceback
 
@@ -41,6 +42,7 @@ class Infrastructure(object):
         self.meta_session = None
 
         self.state = {}
+        self.__state_lock = threading.Lock()
         self.sync_ts = None
         self.state_valid_time = config.get('infrastructure_state_valid_time',
                                            120)
@@ -64,28 +66,52 @@ class Infrastructure(object):
         for node_set in self.state[group_id]['nodes']:
             history.append({'set': [node + (port_to_path(node[1]),)
                                     for node in node_set['set']],
-                            'timestamp': node_set['timestamp']})
+                            'timestamp': node_set['timestamp'],
+                            'manual': node_set.get('manual', False)})
         return history
 
     def _sync_state(self):
         try:
             logging.info('Syncing infrastructure state')
             group_ids = set()
-            idxs = self.meta_session.find_all_indexes([keys.MM_GROUPS_IDX])
-            for idx in idxs:
-                data = idx.indexes[0].data
+            with self.__state_lock:
 
-                state_group = self.unserialize(data)
-                logging.debug('Fetched infrastructure item: %s' %
-                              (state_group,))
+                idxs = self.meta_session.find_all_indexes([keys.MM_GROUPS_IDX])
+                for idx in idxs:
+                    data = idx.indexes[0].data
 
-                self.state[state_group['id']] = state_group
-                group_ids.add(state_group['id'])
+                    state_group = self._unserialize(data)
+                    logging.debug('Fetched infrastructure item: %s' %
+                                  (state_group,))
 
-            for gid in set(self.state.keys()) - group_ids:
-                logging.info('Group %d is not found in infrastructure state, '
-                             'removing' % gid)
-                del self.state[gid]
+                    if (self.state.get(state_group['id']) and
+                        state_group['id'] in storage.groups):
+
+                        group = storage.groups[state_group['id']]
+
+                        for nodes_state in reversed(state_group['nodes']):
+                            if nodes_state['timestamp'] <= self.state[state_group['id']]['nodes'][-1]['timestamp']:
+                                break
+
+                            if nodes_state.get('manual', False):
+                                nodes_set = set(nodes_state['set'])
+                                for node in group.nodes:
+                                    if not (node.host.addr, node.port) in nodes_set:
+                                        logging.info('Removing {0} from group {1} due to manual group detaching'.format(node, group.group_id))
+                                        group.remove_node(node)
+                            if group.couple:
+                                group.couple.update_status()
+                            else:
+                                group.update_status()
+
+
+                    self.state[state_group['id']] = state_group
+                    group_ids.add(state_group['id'])
+
+                for gid in set(self.state.keys()) - group_ids:
+                    logging.info('Group %d is not found in infrastructure state, '
+                                 'removing' % gid)
+                    del self.state[gid]
 
             self.sync_ts = time.time()
 
@@ -141,32 +167,33 @@ class Infrastructure(object):
                                   'skipping' % (g.group_id,))
                     continue
 
-                if not g.group_id in self.state:
-                    # add group to state only if checks succeeded
-                    self.state[g.group_id] = group_state
+                with self.__state_lock:
+                    if not g.group_id in self.state:
+                        # add group to state only if checks succeeded
+                        self.state[g.group_id] = group_state
 
-                cur_group_state = (group_state['nodes'] and
-                                   group_state['nodes'][-1]
-                                   or {'set': []})
+                    cur_group_state = (group_state['nodes'] and
+                                       group_state['nodes'][-1]
+                                       or {'set': []})
 
-                state_nodes = tuple(nodes
-                                    for nodes in cur_group_state['set'])
+                    state_nodes = tuple(nodes
+                                        for nodes in cur_group_state['set'])
 
-                state_nodes_set = set(state_nodes)
+                    state_nodes_set = set(state_nodes)
 
-                # extended storage nodes set which includes newly seen nodes,
-                # do not discard lost nodes
-                ext_storage_nodes = (state_nodes + tuple(
-                    n for n in storage_nodes if n not in state_nodes_set))
+                    # extended storage nodes set which includes newly seen nodes,
+                    # do not discard lost nodes
+                    ext_storage_nodes = (state_nodes + tuple(
+                        n for n in storage_nodes if n not in state_nodes_set))
 
-                logging.debug('Comparing %s and %s' %
-                              (ext_storage_nodes, state_nodes))
+                    logging.debug('Comparing %s and %s' %
+                                  (ext_storage_nodes, state_nodes))
 
-                if set(ext_storage_nodes) != state_nodes_set:
-                    logging.info('Group %d info does not match,'
-                                 'last state: %s, current state: %s' %
-                                 (g.group_id, state_nodes, ext_storage_nodes))
-                    self._update_group(g.group_id, ext_storage_nodes)
+                    if set(ext_storage_nodes) != state_nodes_set:
+                        logging.info('Group %d info does not match,'
+                                     'last state: %s, current state: %s' %
+                                     (g.group_id, state_nodes, ext_storage_nodes))
+                        self._update_group(g.group_id, ext_storage_nodes)
 
             logging.info('Finished updating infrastructure state')
         except Exception as e:
@@ -177,15 +204,40 @@ class Infrastructure(object):
                 config.get('infrastructure_update_period', 300),
                 self._update_state)
 
-    def _update_group(self, group_id, new_nodes):
+    def _update_group(self, group_id, new_nodes, manual=False):
         group = self.state[group_id]
-        group['nodes'].append({'set': new_nodes,
-                               'timestamp': time.time()})
+        new_state = {'set': new_nodes,
+                     'timestamp': time.time()}
+        if manual:
+            new_state['manual'] = True
+
+        group['nodes'].append(new_state)
 
         eid = elliptics.Id(keys.MM_ISTRUCT_GROUP % group_id)
         logging.info('Updating state for group %s' % group_id)
         self.meta_session.update_indexes(eid, [keys.MM_GROUPS_IDX],
                                               [self._serialize(group)])
+
+    def detach_node(self, group, host, port):
+        with self.__state_lock:
+            group_state = self.state[group.group_id]
+            state_nodes = list(group_state['nodes'][-1]['set'][:])
+
+            new_state_nodes = []
+
+            for i, state_node in enumerate(state_nodes):
+                state_host, state_port = state_node
+                if state_host == host and state_port == port:
+                    logging.debug('Removing node {0}:{1} from '
+                        'group {2} history state'.format(host, port, group.group_id))
+                    del state_nodes[i]
+                    break
+            else:
+                raise ValueError('Node {0}:{1} not found in '
+                    'group {2} history state'.format(host, port, group.group_id))
+
+            self._update_group(group.group_id, state_nodes, manual=True)
+
 
     def restore_group_cmd(self, request):
         group_id = int(request[0])
