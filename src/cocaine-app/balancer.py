@@ -266,10 +266,7 @@ class Balancer(object):
 
         if node and node in group.nodes:
             group.remove_node(node)
-            if group.couple:
-                group.couple.update_status()
-            else:
-                group.update_status()
+            group.update_status_recursive()
 
         self.infrastructure.detach_node(group, host, port)
 

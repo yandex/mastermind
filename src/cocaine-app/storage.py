@@ -355,6 +355,12 @@ class Group(object):
     def get_stat(self):
         return reduce(lambda res, x: res + x, [node.stat for node in self.nodes])
 
+    def update_status_recursive(self):
+        if self.couple:
+            self.couple.update_status()
+        else:
+            self.update_status()
+
     def update_status(self):
         if not self.nodes:
             self.status = Status.INIT

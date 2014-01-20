@@ -167,10 +167,7 @@ class NodeInfoUpdater:
                             group_id, e, traceback.format_exc()))
                     group.parse_meta(None)
                 finally:
-                    if group.couple:
-                        group.couple.update_status()
-                    else:
-                        group.update_status()
+                    group.update_status_recursive()
 
         except Exception as e:
             self.__logging.error('Critical error during symmetric group '

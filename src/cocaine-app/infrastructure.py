@@ -99,11 +99,7 @@ class Infrastructure(object):
                                     if not (node.host.addr, node.port) in nodes_set:
                                         logging.info('Removing {0} from group {1} due to manual group detaching'.format(node, group.group_id))
                                         group.remove_node(node)
-                            if group.couple:
-                                group.couple.update_status()
-                            else:
-                                group.update_status()
-
+                            group.update_status_recursive()
 
                     self.state[state_group['id']] = state_group
                     group_ids.add(state_group['id'])
