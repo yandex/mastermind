@@ -131,7 +131,7 @@ class Infrastructure(object):
         return group_state
 
     @staticmethod
-    def new_group_state(group_id):
+    def _new_group_state(group_id):
         return {
             'id': group_id,
             'nodes': [],
@@ -153,7 +153,7 @@ class Infrastructure(object):
             for g in storage.groups.keys():
 
                 group_state = self.state.get(g.group_id,
-                                             self.new_group_state(g.group_id))
+                                             self._new_group_state(g.group_id))
 
                 storage_nodes = tuple((node.host.addr, node.port)
                                       for node in g.nodes)
