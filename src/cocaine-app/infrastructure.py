@@ -371,9 +371,11 @@ class Infrastructure(object):
             try:
                 req_start = time.time()
                 dc = inventory.get_dc_by_host(host)
+                logging.info("Fetched dc for host %s from inventory: %s" %
+                             (host, dc))
             except Exception as e:
                 req_time = time.time() - req_start
-                logging.info('Failed to fetch dc for host {0} (time: {1:.5f}s): {2}\n{3}'.format(
+                logging.error('Failed to fetch dc for host {0} (time: {1:.5f}s): {2}\n{3}'.format(
                     host, req_time, str(e), traceback.format_exc()))
                 raise
             self._update_dc_cache_item(host, dc)
