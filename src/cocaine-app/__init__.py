@@ -135,7 +135,6 @@ for handler in balancer.handlers(b):
     logging.info("registering bounded function %s" % handler)
     register_handle(handler)
 
-
 logging.info("Starting worker")
 W.run()
 logging.info("Initialized")

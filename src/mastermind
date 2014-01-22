@@ -200,6 +200,21 @@ def couple_list_closed(by_dc=('', None, 'Group by dc and provide some useful dat
         print_by_namespaces(couples_by_nss, json)
 
 
+@coupleDispatcher.command(name='info')
+def couple_info(group, host=None):
+    '''Get couple info'''
+    s = service(host)
+    group = int(group)
+
+    res = s.enqueue("get_couple_info", msgpack.packb(group)).get()
+    print color('Groups info', YELLOW)
+    pprint(res[:-1])
+
+    print
+    print color('Couple info', YELLOW)
+    pprint(res[-1])
+
+
 @coupleDispatcher.command(name='build')
 def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:2)'),
                  namespace=('n', '', 'Set custom namespace for couple'), host=None):

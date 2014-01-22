@@ -413,6 +413,7 @@ class Group(object):
     def info(self):
         res = {}
 
+        res['id'] = self.group_id
         res['status'] = self.status
         res['status_text'] = self.status_text
         res['nodes'] = [n.info() for n in self.nodes]
@@ -565,6 +566,15 @@ class Couple(object):
 
     def as_tuple(self):
         return tuple(group.group_id for group in self.groups)
+
+    def info(self):
+        res = {}
+
+        res['groups_status'] = [dict(zip(('group_id', 'status', 'status_text'),
+                                         (g.group_id, g.status, g.status_text)))
+                                for g in self]
+        res['couple_status'] = self.status
+        return res
 
     def __contains__(self, group):
         return group in self.groups
