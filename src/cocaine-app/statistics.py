@@ -38,9 +38,14 @@ class Statistics(object):
         if group.couple:
             data['total_couples'] += 1
             if group.couple.status == storage.Status.OK:
-                data['open_couples'] += 1
+                if not group.couple.closed:
+                    data['open_couples'] += 1
+                else:
+                    data['closed_couples'] += 1
             elif group.couple.status == storage.Status.FROZEN:
                 data['frozen_couples'] += 1
+            else:
+                data['bad_couples'] += 1
         else:
             data['uncoupled_groups'] += 1
 
@@ -65,6 +70,8 @@ class Statistics(object):
 
             'open_couples': 0,
             'frozen_couples': 0,
+            'closed_couples': 0,
+            'bad_couples': 0,
             'total_couples': 0,
             'uncoupled_groups': 0,
         }
