@@ -1,3 +1,12 @@
+mastermind (2.7.17) lucid; urgency=low
+
+  * Feature: closed and bad couples statistics for flowmastermind
+  * Feature: couple info handler added
+  * Feature: command for detaching node from group
+  * Fix: synchronous node info update on worker start
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 27 Jan 2014 15:31:00 +0400
+
 mastermind (2.7.16) lucid; urgency=low
 
   * Fix: couple break handler
