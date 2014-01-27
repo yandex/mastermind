@@ -40,7 +40,7 @@ class NodeInfoUpdater:
         self.__nodeUpdateTimestamps = (time.time(), time.time())
         self.__cache = Service('cache')
 
-        self.loadNodes(delayed=True)
+        self.loadNodes(delayed=False)
 
     def execute_tasks(self, delayed):
         try:
