@@ -1,3 +1,10 @@
+mastermind (2.7.18) lucid; urgency=low
+
+  * Feature: configurable wait_timeout for elliptics sessions
+  * Fix: sleep on startup to wait for elliptics nodes to collect data
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 28 Jan 2014 17:17:24 +0400
+
 mastermind (2.7.17) lucid; urgency=low
 
   * Feature: closed and bad couples statistics for flowmastermind
