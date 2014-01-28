@@ -58,7 +58,14 @@ for host in config["metadata"]["nodes"]:
         meta_node.add_remote(str(host[0]), host[1])
     except Exception as e:
         logging.error("Error: " + str(e) + "\n" + traceback.format_exc())
+
+wait_timeout = config.get('wait_timeout', 5)
+logging.info('sleeping for wait_timeout for nodes '
+             'to collect data ({0} sec)'.format(wait_timeout))
+sleep(wait_timeout)
+
 meta_session = elliptics.Session(meta_node)
+meta_session.set_timeout(wait_timeout)
 meta_session.add_groups(list(config["metadata"]["groups"]))
 logging.info("trace %d" % (i.next()))
 n.meta_session = meta_session

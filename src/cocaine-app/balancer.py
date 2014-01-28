@@ -498,6 +498,7 @@ def handlers(b):
 def kill_symm_group(n, groups):
     logging.info('Killing symm groups: %s' % str(groups))
     s = elliptics.Session(n)
+    s.set_timeout(config.get('wait_timeout', 5))
     s.add_groups(groups)
     try:
         s.remove(keys.SYMMETRIC_GROUPS_KEY)
@@ -510,6 +511,7 @@ def make_symm_group(n, couple, namespace):
     logging.info('groups in couple %s are being assigned namespace "%s"' % (couple, namespace))
 
     s = elliptics.Session(n)
+    s.set_timeout(config.get('wait_timeout', 5))
     good = []
     bad = ()
     for group in couple:
