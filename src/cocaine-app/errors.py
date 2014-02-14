@@ -6,3 +6,7 @@ class SkipHostError(Exception):
 
 class OrphanGroupError(Exception):
     pass
+
+
+class MinionApiError(Exception):
+    pass

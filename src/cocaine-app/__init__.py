@@ -20,6 +20,7 @@ import balancer
 import balancelogicadapter
 import infrastructure
 import cache
+import minions
 import node_info_updater
 import statistics
 from config import config
@@ -133,10 +134,20 @@ def init_statistics():
     return stat
 
 
+def init_minions():
+    m = minions.Minions(n)
+    register_handle(m.get_command)
+    register_handle(m.get_commands)
+    register_handle(m.execute_cmd)
+    register_handle(m.minion_history_log)
+    return m
+
+
 init_cache()
 init_infrastructure()
 init_node_info_updater()
 init_statistics()
+init_minions()
 
 for handler in balancer.handlers(b):
     logging.info("registering bounded function %s" % handler)

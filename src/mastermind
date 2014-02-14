@@ -392,7 +392,7 @@ def restore_group(group, user=('u', os.environ['USER'],
         print res
         return
 
-    cmd, messages = res
+    dst_host, cmd, messages = res
     for msg in messages:
         print '{prefix} {msg}'.format(prefix=warn('WARNING:'), msg=msg)
 
@@ -418,32 +418,52 @@ def restore_group(group, user=('u', os.environ['USER'],
 
         print 'Well if you say so...\n'
 
-    try:
-        retval = subprocess.call(cmd.split(' '))
-    except KeyboardInterrupt:
-        print 'Command execution was manually interrupted'
-        return
-
-    if retval:
-        print 'Failed to execute command, return value: %s' % retval
-        return
-
+    params = {}
     if group_file:
         try:
-            group_file_path = os.path.join(dest or cmd_dest(cmd), group_file)
-            print 'Writing id %s to group file %s' % (group, group_file_path)
-            group_file_dir = os.path.dirname(group_file_path)
-            if not os.path.exists(group_file_dir):
-                os.makedirs(group_file_dir, 0755)
-            with open(group_file_path, 'w') as f:
-                f.write(str(group))
+            dest_dir = dest or cmd_dest(cmd)
+            dest_dir = dest_dir.strip('"')
+            group_file_path = os.path.join(dest_dir, group_file)
+            print 'Group id %s will be written to ' \
+                  'group file %s' % (group, group_file_path)
+            params['group'] = str(group)
+            params['group_file'] = group_file_path
         except Exception as e:
             print warn('Failed to write to group file: %s' % e)
             return
     else:
-        print warn("\nDon't forget to change group id of the restored group "
-                   "back to %s!" % group)
-    print 'All done!'
+        print warn("\nDon't forget to set group id of the restored group "
+                   "to %s!" % group)
+
+    res = s.enqueue('execute_cmd', msgpack.packb([dst_host, cmd, params])).get()
+    print res
+    print
+
+    task_id = res.keys()[0]
+
+    while True:
+        status = s.enqueue('get_command', msgpack.packb([task_id])).get()
+        if not status.get('uid') == task_id:
+            print
+            print warn('Something went wrong')
+            print
+            pprint(status)
+            break
+
+        sys.stdout.write('\rProgress: {0:.2f}%'.format(status['progress'] * 100))
+
+        sys.stdout.flush()
+
+        if status['progress'] == 1.0:
+            print
+            pprint(status)
+            if status['exit_code'] == 0:
+                print 'Task finished successfully'
+            else:
+                print 'Exit code: {exit_code}\n{exit_message}'.format(**status)
+            break
+
+        sleep(1)
 
 
 # display-me-pretty formatters

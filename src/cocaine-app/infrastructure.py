@@ -22,6 +22,13 @@ CACHE_DEFAULT_PORT = 9999
 BASE_STORAGE_PATH = config.get('elliptics_base_storage_path', '/srv/storage/')
 CACHE_DEFAULT_PATH = '/srv/cache/'
 
+RSYNC_MODULE = config.get('restore', {}).get('rsync_use_module') and \
+               config['restore'].get('rsync_module')
+RSYNC_USER = config.get('restore', {}).get('rsync_user', 'rsync')
+
+logging.info('Rsync module using: %s' % RSYNC_MODULE)
+logging.info('Rsync user: %s' % RSYNC_USER)
+
 
 class Infrastructure(object):
 
@@ -31,7 +38,11 @@ class Infrastructure(object):
     TASK_DC_CACHE_SYNC = 'infrastructure_dc_cache_sync'
 
     RSYNC_CMD = ('rsync -rlHpogDt --progress '
-                 '{user}@{src_host}:{src_path}data* {dst_path}')
+                 '"{user}@{src_host}:{src_path}data*" "{dst_path}"')
+    # What about -H ?
+    RSYNC_MODULE_CMD = ('rsync -av --progress '
+                        '"rsync://{user}@{src_host}/{module}/{src_path}data*" '
+                        '"{dst_path}"')
 
     def __init__(self):
 
@@ -288,10 +299,20 @@ class Infrastructure(object):
             if not group_candidates:
                 raise ValueError('No symmetric groups to restore from')
 
+            group_candidates = filter(lambda g: len(g.nodes) == 1, group_candidates)
+
+            if not group_candidates:
+                raise ValueError('No symmetric groups with one node found, '
+                                 'multiple nodes group restoration is not supported')
+
             source_group = group_candidates[0]
             source_node = source_group.nodes[0]
 
             state = self.get_group_history(group.group_id)[-1]['set']
+            if len(state) > 1:
+                raise ValueError('Restoring group has more than one node, '
+                                 'multiple nodes group restoration is not supported')
+
             addr, port = state[0][:2]
 
             if (dest and
@@ -311,20 +332,29 @@ class Infrastructure(object):
                          (group.group_id, source_group, source_node))
             warns.append('Source group %s (%s)' % (source_group, source_node))
 
-            cmd = self.RSYNC_CMD.format(user=user,
-                src_host=source_node.host.addr,
-                src_path=port_to_path(source_node.port),
-                dst_path=dest or port_to_path(port))
+            if RSYNC_MODULE:
+                cmd = self.RSYNC_MODULE_CMD.format(
+                    user=RSYNC_USER,
+                    module=RSYNC_MODULE,
+                    src_host=source_node.host.addr,
+                    src_path=port_to_path(source_node.port).replace(BASE_STORAGE_PATH, ''),
+                    dst_path=dest or port_to_path(port))
+            else:
+                cmd = self.RSYNC_CMD.format(
+                    user=user,
+                    src_host=source_node.host.addr,
+                    src_path=port_to_path(source_node.port),
+                    dst_path=dest or port_to_path(port))
 
         except ValueError as e:
             warns.append(e.message)
             logging.info('Restore cmd for group %s failed, warns: %s' %
                          (group_id, warns))
-            return '', warns
+            return '', '', warns
 
-        logging.info('Restore cmd for group %s, warns: %s, cmd %s' %
-                     (group_id, warns, cmd))
-        return cmd, warns
+        logging.info('Restore cmd for group %s on %s, warns: %s, cmd %s' %
+                     (group_id, addr, warns, cmd))
+        return addr, cmd, warns
 
     def _sync_dc_cache(self):
         try:
