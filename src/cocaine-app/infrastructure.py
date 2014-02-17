@@ -39,7 +39,6 @@ class Infrastructure(object):
 
     RSYNC_CMD = ('rsync -rlHpogDt --progress '
                  '"{user}@{src_host}:{src_path}data*" "{dst_path}"')
-    # What about -H ?
     RSYNC_MODULE_CMD = ('rsync -av --progress '
                         '"rsync://{user}@{src_host}/{module}/{src_path}data*" '
                         '"{dst_path}"')
@@ -57,8 +56,6 @@ class Infrastructure(object):
         self.sync_ts = None
         self.state_valid_time = config.get('infrastructure_state_valid_time',
                                            120)
-        self.dc_cache = {}
-
         self.__tq = timed_queue.TimedQueue()
         self.__tq.start()
 
@@ -67,7 +64,11 @@ class Infrastructure(object):
         self.meta_session = self.node.meta_session
 
         self._sync_state()
-        self._sync_dc_cache()
+
+        self.dc_cache = DcCacheItem(self.meta_session, keys.MM_DC_CACHE_IDX,
+            keys.MM_DC_CACHE_HOST, self.__tq)
+        self.dc_cache._sync_cache()
+
         self.__tq.add_task_in(self.TASK_UPDATE,
             config.get('infrastructure_update_period', 300),
             self._update_state)
@@ -356,61 +357,97 @@ class Infrastructure(object):
                      (group_id, addr, warns, cmd))
         return addr, cmd, warns
 
-    def _sync_dc_cache(self):
+    def get_dc_by_host(self, host):
+        return self.dc_cache[host]
+
+
+class CacheItem(object):
+
+    def __init__(self, meta_session, idx_key, key_key, tq):
+        self.meta_session = meta_session
+        self.idx_key = idx_key
+        self.key_key = key_key
+        self.__tq = tq
+        self.cache = {}
+
+        for attr in ['taskname', 'logprefix', 'sync_period', 'key_expire_time']:
+            if getattr(self, attr) is None:
+                raise AttributeError('Set "{0}" attribute explicitly in your '
+                                 'class instance'.format(attr))
+
+    def get_value(self, key):
+        raise NotImplemented('Method "get_value" should be implemented in '
+                             'derived class')
+
+    def _sync_cache(self):
         try:
-            logging.info('Syncing infrastructure dc cache')
-            idxs = self.meta_session.find_all_indexes([keys.MM_DC_CACHE_IDX])
+            logging.info(self.logprefix + 'syncing')
+            idxs = self.meta_session.find_all_indexes([self.idx_key])
             for idx in idxs:
                 data = msgpack.unpackb(idx.indexes[0].data)
 
-                logging.debug('Fetched infrastructure dc cache item: %s' %
+                logging.debug(self.logprefix + 'Fetched item: %s' %
                               (data,))
 
-                self.dc_cache[data['host']] = data
+                try:
+                    self.cache[data['key']] = data
+                except KeyError:
+                    pass
 
-            logging.info('Finished syncing infrastructure dc cache')
+            logging.info(self.logprefix + 'Finished syncing')
         except Exception as e:
-            logging.error('Failed to sync infrastructure dc cache: %s\n%s' %
+            logging.error(self.logprefix + 'Failed to sync: %s\n%s' %
                           (e, traceback.format_exc()))
         finally:
-            self.__tq.add_task_in(self.TASK_DC_CACHE_SYNC,
-                config.get('infrastructure_dc_cache_update_period', 150),
-                self._sync_dc_cache)
+            self.__tq.add_task_in(self.taskname,
+                self.sync_period, self._sync_cache)
 
-    def _update_dc_cache_item(self, host, dc):
-        eid = elliptics.Id(keys.MM_DC_CACHE_HOST % host)
-        dc_cache_item = {'host': host,
-                         'dc': dc,
-                         'ts': time.time()}
-        logging.info('Updating dc cache item for host %s' % (host,))
-        self.meta_session.update_indexes(eid, [keys.MM_DC_CACHE_IDX],
-                                              [msgpack.packb(dc_cache_item)])
-        self.dc_cache[host] = dc_cache_item
+    def _update_cache_item(self, key, val):
+        eid = elliptics.Id(self.key_key % key)
+        cache_item = {'key': key,
+                      'val': val,
+                      'ts': time.time()}
+        logging.info(self.logprefix + 'Updating item for key %s '
+                                      'to value %s' % (key, val))
+        self.meta_session.update_indexes(eid, [self.idx_key],
+                                              [msgpack.packb(cache_item)])
+        self.cache[key] = cache_item
 
-    def get_dc_by_host(self, host):
-        expire_ts = config.get('infrastructure_dc_cache_valid_time', 604800)
+    def __getitem__(self, key):
         try:
-            dc_cache_item = self.dc_cache[host]
-            if dc_cache_item['ts'] + expire_ts < time.time():
-                logging.debug('Infrastructure DC cache item for host %s expired' % (host,))
+            cache_item = self.cache[key]
+            if cache_item['ts'] + self.key_expire_time < time.time():
+                logging.debug(self.logprefix + 'Item for key %s expired' % (key,))
                 raise KeyError
-            logging.debug('Using dc data for host %s from cache' % (host,))
-            dc = dc_cache_item['dc']
+            logging.debug(self.logprefix + 'Using item for key %s from cache' % (key,))
+            val = cache_item['val']
         except KeyError:
-            logging.debug('Fetching dc for host %s from inventory' % (host,))
+            logging.debug(self.logprefix + 'Fetching value for key %s from source' % (key,))
             try:
                 req_start = time.time()
-                dc = inventory.get_dc_by_host(host)
-                logging.info("Fetched dc for host %s from inventory: %s" %
-                             (host, dc))
+                val = self.get_value(key)
+                logging.info(self.logprefix + 'Fetched value for key %s from source: %s' %
+                             (key, val))
             except Exception as e:
                 req_time = time.time() - req_start
-                logging.error('Failed to fetch dc for host {0} (time: {1:.5f}s): {2}\n{3}'.format(
-                    host, req_time, str(e), traceback.format_exc()))
+                logging.error(self.logprefix + 'Failed to fetch value for key {0} (time: {1:.5f}s): {2}\n{3}'.format(
+                    key, req_time, str(e), traceback.format_exc()))
                 raise
-            self._update_dc_cache_item(host, dc)
+            self._update_cache_item(key, val)
 
-        return dc
+        return val
+
+
+class DcCacheItem(CacheItem):
+    def __init__(self, *args, **kwargs):
+        self.taskname = 'infrastructure_dc_cache_sync'
+        self.logprefix = 'dc cache: '
+        self.sync_period = config.get('infrastructure_dc_cache_update_period', 150)
+        self.key_expire_time = config.get('infrastructure_dc_cache_valid_time', 604800)
+        super(DcCacheItem, self).__init__(*args, **kwargs)
+
+    def get_value(self, key):
+        return inventory.get_dc_by_host(key)
 
 
 infrastructure = Infrastructure()
