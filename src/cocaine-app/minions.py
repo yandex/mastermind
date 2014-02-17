@@ -93,19 +93,20 @@ class Minions(object):
 
         response_data = self._get_wrapped_response(json.loads(response))
 
+        hostname = storage.hosts[addr].hostname
         for uid, state in response_data.iteritems():
             state['uid'] = uid
             state['host'] = addr
+            state['hostname'] = hostname
 
         with self.__commands_lock:
             self.commands.update(response_data)
 
         for uid, state in response_data.iteritems():
-            logging.debug('Fetched state for uid {0} from minion '
-                          'on host {1}'.format(uid, addr))
             if (self.history.get(uid) is None or
                 int(self.history[uid]) != int(state['progress'])):
 
+                logging.debug('Adding new task {0}'.format(self.HISTORY_ENTRY_FETCH % uid))
                 self.__tq.add_task_in(self.HISTORY_ENTRY_FETCH % uid,
                     config.get('minions_history_entry_update_delay', 1),
                     self._history_entry_update, state)

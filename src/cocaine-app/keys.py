@@ -10,5 +10,8 @@ MM_ISTRUCT_GROUP = 'mastermind:group_%d'
 MM_DC_CACHE_IDX = 'mastermind:dc_cache'
 MM_DC_CACHE_HOST = 'mastermind:dc_cache_%s'
 
+MM_HOSTNAME_CACHE_IDX = 'mastermind:hostname_cache'
+MM_HOSTNAME_CACHE_HOST = 'mastermind:hostname_cache_%s'
+
 MINION_HISTORY_KEY = 'minion_cmd_log:%s'
 MINION_HISTORY_ENTRY_KEY = 'minion_cmd_entry:%s'

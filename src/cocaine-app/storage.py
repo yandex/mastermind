@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import datetime
-import socket
 import time
 import traceback
 
@@ -193,11 +192,10 @@ class Host(object):
     def __init__(self, addr):
         self.addr = addr
         self.nodes = []
-        # self.dc = inventory.get_dc_by_host(self.addr)
-        self._dc = None
 
+    @property
     def hostname(self):
-        return socket.gethostbyaddr(self.addr)[0]
+        return infrastructure.get_hostname_by_addr(self.addr)
 
     @property
     def dc(self):

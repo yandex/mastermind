@@ -1,5 +1,6 @@
 import keys
 import os.path
+import socket
 import threading
 import time
 import traceback
@@ -65,9 +66,13 @@ class Infrastructure(object):
 
         self._sync_state()
 
-        self.dc_cache = DcCacheItem(self.meta_session, keys.MM_DC_CACHE_IDX,
-            keys.MM_DC_CACHE_HOST, self.__tq)
+        self.dc_cache = DcCacheItem(self.meta_session,
+            keys.MM_DC_CACHE_IDX, keys.MM_DC_CACHE_HOST, self.__tq)
         self.dc_cache._sync_cache()
+
+        self.hostname_cache = HostnameCacheItem(self.meta_session,
+            keys.MM_HOSTNAME_CACHE_IDX, keys.MM_HOSTNAME_CACHE_HOST, self.__tq)
+        self.hostname_cache._sync_cache()
 
         self.__tq.add_task_in(self.TASK_UPDATE,
             config.get('infrastructure_update_period', 300),
@@ -360,6 +365,9 @@ class Infrastructure(object):
     def get_dc_by_host(self, host):
         return self.dc_cache[host]
 
+    def get_hostname_by_addr(self, addr):
+        return self.hostname_cache[addr]
+
 
 class CacheItem(object):
 
@@ -448,6 +456,18 @@ class DcCacheItem(CacheItem):
 
     def get_value(self, key):
         return inventory.get_dc_by_host(key)
+
+
+class HostnameCacheItem(CacheItem):
+    def __init__(self, *args, **kwargs):
+        self.taskname = 'infrastructure_hostname_cache_sync'
+        self.logprefix = 'hostname cache: '
+        self.sync_period = config.get('infrastructure_hostname_cache_update_period', 600)
+        self.key_expire_time = config.get('infrastructure_hostname_cache_valid_time', 604800)
+        super(HostnameCacheItem, self).__init__(*args, **kwargs)
+
+    def get_value(self, key):
+        return socket.gethostbyaddr(key)[0]
 
 
 infrastructure = Infrastructure()
