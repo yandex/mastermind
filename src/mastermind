@@ -435,6 +435,7 @@ def restore_group(group, user=('u', os.environ['USER'],
         print warn("\nDon't forget to set group id of the restored group "
                    "to %s!" % group)
 
+    print
     res = s.enqueue('execute_cmd', msgpack.packb([dst_host, cmd, params])).get()
     print res
     print
