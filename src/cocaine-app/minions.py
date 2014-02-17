@@ -208,6 +208,9 @@ class Minions(object):
 
     def _history_entry_update(self, state):
         try:
+            uid = state['uid']
+            logging.debug('Started updating minion history entry '
+                          'for command {0}'.format(uid))
             update_history_entry = False
             try:
                 eid = elliptics.Id(keys.MINION_HISTORY_ENTRY_KEY % uid.encode('utf-8'))
@@ -218,6 +221,7 @@ class Minions(object):
                 if int(self.history[uid]) != int(state['progress']):
                     update_history_entry = True
             except elliptics.NotFoundError:
+                logging.debug('History state is not found')
                 update_history_entry = True
 
             if update_history_entry:
@@ -226,6 +230,9 @@ class Minions(object):
                 key = keys.MINION_HISTORY_KEY % start.strftime('%Y-%m')
                 self.meta_session.update_indexes(eid, [key], [self._serialize(state)])
                 self.history[uid] = state['progress']
+            else:
+                logging.debug('Update for minion history entry '
+                              'of command {0} is not required'.format(uid))
         except Exception as e:
             logging.error('Failed to update minion history entry for '
                           'uid {0}: {1}\n{2}'.format(uid, str(e), traceback.format_exc()))

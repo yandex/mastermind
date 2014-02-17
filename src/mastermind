@@ -418,7 +418,7 @@ def restore_group(group, user=('u', os.environ['USER'],
 
         print 'Well if you say so...\n'
 
-    params = {}
+    params = {'group': str(group)}
     if group_file:
         try:
             dest_dir = dest or cmd_dest(cmd)
@@ -426,7 +426,6 @@ def restore_group(group, user=('u', os.environ['USER'],
             group_file_path = os.path.join(dest_dir, group_file)
             print 'Group id %s will be written to ' \
                   'group file %s' % (group, group_file_path)
-            params['group'] = str(group)
             params['group_file'] = group_file_path
         except Exception as e:
             print warn('Failed to write to group file: %s' % e)
