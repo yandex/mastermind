@@ -99,6 +99,13 @@ class Minions(object):
             state['host'] = addr
             state['hostname'] = hostname
 
+            if 'group' in state:
+                group_id = int(state['group'])
+                if group_id in storage.groups:
+                    couple = storage.groups[group_id].couple
+                    if couple:
+                        state['couple'] = str(couple)
+
         with self.__commands_lock:
             self.commands.update(response_data)
 
