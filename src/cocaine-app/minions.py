@@ -91,7 +91,7 @@ class Minions(object):
                           (e, traceback.format_exc()))
         finally:
             self.__tq.add_task_in(self.STATE_FETCH,
-                config.get('minions_fetch_period', 50),
+                config.get('minions', {}).get('commands_fetch_period', 120),
                 self._fetch_states)
 
     def _process_state(self, addr, response):
@@ -120,13 +120,12 @@ class Minions(object):
 
                 logging.debug('Adding new task {0}'.format(self.HISTORY_ENTRY_FETCH % uid))
                 self.__tq.add_task_in(self.HISTORY_ENTRY_FETCH % uid,
-                    config.get('minions_history_entry_update_delay', 1),
-                    self._history_entry_update, state)
+                    1, self._history_entry_update, state)
 
         for uid, state in response_data.iteritems():
             if state['progress'] < 1.0:
                 self.__tq.add_task_in(self.STATE_FETCH_ACTIVE,
-                    config.get('minions_active_fetch_period', 5),
+                    config.get('minions', {}).get('active_fetch_period', 5),
                     self._fetch_states,
                     hosts=[storage.hosts[addr]])
                 break
@@ -206,7 +205,7 @@ class Minions(object):
             logging.exception(e)
         finally:
             self.__tq.add_task_in(self.HISTORY_FETCH,
-                config.get('minions_history_fetch_period', 120),
+                config.get('minions', {}).get('history_fetch_period', 120),
                 self._fetch_history)
 
     def _history_entries(self, dt):
