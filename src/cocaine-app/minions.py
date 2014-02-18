@@ -51,6 +51,10 @@ class Minions(object):
         self.__tq.add_task_in(self.STATE_FETCH,
             5, self._fetch_states)
 
+        self.minion_headers = ({'X-Auth': config['minions']['authkey']}
+                               if config.get('minions', {}).get('authkey') else
+                               None)
+
         self.__commands_lock = threading.Lock()
 
     def _make_tq_thread_ioloop(self):
@@ -69,7 +73,8 @@ class Minions(object):
                 url = self.STATE_URL_TPL.format(host=host.addr, port='8080')
                 states[url] = host
             logging.debug('Starting async batch')
-            responses = AsyncHTTPBatch(states.keys()).get()
+            responses = AsyncHTTPBatch(states.keys(),
+                headers=self.minion_headers).get()
             for url, response in responses.iteritems():
                 host = states[url]
 
@@ -177,9 +182,8 @@ class Minions(object):
                 raise ValueError('Only strings are accepted as command parameters')
             data[k] = v
 
-        headers = {'X-Auth': 'kLrgtdt}?#U}zi~WJul3NmJ}Ey3kT0xJH'}
         response = HTTPClient().fetch(url, method='POST',
-                                           headers=headers,
+                                           headers=self.minion_headers,
                                            body=urllib.urlencode(data))
 
         data = self._process_state(host, self._get_response(host, response))
@@ -266,12 +270,11 @@ class Minions(object):
 
 class AsyncHTTPBatch(object):
 
-    HEADERS = {'X-Auth': 'kLrgtdt}?#U}zi~WJul3NmJ}Ey3kT0xJH'}
-
-    def __init__(self, urls, timeout=3):
+    def __init__(self, urls, headers=None, timeout=3):
         self.left = len(urls)
         self.urls = urls
         self.timeout = timeout
+        self.headers = headers
         self.ioloop = IOLoop.current()
         logging.debug('Minion states, ioloop fetched: {0}'.format(self.ioloop))
         self.responses = {}
@@ -282,7 +285,7 @@ class AsyncHTTPBatch(object):
             self._emergency_halt)
         logging.debug('Minion states, creating async http clients')
         [AsyncHTTPClient().fetch(url, callback=self._process,
-            request_timeout=self.timeout, headers=self.HEADERS) for url in self.urls]
+            request_timeout=self.timeout, headers=self.headers) for url in self.urls]
         logging.debug('Minion states, starting ioloop')
         self.ioloop.start()
         return self.responses
