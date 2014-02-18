@@ -1,3 +1,10 @@
+mastermind (2.8.1) lucid; urgency=low
+
+  * Feature: using minion for remote command execution
+  * Feature: minion commands history for flowmastermind
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 18 Feb 2014 16:34:34 +0400
+
 mastermind (2.7.18) lucid; urgency=low
 
   * Feature: configurable wait_timeout for elliptics sessions
