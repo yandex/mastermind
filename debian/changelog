@@ -1,3 +1,9 @@
+mastermind (2.8.3) lucid; urgency=low
+
+  * Feature: added couple free size to get_group_weights handle
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 19 Feb 2014 15:21:58 +0400
+
 mastermind (2.8.2) lucid; urgency=low
 
   * Fix: configurable minion port
