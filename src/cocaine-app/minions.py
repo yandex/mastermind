@@ -54,6 +54,7 @@ class Minions(object):
         self.minion_headers = ({'X-Auth': config['minions']['authkey']}
                                if config.get('minions', {}).get('authkey') else
                                None)
+        self.minion_port = config.get('minions', {}).get('port', 8081)
 
         self.__commands_lock = threading.Lock()
 
@@ -70,7 +71,8 @@ class Minions(object):
             if hosts is None:
                 hosts = storage.hosts
             for host in hosts:
-                url = self.STATE_URL_TPL.format(host=host.addr, port='8080')
+                url = self.STATE_URL_TPL.format(host=host.addr,
+                                                port=self.minion_port)
                 states[url] = host
             logging.debug('Starting async batch')
             responses = AsyncHTTPBatch(states.keys(),
@@ -171,7 +173,7 @@ class Minions(object):
         if not host in storage.hosts:
             raise ValueError('Host {0} is not present in cluster'.format(host))
 
-        url = self.START_URL_TPL.format(host=host, port='8080')
+        url = self.START_URL_TPL.format(host=host, port=self.minion_port)
         data = {'command': command}
         for k, v in params.iteritems():
             if k == 'command':
