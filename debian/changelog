@@ -1,3 +1,9 @@
+mastermind (2.8.2) lucid; urgency=low
+
+  * Fix: configurable minion port
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 19 Feb 2014 12:48:38 +0400
+
 mastermind (2.8.1) lucid; urgency=low
 
   * Feature: using minion for remote command execution
