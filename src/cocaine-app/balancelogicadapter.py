@@ -89,7 +89,7 @@ class SymmGroup:
         return self.stat.rel_space
 
     def unitId(self):
-        return tuple([g.group_id for g in self.couple.groups])
+        return self.couple
 
     @property
     def namespace(self):

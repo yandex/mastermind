@@ -158,7 +158,11 @@ class Balancer(object):
                                                                 bla.getConfig(),
                                                                 bla._and(bla.GroupSizeEquals(size),
                                                                          bla.GroupNamespaceEquals(namespace)))
-                result.setdefault(namespace, {})[size] = [item for item in group_weights.items()]
+                result.setdefault(namespace, {})[size] = \
+                    [([g.group_id for g in item[0].groups],) +
+                         item[1:] +
+                         (int(item[0].get_stat().free_space),)
+                     for item in group_weights.items()]
                 logging.info('Cluster info: ' + str(info))
 
         logging.info(str(result))
