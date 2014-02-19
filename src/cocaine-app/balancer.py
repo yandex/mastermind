@@ -241,14 +241,14 @@ class Balancer(object):
     @h.handler
     def get_group_history(self, request):
         group = int(request[0])
-        group_history = []
+        group_history = {}
 
         if self.infrastructure:
-            for nodes_data in self.infrastructure.get_group_history(group):
-                dt = datetime.fromtimestamp(nodes_data['timestamp'])
-                group_history.append({'set': nodes_data['set'],
-                                      'timestamp': dt.strftime(self.DT_FORMAT),
-                                      'manual': nodes_data['manual']})
+            for key, data in self.infrastructure.get_group_history(group).iteritems():
+                for nodes_data in data:
+                    dt = datetime.fromtimestamp(nodes_data['timestamp'])
+                    nodes_data['timestamp'] = dt.strftime(self.DT_FORMAT)
+                group_history[key] = data
 
         return group_history
 

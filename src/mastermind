@@ -47,14 +47,20 @@ def group_info(group, history=('l', False, 'History of group nodes'), host=None)
 
     if history:
 
-        print "\nHistory:"
-
         group_history = s.enqueue('get_group_history', msgpack.packb([group])).get()
-        if isinstance(group_history, dict):
+        if isinstance(group_history, dict) and not 'nodes' in group_history:
             # exception returned
             print group_history
         else:
-            for entry in group_history:
+            if group_history['couples']:
+                print
+                print color('Couples history:', YELLOW)
+                for entry in group_history['couples']:
+                    record = '[{timestamp}] {couple}'.format(**entry)
+                    print record
+            print
+            print color('Nodes history:', YELLOW)
+            for entry in group_history['nodes']:
                 record = '[{timestamp}] {set}'.format(**entry)
                 if entry['manual']:
                     record += ', MANUAL'

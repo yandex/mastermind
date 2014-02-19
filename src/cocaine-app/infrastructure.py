@@ -79,13 +79,18 @@ class Infrastructure(object):
             self._update_state)
 
     def get_group_history(self, group_id):
-        history = []
+        couples_history = []
+        for couple in self.state[group_id]['couples']:
+            couples_history.append({'couple': couple['couple'],
+                                    'timestamp': couple['timestamp']})
+        nodes_history = []
         for node_set in self.state[group_id]['nodes']:
-            history.append({'set': [node + (port_to_path(node[1]),)
-                                    for node in node_set['set']],
-                            'timestamp': node_set['timestamp'],
-                            'manual': node_set.get('manual', False)})
-        return history
+            nodes_history.append({'set': [node + (port_to_path(node[1]),)
+                                          for node in node_set['set']],
+                                  'timestamp': node_set['timestamp'],
+                                  'manual': node_set.get('manual', False)})
+        return {'couples': couples_history,
+                'nodes': nodes_history}
 
     def _sync_state(self):
         try:
@@ -145,6 +150,8 @@ class Infrastructure(object):
     def _unserialize(data):
         group_state = msgpack.unpackb(data)
         group_state['nodes'] = list(group_state['nodes'])
+        if not 'couples' in group_state:
+            group_state['couples'] = []
         return group_state
 
     @staticmethod
@@ -152,6 +159,7 @@ class Infrastructure(object):
         return {
             'id': group_id,
             'nodes': [],
+            'couples': [],
         }
 
     def _update_state(self):
@@ -174,11 +182,17 @@ class Infrastructure(object):
 
                 storage_nodes = tuple((node.host.addr, node.port)
                                       for node in g.nodes)
+                storage_couple = (tuple([group.group_id for group in g.couple])
+                                  if g.couple is not None else
+                                  tuple())
 
                 if not storage_nodes:
                     logging.debug('Storage nodes list for group %d is empty, '
                                   'skipping' % (g.group_id,))
                     continue
+
+                new_nodes = []
+                new_couple = []
 
                 with self.__state_lock:
                     if not g.group_id in self.state:
@@ -191,7 +205,6 @@ class Infrastructure(object):
 
                     state_nodes = tuple(nodes
                                         for nodes in cur_group_state['set'])
-
                     state_nodes_set = set(state_nodes)
 
                     # extended storage nodes set which includes newly seen nodes,
@@ -206,7 +219,25 @@ class Infrastructure(object):
                         logging.info('Group %d info does not match,'
                                      'last state: %s, current state: %s' %
                                      (g.group_id, state_nodes, ext_storage_nodes))
-                        self._update_group(g.group_id, ext_storage_nodes)
+                        new_nodes = ext_storage_nodes
+
+                    cur_couple_state = (group_state['couples'] and
+                                        group_state['couples'][-1]
+                                        or {'couple': tuple()})
+                    state_couple = cur_couple_state['couple']
+
+                    logging.debug('Comparing %s and %s' %
+                                  (storage_couple, state_couple))
+
+                    if storage_couple and set(state_couple) != set(storage_couple):
+                        logging.info('Group %d couple does not match,'
+                                     'last state: %s, current state: %s' %
+                                     (g.group_id, state_couple, storage_couple))
+                        new_couple = storage_couple
+
+                    if new_nodes or new_couple:
+                        self._update_group(g.group_id, new_nodes, new_couple)
+
 
             logging.info('Finished updating infrastructure state')
         except Exception as e:
@@ -217,14 +248,20 @@ class Infrastructure(object):
                 config.get('infrastructure_update_period', 300),
                 self._update_state)
 
-    def _update_group(self, group_id, new_nodes, manual=False):
+    def _update_group(self, group_id, new_nodes, new_couple, manual=False):
         group = self.state[group_id]
-        new_state = {'set': new_nodes,
-                     'timestamp': time.time()}
-        if manual:
-            new_state['manual'] = True
+        if new_nodes:
+            new_nodes_state = {'set': new_nodes,
+                               'timestamp': time.time()}
+            if manual:
+                new_nodes_state['manual'] = True
 
-        group['nodes'].append(new_state)
+            group['nodes'].append(new_nodes_state)
+
+        if new_couple:
+            new_couples_state = {'couple': new_couple,
+                                 'timestamp': time.time()}
+            group['couples'].append(new_couples_state)
 
         eid = elliptics.Id(keys.MM_ISTRUCT_GROUP % group_id)
         logging.info('Updating state for group %s' % group_id)
@@ -249,7 +286,7 @@ class Infrastructure(object):
                 raise ValueError('Node {0}:{1} not found in '
                     'group {2} history state'.format(host, port, group.group_id))
 
-            self._update_group(group.group_id, state_nodes, manual=True)
+            self._update_group(group.group_id, state_nodes, None, manual=True)
 
 
     def restore_group_cmd(self, request):
@@ -314,7 +351,7 @@ class Infrastructure(object):
             source_group = group_candidates[0]
             source_node = source_group.nodes[0]
 
-            state = self.get_group_history(group.group_id)[-1]['set']
+            state = self.get_group_history(group.group_id)['nodes'][-1]['set']
             if len(state) > 1:
                 raise ValueError('Restoring group has more than one node, '
                                  'multiple nodes group restoration is not supported')
