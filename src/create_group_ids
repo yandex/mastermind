@@ -117,9 +117,10 @@ def get_group_from_mastermind(host):
 
     while True:
         try:
-            res = c.get('mastermind/get_next_group_number', 1)
-            yield res
-        except:
+            res = s.enqueue('get_next_group_number', msgpack.packb(1)).get()
+            yield int(res)
+        except Exception as e:
+            print "Failed while fetching next group number from mastermind: %s" % (e,)
             raise StopIteration()
 
 @command(usage='-h cloud.host -e elliptics_config -g group_id_start[:group_id_end]')
