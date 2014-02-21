@@ -292,6 +292,55 @@ def couple_repair(host=None):
     print res
 
 
+# namespace commands
+nsDispatcher = Dispatcher(globaloptions=(host_param,))
+
+@nsDispatcher.command(name='setup')
+def ns_setup(namespace,
+             groups_count=('g', '', 'Set number of groups per couple'),
+             success_copies=('s', '', 'Success copy politics (any|quorum|all)'),
+             auth_key=('a', '', 'Proxy auth-key'),
+             couple=('c', '', 'Set static couple for namespace (1:2:10)'),
+             host=None):
+    '''Repair broken symmetric groups'''
+    s = service(host)
+
+    settings = {}
+
+    try:
+        groups_count = int(groups_count)
+    except ValueError:
+        print warn('--groups-count is required parameter')
+        return
+
+    if not success_copies:
+        print warn('--success-copies is required parameter')
+        return
+
+    settings = {'groups-count': groups_count,
+                'success-copies-num': success_copies}
+
+    if couple:
+        couple = [int(g) for g in couple.split(':')]
+    else:
+        couple = None
+    if couple:
+        settings['static-couple'] = couple
+    if auth_key:
+        settings['auth-key'] = auth_key
+
+    res = s.enqueue('namespace_setup', msgpack.packb([namespace, settings])).get()
+    print res
+
+
+@nsDispatcher.command(name='settings')
+def ns_settings(namespace, host=None):
+    '''Get namespace settings'''
+    s = service(host)
+
+    res = s.enqueue('get_namespace_settings', msgpack.packb([namespace])).get()
+    print res
+
 # cache commands
 cacheDispatcher = Dispatcher(globaloptions=(host_param,))
 
@@ -582,6 +631,7 @@ def print_by_namespaces(couples_by_nss, as_json):
 d = Dispatcher()
 d.nest('group', groupDispatcher, 'Perform group action')
 d.nest('couple', coupleDispatcher, 'Perform couple action')
+d.nest('ns', nsDispatcher, 'Perform namespace action')
 d.nest('cache', cacheDispatcher, 'Perform cache action')
 d.nest('cmd', cmdDispatcher, 'Some useful commands')
 

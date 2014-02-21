@@ -15,6 +15,7 @@ import balancelogic
 from compat import EllAsyncResult, EllReadResult, EllLookupResult
 from config import config
 import helpers as h
+import indexes
 import infrastructure
 import keys
 import storage
@@ -33,6 +34,10 @@ class Balancer(object):
     def __init__(self, n):
         self.node = n
         self.infrastructure = None
+        self.ns_settings_idx = \
+            indexes.SecondaryIndex(keys.MM_NAMESPACE_SETTINGS_IDX,
+                                   keys.MM_NAMESPACE_SETTINGS_KEY_TPL,
+                                   self.node.meta_session)
 
     def set_infrastructure(self, infrastructure):
         self.infrastructure = infrastructure
@@ -457,6 +462,93 @@ class Balancer(object):
                        EllLookupResult).get()
 
         couple.update_status()
+
+    ALPHANUM = 'a-zA-Z0-9'
+    EXTRA = '\-_'
+    NS_RE = re.compile('^[{alphanum}][{alphanum}{extra}]*[{alphanum}]$'.format(
+        alphanum=ALPHANUM, extra=EXTRA))
+
+    def valid_namespace(self, namespace):
+        return self.NS_RE.match(namespace) is not None
+
+    def validate_ns_settings(self, settings):
+        try:
+            if not int(settings.get('groups-count', 0)) > 0:
+                raise ValueError
+        except ValueError:
+            raise ValueError('groups-count should be positive integer')
+
+        if settings.get('success-copies-num', '') not in ('any', 'quorum', 'all'):
+            raise ValueError('success-copies-num allowed values are "any", '
+                             '"quorum" and "all"')
+
+        if settings.get('static-couple'):
+            couple = settings['static-couple']
+            groups = [storage.groups[g] for g in couple]
+            ref_couple = groups[0].couple
+
+            couple_checks = [g.couple and g.couple == ref_couple
+                             for g in groups]
+            logging.debug('Checking couple {0}: {1}'.format(
+                couple, couple_checks))
+
+            if (not ref_couple or not all(couple_checks)):
+                raise ValueError('Couple {0} is not found'.format(couple))
+            for g in ref_couple:
+                if g not in groups:
+                    raise ValueError('Using incomplete couple {0}, '
+                        'full couple is {1}'.format(couple, ref_couple))
+
+            if len(couple) != settings['groups-count']:
+                raise ValueError('Couple {0} does not have '
+                    'length {1}'.format(couple, settings['groups-count']))
+
+        #check for other keys!!!
+
+    def namespace_setup(self, request):
+        try:
+            namespace, settings = request[:2]
+        except Exception:
+            raise ValueError('Invalid parameters')
+
+        if not self.valid_namespace(namespace):
+            raise ValueError('Namespace "{0}" is invalid'.format(namespace))
+
+        try:
+            self.validate_ns_settings(settings)
+        except Exception as e:
+            logging.error(e)
+            raise
+
+        logging.debug('saving settings for namespace "{0}": {1}'.format(
+            namespace, settings))
+
+        settings['namespace'] = namespace
+        self.ns_settings_idx[namespace] = msgpack.packb(settings)
+        return True
+
+    def get_namespace_settings(self, request):
+        try:
+            namespace = request[0]
+        except Exception:
+            raise ValueError('Invalid parameters')
+
+        if not self.valid_namespace(namespace):
+            raise ValueError('Namespace "{0}" is invalid'.format(namespace))
+
+        res = msgpack.unpackb(self.ns_settings_idx[namespace])
+        del res['namespace']
+        logging.info('Namespace "{0}" settings: {1}'.format(namespace, res))
+        return res
+
+    def get_namespaces_settings(self, request):
+        res = {}
+        for data in self.ns_settings_idx:
+            settings = msgpack.unpackb(data)
+            res[settings['namespace']] = settings
+            del settings['namespace']
+        return res
+
 
     @h.handler
     def freeze_couple(self, request):
