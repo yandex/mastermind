@@ -83,6 +83,8 @@ class SymmGroup:
         return self.stat.max_read_rps
 
     def freeSpaceInKb(self):
+        if not self.stat:
+            return 0
         return self.stat.free_space / 1024
 
     def freeSpaceRelative(self):
