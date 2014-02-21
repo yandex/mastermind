@@ -112,6 +112,9 @@ def init_infrastructure():
 def init_node_info_updater():
     logging.info("trace node info updater %d" % (i.next()))
     niu = node_info_updater.NodeInfoUpdater(logging, n)
+    register_handle(niu.force_nodes_update)
+
+    return niu
 
 
 def init_cache():

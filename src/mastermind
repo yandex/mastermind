@@ -114,6 +114,15 @@ def group_detach_node(group, node=None,
     print res
 
 
+@groupDispatcher.command(name='force-update')
+def group_force_update(host=None):
+    '''Force mastermind node data collection'''
+    s = service(host)
+
+    res = s.enqueue('force_nodes_update', '').get()
+    print res
+
+
 # couple commands
 coupleDispatcher = Dispatcher(globaloptions=(host_param,))
 

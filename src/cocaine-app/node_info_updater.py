@@ -93,6 +93,16 @@ class NodeInfoUpdater:
             self.__nodeUpdateTimestamps = self.__nodeUpdateTimestamps[1:] + (time.time(),)
             bla.setConfigValue("dynamic_too_old_age", max(time.time() - self.__nodeUpdateTimestamps[0], reload_period * 3))
 
+    def force_nodes_update(self, request):
+        self.__logging.info('Forcing nodes update')
+        try:
+            self.__tq.add_task_in('load_nodes', 0, self.loadNodes)
+            self.__logging.info('Task for nodes update was created successfully')
+        except Exception:
+            self.__logging.info('Task for nodes update has already been created')
+            self.__tq.hurry('load_nodes')
+        return True
+
     def update_symm_groups_async(self):
 
         _queue = set()
