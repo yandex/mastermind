@@ -302,7 +302,7 @@ def ns_setup(namespace,
              auth_key=('a', '', 'Proxy auth-key'),
              couple=('c', '', 'Set static couple for namespace (1:2:10)'),
              host=None):
-    '''Repair broken symmetric groups'''
+    '''Namespace setup'''
     s = service(host)
 
     settings = {}
