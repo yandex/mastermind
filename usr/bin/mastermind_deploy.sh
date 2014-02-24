@@ -9,6 +9,7 @@ do
 	rm -rf /var/lib/cocaine/apps/$app
 	rm -rf /var/spool/cocaine/$app
 	rm -rf /var/cache/cocaine/apps/$app
+	rm -f /var/cache/cocaine/manifests/$app
 done
 
 echo "Deploy New Mastermind:"
