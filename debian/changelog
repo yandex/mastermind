@@ -1,3 +1,10 @@
+mastermind (2.8.4) lucid; urgency=low
+
+  * Feature: handle for forcing nodes stats update
+  * Feature: handles for namespace setup
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 24 Feb 2014 12:26:51 +0400
+
 mastermind (2.8.3) lucid; urgency=low
 
   * Feature: added couple free size to get_group_weights handle
