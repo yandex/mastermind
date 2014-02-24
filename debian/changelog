@@ -1,3 +1,9 @@
+mastermind (2.8.5) lucid; urgency=low
+
+  * Fix: removing manifest for safe deploy to cocaine v11 cloud
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 24 Feb 2014 17:40:12 +0400
+
 mastermind (2.8.4) lucid; urgency=low
 
   * Feature: handle for forcing nodes stats update
