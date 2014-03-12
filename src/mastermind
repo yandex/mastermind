@@ -176,7 +176,7 @@ def couple_list_frozen(by_dc=('', None, 'Group by dc and provide some useful dat
                        by_ns=('', None, 'Group by namespaces'),
                        json=('', None, 'Format additional data as json'),
                        host=None):
-    '''Get list of good couples from balancer'''
+    '''Get list of frozen couples from balancer'''
     s = service(host)
     res = s.enqueue("get_frozen_groups", "").get()
 
