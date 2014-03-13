@@ -1,3 +1,9 @@
+mastermind (2.8.6) lucid; urgency=low
+
+  * Feature: treemap groups statistics for flowmastermind
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 13 Mar 2014 13:38:12 +0400
+
 mastermind (2.8.5) lucid; urgency=low
 
   * Fix: removing manifest for safe deploy to cocaine v11 cloud
