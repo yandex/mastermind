@@ -134,6 +134,7 @@ def init_cache():
 def init_statistics():
     stat = statistics.Statistics(b)
     register_handle(stat.get_flow_stats)
+    register_handle(stat.get_groups_tree)
     return stat
 
 

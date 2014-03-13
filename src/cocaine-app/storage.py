@@ -201,6 +201,11 @@ class Host(object):
     def dc(self):
         return infrastructure.get_dc_by_host(self.addr)
 
+    @property
+    def parents(self):
+        return infrastructure.get_host_tree(
+            infrastructure.get_hostname_by_addr(self.addr))
+
     def index(self):
         return self.__str__()
 

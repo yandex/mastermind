@@ -74,6 +74,10 @@ class Infrastructure(object):
             keys.MM_HOSTNAME_CACHE_IDX, keys.MM_HOSTNAME_CACHE_HOST, self.__tq)
         self.hostname_cache._sync_cache()
 
+        self.hosttree_cache = HostTreeCacheItem(self.meta_session,
+            keys.MM_HOSTTREE_CACHE_IDX, keys.MM_HOSTTREE_CACHE_HOST, self.__tq)
+        self.hosttree_cache._sync_cache()
+
         self.__tq.add_task_in(self.TASK_UPDATE,
             config.get('infrastructure_update_period', 300),
             self._update_state)
@@ -405,6 +409,9 @@ class Infrastructure(object):
     def get_hostname_by_addr(self, addr):
         return self.hostname_cache[addr]
 
+    def get_host_tree(self, hostname):
+        return self.hosttree_cache[hostname]
+
 
 class CacheItem(object):
 
@@ -505,6 +512,18 @@ class HostnameCacheItem(CacheItem):
 
     def get_value(self, key):
         return socket.gethostbyaddr(key)[0]
+
+
+class HostTreeCacheItem(CacheItem):
+    def __init__(self, *args, **kwargs):
+        self.taskname = 'infrastructure_hosttree_cache_sync'
+        self.logprefix = 'hosttree cache: '
+        self.sync_period = config.get('infrastructure_hosttree_cache_update_period', 600)
+        self.key_expire_time = config.get('infrastructure_hosttree_cache_valid_time', 604800)
+        super(HostTreeCacheItem, self).__init__(*args, **kwargs)
+
+    def get_value(self, key):
+        return inventory.get_host_tree(key)
 
 
 infrastructure = Infrastructure()

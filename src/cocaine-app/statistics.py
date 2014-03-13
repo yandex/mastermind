@@ -200,3 +200,49 @@ class Statistics(object):
         res.update(self.get_couple_stats())
 
         return res
+
+
+    def get_groups_tree(self, request):
+        nodes = {}
+        root = None
+
+        hosts = set([host.addr for host in storage.hosts])
+        group_hosts = set([node.host.addr for group in storage.groups for node in group.nodes])
+
+        for host in storage.hosts:
+            host_node = tree_node = host.parents
+            new_child = None
+            while True:
+                type_nodes = nodes.setdefault(tree_node['type'], {})
+                cur_node = type_nodes.get(tree_node['name'], {'name': tree_node['name'],
+                                                              'type': tree_node['type']})
+
+                if new_child:
+                    cur_node.setdefault('children', []).append(new_child)
+                    new_child = None
+
+                if not tree_node['name'] in type_nodes:
+                    type_nodes[tree_node['name']] = cur_node
+                    new_child = cur_node
+
+                if not 'parent' in tree_node:
+                    if not root:
+                        root = nodes[tree_node['type']]
+                    break
+                tree_node = tree_node['parent']
+
+        for group in storage.groups:
+            stat = group.get_stat()
+            for node in group.nodes:
+                group_parent = nodes['host'][node.host.hostname]
+                groups = group_parent.setdefault('children', [])
+                groups.append({'type': 'group',
+                               'name': str(group),
+                               'couple': group.couple and str(group.couple) or None,
+                               'couple_status': group.couple and group.couple.status or None,
+                               'free_space': stat.free_space,
+                               'total_space': stat.total_space,
+                               'status': group.couple and group.couple.status or None})
+
+        return {'type': 'root', 'name': 'root',
+                'children': root.values()}

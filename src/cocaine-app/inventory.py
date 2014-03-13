@@ -10,3 +10,4 @@ except (ImportError, KeyError):
     import fake_inventory as inv
 
 get_dc_by_host = inv.get_dc_by_host
+get_host_tree = inv.get_host_tree
