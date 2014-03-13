@@ -1,3 +1,9 @@
+mastermind (2.8.7) lucid; urgency=low
+
+  * Fix: flowmastermind statistics fix
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 13 Mar 2014 18:38:51 +0400
+
 mastermind (2.8.6) lucid; urgency=low
 
   * Feature: treemap groups statistics for flowmastermind
