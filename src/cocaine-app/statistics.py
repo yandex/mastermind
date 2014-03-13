@@ -232,6 +232,8 @@ class Statistics(object):
                 tree_node = tree_node['parent']
 
         for group in storage.groups:
+            if not group.nodes:
+                continue
             stat = group.get_stat()
             for node in group.nodes:
                 group_parent = nodes['host'][node.host.hostname]
