@@ -241,7 +241,9 @@ class Statistics(object):
                 groups.append({'type': 'group',
                                'name': str(group),
                                'couple': group.couple and str(group.couple) or None,
-                               'couple_status': group.couple and group.couple.status or None,
+                               'couple_status': group.couple and (
+                                    (group.couple.closed and 'CLOSED') or
+                                    group.couple.status) or None,
                                'free_space': stat.free_space,
                                'total_space': stat.total_space,
                                'status': group.couple and group.couple.status or None})
