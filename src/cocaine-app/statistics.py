@@ -242,7 +242,8 @@ class Statistics(object):
                                'name': str(group),
                                'couple': group.couple and str(group.couple) or None,
                                'couple_status': group.couple and (
-                                    (group.couple.closed and 'CLOSED') or
+                                    (group.couple.status == storage.Status.OK and
+                                     group.couple.closed and 'CLOSED') or
                                     group.couple.status) or None,
                                'free_space': stat.free_space,
                                'total_space': stat.total_space,
