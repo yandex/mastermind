@@ -267,7 +267,7 @@ class Balancer(object):
             raise ValueError('Group %d is not found' % group_id)
 
         group = storage.groups[group_id]
-        node = storage.nodes.get(node_str)
+        node = node_str in storage.nodes and storage.nodes[node_str] or None
         try:
             host, port = node_str.split(':')
             port = int(port)
@@ -275,10 +275,18 @@ class Balancer(object):
             raise ValueError('Node should have form <host>:<port>')
 
         if node and node in group.nodes:
+            logging.info('Removing node {0} from group {1} nodes'.format(node, group))
             group.remove_node(node)
             group.update_status_recursive()
+            logging.info('Removed node {0} from group {1} nodes'.format(node, group))
 
-        self.infrastructure.detach_node(group, host, port)
+        logging.info('Removing node {0} from group {1} history'.format(node, group))
+        try:
+            self.infrastructure.detach_node(group, host, port)
+            logging.info('Removed node {0} from group {1} history'.format(node, group))
+        except Exception as e:
+            logging.error('Failed to remove {0} from group {1} history: {2}'.format(node, group, str(e)))
+            raise
 
         return True
 
