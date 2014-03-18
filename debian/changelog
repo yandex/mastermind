@@ -1,3 +1,9 @@
+mastermind (2.8.10) lucid; urgency=low
+
+  * Fix: fix for detaching inexistent nodes
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 18 Mar 2014 18:55:06 +0400
+
 mastermind (2.8.9) lucid; urgency=low
 
   * Fix: closed couples added to treemap
