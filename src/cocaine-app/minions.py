@@ -230,6 +230,7 @@ class Minions(object):
                 r = self.meta_session.read_data(eid).get()[0]
                 history_state = self._unserialize(r.data)
                 self.history[uid] = history_state['progress']
+                # updating if process is finished
                 if int(self.history[uid]) != int(state['progress']):
                     update_history_entry = True
             except elliptics.NotFoundError:

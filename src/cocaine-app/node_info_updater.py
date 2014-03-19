@@ -122,8 +122,8 @@ class NodeInfoUpdater:
 
             self.__logging.debug('{0} in storage.couples: {1}'.format(
                 couple_str, couple_str in storage.couples))
-            self.__logging.debug('Keys in storage.couples: {0}'.format(
-                [str(c) for c in storage.couples]))
+            # self.__logging.debug('Keys in storage.couples: {0}'.format(
+            #     [str(c) for c in storage.couples]))
 
             if not couple_str in storage.couples:
                 self.__logging.info('Creating couple {0}'.format(couple_str))

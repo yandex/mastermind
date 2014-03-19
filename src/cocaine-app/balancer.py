@@ -154,7 +154,7 @@ class Balancer(object):
             namespaces.setdefault(couple.namespace, set())
             namespaces[couple.namespace].add(len(couple))
             all_symm_group_objects.append(symm_group)
-            logging.debug(str(symm_group))
+            # logging.debug(str(symm_group))
 
         result = {}
 
