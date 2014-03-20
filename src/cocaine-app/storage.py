@@ -422,10 +422,8 @@ class Group(object):
         res['nodes'] = [n.info() for n in self.nodes]
         if self.couple:
             res['couples'] = self.couple.as_tuple()
-            try:
+            if self.couple.status == Status.OK:
                 res['writable'] = not self.couple.closed
-            except AssertionError:
-                pass
         else:
             res['couples'] = None
         if self.meta:
@@ -539,8 +537,7 @@ class Couple(object):
         min_rel_space = config['balancer_config'].get('min_free_space_relative', 0.15)
 
         stats = self.get_stat()
-        assert stats
-        return (self.status == Status.OK and (
+        return (self.status == Status.OK and stats and (
                 stats.free_space < min_free_space or
                 stats.rel_space < min_rel_space))
 

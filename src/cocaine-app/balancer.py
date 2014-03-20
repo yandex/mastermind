@@ -72,7 +72,8 @@ class Balancer(object):
         logging.debug('configured min_free_space: %s bytes' % min_free_space)
         logging.debug('configured min_rel_space: %s' % min_rel_space)
 
-        result = [couple.as_tuple() for couple in storage.couples if couple.closed]
+        result = [couple.as_tuple() for couple in storage.couples
+                  if couple.status == storage.Status.OK and couple.closed]
 
         logging.debug('closed couples: ' + str(result))
         return result
