@@ -127,6 +127,8 @@ class Statistics(object):
 
         return {'open_couples': len(symmetric_couples) - len(closed_couples),
                 'frozen_couples': len(frozen_couples),
+                'closed_couples': len(closed_couples),
+                'bad_couples': len(bad_couples),
                 'total_couples': len(symmetric_couples) + len(frozen_couples) + len(bad_couples),
                 'uncoupled_groups': len(uncoupled_groups)}
 
