@@ -87,6 +87,31 @@ class Balancer(object):
         return result
 
     @h.handler
+    def get_group_meta(self, request):
+        gid = request[0]
+        key = request[1] or keys.SYMMETRIC_GROUPS_KEY
+        unpack = request[2]
+
+        if not gid in storage.groups:
+            raise ValueError('Group %d is not found' % group)
+
+        group = storage.groups[gid]
+
+        logging.info('Creating elliptics session')
+
+        s = elliptics.Session(self.node)
+        s.set_timeout(config.get('wait_timeout', 5))
+        s.add_groups([group.group_id])
+
+        data = s.read_data(key).get()[0]
+
+        logging.info('Read key {0} from group {1}: {2}'.format(key.replace('\0', r'\0'), group, data.data))
+
+        return {'id': repr(data.id),
+                'full_id': str(data.id),
+                'data': msgpack.unpackb(data.data) if unpack else data.data}
+
+    @h.handler
     def groups_by_dc(self, request):
         groups = request[0]
         logging.info('Groups: %s' % (groups,))

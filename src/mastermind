@@ -67,6 +67,18 @@ def group_info(group, history=('l', False, 'History of group nodes'), host=None)
                     record = color(record, YELLOW)
                 print record
 
+@groupDispatcher.command(name='meta')
+def group_meta(group, key=('k', '', 'Read data from arbitrary key'),
+               unpack=('u', False, 'Unpack key with msgpack'), host=None):
+    '''Read group metadata'''
+    s = service(host)
+    group = int(group)
+
+    params = [group, key, unpack]
+
+    res = s.enqueue('get_group_meta', msgpack.packb(params)).get()
+    pprint(res)
+
 
 @groupDispatcher.command(name='next-number')
 def group_next_number(count, host=None):
