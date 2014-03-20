@@ -290,6 +290,8 @@ class Node(object):
             'unknown')
         if self.stat:
             res['free_space'] = '{0:.3f} Gb'.format(self.stat.free_space / (1024.0 * 1024.0 * 1024.0))
+            res['used_space'] = '{0:.3f} Gb'.format((self.stat.total_space - self.stat.free_space) /
+                                                    (1024.0 * 1024.0 * 1024.0))
 
         return res
 
