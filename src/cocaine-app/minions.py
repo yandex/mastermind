@@ -282,9 +282,9 @@ class AsyncHTTPBatch(object):
         self.responses = {}
 
     def get(self, emergency_timeout=None):
-        self.emergency_timeout = self.ioloop.add_timeout(
-            time.time() + (emergency_timeout or self.timeout * 2),
-            self._emergency_halt)
+        # self.emergency_timeout = self.ioloop.add_timeout(
+        #     time.time() + (emergency_timeout or self.timeout * 2),
+        #     self._emergency_halt)
         logging.debug('Minion states, creating async http clients')
         [AsyncHTTPClient().fetch(url, callback=self._process,
             request_timeout=self.timeout, headers=self.headers) for url in self.urls]
@@ -299,7 +299,7 @@ class AsyncHTTPBatch(object):
         self.left -= 1
         if not self.left:
             logging.debug('Minion states, stopping loop')
-            self.ioloop.remove_timeout(self.emergency_timeout)
+            # self.ioloop.remove_timeout(self.emergency_timeout)
             self.ioloop.stop()
 
     def _emergency_halt(self):
