@@ -659,6 +659,11 @@ def command_helper(argv):
 
         command = cmdtable.get(opt, None) and cmdtable[opt][0]
         if not isinstance(command, Dispatcher):
+            for o in command.opts:
+                if o.name:
+                    print '--' + o.name
+                else:
+                    print '-' + o.short
             return
         cmdtable = command.cmdtable
 

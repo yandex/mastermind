@@ -16,27 +16,27 @@ _mastermind()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    if [[ ${COMP_CWORD} -le 2 ]] ; then 
+#    if [[ ${COMP_CWORD} -le 2 ]] ; then
         COMPREPLY=( $(compgen -W "`$HELPER`" -- ${cur}) )
         return 0
-    fi
+#    fi
 
-    if [[ ${COMP_WORDS[1]} = 'cmd' ]] ; then 
-
-        if [[ ${COMP_WORDS[2]} = 'restore' ]] ; then 
-
-            case "$prev" in
-            -u|--user)
-                COMPREPLY=( $(compgen -W "`lastlog | cut -d' ' -f1`" -- ${cur}) )
-                return 0
-                ;;
-            -f|--group-file|-d|--dest)
-                _filedir
-                return 0
-                ;;
-            esac
-        fi
-    fi
+#    if [[ ${COMP_WORDS[1]} = 'cmd' ]] ; then
+#
+#        if [[ ${COMP_WORDS[2]} = 'restore' ]] ; then
+#
+#            case "$prev" in
+#            -u|--user)
+#                COMPREPLY=( $(compgen -W "`lastlog | cut -d' ' -f1`" -- ${cur}) )
+#                return 0
+#                ;;
+#            -f|--group-file|-d|--dest)
+#                _filedir
+#                return 0
+#                ;;
+#            esac
+#        fi
+#    fi
 
 } &&
 complete -F _mastermind mastermind
