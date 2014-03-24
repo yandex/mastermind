@@ -139,12 +139,27 @@ def group_force_update(host=None):
 coupleDispatcher = Dispatcher(globaloptions=(host_param,))
 
 
+def deprecated(state, by_ns=None, by_dc=None, json=None):
+    options = []
+    if by_ns:
+        options.append('--by-ns')
+    elif by_dc:
+        options.append('--by-dc')
+    if not json:
+        options.append('--short')
+
+    print (warn('DEPRECATED: ') + 'use command "mastermind couple list --state {0}'
+        '{1}"'.format(state, ' ' + ' '.join(options) if options else ''))
+
+
 @coupleDispatcher.command(name='list-bad')
 def couple_list_bad(by_dc=('', None, 'Group by dc and provide some useful data'),
                     by_ns=('', None, 'Group by namespaces'),
                     json=('', None, 'Format additional data as json'),
                     host=None):
     '''Get list of broken couples from balancer'''
+    deprecated('bad', by_ns=by_ns, by_dc=by_dc, json=json)
+
     s = service(host)
     res = s.enqueue('get_bad_groups', '').get()
 
@@ -167,6 +182,8 @@ def couple_list_symmetric(by_dc=('', None, 'Group by dc and provide some useful 
                           json=('', None, 'Format additional data as json'),
                           host=None):
     '''Get list of good couples from balancer'''
+    deprecated('good', by_ns=by_ns, by_dc=by_dc, json=json)
+
     s = service(host)
     res = s.enqueue("get_symmetric_groups", "").get()
 
@@ -189,6 +206,8 @@ def couple_list_frozen(by_dc=('', None, 'Group by dc and provide some useful dat
                        json=('', None, 'Format additional data as json'),
                        host=None):
     '''Get list of frozen couples from balancer'''
+    deprecated('frozen', by_ns=by_ns, by_dc=by_dc, json=json)
+
     s = service(host)
     res = s.enqueue("get_frozen_groups", "").get()
 
@@ -211,6 +230,8 @@ def couple_list_closed(by_dc=('', None, 'Group by dc and provide some useful dat
                        json=('', None, 'Format additional data as json'),
                        host=None):
     '''Get list of couples closed to balancer'''
+    deprecated('closed', by_ns=by_ns, by_dc=by_dc, json=json)
+
     s = service(host)
     res = s.enqueue('get_closed_groups', '').get()
 
