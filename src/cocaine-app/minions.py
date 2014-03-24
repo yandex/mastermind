@@ -38,6 +38,7 @@ class Minions(object):
 
         self.commands = {}
         self.history = {}
+        self.active_hosts = []
 
         self.__tq = timed_queue.TimedQueue()
         self.__tq.start()
@@ -57,19 +58,27 @@ class Minions(object):
         self.minion_port = config.get('minions', {}).get('port', 8081)
 
         self.__commands_lock = threading.Lock()
+        self.__active_hosts_lock = threading.Lock()
 
     def _make_tq_thread_ioloop(self):
         logging.debug('Minion states, creating thread ioloop')
         io_loop = IOLoop()
         io_loop.make_current()
 
-    def _fetch_states(self, hosts=None):
+    def _fetch_states(self, active_hosts=False):
         logging.info('Fetching minion states task started')
         try:
             states = {}
 
-            if hosts is None:
+            if not active_hosts:
                 hosts = storage.hosts
+            else:
+                if not self.active_hosts:
+                    return
+                with self.__active_hosts_lock:
+                    hosts = self.active_hosts
+                    self.active_hosts = []
+
             for host in hosts:
                 url = self.STATE_URL_TPL.format(host=host.addr,
                                                 port=self.minion_port)
@@ -126,10 +135,18 @@ class Minions(object):
 
         for uid, state in response_data.iteritems():
             if state['progress'] < 1.0:
-                self.__tq.add_task_in(self.STATE_FETCH_ACTIVE,
-                    config.get('minions', {}).get('active_fetch_period', 5),
-                    self._fetch_states,
-                    hosts=[storage.hosts[addr]])
+                with self.__active_hosts_lock:
+                    self.active_hosts.append(storage.hosts[addr])
+
+                try:
+                    self.__tq.add_task_in(self.STATE_FETCH_ACTIVE,
+                        config.get('minions', {}).get('active_fetch_period', 5),
+                        self._fetch_states,
+                        active_hosts=True)
+                except Exception:
+                    # task already exists
+                    pass
+
                 break
 
         return response_data
@@ -185,7 +202,8 @@ class Minions(object):
 
         response = HTTPClient().fetch(url, method='POST',
                                            headers=self.minion_headers,
-                                           body=urllib.urlencode(data))
+                                           body=urllib.urlencode(data),
+                                           request_timeout=5.0)
 
         data = self._process_state(host, self._get_response(host, response))
         return data
