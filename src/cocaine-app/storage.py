@@ -7,7 +7,7 @@ from cocaine.logging import Logger
 import msgpack
 
 import inventory
-from infrastructure import infrastructure
+from infrastructure import infrastructure, port_to_path
 from config import config
 
 
@@ -289,9 +289,18 @@ class Node(object):
             datetime.datetime.fromtimestamp(self.stat.ts).strftime('%Y-%m-%d %H:%M:%S') or
             'unknown')
         if self.stat:
+            min_free_space = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
+            min_free_space_rel = config['balancer_config'].get('min_free_space_relative', 0.15)
+
             res['free_space'] = '{0:.3f} Gb'.format(self.stat.free_space / (1024.0 * 1024.0 * 1024.0))
+            node_eff_space = max(min(self.stat.total_space - min_free_space,
+                                     self.stat.total_space * (1 - min_free_space_rel)), 0.0)
+
+            res['free_effective_space'] = '{0:.3f} Gb'.format(
+                max(self.stat.free_space - (self.stat.total_space - node_eff_space), 0.0) / (1024.0 * 1024.0 * 1024.0))
             res['used_space'] = '{0:.3f} Gb'.format((self.stat.total_space - self.stat.free_space) /
                                                     (1024.0 * 1024.0 * 1024.0))
+        res['path'] = port_to_path(int(res['addr'].split(':')[1]))
 
         return res
 
@@ -574,12 +583,11 @@ class Couple(object):
         return tuple(group.group_id for group in self.groups)
 
     def info(self):
-        res = {}
+        res = {'couple_status': self.status,
+               'id': str(self),
+               'tuple': self.as_tuple(),
+               'namespace': self.namespace}
 
-        res['groups_status'] = [dict(zip(('group_id', 'status', 'status_text'),
-                                         (g.group_id, g.status, g.status_text)))
-                                for g in self]
-        res['couple_status'] = self.status
         return res
 
     def __contains__(self, group):

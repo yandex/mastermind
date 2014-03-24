@@ -239,7 +239,108 @@ def couple_info(group, host=None):
 
     print
     print color('Couple info', YELLOW)
-    pprint(res[-1])
+    couple_info = res[-1]
+    couple_info['group_statuses'] = []
+    for g in res[:-1]:
+        couple_info['groups_status'].append({'group_id': g['id'],
+            'status': g['status'],
+            'status_text': g['status_text']})
+    pprint(couple_info)
+
+
+@coupleDispatcher.command(name='list')
+def couple_list(namespace=('n', '', 'Filter by namespace'),
+                state=('s', '', 'Filter by state (good|closed|frozen|bad)'),
+                short=('', False, 'Use short format output'),
+                verbose=('v', False, 'Use verbose format output'),
+                by_ns=('', False, 'Output by namespaces'),
+                by_dc=('', False, 'Output by dc'),
+                host=None):
+    '''List couples with various view options. Default format is json,
+    use '--short' or '--verbose' option for human readable formats.'''
+    s = service(host)
+
+    options = {'namespace': namespace,
+               'state': state}
+    couples = s.enqueue('get_couples_list', msgpack.packb([options])).get()
+
+    viewer = view_couples
+    data = couples
+
+    grouped = by_ns or by_dc
+    if grouped:
+        if by_dc:
+            viewer = view_groups
+            data = group_by_dc(couples)
+        elif by_ns:
+            data = group_by_ns(couples)
+
+    if not short and not verbose:
+        pprint(data)
+        return
+
+    viewer(data, grouped, short=short, verbose=verbose)
+
+
+def group_by_ns(couples):
+    res = {}
+    for c in couples:
+        res.setdefault(c['namespace'], []).append(c)
+    return res
+
+
+def group_by_dc(couples):
+    res = {}
+    for c in couples:
+        for g in c['groups']:
+            dcs = set()
+            for node in g['nodes']:
+                dcs.add(node['dc'])
+            if not dcs:
+                dcs.add('unknown')
+            for dc in dcs:
+                res.setdefault(dc, []).append(g)
+    return res
+
+
+def view_couples(data, grouped, short=False, verbose=False):
+
+    def output(couples, short=False, verbose=False):
+        if short:
+            print tuple([c['tuple'] for c in couples])
+        elif verbose:
+            print '-' * 30
+            for c in sorted(couples,
+                            key=lambda x: (len(x['id'].split(':')), x['id'])):
+                print_couple(c)
+
+    if grouped:
+        for k, couples in data.iteritems():
+            print color(k, YELLOW)
+            output(couples, short=short, verbose=verbose)
+            print
+    else:
+        output(data, short=short, verbose=verbose)
+
+
+def view_groups(data, grouped, short=False, verbose=False):
+
+    def output(groups, short=False, verbose=False):
+        if short:
+            print tuple([g['id'] for g in groups])
+        elif verbose:
+            print '-' * 30
+            for c in sorted(groups):
+                print_group(c)
+
+    if grouped:
+        for k, groups in sorted(data.iteritems(),
+                                key=lambda x: '' if x[0] == 'unknown' else x[0]):
+            print color(k, YELLOW)
+            output(groups, short=short, verbose=verbose)
+            print
+    else:
+        output(groups, short=short, verbose=verbose)
 
 
 @coupleDispatcher.command(name='build')
@@ -638,6 +739,45 @@ def print_by_namespaces(couples_by_nss, as_json):
                 print '{0:15}: {1}'.format(k, v)
 
             print '-' * 30
+
+
+def print_couple(couple):
+    couple_status = couple['couple_status']
+    couple_s = '{0}, status {1}'.format(couple['id'],
+        couple_status if couple_status == 'OK' else warn(couple_status))
+
+    print '{0:15}: {1}'.format('couple', couple_s)
+    for group in couple['groups']:
+        group_status = group['status']
+        group_s = '{0}, status {1}'.format(group['id'],
+            group_status if group_status == 'COUPLED' else warn(group_status))
+
+        print '  {0:13}: {1}'.format('group', group_s)
+
+        for i, node in enumerate(group['nodes']):
+            node_status = node['status']
+            print '    {0:11}: {1}, status {2}, dc {3} ({4})'.format(
+                'nodes' if i == 0 else '', node['addr'], node_status,
+                color(node['dc'], DEFAULT_BOLD),
+                node['last_stat_update'])
+
+    print '-' * 30
+
+
+def print_group(group):
+    group_status = group['status']
+    group_s = '{0}, status {1}'.format(group['id'],
+        group_status if group_status == 'COUPLED' else warn(group_status))
+    print '{0:15}: {1}'.format('group', group_s)
+
+    for i, node in enumerate(group['nodes']):
+        node_status = node['status']
+        print '  {0:13}: {1}, status {2}, path {3} ({4})'.format(
+            'nodes' if i == 0 else '', node['addr'], node_status,
+            node['path'],
+            node['last_stat_update'])
+
+    print '-' * 30
 
 
 d = Dispatcher()

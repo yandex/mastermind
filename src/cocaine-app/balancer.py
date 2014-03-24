@@ -86,6 +86,44 @@ class Balancer(object):
         logging.debug('uncoupled groups: ' + str(result))
         return result
 
+
+    STATES = {
+        'good': [storage.Status.OK],
+        'closed': [storage.Status.OK],
+        'frozen': [storage.Status.FROZEN],
+        'bad': [storage.Status.INIT, storage.Status.BAD],
+    }
+
+    @h.handler
+    def get_couples_list(self, request):
+        options = request[0]
+
+        couples = storage.couples.keys()
+
+        if options.get('namespace', None):
+            couples = filter(lambda c: c.namespace == options['namespace'], couples)
+
+        if options.get('state', None):
+            if options['state'] not in self.STATES:
+                raise ValueError('Invalid state: {0}'.format(options['state']))
+            couples = filter(lambda c: c.status in self.STATES[options['state']], couples)
+
+            if options['state'] == 'closed':
+                min_free_space = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
+                min_rel_space = config['balancer_config'].get('min_free_space_relative', 0.15)
+
+                logging.debug('configured min_free_space: %s bytes' % min_free_space)
+                logging.debug('configured min_rel_space: %s' % min_rel_space)
+
+                couples = filter(lambda c: c.closed, couples)
+
+        data = []
+        for c in couples:
+            info = c.info()
+            info['groups'] = [g.info() for g in c]
+            data.append(info)
+        return data
+
     @h.handler
     def get_group_meta(self, request):
         gid = request[0]
