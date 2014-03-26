@@ -1,5 +1,8 @@
 #!/usr/bin/python
+import inspect
 import json
+import logging
+from logging.handlers import SysLogHandler
 import os
 import os.path
 from pprint import pprint
@@ -25,6 +28,17 @@ host_param = ['h',
                                      port=SERVICE_DEFAULT_PORT),
               'Mastermind application host[:port]']
 
+def logger_setup():
+    logger = logging.getLogger('mastermind.commands')
+    logger_h = SysLogHandler()
+    logger_h.setFormatter(logging.Formatter(fmt='%(name)-15s %(message)s'))
+    logger.addHandler(logger_h)
+    logger.setLevel(logging.INFO)
+    return logger
+
+
+logger = logger_setup()
+
 
 def service(host):
     parts = host.split(':', 1)
@@ -32,11 +46,42 @@ def service(host):
     return Service(SERVICE_APP_NAME, host=hostname, port=port)
 
 
+def log_action(func):
+
+    def decorator(func, *args, **kwargs):
+        logger.info(' '.join(sys.argv))
+        return func(*args, **kwargs)
+
+    return evil_wrapper(func, decorator)
+
+
+def evil_wrapper(func, decorator):
+    '''This evil code is needed to be able to decorate opster dispacher
+    commands. This workaround helps "inspect" module to parse
+    command arguments properly'''
+
+    args = inspect.getargspec(func)
+    arglist = args[0][:-len(args[3])]
+    kwarglist = zip(args[0][-len(args[3]):], args[3])
+
+    argstr = ', '.join(arglist) + (', ' if arglist else '')
+    wrapper = "def wrapper(%s %s):\n    return wrapped(func, %s %s)\n" % (argstr,
+        ', '.join([kw[0] + '=' + str(kw[1]) for kw in kwarglist]), argstr,
+        ', '.join([kw[0] + '=' + kw[0] for kw in kwarglist]))
+    wrapper_code = compile(wrapper, '<string>', 'exec')
+    fakeglobals = {}
+    eval(wrapper_code, {'wrapped': decorator, 'func': func}, fakeglobals)
+    f_with_good_sig = fakeglobals['wrapper']
+
+    return wraps(func)(f_with_good_sig)
+
+
 # group commands
 groupDispatcher = Dispatcher(globaloptions=(host_param,))
 
 
 @groupDispatcher.command(name='info')
+@log_action
 def group_info(group, history=('l', False, 'History of group nodes'), host=None):
     '''Get group info'''
     s = service(host)
@@ -67,7 +112,9 @@ def group_info(group, history=('l', False, 'History of group nodes'), host=None)
                     record = color(record, YELLOW)
                 print record
 
+
 @groupDispatcher.command(name='meta')
+@log_action
 def group_meta(group, key=('k', '', 'Read data from arbitrary key'),
                unpack=('u', False, 'Unpack key with msgpack'), host=None):
     '''Read group metadata'''
@@ -81,6 +128,7 @@ def group_meta(group, key=('k', '', 'Read data from arbitrary key'),
 
 
 @groupDispatcher.command(name='next-number')
+@log_action
 def group_next_number(count, host=None):
     '''Get unused group numbers, number of groups is an argument'''
     s = service(host)
@@ -91,6 +139,7 @@ def group_next_number(count, host=None):
 
 
 @groupDispatcher.command(name='list-uncoupled')
+@log_action
 def group_list_uncoupled(by_dc=('', None, 'Group by dc and provide some useful data'),
                          json=('', None, 'Format additional data as json'),
                          host=None):
@@ -108,6 +157,7 @@ def group_list_uncoupled(by_dc=('', None, 'Group by dc and provide some useful d
 
 
 @groupDispatcher.command(name='detach-node')
+@log_action
 def group_detach_node(group, node=None,
                       host=None):
     '''Detach node from a group. Used when elliptics instance is
@@ -127,6 +177,7 @@ def group_detach_node(group, node=None,
 
 
 @groupDispatcher.command(name='force-update')
+@log_action
 def group_force_update(host=None):
     '''Force mastermind node data collection'''
     s = service(host)
@@ -153,6 +204,7 @@ def deprecated(state, by_ns=None, by_dc=None, json=None):
 
 
 @coupleDispatcher.command(name='list-bad')
+@log_action
 def couple_list_bad(by_dc=('', None, 'Group by dc and provide some useful data'),
                     by_ns=('', None, 'Group by namespaces'),
                     json=('', None, 'Format additional data as json'),
@@ -177,6 +229,7 @@ def couple_list_bad(by_dc=('', None, 'Group by dc and provide some useful data')
 
 
 @coupleDispatcher.command(name='list-symmetric')
+@log_action
 def couple_list_symmetric(by_dc=('', None, 'Group by dc and provide some useful data'),
                           by_ns=('', None, 'Group by namespaces'),
                           json=('', None, 'Format additional data as json'),
@@ -201,6 +254,7 @@ def couple_list_symmetric(by_dc=('', None, 'Group by dc and provide some useful 
 
 
 @coupleDispatcher.command(name='list-frozen')
+@log_action
 def couple_list_frozen(by_dc=('', None, 'Group by dc and provide some useful data'),
                        by_ns=('', None, 'Group by namespaces'),
                        json=('', None, 'Format additional data as json'),
@@ -225,6 +279,7 @@ def couple_list_frozen(by_dc=('', None, 'Group by dc and provide some useful dat
 
 
 @coupleDispatcher.command(name='list-closed')
+@log_action
 def couple_list_closed(by_dc=('', None, 'Group by dc and provide some useful data'),
                        by_ns=('', None, 'Group by namespaces'),
                        json=('', None, 'Format additional data as json'),
@@ -249,6 +304,7 @@ def couple_list_closed(by_dc=('', None, 'Group by dc and provide some useful dat
 
 
 @coupleDispatcher.command(name='info')
+@log_action
 def couple_info(group, host=None):
     '''Get couple info'''
     s = service(host)
@@ -275,6 +331,7 @@ def couple_info(group, host=None):
 
 
 @coupleDispatcher.command(name='list')
+@log_action
 def couple_list(namespace=('n', '', 'Filter by namespace'),
                 state=('s', '', 'Filter by state (good|closed|frozen|bad)'),
                 short=('', False, 'Use short format output'),
@@ -370,6 +427,7 @@ def view_groups(data, grouped, short=False, verbose=False):
 
 
 @coupleDispatcher.command(name='build')
+@log_action
 def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:2)'),
                  namespace=('n', '', 'Set custom namespace for couple'), host=None):
     '''Make a couple of groups, number of groups is an argument'''
@@ -389,6 +447,7 @@ def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:
 
 
 @coupleDispatcher.command(name='break')
+@log_action
 def couple_break(couple, confirm=None,
                  force=('f', None, ''), host=None):
     '''Break the couple of groups, couple is an argument
@@ -401,6 +460,7 @@ def couple_break(couple, confirm=None,
 
 
 @coupleDispatcher.command(name='weights')
+@log_action
 def couple_get_weights(host=None):
     '''Get weights for symmetric groups'''
     s = service(host)
@@ -409,6 +469,7 @@ def couple_get_weights(host=None):
 
 
 @coupleDispatcher.command(name='repair')
+@log_action
 def couple_repair(group,
                   namespace=('n', '', 'Use namespace for couple if there are '
                                       'no neighbour groups to fetch definite namespace'),
@@ -424,6 +485,7 @@ def couple_repair(group,
 
 
 @coupleDispatcher.command(name='list-namespaces')
+@log_action
 def couple_repair(host=None):
     '''List all couple namespaces'''
     s = service(host)
@@ -435,6 +497,7 @@ def couple_repair(host=None):
 nsDispatcher = Dispatcher(globaloptions=(host_param,))
 
 @nsDispatcher.command(name='setup')
+@log_action
 def ns_setup(namespace,
              groups_count=('g', '', 'Set number of groups per couple'),
              success_copies=('s', '', 'Success copy politics (any|quorum|all)'),
@@ -473,6 +536,7 @@ def ns_setup(namespace,
 
 
 @nsDispatcher.command(name='settings')
+@log_action
 def ns_settings(namespace, host=None):
     '''Get namespace settings'''
     s = service(host)
@@ -485,6 +549,7 @@ cacheDispatcher = Dispatcher(globaloptions=(host_param,))
 
 
 @cacheDispatcher.command(name='keys')
+@log_action
 def cache_keys(host=None):
     '''Fetch cached keys'''
     s = service(host)
@@ -494,6 +559,7 @@ def cache_keys(host=None):
 
 
 @cacheDispatcher.command(name='keys-by-group')
+@log_action
 def cache_keys_by_group(group, host=None):
     '''Fetch cached keys for certain group id'''
     s = service(host)
@@ -503,6 +569,7 @@ def cache_keys_by_group(group, host=None):
 
 
 @coupleDispatcher.command(name='freeze')
+@log_action
 def couple_freeze(couple, host=None):
     '''Freeze symmetric group (freeze couples are excluded from balancing)'''
     s = service(host)
@@ -513,6 +580,7 @@ def couple_freeze(couple, host=None):
 
 
 @coupleDispatcher.command(name='unfreeze')
+@log_action
 def couple_unfreeze(couple, host=None):
     '''Unfreeze symmetric group'''
     s = service(host)
@@ -579,6 +647,7 @@ def cmd_dest(cmd):
 
 
 @cmdDispatcher.command(name='restore')
+@log_action
 def restore_group(group, user=('u', os.environ['USER'],
                                'rsync command user for source path'),
                   dest=('d', '', 'Destination path on current host'),
