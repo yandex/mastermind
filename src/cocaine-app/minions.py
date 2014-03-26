@@ -107,7 +107,7 @@ class Minions(object):
 
     def _process_state(self, addr, response):
 
-        response_data = self._get_wrapped_response(json.loads(response))
+        response_data = self._get_wrapped_response(json.loads(response), addr)
 
         hostname = storage.hosts[addr].hostname
         for uid, state in response_data.iteritems():
@@ -164,7 +164,7 @@ class Minions(object):
 
         return response.body
 
-    def _get_wrapped_response(self, response):
+    def _get_wrapped_response(self, response, host):
         if response['status'] != 'success':
             logging.warn('Host: {0}, minion returned error: {1}'.format(
                 host, response['error']))

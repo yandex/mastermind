@@ -255,6 +255,11 @@ def couple_info(group, host=None):
     group = int(group)
 
     res = s.enqueue("get_couple_info", msgpack.packb(group)).get()
+
+    if isinstance(res, dict):
+        print res
+        return
+
     print color('Groups info', YELLOW)
     pprint(res[:-1])
 
@@ -263,7 +268,7 @@ def couple_info(group, host=None):
     couple_info = res[-1]
     couple_info['group_statuses'] = []
     for g in res[:-1]:
-        couple_info['groups_status'].append({'group_id': g['id'],
+        couple_info['group_statuses'].append({'group_id': g['id'],
             'status': g['status'],
             'status_text': g['status_text']})
     pprint(couple_info)
