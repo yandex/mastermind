@@ -156,6 +156,7 @@ class Infrastructure(object):
         group_state['nodes'] = list(group_state['nodes'])
         if not 'couples' in group_state:
             group_state['couples'] = []
+        group_state['couples'] = list(group_state['couples'])
         return group_state
 
     @staticmethod
