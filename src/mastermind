@@ -1,6 +1,7 @@
 #!/usr/bin/python
 import inspect
 import json
+from json import dumps
 import logging
 from logging.handlers import SysLogHandler
 import os
@@ -338,6 +339,7 @@ def couple_list(namespace=('n', '', 'Filter by namespace'),
                 verbose=('v', False, 'Use verbose format output'),
                 by_ns=('', False, 'Output by namespaces'),
                 by_dc=('', False, 'Output by dc'),
+                json=('', False, 'Output in json format (overrided by --short and --verbose options)'),
                 host=None):
     '''List couples with various view options. Default format is json,
     use '--short' or '--verbose' option for human readable formats.'''
@@ -359,7 +361,10 @@ def couple_list(namespace=('n', '', 'Filter by namespace'),
             data = group_by_ns(couples)
 
     if not short and not verbose:
-        pprint(data)
+        if json:
+            print dumps(data)
+        else:
+            pprint(data)
         return
 
     viewer(data, grouped, short=short, verbose=verbose)
