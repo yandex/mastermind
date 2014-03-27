@@ -1,3 +1,15 @@
+mastermind (2.8.11) lucid; urgency=low
+
+  * Fix for fetching closed couples info
+  * Mastermind-utils handle for fetching metadata and any arbitrary key from group
+  * Used space returned along with free space for group info
+  * Bash completion for command options
+  * Universal couple list handle unifying all list-xxx handles
+  * Fix for minions tasks status fetching
+  * Admin actions log
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 27 Mar 2014 13:16:45 +0400
+
 mastermind (2.8.10) lucid; urgency=low
 
   * Fix: fix for detaching inexistent nodes
