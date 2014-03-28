@@ -371,8 +371,8 @@ class Balancer(object):
         logging.info('Group %s: %s' % (group, repr(group)))
         logging.info('Couple %s: %s' % (couple, repr(couple)))
 
-        res = [g.info() for g in couple]
-        res.append(couple.info())
+        res = couple.info()
+        res['groups'] = [g.info() for g in couple]
 
         return res
 

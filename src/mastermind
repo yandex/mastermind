@@ -313,22 +313,22 @@ def couple_info(group, host=None):
 
     res = s.enqueue("get_couple_info", msgpack.packb(group)).get()
 
-    if isinstance(res, dict):
+    if 'Balancer error' in res or 'Error' in res:
         print res
         return
 
     print color('Groups info', YELLOW)
-    pprint(res[:-1])
+    pprint(res['groups'])
 
     print
     print color('Couple info', YELLOW)
-    couple_info = res[-1]
-    couple_info['group_statuses'] = []
-    for g in res[:-1]:
-        couple_info['group_statuses'].append({'group_id': g['id'],
+    res['group_statuses'] = []
+    for g in res['groups']:
+        res['group_statuses'].append({'group_id': g['id'],
             'status': g['status'],
             'status_text': g['status_text']})
-    pprint(couple_info)
+    del res['groups']
+    pprint(res)
 
 
 @coupleDispatcher.command(name='list')
