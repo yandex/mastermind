@@ -8,7 +8,7 @@ import urllib
 from cocaine.logging import Logger
 import elliptics
 import msgpack
-from tornado.httpclient import AsyncHTTPClient, HTTPClient
+from tornado.httpclient import AsyncHTTPClient, HTTPClient, HTTPError
 from tornado.ioloop import IOLoop
 
 from config import config
@@ -89,8 +89,10 @@ class Minions(object):
             for url, response in responses.iteritems():
                 host = states[url]
 
-                data = self._get_response(host, response)
-                if not data:
+                try:
+                    data = self._get_response(host, response)
+                except ValueError as e:
+                    logging.debug(e)
                     continue
                 try:
                     self._process_state(host.addr, data)
@@ -152,15 +154,19 @@ class Minions(object):
         return response_data
 
     def _get_response(self, host, response):
-        if response.error:
-            code = response.error.code
+        if isinstance(response, HTTPError):
+            error = response
+        else:
+            error = response.error
+        if error:
+            code = error.code
             if code == 599:
-                logging.debug('Failed to connect to minion '
-                              'on host {0} ({1})'.format(host, response.error.message))
+                error_msg = ('Failed to connect to minion '
+                             'on host {0} ({1})'.format(host, error.message))
             else:
-                logging.debug('Minion http error on host {0}, '
-                              'code {1} ({2})'.format(host, code, response.error.message))
-            return None
+                error_msg = ('Minion http error on host {0}, '
+                             'code {1} ({2})'.format(host, code, error.message))
+            raise ValueError(error_msg)
 
         return response.body
 
@@ -200,10 +206,13 @@ class Minions(object):
                 raise ValueError('Only strings are accepted as command parameters')
             data[k] = v
 
-        response = HTTPClient().fetch(url, method='POST',
-                                           headers=self.minion_headers,
-                                           body=urllib.urlencode(data),
-                                           request_timeout=5.0)
+        try:
+            response = HTTPClient().fetch(url, method='POST',
+                                               headers=self.minion_headers,
+                                               body=urllib.urlencode(data),
+                                               request_timeout=5.0)
+        except HTTPError as e:
+            response = e
 
         data = self._process_state(host, self._get_response(host, response))
         return data

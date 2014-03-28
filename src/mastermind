@@ -716,6 +716,9 @@ def restore_group(group, user=('u', os.environ['USER'],
     print res
     print
 
+    if 'Balancer error' in res:
+        return
+
     task_id = res.keys()[0]
 
     while True:
