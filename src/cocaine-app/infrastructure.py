@@ -241,7 +241,12 @@ class Infrastructure(object):
                         new_couple = storage_couple
 
                     if new_nodes or new_couple:
-                        self._update_group(g.group_id, new_nodes, new_couple)
+                        try:
+                            self._update_group(g.group_id, new_nodes, new_couple)
+                        except Exception as e:
+                            logging.error('Failed to update infrastructure state for group %s: %s\n%s' %
+                                (g.group_id, e, traceback.format_exc()))
+                            pass
 
 
             logging.info('Finished updating infrastructure state')
