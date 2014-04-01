@@ -283,6 +283,7 @@ class Node(object):
         res = {}
 
         res['addr'] = self.__str__()
+        res['hostname'] = infrastructure.get_hostname_by_addr(self.host.addr)
         res['status'] = self.status
         res['dc'] = self.host.dc
         res['last_stat_update'] = (self.stat and
@@ -586,8 +587,8 @@ class Couple(object):
         res = {'couple_status': self.status,
                'id': str(self),
                'tuple': self.as_tuple(),
-               'namespace': self.namespace}
-
+               'namespace': self.namespace,
+               'writable': not self.closed}
         return res
 
     def __contains__(self, group):

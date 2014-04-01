@@ -253,3 +253,48 @@ class Statistics(object):
 
         return {'type': 'root', 'name': 'root',
                 'children': root.values()}
+
+    def get_couple_statistics(self, request):
+        group_id = int(request[0])
+
+        if not group_id in storage.groups:
+            raise ValueError('Group %d is not found' % group_id)
+
+        group = storage.groups[group_id]
+
+        res = {}
+
+        if group.couple:
+            res = group.couple.info()
+            res['status'] = res['couple_status']
+            res['stats'] = self.__stats_to_dict(group.couple.get_stat())
+            groups = group.couple.groups
+        else:
+            groups = [group]
+
+        res['groups'] = []
+        for group in groups:
+            g = group.info()
+            g['stats'] = self.__stats_to_dict(group.get_stat())
+            for node in g['nodes']:
+                node['stats'] = self.__stats_to_dict(storage.nodes[node['addr']].stat)
+            res['groups'].append(g)
+
+        return res
+
+    MIN_FREE_SPACE = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
+    MIN_FREE_SPACE_REL = config['balancer_config'].get('min_free_space_relative', 0.15)
+
+    def __stats_to_dict(self, stat):
+        res = {}
+
+        res['total_space'] = stat.total_space
+        res['free_space'] = stat.free_space
+        node_eff_space = max(min(stat.total_space - self.MIN_FREE_SPACE,
+            stat.total_space * (1 - self.MIN_FREE_SPACE_REL)), 0.0)
+
+        res['free_effective_space'] = max(stat.free_space -
+            (stat.total_space - node_eff_space), 0.0)
+        res['used_space'] = stat.total_space - stat.free_space
+
+        return res
