@@ -507,6 +507,9 @@ def ns_setup(namespace,
              groups_count=('g', '', 'Set number of groups per couple'),
              success_copies=('s', '', 'Success copy politics (any|quorum|all)'),
              auth_key=('a', '', 'Proxy auth-key'),
+             sign_token=('', '', 'Signature token'),
+             sign_path_prefix=('', '', 'Signature path prefix'),
+             sign_port=('', '', 'Signature scheme port'),
              couple=('c', '', 'Set static couple for namespace (1:2:10)'),
              host=None):
     '''Namespace setup'''
@@ -535,6 +538,12 @@ def ns_setup(namespace,
         settings['static-couple'] = couple
     if auth_key:
         settings['auth-key'] = auth_key
+    if sign_token:
+        settings.setdefault('signature', {})['token'] = sign_token
+    if sign_path_prefix:
+        settings.setdefault('signature', {})['path_prefix'] = sign_path_prefix
+    if sign_port:
+        settings.setdefault('signature', {})['port'] = sign_port
 
     res = s.enqueue('namespace_setup', msgpack.packb([namespace, settings])).get()
     print res

@@ -549,6 +549,15 @@ class Balancer(object):
         except ValueError:
             raise ValueError('groups-count should be positive integer')
 
+        try:
+            port = settings['signature']['port'] = int(settings['signature']['port'])
+            if not port > 0:
+                raise ValueError
+        except KeyError:
+            pass
+        except ValueError:
+            raise ValueError('port should be positive integer')
+
         if settings.get('success-copies-num', '') not in ('any', 'quorum', 'all'):
             raise ValueError('success-copies-num allowed values are "any", '
                              '"quorum" and "all"')
