@@ -37,19 +37,23 @@ logging.info("trace %d" % (i.next()))
 log = elliptics.Logger(str(config["dnet_log"]), config["dnet_log_mask"])
 n = elliptics.Node(log)
 
+connected = False
+
 logging.info("trace %d" % (i.next()))
-try:
-    for host in config["elliptics_nodes"]:
-        logging.debug("Adding node %s" % str(host))
-        try:
-            logging.info("host: " + str(host))
-            n.add_remote(str(host[0]), host[1])
-        except Exception as e:
-            logging.error("Error: " + str(e) + "\n" + traceback.format_exc())
-#except Exception as e:
-except:
-    #logging.error("1Error: " + str(e) + "\n" + traceback.format_exc())
-    logging.info("trace error")
+for host in config["elliptics_nodes"]:
+    logging.debug("Adding node %s" % str(host))
+    try:
+        logging.info("host: " + str(host))
+        n.add_remote(str(host[0]), host[1])
+        connected = True
+    except Exception as e:
+        logging.error("Error: " + str(e) + "\n" + traceback.format_exc())
+
+if not connected:
+    logging.error('Failed to connect to any elliptics storage node')
+    raise ValueError('Failed to connect to any elliptics storage node')
+
+connected = False
 
 logging.info("trace %d" % (i.next()))
 meta_node = elliptics.Node(log)
@@ -57,8 +61,14 @@ for host in config["metadata"]["nodes"]:
     try:
         logging.info("host: " + str(host))
         meta_node.add_remote(str(host[0]), host[1])
+        connected = True
     except Exception as e:
         logging.error("Error: " + str(e) + "\n" + traceback.format_exc())
+
+if not connected:
+    logging.error('Failed to connect to any elliptics meta storage node')
+    raise ValueError('Failed to connect to any elliptics storage node')
+
 
 wait_timeout = config.get('wait_timeout', 5)
 logging.info('sleeping for wait_timeout for nodes '
