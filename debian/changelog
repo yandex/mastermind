@@ -1,3 +1,9 @@
+mastermind (2.8.14) lucid; urgency=low
+
+  * Network map for namespaces
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 03 Apr 2014 15:09:28 +0400
+
 mastermind (2.8.13) lucid; urgency=low
 
   * Couple statistics for flowmastermind
