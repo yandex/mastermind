@@ -110,6 +110,7 @@ class NodeStat(object):
 
         self.total_space = float(raw_stat['counters']['DNET_CNTR_BLOCKS'][0]) * raw_stat['counters']['DNET_CNTR_BSIZE'][0]
         self.free_space = float(raw_stat['counters']['DNET_CNTR_BAVAIL'][0]) * raw_stat['counters']['DNET_CNTR_BSIZE'][0]
+        self.used_space = self.total_space - self.free_space
         self.rel_space = float(raw_stat['counters']['DNET_CNTR_BAVAIL'][0]) / raw_stat['counters']['DNET_CNTR_BLOCKS'][0]
         self.load_average = (float(raw_stat['counters']['DNET_CNTR_DU1'][0]) / 100
                              if raw_stat['counters'].get('DNET_CNTR_DU1') else
@@ -151,6 +152,7 @@ class NodeStat(object):
 
         res.total_space = self.total_space + other.total_space
         res.free_space = self.free_space + other.free_space
+        res.used_space = self.used_space + other.used_space
         res.rel_space = min(self.rel_space, other.rel_space)
         res.load_average = max(self.load_average, other.load_average)
 
@@ -168,6 +170,7 @@ class NodeStat(object):
 
         res.total_space = min(self.total_space, other.total_space)
         res.free_space = min(self.free_space, other.free_space)
+        res.used_space = min(self.used_space, other.used_space)
         res.rel_space = min(self.rel_space, other.rel_space)
         res.load_average = max(self.load_average, other.load_average)
 
@@ -299,8 +302,7 @@ class Node(object):
 
             res['free_effective_space'] = '{0:.3f} Gb'.format(
                 max(self.stat.free_space - (self.stat.total_space - node_eff_space), 0.0) / (1024.0 * 1024.0 * 1024.0))
-            res['used_space'] = '{0:.3f} Gb'.format((self.stat.total_space - self.stat.free_space) /
-                                                    (1024.0 * 1024.0 * 1024.0))
+            res['used_space'] = '{0:.3f} Gb'.format(self.stat.used_space / (1024.0 * 1024.0 * 1024.0))
         res['path'] = port_to_path(int(res['addr'].split(':')[1]))
 
         return res
@@ -589,6 +591,19 @@ class Couple(object):
                'tuple': self.as_tuple(),
                'namespace': self.namespace,
                'writable': not self.closed}
+        stat = self.get_stat()
+        if stat:
+            min_free_space = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
+            min_free_space_rel = config['balancer_config'].get('min_free_space_relative', 0.15)
+
+            res['free_space'] = '{0:.3f} Gb'.format(stat.free_space / (1024.0 * 1024.0 * 1024.0))
+            node_eff_space = max(min(stat.total_space - min_free_space,
+                                     stat.total_space * (1 - min_free_space_rel)), 0.0)
+
+            res['free_effective_space'] = '{0:.3f} Gb'.format(
+                max(stat.free_space - (stat.total_space - node_eff_space), 0.0) / (1024.0 * 1024.0 * 1024.0))
+
+            res['used_space'] = '{0:.3f} Gb'.format(stat.used_space / (1024.0 * 1024.0 * 1024.0))
         return res
 
     def __contains__(self, group):

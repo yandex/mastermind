@@ -294,11 +294,6 @@ class Statistics(object):
                 node['stats'] = self.__stats_to_dict(storage.nodes[node['addr']].stat)
             res['groups'].append(g)
 
-        if group.couple:
-            # fix used_space statistics for couple,
-            # it should be min of groups used_space
-            res['stats']['used_space'] = min(g['stats']['used_space'] for g in res['groups'])
-
         return res
 
     MIN_FREE_SPACE = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
@@ -314,6 +309,6 @@ class Statistics(object):
 
         res['free_effective_space'] = max(stat.free_space -
             (stat.total_space - node_eff_space), 0.0)
-        res['used_space'] = stat.total_space - stat.free_space
+        res['used_space'] = stat.used_space
 
         return res
