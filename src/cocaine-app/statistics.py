@@ -208,11 +208,22 @@ class Statistics(object):
         nodes = {}
         root = None
 
-        hosts = set([host.addr for host in storage.hosts])
-        group_hosts = set([node.host.addr for group in storage.groups for node in group.nodes])
+        try:
+            hosts = []
+            namespace = request[0]
+        except (TypeError, IndexError):
+            namespace = None
 
-        for host in storage.hosts:
-            host_node = tree_node = host.parents
+        if namespace:
+            for couple in storage.couples:
+                if couple.namespace == namespace:
+                    hosts.extend([n.host for g in couple for n in g.nodes])
+            hosts = list(set(hosts))
+        else:
+            hosts = storage.hosts.keys()
+
+        for host in hosts:
+            tree_node = host.parents
             new_child = None
             while True:
                 type_nodes = nodes.setdefault(tree_node['type'], {})
@@ -233,8 +244,11 @@ class Statistics(object):
                     break
                 tree_node = tree_node['parent']
 
-        for group in storage.groups:
+        for group in storage.groups.keys():
             if not group.nodes:
+                continue
+            if namespace and (not group.couple or
+                              group.couple.namespace != namespace):
                 continue
             stat = group.get_stat()
             for node in group.nodes:
@@ -279,6 +293,11 @@ class Statistics(object):
             for node in g['nodes']:
                 node['stats'] = self.__stats_to_dict(storage.nodes[node['addr']].stat)
             res['groups'].append(g)
+
+        if group.couple:
+            # fix used_space statistics for couple,
+            # it should be min of groups used_space
+            res['stats']['used_space'] = min(g['stats']['used_space'] for g in res['groups'])
 
         return res
 
