@@ -1,3 +1,9 @@
+mastermind (2.8.16) lucid; urgency=low
+
+  * Used space stats for couples
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 03 Apr 2014 17:44:41 +0400
+
 mastermind (2.8.15) lucid; urgency=low
 
   * Do not start if elliptics nodes and/or metanodes are unavailable
