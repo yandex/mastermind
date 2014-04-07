@@ -512,7 +512,7 @@ def couple_repair(group,
 
 @coupleDispatcher.command(name='list-namespaces')
 @log_action
-def couple_repair(host=None):
+def couple_list_namespaces(host=None):
     '''List all couple namespaces'''
     s = service(host)
     res = s.enqueue('get_namespaces', '').get()
@@ -541,22 +541,27 @@ def ns_setup(namespace,
     try:
         groups_count = int(groups_count)
     except ValueError:
-        print warn('--groups-count is required parameter')
-        return
+        groups_count = 0
 
     if not success_copies:
         print warn('--success-copies is required parameter')
         return
 
-    settings = {'groups-count': groups_count,
-                'success-copies-num': success_copies}
+    settings = {'success-copies-num': success_copies}
 
     if couple:
         couple = [int(g) for g in couple.split(':')]
     else:
         couple = None
+
+    if not couple and not groups_count:
+        print warn('either --groups-count or --couple is required')
+        return
+
     if couple:
         settings['static-couple'] = couple
+    elif groups_count:
+        settings['groups-count'] = groups_count
     if auth_key:
         settings['auth-key'] = auth_key
     if sign_token:

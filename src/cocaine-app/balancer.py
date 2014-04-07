@@ -428,6 +428,11 @@ class Balancer(object):
 
         try:
             namespace = request[2]
+            logging.info('namespace from request: {0}'.format(namespace))
+            if not self.valid_namespace(namespace):
+                logging.info('namespace from request: {0}, RaISING EXCEPTION!!!!111'.format(namespace))
+                raise ValueError('Namespace "{0}" is invalid'.format(namespace))
+            logging.info('namespace from request: {0}'.format(namespace))
         except IndexError:
             namespace = storage.Group.DEFAULT_NAMESPACE
 
@@ -532,12 +537,15 @@ class Balancer(object):
     def valid_namespace(self, namespace):
         return self.NS_RE.match(namespace) is not None
 
-    def validate_ns_settings(self, settings):
-        try:
-            if not int(settings.get('groups-count', 0)) > 0:
-                raise ValueError
-        except ValueError:
-            raise ValueError('groups-count should be positive integer')
+    def validate_ns_settings(self, namespace, settings):
+
+        groups_count = None
+        if settings.get('groups-count'):
+            groups_count = settings['groups-count']
+            if groups_count <= 0:
+                raise ValueError('groups-count should be positive integer')
+        elif not settings.get('static-couple'):
+            raise ValueError('groups-count should be set')
 
         try:
             port = settings['signature']['port'] = int(settings['signature']['port'])
@@ -564,16 +572,36 @@ class Balancer(object):
 
             if (not ref_couple or not all(couple_checks)):
                 raise ValueError('Couple {0} is not found'.format(couple))
+
+            logging.debug('Checking couple {0} namespace'.format(couple))
+            if ref_couple.namespace != namespace:
+                raise ValueError('Couple {0} namespace is {1}, not {2}'.format(ref_couple,
+                    ref_couple.namespace, namespace))
+
+            for c in storage.couples:
+                if c.namespace == namespace and c != ref_couple:
+                    raise ValueError('Namespace "{0}" has several couples, '
+                        'should have only 1 couple for static couple setting'.format(namespace))
+
             for g in ref_couple:
                 if g not in groups:
                     raise ValueError('Using incomplete couple {0}, '
                         'full couple is {1}'.format(couple, ref_couple))
 
-            if len(couple) != settings['groups-count']:
-                raise ValueError('Couple {0} does not have '
-                    'length {1}'.format(couple, settings['groups-count']))
+            if groups_count:
+                if len(couple) != groups_count:
+                    raise ValueError('Couple {0} does not have '
+                        'length {1}'.format(couple, groups_count))
+            else:
+                groups_count = len(ref_couple.groups)
 
-        #check for other keys!!!
+        settings['groups-count'] = groups_count
+
+
+    ALLOWED_NS_KEYS = set(['success-copies-num', 'groups-count',
+        'static-couple', 'auth-key', 'signature'])
+    ALLOWED_NS_SIGN_KEYS = set(['token', 'path_prefix', 'port'])
+
 
     def namespace_setup(self, request):
         try:
@@ -581,11 +609,19 @@ class Balancer(object):
         except Exception:
             raise ValueError('Invalid parameters')
 
-        if not self.valid_namespace(namespace):
-            raise ValueError('Namespace "{0}" is invalid'.format(namespace))
+        # filtering settings
+        for k in settings.keys():
+            if k not in self.ALLOWED_NS_KEYS:
+                del settings[k]
+        for k in settings.get('signature', {}).keys():
+            if k not in self.ALLOWED_NS_SIGN_KEYS:
+                del settings['signature'][k]
+
+        if not namespace in self.__all_namespaces():
+            raise ValueError('Namespace "{0}" does not exist'.format(namespace))
 
         try:
-            self.validate_ns_settings(settings)
+            self.validate_ns_settings(namespace, settings)
         except Exception as e:
             logging.error(e)
             raise
@@ -603,8 +639,8 @@ class Balancer(object):
         except Exception:
             raise ValueError('Invalid parameters')
 
-        if not self.valid_namespace(namespace):
-            raise ValueError('Namespace "{0}" is invalid'.format(namespace))
+        if not namespace in self.__all_namespaces():
+            raise ValueError('Namespace "{0}" does not exist'.format(namespace))
 
         res = msgpack.unpackb(self.ns_settings_idx[namespace])
         del res['namespace']
@@ -618,7 +654,6 @@ class Balancer(object):
             res[settings['namespace']] = settings
             del settings['namespace']
         return res
-
 
     @h.handler
     def freeze_couple(self, request):
@@ -648,8 +683,11 @@ class Balancer(object):
 
     @h.handler
     def get_namespaces(self, request):
+        return tuple(self.__all_namespaces())
+
+    def __all_namespaces(self):
         namespaces = [c.namespace for c in storage.couples]
-        return tuple(set(filter(None, namespaces)))
+        return set(filter(None, namespaces))
 
 
 def handlers(b):
