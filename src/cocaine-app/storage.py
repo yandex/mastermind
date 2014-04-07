@@ -24,11 +24,16 @@ def ts_str(ts):
 class Status(object):
     INIT = 'INIT'
     OK = 'OK'
+    FULL = 'FULL'
     COUPLED = 'COUPLED'
     BAD = 'BAD'
     RO = 'RO'
     STALLED = 'STALLED'
     FROZEN = 'FROZEN'
+
+
+GOOD_STATUSES = set([Status.OK, Status.FULL])
+NOT_BAD_STATUSES = set([Status.OK, Status.FULL, Status.FROZEN])
 
 
 class Repositary(object):
@@ -436,8 +441,6 @@ class Group(object):
         res['nodes'] = [n.info() for n in self.nodes]
         if self.couple:
             res['couples'] = self.couple.as_tuple()
-            if self.couple.status == Status.OK:
-                res['writable'] = not self.couple.closed
         else:
             res['couples'] = None
         if self.meta:
@@ -488,7 +491,16 @@ class Couple(object):
             return self.status
 
         if all([st == Status.COUPLED for st in statuses]):
-            self.status = Status.OK
+            min_free_space = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
+            min_rel_space = config['balancer_config'].get('min_free_space_relative', 0.15)
+
+            stats = self.get_stat()
+            if (stats and (stats.free_space < min_free_space or
+                           stats.rel_space < min_rel_space)):
+                self.status = Status.FULL
+            else:
+                self.status = Status.OK
+
             return self.status
 
         if Status.INIT in statuses:
@@ -547,13 +559,7 @@ class Couple(object):
 
     @property
     def closed(self):
-        min_free_space = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
-        min_rel_space = config['balancer_config'].get('min_free_space_relative', 0.15)
-
-        stats = self.get_stat()
-        return (self.status == Status.OK and stats and (
-                stats.free_space < min_free_space or
-                stats.rel_space < min_rel_space))
+        return self.status == Status.FULL
 
     def destroy(self):
         for group in self.groups:
@@ -589,8 +595,7 @@ class Couple(object):
         res = {'couple_status': self.status,
                'id': str(self),
                'tuple': self.as_tuple(),
-               'namespace': self.namespace,
-               'writable': not self.closed}
+               'namespace': self.namespace}
         stat = self.get_stat()
         if stat:
             min_free_space = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024

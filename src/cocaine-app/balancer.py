@@ -28,7 +28,6 @@ logging.info('balancer.py')
 
 class Balancer(object):
 
-    NOT_BAD_STATUSES = set([storage.Status.OK, storage.Status.FROZEN])
     DT_FORMAT = '%Y-%m-%d %H:%M:%S'
 
     def __init__(self, n):
@@ -53,7 +52,7 @@ class Balancer(object):
 
     @h.handler
     def get_bad_groups(self, request):
-        result = [couple.as_tuple() for couple in storage.couples if couple.status not in self.NOT_BAD_STATUSES]
+        result = [couple.as_tuple() for couple in storage.couples if couple.status not in storage.NOT_BAD_STATUSES]
         logging.debug('bad_symm_groups: ' + str(result))
         return result
 
@@ -73,7 +72,7 @@ class Balancer(object):
         logging.debug('configured min_rel_space: %s' % min_rel_space)
 
         result = [couple.as_tuple() for couple in storage.couples
-                  if couple.status == storage.Status.OK and couple.closed]
+                  if couple.status == storage.Status.FULL]
 
         logging.debug('closed couples: ' + str(result))
         return result
@@ -89,7 +88,7 @@ class Balancer(object):
 
     STATES = {
         'good': [storage.Status.OK],
-        'closed': [storage.Status.OK],
+        'full': [storage.Status.FULL],
         'frozen': [storage.Status.FROZEN],
         'bad': [storage.Status.INIT, storage.Status.BAD],
     }
@@ -107,15 +106,6 @@ class Balancer(object):
             if options['state'] not in self.STATES:
                 raise ValueError('Invalid state: {0}'.format(options['state']))
             couples = filter(lambda c: c.status in self.STATES[options['state']], couples)
-
-            if options['state'] == 'closed':
-                min_free_space = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
-                min_rel_space = config['balancer_config'].get('min_free_space_relative', 0.15)
-
-                logging.debug('configured min_free_space: %s bytes' % min_free_space)
-                logging.debug('configured min_rel_space: %s' % min_rel_space)
-
-                couples = filter(lambda c: c.closed, couples)
 
         data = []
         for c in couples:
@@ -211,7 +201,7 @@ class Balancer(object):
         namespaces = {}
         all_symm_group_objects = []
         for couple in storage.couples:
-            if couple.status != storage.Status.OK:
+            if couple.status not in storage.GOOD_STATUSES:
                 continue
 
             symm_group = bla.SymmGroup(couple)
@@ -257,7 +247,7 @@ class Balancer(object):
         bad_couples = []
         for couple in storage.couples:
             if group in couple:
-                if couple.status == storage.Status.OK:
+                if couple.status in storage.NOT_BAD_STATUSES:
                     logging.error('Balancer error: cannot repair, group %d is in couple %s' % (group_id, str(couple)))
                     return {'Balancer error' : 'cannot repair, group %d is in couple %s' % (group_id, str(couple))}
                 bad_couples.append(couple)
@@ -465,7 +455,7 @@ class Balancer(object):
 
         correct_confirms = []
         correct_confirm = 'Yes, I want to break '
-        if couple.status == storage.Status.OK:
+        if couple.status in storage.NOT_BAD_STATUSES:
             correct_confirm += 'good'
         else:
             correct_confirm += 'bad'

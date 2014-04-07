@@ -38,10 +38,9 @@ class Statistics(object):
         if group.couple:
             data['total_couples'] += 1
             if group.couple.status == storage.Status.OK:
-                if not group.couple.closed:
-                    data['open_couples'] += 1
-                else:
-                    data['closed_couples'] += 1
+                data['open_couples'] += 1
+            elif group.couple.status == storage.Status.FULL:
+                data['closed_couples'] += 1
             elif group.couple.status == storage.Status.FROZEN:
                 data['frozen_couples'] += 1
             else:
@@ -119,17 +118,18 @@ class Statistics(object):
         return dict(reduce(self.dict_keys_sum, per_dc_stat.values()))
 
     def get_couple_stats(self):
-        symmetric_couples = self.balancer.get_symmetric_groups(None)
+        open_couples = self.balancer.get_symmetric_groups(None)
         bad_couples = self.balancer.get_bad_groups(None)
         closed_couples = self.balancer.get_closed_groups(None)
         frozen_couples = self.balancer.get_frozen_groups(None)
         uncoupled_groups = self.balancer.get_empty_groups(None)
 
-        return {'open_couples': len(symmetric_couples) - len(closed_couples),
+        return {'open_couples': len(open_couples),
                 'frozen_couples': len(frozen_couples),
                 'closed_couples': len(closed_couples),
                 'bad_couples': len(bad_couples),
-                'total_couples': len(symmetric_couples) + len(frozen_couples) + len(bad_couples),
+                'total_couples': (len(open_couples) + len(closed_couples) +
+                                  len(frozen_couples) + len(bad_couples)),
                 'uncoupled_groups': len(uncoupled_groups)}
 
     def get_data_space(self):
@@ -257,10 +257,7 @@ class Statistics(object):
                 groups.append({'type': 'group',
                                'name': str(group),
                                'couple': group.couple and str(group.couple) or None,
-                               'couple_status': group.couple and (
-                                    (group.couple.status == storage.Status.OK and
-                                     group.couple.closed and 'CLOSED') or
-                                    group.couple.status) or None,
+                               'couple_status': group.couple and group.couple.status or None,
                                'free_space': stat.free_space,
                                'total_space': stat.total_space,
                                'status': group.couple and group.couple.status or None})

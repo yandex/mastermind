@@ -286,7 +286,7 @@ def couple_list_closed(by_dc=('', None, 'Group by dc and provide some useful dat
                        json=('', None, 'Format additional data as json'),
                        host=None):
     '''Get list of couples closed to balancer'''
-    deprecated('closed', by_ns=by_ns, by_dc=by_dc, json=json)
+    deprecated('full', by_ns=by_ns, by_dc=by_dc, json=json)
 
     s = service(host)
     res = s.enqueue('get_closed_groups', '').get()
@@ -334,7 +334,7 @@ def couple_info(group, host=None):
 @coupleDispatcher.command(name='list')
 @log_action
 def couple_list(namespace=('n', '', 'Filter by namespace'),
-                state=('s', '', 'Filter by state (good|closed|frozen|bad)'),
+                state=('s', '', 'Filter by state (good|full|frozen|bad)'),
                 short=('', False, 'Use short format output'),
                 verbose=('v', False, 'Use verbose format output'),
                 by_ns=('', False, 'Output by namespaces'),
