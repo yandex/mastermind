@@ -331,6 +331,15 @@ def couple_info(group, host=None):
     pprint(res)
 
 
+STATES = {
+    'OK': 'good',
+    'FULL': 'full',
+    'FROZEN': 'frozen',
+    'INIT': 'bad',
+    'BAD': 'bad',
+}
+
+
 @coupleDispatcher.command(name='list')
 @log_action
 def couple_list(namespace=('n', '', 'Filter by namespace'),
@@ -339,6 +348,7 @@ def couple_list(namespace=('n', '', 'Filter by namespace'),
                 verbose=('v', False, 'Use verbose format output'),
                 by_ns=('', False, 'Output by namespaces'),
                 by_dc=('', False, 'Output by dc'),
+                by_state=('', False, 'Output by state'),
                 json=('', False, 'Output in json format (overrided by --short and --verbose options)'),
                 host=None):
     '''List couples with various view options. Default format is json,
@@ -352,13 +362,17 @@ def couple_list(namespace=('n', '', 'Filter by namespace'),
     viewer = view_couples
     data = couples
 
-    grouped = by_ns or by_dc
+    grouped = by_ns or by_dc or by_state
+    key_mapper = lambda k: k
     if grouped:
         if by_dc:
             viewer = view_groups
             data = group_by_dc(couples)
         elif by_ns:
             data = group_by_ns(couples)
+        elif by_state:
+            data = group_by_state(couples)
+            key_mapper = lambda k: STATES.get(k, k)
 
     if not short and not verbose:
         if json:
@@ -367,13 +381,20 @@ def couple_list(namespace=('n', '', 'Filter by namespace'),
             pprint(data)
         return
 
-    viewer(data, grouped, short=short, verbose=verbose)
+    viewer(data, grouped, key_mapper, short=short, verbose=verbose)
 
 
 def group_by_ns(couples):
     res = {}
     for c in couples:
         res.setdefault(c['namespace'], []).append(c)
+    return res
+
+
+def group_by_state(couples):
+    res = {}
+    for c in couples:
+        res.setdefault(c['couple_status'], []).append(c)
     return res
 
 
@@ -391,7 +412,7 @@ def group_by_dc(couples):
     return res
 
 
-def view_couples(data, grouped, short=False, verbose=False):
+def view_couples(data, grouped, key_mapper, short=False, verbose=False):
 
     def output(couples, short=False, verbose=False):
         if short:
@@ -404,14 +425,14 @@ def view_couples(data, grouped, short=False, verbose=False):
 
     if grouped:
         for k, couples in data.iteritems():
-            print color(k, YELLOW)
+            print color(key_mapper(k), YELLOW)
             output(couples, short=short, verbose=verbose)
             print
     else:
         output(data, short=short, verbose=verbose)
 
 
-def view_groups(data, grouped, short=False, verbose=False):
+def view_groups(data, grouped, key_mapper, short=False, verbose=False):
 
     def output(groups, short=False, verbose=False):
         if short:
@@ -424,7 +445,7 @@ def view_groups(data, grouped, short=False, verbose=False):
     if grouped:
         for k, groups in sorted(data.iteritems(),
                                 key=lambda x: '' if x[0] == 'unknown' else x[0]):
-            print color(k, YELLOW)
+            print color(key_mapper(k), YELLOW)
             output(groups, short=short, verbose=verbose)
             print
     else:
