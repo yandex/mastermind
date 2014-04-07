@@ -473,7 +473,7 @@ class Balancer(object):
         if confirm not in correct_confirms:
             raise Exception('Incorrect confirmation string')
 
-        kill_symm_group(self.node, [group.group_id for group in couple])
+        kill_symm_group(self.node, self.node.meta_session, couple)
         couple.destroy()
 
         return True
@@ -700,13 +700,18 @@ def handlers(b):
     return handlers
 
 
-def kill_symm_group(n, groups):
+def kill_symm_group(n, meta_session, couple):
+    groups = [group.group_id for group in couple]
     logging.info('Killing symm groups: %s' % str(groups))
     s = elliptics.Session(n)
     s.set_timeout(config.get('wait_timeout', 5))
     s.add_groups(groups)
     try:
-        s.remove(keys.SYMMETRIC_GROUPS_KEY)
+        s.remove(keys.SYMMETRIC_GROUPS_KEY).get()
+    except elliptics.NotFoundError:
+        pass
+    try:
+        meta_session.remove(keys.MASTERMIND_COUPLE_META_KEY % str(couple)).get()
     except elliptics.NotFoundError:
         pass
 
@@ -726,6 +731,7 @@ def make_symm_group(n, couple, namespace):
             s.add_groups([group.group_id])
             EllAsyncResult(s.write_data(keys.SYMMETRIC_GROUPS_KEY, packed),
                            EllLookupResult).get()
+            group.parse_meta(packed)
             good.append(group.group_id)
         except Exception as e:
             logging.error('Failed to write symm group info, group %d: %s\n%s'
