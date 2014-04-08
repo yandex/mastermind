@@ -1,13 +1,12 @@
 from collections import defaultdict
-
-from cocaine.logging import Logger
+import logging
 
 import storage
 from config import config
 import copy
 
 
-logging = Logger()
+logger = logging.getLogger('mm.statistics')
 
 
 class Statistics(object):
@@ -102,7 +101,7 @@ class Statistics(object):
                     ns_dc_couple_map[ns][dc].add(couple)
 
                 if not node.stat:
-                    logging.debug('No stats available for node %s' % str(node))
+                    logger.debug('No stats available for node %s' % str(node))
                     continue
 
                 if not node.stat.fsid in host_fsid_map[node.host]:

@@ -1,11 +1,11 @@
 import keys
+import logging
 import os.path
 import socket
 import threading
 import time
 import traceback
 
-from cocaine.logging import Logger
 import elliptics
 import msgpack
 
@@ -15,7 +15,7 @@ import storage
 import timed_queue
 
 
-logging = Logger()
+logger = logging.getLogger('mm.infrastructure')
 
 BASE_PORT = config.get('elliptics_base_port', 1024)
 CACHE_DEFAULT_PORT = 9999
@@ -27,8 +27,8 @@ RSYNC_MODULE = config.get('restore', {}).get('rsync_use_module') and \
                config['restore'].get('rsync_module')
 RSYNC_USER = config.get('restore', {}).get('rsync_user', 'rsync')
 
-logging.info('Rsync module using: %s' % RSYNC_MODULE)
-logging.info('Rsync user: %s' % RSYNC_USER)
+logger.info('Rsync module using: %s' % RSYNC_MODULE)
+logger.info('Rsync user: %s' % RSYNC_USER)
 
 
 class Infrastructure(object):
@@ -98,7 +98,7 @@ class Infrastructure(object):
 
     def _sync_state(self):
         try:
-            logging.info('Syncing infrastructure state')
+            logger.info('Syncing infrastructure state')
             group_ids = set()
             with self.__state_lock:
 
@@ -107,7 +107,7 @@ class Infrastructure(object):
                     data = idx.indexes[0].data
 
                     state_group = self._unserialize(data)
-                    logging.debug('Fetched infrastructure item: %s' %
+                    logger.debug('Fetched infrastructure item: %s' %
                                   (state_group,))
 
                     if (self.state.get(state_group['id']) and
@@ -123,7 +123,7 @@ class Infrastructure(object):
                                 nodes_set = set(nodes_state['set'])
                                 for node in group.nodes:
                                     if not (node.host.addr, node.port) in nodes_set:
-                                        logging.info('Removing {0} from group {1} due to manual group detaching'.format(node, group.group_id))
+                                        logger.info('Removing {0} from group {1} due to manual group detaching'.format(node, group.group_id))
                                         group.remove_node(node)
                             group.update_status_recursive()
 
@@ -131,15 +131,15 @@ class Infrastructure(object):
                     group_ids.add(state_group['id'])
 
                 for gid in set(self.state.keys()) - group_ids:
-                    logging.info('Group %d is not found in infrastructure state, '
+                    logger.info('Group %d is not found in infrastructure state, '
                                  'removing' % gid)
                     del self.state[gid]
 
             self.sync_ts = time.time()
 
-            logging.info('Finished syncing infrastructure state')
+            logger.info('Finished syncing infrastructure state')
         except Exception as e:
-            logging.error('Failed to sync infrastructure state: %s\n%s' %
+            logger.error('Failed to sync infrastructure state: %s\n%s' %
                           (e, traceback.format_exc()))
         finally:
             self.__tq.add_task_in(self.TASK_SYNC,
@@ -170,7 +170,7 @@ class Infrastructure(object):
     def _update_state(self):
         groups_to_update = []
         try:
-            logging.info('Updating infrastructure state')
+            logger.info('Updating infrastructure state')
 
             if self.sync_ts is None:
                 raise ValueError('Nothing to update')
@@ -192,7 +192,7 @@ class Infrastructure(object):
                                   tuple())
 
                 if not storage_nodes:
-                    logging.debug('Storage nodes list for group %d is empty, '
+                    logger.debug('Storage nodes list for group %d is empty, '
                                   'skipping' % (g.group_id,))
                     continue
 
@@ -217,11 +217,11 @@ class Infrastructure(object):
                     ext_storage_nodes = (state_nodes + tuple(
                         n for n in storage_nodes if n not in state_nodes_set))
 
-                    logging.debug('Comparing %s and %s' %
+                    logger.debug('Comparing %s and %s' %
                                   (ext_storage_nodes, state_nodes))
 
                     if set(ext_storage_nodes) != state_nodes_set:
-                        logging.info('Group %d info does not match,'
+                        logger.info('Group %d info does not match,'
                                      'last state: %s, current state: %s' %
                                      (g.group_id, state_nodes, ext_storage_nodes))
                         new_nodes = ext_storage_nodes
@@ -231,11 +231,11 @@ class Infrastructure(object):
                                         or {'couple': tuple()})
                     state_couple = cur_couple_state['couple']
 
-                    logging.debug('Comparing %s and %s' %
+                    logger.debug('Comparing %s and %s' %
                                   (storage_couple, state_couple))
 
                     if storage_couple and set(state_couple) != set(storage_couple):
-                        logging.info('Group %d couple does not match,'
+                        logger.info('Group %d couple does not match,'
                                      'last state: %s, current state: %s' %
                                      (g.group_id, state_couple, storage_couple))
                         new_couple = storage_couple
@@ -244,14 +244,14 @@ class Infrastructure(object):
                         try:
                             self._update_group(g.group_id, new_nodes, new_couple)
                         except Exception as e:
-                            logging.error('Failed to update infrastructure state for group %s: %s\n%s' %
+                            logger.error('Failed to update infrastructure state for group %s: %s\n%s' %
                                 (g.group_id, e, traceback.format_exc()))
                             pass
 
 
-            logging.info('Finished updating infrastructure state')
+            logger.info('Finished updating infrastructure state')
         except Exception as e:
-            logging.error('Failed to update infrastructure state: %s\n%s' %
+            logger.error('Failed to update infrastructure state: %s\n%s' %
                           (e, traceback.format_exc()))
         finally:
             self.__tq.add_task_in(self.TASK_UPDATE,
@@ -274,7 +274,7 @@ class Infrastructure(object):
             group['couples'].append(new_couples_state)
 
         eid = elliptics.Id(keys.MM_ISTRUCT_GROUP % group_id)
-        logging.info('Updating state for group %s' % group_id)
+        logger.info('Updating state for group %s' % group_id)
         self.meta_session.update_indexes(eid, [keys.MM_GROUPS_IDX],
                                               [self._serialize(group)])
 
@@ -288,7 +288,7 @@ class Infrastructure(object):
             for i, state_node in enumerate(state_nodes):
                 state_host, state_port = state_node
                 if state_host == host and state_port == port:
-                    logging.debug('Removing node {0}:{1} from '
+                    logger.debug('Removing node {0}:{1} from '
                         'group {2} history state'.format(host, port, group.group_id))
                     del state_nodes[i]
                     break
@@ -380,7 +380,7 @@ class Infrastructure(object):
                 raise ValueError('Do not know how to restore group '
                                  'with more than one node')
 
-            logging.info('Constructing restore cmd for group %s '
+            logger.info('Constructing restore cmd for group %s '
                          'from group %s, (%s)' %
                          (group.group_id, source_group, source_node))
             warns.append('Source group %s (%s)' % (source_group, source_node))
@@ -401,11 +401,11 @@ class Infrastructure(object):
 
         except ValueError as e:
             warns.append(e.message)
-            logging.info('Restore cmd for group %s failed, warns: %s' %
+            logger.info('Restore cmd for group %s failed, warns: %s' %
                          (group_id, warns))
             return '', '', warns
 
-        logging.info('Restore cmd for group %s on %s, warns: %s, cmd %s' %
+        logger.info('Restore cmd for group %s on %s, warns: %s, cmd %s' %
                      (group_id, addr, warns, cmd))
         return addr, cmd, warns
 
@@ -439,12 +439,12 @@ class CacheItem(object):
 
     def _sync_cache(self):
         try:
-            logging.info(self.logprefix + 'syncing')
+            logger.info(self.logprefix + 'syncing')
             idxs = self.meta_session.find_all_indexes([self.idx_key])
             for idx in idxs:
                 data = msgpack.unpackb(idx.indexes[0].data)
 
-                logging.debug(self.logprefix + 'Fetched item: %s' %
+                logger.debug(self.logprefix + 'Fetched item: %s' %
                               (data,))
 
                 try:
@@ -452,9 +452,9 @@ class CacheItem(object):
                 except KeyError:
                     pass
 
-            logging.info(self.logprefix + 'Finished syncing')
+            logger.info(self.logprefix + 'Finished syncing')
         except Exception as e:
-            logging.error(self.logprefix + 'Failed to sync: %s\n%s' %
+            logger.error(self.logprefix + 'Failed to sync: %s\n%s' %
                           (e, traceback.format_exc()))
         finally:
             self.__tq.add_task_in(self.taskname,
@@ -465,7 +465,7 @@ class CacheItem(object):
         cache_item = {'key': key,
                       'val': val,
                       'ts': time.time()}
-        logging.info(self.logprefix + 'Updating item for key %s '
+        logger.info(self.logprefix + 'Updating item for key %s '
                                       'to value %s' % (key, val))
         self.meta_session.update_indexes(eid, [self.idx_key],
                                               [msgpack.packb(cache_item)])
@@ -475,20 +475,20 @@ class CacheItem(object):
         try:
             cache_item = self.cache[key]
             if cache_item['ts'] + self.key_expire_time < time.time():
-                logging.debug(self.logprefix + 'Item for key %s expired' % (key,))
+                logger.debug(self.logprefix + 'Item for key %s expired' % (key,))
                 raise KeyError
-            logging.debug(self.logprefix + 'Using item for key %s from cache' % (key,))
+            logger.debug(self.logprefix + 'Using item for key %s from cache' % (key,))
             val = cache_item['val']
         except KeyError:
-            logging.debug(self.logprefix + 'Fetching value for key %s from source' % (key,))
+            logger.debug(self.logprefix + 'Fetching value for key %s from source' % (key,))
             try:
                 req_start = time.time()
                 val = self.get_value(key)
-                logging.info(self.logprefix + 'Fetched value for key %s from source: %s' %
+                logger.info(self.logprefix + 'Fetched value for key %s from source: %s' %
                              (key, val))
             except Exception as e:
                 req_time = time.time() - req_start
-                logging.error(self.logprefix + 'Failed to fetch value for key {0} (time: {1:.5f}s): {2}\n{3}'.format(
+                logger.error(self.logprefix + 'Failed to fetch value for key {0} (time: {1:.5f}s): {2}\n{3}'.format(
                     key, req_time, str(e), traceback.format_exc()))
                 raise
             self._update_cache_item(key, val)

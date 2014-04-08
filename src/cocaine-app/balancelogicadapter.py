@@ -6,9 +6,6 @@ import threading
 import inventory
 import storage
 
-from cocaine.logging import Logger
-logging = Logger()
-
 
 __config = {}
 __config_lock = threading.Lock()

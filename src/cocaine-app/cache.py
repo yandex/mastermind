@@ -3,11 +3,11 @@ import copy
 from functools import wraps
 from itertools import imap
 import json
+import logging
 import random
 import traceback
 import threading
 
-from cocaine.logging import Logger
 import elliptics
 import timed_queue
 
@@ -16,7 +16,7 @@ import storage
 from cache_transport.transport import transport
 
 
-logging = Logger()
+logger = logging.getLogger('mm.cache')
 
 __update_lock = threading.Lock()
 
@@ -67,16 +67,16 @@ class CacheManager(object):
         try:
             return json.loads(item.indexes[0].data)
         except Exception as e:
-            logging.info('Failed to load cache item: %s' % e)
+            logger.info('Failed to load cache item: %s' % e)
             return None
 
     @update_lock
     def update_cache_list(self):
         try:
-            logging.info('Updating cache list')
+            logger.info('Updating cache list')
 
             if not self.instances:
-                logging.info('Cache instances are not yet fetched')
+                logger.info('Cache instances are not yet fetched')
                 return
 
             indexes = [(self.__index_prefix + ns).encode('utf-8') for ns in self.__namespaces]
@@ -84,11 +84,11 @@ class CacheManager(object):
             self.__sync(imap(self.__loads, self.__session.find_any_indexes(indexes)))
 
         except Exception as e:
-            logging.error("Error while updating cache list: %s\n%s" % (str(e), traceback.format_exc()))
+            logger.error("Error while updating cache list: %s\n%s" % (str(e), traceback.format_exc()))
         finally:
             cache_list_update_period = config['cache'].get('list_update_period', 30)
             self.__tq.add_task_in('cache_list_update', cache_list_update_period, self.update_cache_list)
-            logging.info('Cache list updated')
+            logger.info('Cache list updated')
 
     @update_lock
     def upload_list(self, request):
@@ -98,14 +98,14 @@ class CacheManager(object):
                                'cache is not set up')
 
         data = request['request']
-        logging.info('request: %s ' % request)
+        logger.info('request: %s ' % request)
         files = json.loads(data['files'])
         ns = data['namespace']
 
         if not ns in self.__namespaces:
-            logging.info('Invalid cache namespace: %s' % ns)
+            logger.info('Invalid cache namespace: %s' % ns)
 
-        logging.info('Files to upload: %s' % (files,))
+        logger.info('Files to upload: %s' % (files,))
 
         files = sorted(files, key=lambda f: f['traffic'], reverse=True)
 
@@ -124,18 +124,18 @@ class CacheManager(object):
             namespaces = self.__namespaces
 
         if not namespaces:
-            logging.info('No valid namespaces for synchronizing cache')
+            logger.info('No valid namespaces for synchronizing cache')
             return
 
         for ns in namespaces:
             keys_to_remove[ns] = set(self.keys[ns].keys())
 
         for item in items:
-            logging.info('Updating cache key %s' % item['key'])
+            logger.info('Updating cache key %s' % item['key'])
 
             ns = namespace or item.get('namespace')
             if not ns:
-                logging.info('No namespace for key %s' % item['key'])
+                logger.info('No namespace for key %s' % item['key'])
                 continue
 
             keys_to_remove[ns].discard(item['key'])
@@ -151,13 +151,13 @@ class CacheManager(object):
             cur_groups = set(existing_key and existing_key['dgroups'] or [])
 
             if existing_key:
-                logging.info('Existing key: %s' % item['key'])
+                logger.info('Existing key: %s' % item['key'])
 
             if not passive:
                 req_ci_num = self.__cache_instances_num(item['traffic'])
 
                 req_ci_num -= len(cur_groups)
-                logging.info('Key %s already dispatched %s cache instances, %s more required' % (item['key'], len(cur_groups), req_ci_num))
+                logger.info('Key %s already dispatched %s cache instances, %s more required' % (item['key'], len(cur_groups), req_ci_num))
 
                 key = {}
                 for k in ('key', self.ITEM_SIZE_KEY, 'traffic', 'sgroups'):
@@ -181,12 +181,12 @@ class CacheManager(object):
                 else:
                     space_needed = self.__need_space(ns, req_ci_num, item[self.ITEM_SIZE_KEY])
                     if space_needed > 0:
-                        logging.info('Additional space for namespaces required: %s' % mb(space_needed))
+                        logger.info('Additional space for namespaces required: %s' % mb(space_needed))
 
                         keys_removed, freed_space = self.__pop_least_popular_keys(ns, item['traffic'], space_needed)
                         keys_to_remove[ns] = keys_to_remove[ns] - keys_removed[ns]
                         if freed_space < space_needed:
-                            logging.info('Not enough space for key %s (size: %s, require add.space: %s)' % (item['key'], mb(item[self.ITEM_SIZE_KEY]), mb(space_needed)))
+                            logger.info('Not enough space for key %s (size: %s, require add.space: %s)' % (item['key'], mb(item[self.ITEM_SIZE_KEY]), mb(space_needed)))
                             continue
 
                     cis = self.__cis_choose_add(req_ci_num, item['sgroups'], item['traffic'], item[self.ITEM_SIZE_KEY])
@@ -196,7 +196,7 @@ class CacheManager(object):
 
                     # TODO: exclude existing dgroups from task
                     task = self.__transport_key(updated_key, action='add')
-                    logging.info('Put task for cache distribution: %s' % task)
+                    logger.info('Put task for cache distribution: %s' % task)
                     transport.put(json.dumps(task))
 
                 self.__upstream_update_key(ns, updated_key)
@@ -206,19 +206,19 @@ class CacheManager(object):
                 # dgroups should contain only groups that are in our cache instances
                 updated_key['dgroups'] = list(ext_groups)
                 self.keys[ns][item['key']] = updated_key
-                logging.info('External key %s' % (updated_key,))
+                logger.info('External key %s' % (updated_key,))
 
             for gid in cur_groups - ext_groups:
                 group = storage.groups[gid]
                 self.instances[group].remove_file(item[self.ITEM_SIZE_KEY])
                 self.__namespaces[ns]['cache_size'] -= item[self.ITEM_SIZE_KEY]
-                logging.info('Namespace %s: cache size changed -%s = %s' %
+                logger.info('Namespace %s: cache size changed -%s = %s' %
                              (ns, mb(item[self.ITEM_SIZE_KEY]), mb(self.__namespaces[ns]['cache_size'])))
             for gid in ext_groups - cur_groups:
                 group = storage.groups[gid]
                 self.instances[group].add_file(item[self.ITEM_SIZE_KEY])
                 self.__namespaces[ns]['cache_size'] += item[self.ITEM_SIZE_KEY]
-                logging.info('Namespace %s: cache size changed +%s = %s' %
+                logger.info('Namespace %s: cache size changed +%s = %s' %
                              (ns, mb(item[self.ITEM_SIZE_KEY]), mb(self.__namespaces[ns]['cache_size'])))
 
         self.__sync_removed(keys_to_remove, namespaces, passive=passive)
@@ -230,14 +230,14 @@ class CacheManager(object):
 
                 if not passive:
                     task = self.__transport_key(existing_key, action='remove', dgroups=existing_key['dgroups'])
-                    logging.info('Put task for cache distribution: %s' % task)
+                    logger.info('Put task for cache distribution: %s' % task)
                     transport.put(json.dumps(task))
                     self.__upstream_remove_key(ns, existing_key)
 
                 for gid in existing_key['dgroups']:
                     self.instances[gid].remove_file(existing_key[self.ITEM_SIZE_KEY])
                     self.__namespaces[ns]['cache_size'] -= existing_key[self.ITEM_SIZE_KEY]
-                    logging.info('Namespace %s: cache size changed -%s = %s' %
+                    logger.info('Namespace %s: cache size changed -%s = %s' %
                                  (ns, mb(existing_key[self.ITEM_SIZE_KEY]), mb(self.__namespaces[ns]['cache_size'])))
 
                 del self.keys[ns][key]
@@ -263,7 +263,7 @@ class CacheManager(object):
             if key['key'] in self.keys[ns]:
                 updated_indexes.append((self.__index_prefix + ns).encode('utf-8'))
                 updated_datas.append(json.dumps(self.keys[ns][key['key']]))
-        logging.info('Updated indexes for key %s: %s %s' % (key_, updated_indexes, updated_datas))
+        logger.info('Updated indexes for key %s: %s %s' % (key_, updated_indexes, updated_datas))
         self.__session.set_indexes(eid, updated_indexes, updated_datas)
 
     def get_cached_keys(self, request):
@@ -291,7 +291,7 @@ class CacheManager(object):
             try:
                 item = json.loads(item.indexes[0].data)
             except Exception as e:
-                logging.info('Failed to load cache item: %s' % e)
+                logger.info('Failed to load cache item: %s' % e)
                 continue
 
             if group_id in item['dgroups']:
@@ -322,7 +322,7 @@ class CacheManager(object):
 
         keys_to_remove = {namespace: set()}
 
-        logging.info('Traffic checking %s > %s' % (traffic, l_key['traffic']))
+        logger.info('Traffic checking %s > %s' % (traffic, l_key['traffic']))
         while freed_space < space_needed and traffic > l_key['traffic']:
 
             keys_to_remove[namespace].add(l_key['key'])
@@ -330,7 +330,7 @@ class CacheManager(object):
             freed_space += len(l_key['dgroups']) * l_key[self.ITEM_SIZE_KEY]
             l_key, sorted_keys = sorted_keys[-1], sorted_keys[:-1]
 
-        logging.info('Keys to be removed to free space: %s' % (keys_to_remove,))
+        logger.info('Keys to be removed to free space: %s' % (keys_to_remove,))
         self.__sync_removed(keys_to_remove, [namespace], passive=False)
 
         return keys_to_remove, freed_space
@@ -355,24 +355,24 @@ class CacheManager(object):
             groups = self.cache_groups()
             new_groups = [g for g in groups if g not in self.instances]
             for g in new_groups:
-                logging.info('Adding new cache instance (group %s)' % g)
+                logger.info('Adding new cache instance (group %s)' % g)
                 ci = CacheInstance(g)
                 self.instances[ci] = ci
                 self.__update_namespaces_size(ci)
 
-            logging.info('Current cache instances: %s' % self.instances.keys())
+            logger.info('Current cache instances: %s' % self.instances.keys())
 
             las = sorted([c.load_average for c in self.instances])
-            logging.info(las)
+            logger.info(las)
             median = len(las) and las[len(las) / 2] or 0.0
-            logging.info('Current LA median: %s' % median)
+            logger.info('Current LA median: %s' % median)
 
             self.__bw_per_instance = (self.__base_bw_per_instance
                                       if median <= self.__bw_degradation_threshold else
                                       self.__bandwidth_degrade(median) * self.__base_bw_per_instance)
-            logging.info('Node bandwidth was set to %s Mbytes/sec' % self.__bw_per_instance)
+            logger.info('Node bandwidth was set to %s Mbytes/sec' % self.__bw_per_instance)
         except Exception as e:
-            logging.error("Error while updating cache bandwidth: %s\n%s" % (str(e), traceback.format_exc()))
+            logger.error("Error while updating cache bandwidth: %s\n%s" % (str(e), traceback.format_exc()))
         finally:
             cache_status_update_period = config['cache'].get('status_update_period', 60)
             self.__tq.add_task_in('bandwidth_update', cache_status_update_period, self.cache_status_update)
@@ -380,7 +380,7 @@ class CacheManager(object):
     def __update_namespaces_size(self, ci):
         for ns, ns_stat in self.__namespaces.iteritems():
             ns_stat['total_space'] += ci.total_space
-            logging.info('Total space of namespace %s increased by %s, total %s' %
+            logger.info('Total space of namespace %s increased by %s, total %s' %
                          (ns, mb(ci.total_space), mb(ns_stat['total_space'])))
 
     def __cache_instances_num(self, traffic):
@@ -394,7 +394,7 @@ class CacheManager(object):
             idx = 0
             weights = [ci.weight for ci in cis]
             weights_sum = sum(weights)
-            logging.info('Cache instances weights: %s' % weights)
+            logger.info('Cache instances weights: %s' % weights)
             rnd = random.random() * weights_sum
             for i, w in enumerate(weights):
                 rnd -= w
@@ -413,11 +413,11 @@ class CacheManager(object):
             for n in storage.groups[g].nodes:
                 shosts.add(n)
 
-        logging.info('Source hosts: %s' % shosts)
+        logger.info('Source hosts: %s' % shosts)
 
         filtered_cis = []
         for ci in cis:
-            logging.info('Checking cache instance %s' % (ci))
+            logger.info('Checking cache instance %s' % (ci))
             try:
                 # FOR LOCAL TESTING
                 # for n in g:
@@ -433,19 +433,19 @@ class CacheManager(object):
                     raise ValueError('Cache instance %s group status is not COUPLED' % ci)
 
             except ValueError as e:
-                logging.info("Can't use cache instance %s: %s" % (ci, e))
+                logger.info("Can't use cache instance %s: %s" % (ci, e))
                 continue
             else:
                 filtered_cis.append(ci)
 
-        logging.info('Filtered cache instances with suitable hosts: %s' % filtered_cis)
+        logger.info('Filtered cache instances with suitable hosts: %s' % filtered_cis)
 
-        logging.info('Number of cache instances calculated: %s' % req_num)
+        logger.info('Number of cache instances calculated: %s' % req_num)
         actual_num = min(req_num, len(filtered_cis))
-        logging.info('Number of cache instances to be used: %s' % actual_num)
+        logger.info('Number of cache instances to be used: %s' % actual_num)
 
         selected_cis = self.__cache_instances_rnd_choice(filtered_cis, actual_num)
-        logging.info('Selected cache instances: %s' % selected_cis)
+        logger.info('Selected cache instances: %s' % selected_cis)
 
         return selected_cis
 
@@ -493,12 +493,12 @@ class CacheInstance(object):
 
     def add_file(self, filesize):
         self.cache_size += filesize
-        logging.info('Added file to cache instance %s: +%s = %s' % (
+        logger.info('Added file to cache instance %s: +%s = %s' % (
                      self, mb(filesize), mb(self.cache_size)))
 
     def remove_file(self, filesize):
         self.cache_size = max(self.cache_size - filesize, 0)
-        logging.info('Removed file from cache instance %s: -%s = %s' % (
+        logger.info('Removed file from cache instance %s: -%s = %s' % (
                      self, mb(filesize), mb(self.cache_size)))
 
     def __eq__(self, other):

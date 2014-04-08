@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 import datetime
+import logging
 import time
 import traceback
 
-from cocaine.logging import Logger
 import msgpack
 
 import inventory
@@ -11,7 +11,7 @@ from infrastructure import infrastructure, port_to_path
 from config import config
 
 
-logging = Logger()
+logger = logging.getLogger('mm.storage')
 
 
 RPS_FORMULA_VARIANT = config.get('rps_formula', 0)
@@ -391,7 +391,7 @@ class Group(object):
         # node statuses should be updated before group status is set
         statuses = tuple(node.update_status() for node in self.nodes)
 
-        logging.info('In group %d meta = %s' % (self.group_id, str(self.meta)))
+        logger.info('In group %d meta = %s' % (self.group_id, str(self.meta)))
         if (not self.meta) or (not 'couple' in self.meta) or (not self.meta['couple']):
             self.status = Status.INIT
             self.status_text = "Group %s is in INIT state because there is no coupling info" % (self.__str__())
@@ -657,7 +657,7 @@ def update_statistics(stats):
         stats = [stat_result_entry_to_dict(sre) for sre in stats.get()]
 
     for stat in stats:
-        logging.info("Stats: %s %s" % (str(stat['group_id']), stat['addr']))
+        logger.info("Stats: %s %s" % (str(stat['group_id']), stat['addr']))
 
         try:
 
@@ -667,7 +667,7 @@ def update_statistics(stats):
                 addr = stat['addr'].split(':')
                 if not addr[0] in hosts:
                     host = hosts.add(addr[0])
-                    logging.debug('Adding host %s' % (addr[0]))
+                    logger.debug('Adding host %s' % (addr[0]))
                 else:
                     host = hosts[addr[0]]
 
@@ -675,27 +675,27 @@ def update_statistics(stats):
 
             if not gid in groups:
                 group = groups.add(gid)
-                logging.debug('Adding group %d' % stat['group_id'])
+                logger.debug('Adding group %d' % stat['group_id'])
             else:
                 group = groups[gid]
 
-            logging.info('Stats for node %s' % gid)
+            logger.info('Stats for node %s' % gid)
 
             node = nodes[stat['addr']]
 
             if not node in group.nodes:
                 group.add_node(node)
-                logging.debug('Adding node %d -> %s:%s' %
+                logger.debug('Adding node %d -> %s:%s' %
                               (gid, node.host.addr, node.port))
 
 
-            logging.info('Updating statistics for node %s' % (str(node)))
+            logger.info('Updating statistics for node %s' % (str(node)))
             node.update_statistics(stat)
-            logging.info('Updating status for group %d' % gid)
+            logger.info('Updating status for group %d' % gid)
             groups[gid].update_status()
 
         except Exception as e:
-            logging.error('Unable to process statictics for node %s group_id %d (%s): %s' % (stat['addr'], stat['group_id'], e, traceback.format_exc()))
+            logger.error('Unable to process statictics for node %s group_id %d (%s): %s' % (stat['addr'], stat['group_id'], e, traceback.format_exc()))
 
 
 '''

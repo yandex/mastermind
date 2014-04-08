@@ -1,12 +1,12 @@
 # encoding: utf-8
 import copy
 from datetime import datetime
+import logging
 import re
 import sys
 import traceback
 
 from cocaine.worker import Worker
-from cocaine.logging import Logger
 import elliptics
 import msgpack
 
@@ -21,9 +21,9 @@ import keys
 import storage
 
 
-logging = Logger()
+logger = logging.getLogger('mm.balancer')
 
-logging.info('balancer.py')
+logger.info('balancer.py')
 
 
 class Balancer(object):
@@ -47,19 +47,19 @@ class Balancer(object):
     @h.handler
     def get_symmetric_groups(self, request):
         result = [couple.as_tuple() for couple in storage.couples if couple.status == storage.Status.OK]
-        logging.debug('good_symm_groups: ' + str(result))
+        logger.debug('good_symm_groups: ' + str(result))
         return result
 
     @h.handler
     def get_bad_groups(self, request):
         result = [couple.as_tuple() for couple in storage.couples if couple.status not in storage.NOT_BAD_STATUSES]
-        logging.debug('bad_symm_groups: ' + str(result))
+        logger.debug('bad_symm_groups: ' + str(result))
         return result
 
     @h.handler
     def get_frozen_groups(self, request):
         result = [couple.as_tuple() for couple in storage.couples if couple.status == storage.Status.FROZEN]
-        logging.debug('frozen_couples: ' + str(result))
+        logger.debug('frozen_couples: ' + str(result))
         return result
 
     @h.handler
@@ -68,21 +68,21 @@ class Balancer(object):
         min_free_space = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
         min_rel_space = config['balancer_config'].get('min_free_space_relative', 0.15)
 
-        logging.debug('configured min_free_space: %s bytes' % min_free_space)
-        logging.debug('configured min_rel_space: %s' % min_rel_space)
+        logger.debug('configured min_free_space: %s bytes' % min_free_space)
+        logger.debug('configured min_rel_space: %s' % min_rel_space)
 
         result = [couple.as_tuple() for couple in storage.couples
                   if couple.status == storage.Status.FULL]
 
-        logging.debug('closed couples: ' + str(result))
+        logger.debug('closed couples: ' + str(result))
         return result
 
     @h.handler
     def get_empty_groups(self, request):
-        logging.info('len(storage.groups) = %d' % (len(storage.groups.elements)))
-        logging.info('groups: %s' % str([(group.group_id, group.couple) for group in storage.groups if group.couple is None]))
+        logger.info('len(storage.groups) = %d' % (len(storage.groups.elements)))
+        logger.info('groups: %s' % str([(group.group_id, group.couple) for group in storage.groups if group.couple is None]))
         result = [group.group_id for group in storage.groups if group.couple is None]
-        logging.debug('uncoupled groups: ' + str(result))
+        logger.debug('uncoupled groups: ' + str(result))
         return result
 
 
@@ -125,7 +125,7 @@ class Balancer(object):
 
         group = storage.groups[gid]
 
-        logging.info('Creating elliptics session')
+        logger.info('Creating elliptics session')
 
         s = elliptics.Session(self.node)
         s.set_timeout(config.get('wait_timeout', 5))
@@ -133,7 +133,7 @@ class Balancer(object):
 
         data = s.read_data(key).get()[0]
 
-        logging.info('Read key {0} from group {1}: {2}'.format(key.replace('\0', r'\0'), group, data.data))
+        logger.info('Read key {0} from group {1}: {2}'.format(key.replace('\0', r'\0'), group, data.data))
 
         return {'id': repr(data.id),
                 'full_id': str(data.id),
@@ -142,12 +142,12 @@ class Balancer(object):
     @h.handler
     def groups_by_dc(self, request):
         groups = request[0]
-        logging.info('Groups: %s' % (groups,))
+        logger.info('Groups: %s' % (groups,))
         groups_by_dcs = {}
         for g in groups:
 
             if not g in storage.groups:
-                logging.info('Group %s not found' % (g,))
+                logger.info('Group %s not found' % (g,))
                 continue
 
             group = storage.groups[g]
@@ -177,14 +177,14 @@ class Balancer(object):
     @h.handler
     def couples_by_namespace(self, request):
         couples = request[0]
-        logging.info('Couples: %s' % (couples,))
+        logger.info('Couples: %s' % (couples,))
 
         couples_by_nss = {}
 
         for c in couples:
             couple_str = ':'.join([str(i) for i in sorted(c)])
             if not couple_str in storage.couples:
-                logging.info('Couple %s not found' % couple_str)
+                logger.info('Couple %s not found' % couple_str)
             couple = storage.couples[couple_str]
 
             couple_data = {
@@ -208,7 +208,7 @@ class Balancer(object):
             namespaces.setdefault(couple.namespace, set())
             namespaces[couple.namespace].add(len(couple))
             all_symm_group_objects.append(symm_group)
-            # logging.debug(str(symm_group))
+            # logger.debug(str(symm_group))
 
         result = {}
 
@@ -223,15 +223,15 @@ class Balancer(object):
                          item[1:] +
                          (int(item[0].get_stat().free_space),)
                      for item in group_weights.items()]
-                logging.info('Cluster info: ' + str(info))
+                logger.info('Cluster info: ' + str(info))
 
-        logging.info(str(result))
+        logger.info(str(result))
         return result
 
     @h.handler
     def repair_groups(self, request):
-        logging.info('----------------------------------------')
-        logging.info('New repair groups request: ' + str(request))
+        logger.info('----------------------------------------')
+        logger.info('New repair groups request: ' + str(request))
 
         group_id = int(request[0])
         try:
@@ -248,16 +248,16 @@ class Balancer(object):
         for couple in storage.couples:
             if group in couple:
                 if couple.status in storage.NOT_BAD_STATUSES:
-                    logging.error('Balancer error: cannot repair, group %d is in couple %s' % (group_id, str(couple)))
+                    logger.error('Balancer error: cannot repair, group %d is in couple %s' % (group_id, str(couple)))
                     return {'Balancer error' : 'cannot repair, group %d is in couple %s' % (group_id, str(couple))}
                 bad_couples.append(couple)
 
         if not bad_couples:
-            logging.error('Balancer error: cannot repair, group %d is not a member of any couple' % group_id)
+            logger.error('Balancer error: cannot repair, group %d is not a member of any couple' % group_id)
             return {'Balancer error' : 'cannot repair, group %d is not a member of any couple' % group_id}
 
         if len(bad_couples) > 1:
-            logging.error('Balancer error: cannot repair, group %d is a member of several couples: %s' % (group_id, str(bad_couples)))
+            logger.error('Balancer error: cannot repair, group %d is a member of several couples: %s' % (group_id, str(bad_couples)))
             return {'Balancer error' : 'cannot repair, group %d is a member of several couples: %s' % (group_id, str(bad_couples))}
 
         couple = bad_couples[0]
@@ -267,17 +267,17 @@ class Balancer(object):
             if g.group_id == group_id:
                 continue
             if g.meta is None:
-                logging.error('Balancer error: group %d (coupled with group %d) has no metadata' % (g.group_id, group_id))
+                logger.error('Balancer error: group %d (coupled with group %d) has no metadata' % (g.group_id, group_id))
                 return {'Balancer error': 'group %d (coupled with group %d) has no metadata' % (g.group_id, group_id)}
 
         namespaces = [g.meta['namespace'] for g in couple if g.group_id != group_id]
         if not all(ns == namespaces[0] for ns in namespaces):
-            logging.error('Balancer error: namespaces of groups coupled with group %d are not the same: %s' % (group_id, namespaces))
+            logger.error('Balancer error: namespaces of groups coupled with group %d are not the same: %s' % (group_id, namespaces))
             return {'Balancer error': 'namespaces of groups coupled with group %d are not the same: %s' % (group_id, namespaces)}
 
         namespace_to_use = namespaces and namespaces[0] or force_namespace
         if not namespace_to_use:
-            logging.error('Balancer error: cannot identify a namespace to use for group %d' % (group_id,))
+            logger.error('Balancer error: cannot identify a namespace to use for group %d' % (group_id,))
             return {'Balancer error': 'cannot identify a namespace to use for group %d' % (group_id,)}
 
         (good, bad) = make_symm_group(self.node, couple, namespace_to_use)
@@ -289,12 +289,12 @@ class Balancer(object):
     @h.handler
     def get_group_info(self, request):
         group = int(request)
-        logging.info('get_group_info: request: %s' % (str(request),))
+        logger.info('get_group_info: request: %s' % (str(request),))
 
         if not group in storage.groups:
             raise ValueError('Group %d is not found' % group)
 
-        logging.info('Group %d: %s' % (group, repr(storage.groups[group])))
+        logger.info('Group %d: %s' % (group, repr(storage.groups[group])))
 
         return storage.groups[group].info()
 
@@ -329,17 +329,17 @@ class Balancer(object):
             raise ValueError('Node should have form <host>:<port>')
 
         if node and node in group.nodes:
-            logging.info('Removing node {0} from group {1} nodes'.format(node, group))
+            logger.info('Removing node {0} from group {1} nodes'.format(node, group))
             group.remove_node(node)
             group.update_status_recursive()
-            logging.info('Removed node {0} from group {1} nodes'.format(node, group))
+            logger.info('Removed node {0} from group {1} nodes'.format(node, group))
 
-        logging.info('Removing node {0} from group {1} history'.format(node, group))
+        logger.info('Removing node {0} from group {1} history'.format(node, group))
         try:
             self.infrastructure.detach_node(group, host, port)
-            logging.info('Removed node {0} from group {1} history'.format(node, group))
+            logger.info('Removed node {0} from group {1} history'.format(node, group))
         except Exception as e:
-            logging.error('Failed to remove {0} from group {1} history: {2}'.format(node, group, str(e)))
+            logger.error('Failed to remove {0} from group {1} history: {2}'.format(node, group, str(e)))
             raise
 
         return True
@@ -347,7 +347,7 @@ class Balancer(object):
     @h.handler
     def get_couple_info(self, request):
         group_id = int(request)
-        logging.info('get_couple_info: request: %s' % (str(request),))
+        logger.info('get_couple_info: request: %s' % (str(request),))
 
         if not group_id in storage.groups:
             raise ValueError('Group %d is not found' % group_id)
@@ -358,8 +358,8 @@ class Balancer(object):
         if not couple:
             raise ValueError('Group %s is not coupled' % group)
 
-        logging.info('Group %s: %s' % (group, repr(group)))
-        logging.info('Couple %s: %s' % (couple, repr(couple)))
+        logger.info('Group %s: %s' % (group, repr(group)))
+        logger.info('Couple %s: %s' % (couple, repr(couple)))
 
         res = couple.info()
         res['groups'] = [g.info() for g in couple]
@@ -368,8 +368,8 @@ class Balancer(object):
 
     @h.handler
     def couple_groups(self, request):
-        logging.info('----------------------------------------')
-        logging.info('New couple groups request: ' + str(request))
+        logger.info('----------------------------------------')
+        logger.info('New couple groups request: ' + str(request))
         uncoupled_groups = self.get_empty_groups(self.node)
         dc_by_group_id = {}
         group_by_dc = {}
@@ -379,8 +379,8 @@ class Balancer(object):
             suitable = True
             for node in group.nodes:
                 if node.status != storage.Status.OK:
-                    logging.info('Group {0} cannot be used, node {1} status '
-                                 'is {2} (not OK)'.format(group.group_id,
+                    logger.info('Group {0} cannot be used, node {1} status '
+                                'is {2} (not OK)'.format(group.group_id,
                                      node, node.status))
                     suitable = False
                     break
@@ -388,17 +388,17 @@ class Balancer(object):
                 continue
 
             try:
-                logging.info('Fetching dc for group {0}'.format(group.group_id))
+                logger.info('Fetching dc for group {0}'.format(group.group_id))
                 dc = group.nodes[0].host.dc
             except IndexError:
-                logging.error('Empty nodes list for group %s' % group_id)
+                logger.error('Empty nodes list for group %s' % group_id)
                 continue
 
             dc_by_group_id[group_id] = dc
             groups_in_dc = group_by_dc.setdefault(dc, [])
             groups_in_dc.append(group_id)
-        logging.info('dc by group: %s' % str(dc_by_group_id))
-        logging.info('group_by_dc: %s' % str(group_by_dc))
+        logger.info('dc by group: %s' % str(dc_by_group_id))
+        logger.info('group_by_dc: %s' % str(group_by_dc))
         size = int(request[0])
         mandatory_groups = [int(g) for g in request[1]]
 
@@ -428,11 +428,11 @@ class Balancer(object):
 
         try:
             namespace = request[2]
-            logging.info('namespace from request: {0}'.format(namespace))
+            logger.info('namespace from request: {0}'.format(namespace))
             if not self.valid_namespace(namespace):
-                logging.info('namespace from request: {0}, RaISING EXCEPTION!!!!111'.format(namespace))
+                logger.info('namespace from request: {0}, RaISING EXCEPTION!!!!111'.format(namespace))
                 raise ValueError('Namespace "{0}" is invalid'.format(namespace))
-            logging.info('namespace from request: {0}'.format(namespace))
+            logger.info('namespace from request: {0}'.format(namespace))
         except IndexError:
             namespace = storage.Group.DEFAULT_NAMESPACE
 
@@ -445,8 +445,8 @@ class Balancer(object):
 
     @h.handler
     def break_couple(self, request):
-        logging.info('----------------------------------------')
-        logging.info('New break couple request: ' + str(request))
+        logger.info('----------------------------------------')
+        logger.info('New break couple request: ' + str(request))
 
         couple_str = ':'.join(map(str, sorted(request[0], key=lambda x: int(x))))
         if not couple_str in storage.couples:
@@ -455,7 +455,7 @@ class Balancer(object):
         couple = storage.couples[couple_str]
         confirm = request[1]
 
-        logging.info('groups: %s; confirmation: "%s"' %
+        logger.info('groups: %s; confirmation: "%s"' %
             (couple_str, confirm))
 
         correct_confirms = []
@@ -523,7 +523,7 @@ class Balancer(object):
         key = keys.MASTERMIND_COUPLE_META_KEY % str(couple)
 
         packed = msgpack.packb(couple.meta)
-        logging.info('packed meta for couple %s: "%s"' % (couple, str(packed).encode('hex')))
+        logger.info('packed meta for couple %s: "%s"' % (couple, str(packed).encode('hex')))
         EllAsyncResult(self.node.meta_session.write_data(key, packed),
                        EllLookupResult).get()
 
@@ -567,13 +567,13 @@ class Balancer(object):
 
             couple_checks = [g.couple and g.couple == ref_couple
                              for g in groups]
-            logging.debug('Checking couple {0}: {1}'.format(
+            logger.debug('Checking couple {0}: {1}'.format(
                 couple, couple_checks))
 
             if (not ref_couple or not all(couple_checks)):
                 raise ValueError('Couple {0} is not found'.format(couple))
 
-            logging.debug('Checking couple {0} namespace'.format(couple))
+            logger.debug('Checking couple {0} namespace'.format(couple))
             if ref_couple.namespace != namespace:
                 raise ValueError('Couple {0} namespace is {1}, not {2}'.format(ref_couple,
                     ref_couple.namespace, namespace))
@@ -623,10 +623,10 @@ class Balancer(object):
         try:
             self.validate_ns_settings(namespace, settings)
         except Exception as e:
-            logging.error(e)
+            logger.error(e)
             raise
 
-        logging.debug('saving settings for namespace "{0}": {1}'.format(
+        logger.debug('saving settings for namespace "{0}": {1}'.format(
             namespace, settings))
 
         settings['namespace'] = namespace
@@ -644,7 +644,7 @@ class Balancer(object):
 
         res = msgpack.unpackb(self.ns_settings_idx[namespace])
         del res['namespace']
-        logging.info('Namespace "{0}" settings: {1}'.format(namespace, res))
+        logger.info('Namespace "{0}" settings: {1}'.format(namespace, res))
         return res
 
     def get_namespaces_settings(self, request):
@@ -657,7 +657,7 @@ class Balancer(object):
 
     @h.handler
     def freeze_couple(self, request):
-        logging.info('freezing couple %s' % str(request))
+        logger.info('freezing couple %s' % str(request))
         couple = self.__get_couple(request)
 
         self.__sync_couple_meta(couple)
@@ -670,7 +670,7 @@ class Balancer(object):
 
     @h.handler
     def unfreeze_couple(self, request):
-        logging.info('unfreezing couple %s' % str(request))
+        logger.info('unfreezing couple %s' % str(request))
         couple = self.__get_couple(request)
 
         self.__sync_couple_meta(couple)
@@ -702,7 +702,7 @@ def handlers(b):
 
 def kill_symm_group(n, meta_session, couple):
     groups = [group.group_id for group in couple]
-    logging.info('Killing symm groups: %s' % str(groups))
+    logger.info('Killing symm groups: %s' % str(groups))
     s = elliptics.Session(n)
     s.set_timeout(config.get('wait_timeout', 5))
     s.add_groups(groups)
@@ -717,8 +717,8 @@ def kill_symm_group(n, meta_session, couple):
 
 
 def make_symm_group(n, couple, namespace):
-    logging.info('writing couple info: ' + str(couple))
-    logging.info('groups in couple %s are being assigned namespace "%s"' % (couple, namespace))
+    logger.info('writing couple info: ' + str(couple))
+    logger.info('groups in couple %s are being assigned namespace "%s"' % (couple, namespace))
 
     s = elliptics.Session(n)
     s.set_timeout(config.get('wait_timeout', 5))
@@ -727,15 +727,15 @@ def make_symm_group(n, couple, namespace):
     for group in couple:
         try:
             packed = msgpack.packb(couple.compose_group_meta(namespace))
-            logging.info('packed couple for group %d: "%s"' % (group.group_id, str(packed).encode('hex')))
+            logger.info('packed couple for group %d: "%s"' % (group.group_id, str(packed).encode('hex')))
             s.add_groups([group.group_id])
             EllAsyncResult(s.write_data(keys.SYMMETRIC_GROUPS_KEY, packed),
                            EllLookupResult).get()
             group.parse_meta(packed)
             good.append(group.group_id)
         except Exception as e:
-            logging.error('Failed to write symm group info, group %d: %s\n%s'
-                          % (group.group_id, str(e), traceback.format_exc()))
+            logger.error('Failed to write symm group info, group %d: %s\n%s'
+                         % (group.group_id, str(e), traceback.format_exc()))
             bad = (group.group_id, e)
             break
     return (good, bad)

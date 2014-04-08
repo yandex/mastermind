@@ -1,13 +1,13 @@
 #!/usr/bin/python
 # encoding: utf-8
 from functools import wraps, partial
+import logging
 import sys
 from time import sleep
 import traceback
 import types
 
 from cocaine.worker import Worker
-from cocaine.logging import Logger
 
 sys.path.append('/usr/lib')
 
@@ -16,6 +16,7 @@ import msgpack
 
 import elliptics
 
+import log
 import balancer
 import balancelogicadapter
 import infrastructure
@@ -26,68 +27,68 @@ import statistics
 from config import config
 
 
-logging = Logger()
+logger = logging.getLogger('mm.init')
 
 i = iter(xrange(100))
-logging.info("trace %d" % (i.next()))
+logger.info("trace %d" % (i.next()))
 
-logging.debug("config: %s" % str(config["elliptics_nodes"]))
+logger.debug("config: %s" % str(config["elliptics_nodes"]))
 
-logging.info("trace %d" % (i.next()))
+logger.info("trace %d" % (i.next()))
 log = elliptics.Logger(str(config["dnet_log"]), config["dnet_log_mask"])
 n = elliptics.Node(log)
 
 connected = False
 
-logging.info("trace %d" % (i.next()))
+logger.info("trace %d" % (i.next()))
 for host in config["elliptics_nodes"]:
-    logging.debug("Adding node %s" % str(host))
+    logger.debug("Adding node %s" % str(host))
     try:
-        logging.info("host: " + str(host))
+        logger.info("host: " + str(host))
         n.add_remote(str(host[0]), host[1])
         connected = True
     except Exception as e:
-        logging.error("Error: " + str(e) + "\n" + traceback.format_exc())
+        logger.error("Error: " + str(e) + "\n" + traceback.format_exc())
 
 if not connected:
-    logging.error('Failed to connect to any elliptics storage node')
+    logger.error('Failed to connect to any elliptics storage node')
     raise ValueError('Failed to connect to any elliptics storage node')
 
 connected = False
 
-logging.info("trace %d" % (i.next()))
+logger.info("trace %d" % (i.next()))
 meta_node = elliptics.Node(log)
 for host in config["metadata"]["nodes"]:
     try:
-        logging.info("host: " + str(host))
+        logger.info("host: " + str(host))
         meta_node.add_remote(str(host[0]), host[1])
         connected = True
     except Exception as e:
-        logging.error("Error: " + str(e) + "\n" + traceback.format_exc())
+        logger.error("Error: " + str(e) + "\n" + traceback.format_exc())
 
 if not connected:
-    logging.error('Failed to connect to any elliptics meta storage node')
+    logger.error('Failed to connect to any elliptics meta storage node')
     raise ValueError('Failed to connect to any elliptics storage node')
 
 
 wait_timeout = config.get('wait_timeout', 5)
-logging.info('sleeping for wait_timeout for nodes '
+logger.info('sleeping for wait_timeout for nodes '
              'to collect data ({0} sec)'.format(wait_timeout))
 sleep(wait_timeout)
 
 meta_session = elliptics.Session(meta_node)
 meta_session.set_timeout(wait_timeout)
 meta_session.add_groups(list(config["metadata"]["groups"]))
-logging.info("trace %d" % (i.next()))
+logger.info("trace %d" % (i.next()))
 n.meta_session = meta_session
 
 balancelogicadapter.setConfig(config["balancer_config"])
 
 
-logging.info("trace %d" % (i.next()))
-logging.info("before creating worker")
+logger.info("trace %d" % (i.next()))
+logger.info("before creating worker")
 W = Worker(disown_timeout=config.get('disown_timeout', 2))
-logging.info("after creating worker")
+logger.info("after creating worker")
 
 
 b = balancer.Balancer(n)
@@ -99,16 +100,16 @@ def register_handle(h):
         try:
             data = yield request.read()
             data = msgpack.unpackb(data)
-            logging.info("Running handler for event %s, data=%s" % (h.__name__, str(data)))
+            logger.info("Running handler for event %s, data=%s" % (h.__name__, str(data)))
             #msgpack.pack(h(data), response)
             response.write(h(data))
         except Exception as e:
-            logging.error("Balancer error: %s" % traceback.format_exc().replace('\n', '    '))
+            logger.error("Balancer error: %s" % traceback.format_exc().replace('\n', '    '))
             response.write({"Balancer error": str(e)})
         response.close()
 
     W.on(h.__name__, wrapper)
-    logging.info("Registering handler for event %s" % h.__name__)
+    logger.info("Registering handler for event %s" % h.__name__)
     return wrapper
 
 
@@ -120,8 +121,8 @@ def init_infrastructure():
 
 
 def init_node_info_updater():
-    logging.info("trace node info updater %d" % (i.next()))
-    niu = node_info_updater.NodeInfoUpdater(logging, n)
+    logger.info("trace node info updater %d" % (i.next()))
+    niu = node_info_updater.NodeInfoUpdater(logging.getLogger('mm.nodes'), n)
     register_handle(niu.force_nodes_update)
 
     return niu
@@ -165,9 +166,9 @@ init_statistics()
 init_minions()
 
 for handler in balancer.handlers(b):
-    logging.info("registering bounded function %s" % handler)
+    logger.info("registering bounded function %s" % handler)
     register_handle(handler)
 
-logging.info("Starting worker")
+logger.info("Starting worker")
 W.run()
-logging.info("Initialized")
+logger.info("Initialized")
