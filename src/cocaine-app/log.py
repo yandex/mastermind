@@ -26,11 +26,14 @@ class CocaineHandler(logging.Handler):
 
 
 root_logger = logging.getLogger('mm')
+tornado_logger = logging.getLogger('tornado')
 
 _handler = CocaineHandler()
 _handler.setFormatter(logging.Formatter(fmt='[%(name)s] %(message)s'))
 
 root_logger.addHandler(_handler)
+tornado_logger.addHandler(_handler)
 
 # cocaine.Logger will take care of low-level messages filtering
 root_logger.setLevel(logging.DEBUG)
+tornado_logger.setLevel(logging.DEBUG)

@@ -313,7 +313,8 @@ class AsyncHTTPBatch(object):
         #     time.time() + (emergency_timeout or self.timeout * 2),
         #     self._emergency_halt)
         logger.debug('Minion states, creating async http clients')
-        [AsyncHTTPClient().fetch(url, callback=self._process,
+        max_clients = len(self.urls)
+        [AsyncHTTPClient(max_clients=max_clients).fetch(url, callback=self._process,
             request_timeout=self.timeout, headers=self.headers) for url in self.urls]
         logger.debug('Minion states, starting ioloop')
         self.ioloop.start()

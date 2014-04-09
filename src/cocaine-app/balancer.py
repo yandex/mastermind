@@ -4,6 +4,7 @@ from datetime import datetime
 import logging
 import re
 import sys
+import time
 import traceback
 
 from cocaine.worker import Worker
@@ -630,7 +631,11 @@ class Balancer(object):
             namespace, settings))
 
         settings['namespace'] = namespace
+        start = time.time()
         self.ns_settings_idx[namespace] = msgpack.packb(settings)
+        logger.debug('namespace "{0}" settings saved to index '
+            '({1:.4f}s)'.format(namespace, time.time() - start))
+
         return True
 
     def get_namespace_settings(self, request):
@@ -642,15 +647,24 @@ class Balancer(object):
         if not namespace in self.__all_namespaces():
             raise ValueError('Namespace "{0}" does not exist'.format(namespace))
 
+        logger.debug('fetching namespace "{0}" settings from index'.format(namespace))
+        start = time.time()
         res = msgpack.unpackb(self.ns_settings_idx[namespace])
+        logger.debug('namespace "{0}" settings fetched from index '
+            '({1:.4f}s)'.format(namespace, time.time() - start))
+
         del res['namespace']
         logger.info('Namespace "{0}" settings: {1}'.format(namespace, res))
         return res
 
     def get_namespaces_settings(self, request):
         res = {}
+        logger.debug('fetching all namespace settings')
+        start = time.time()
         for data in self.ns_settings_idx:
             settings = msgpack.unpackb(data)
+            logger.debug('fetched namespace settings for "{0}" '
+                '({1:.4f}s)'.format(settings['namespace'], time.time() - start))
             res[settings['namespace']] = settings
             del settings['namespace']
         return res
