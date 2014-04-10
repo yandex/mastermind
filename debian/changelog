@@ -1,3 +1,9 @@
+mastermind (2.8.18) lucid; urgency=low
+
+  * Fix for python 2.6.5 logging handlers
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 10 Apr 2014 17:02:44 +0400
+
 mastermind (2.8.17) lucid; urgency=low
 
   * By-state formatter for couples list
