@@ -1,3 +1,11 @@
+mastermind (2.8.17) lucid; urgency=low
+
+  * By-state formatter for couples list
+  * Fix for couple breaking (couple metadata is also being removed)
+  * Logging refactored
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 10 Apr 2014 16:34:44 +0400
+
 mastermind (2.8.16) lucid; urgency=low
 
   * Used space stats for couples
