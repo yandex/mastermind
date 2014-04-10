@@ -8,7 +8,9 @@ _cocaine_logger = Logger()
 
 class CocaineHandler(logging.Handler):
     def __init__(self, level=logging.NOTSET):
-        super(CocaineHandler, self).__init__(level=level)
+        # do not work in python 2.6.5 - logging.Handler is an old-style class
+        # super(CocaineHandler, self).__init__(level=level)
+        logging.Handler.__init__(self, level=level)
 
     def emit(self, record):
         try:
