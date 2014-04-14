@@ -301,13 +301,12 @@ class Node(object):
             min_free_space = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
             min_free_space_rel = config['balancer_config'].get('min_free_space_relative', 0.15)
 
-            res['free_space'] = '{0:.3f} Gb'.format(self.stat.free_space / (1024.0 * 1024.0 * 1024.0))
+            res['free_space'] = int(self.stat.free_space)
             node_eff_space = max(min(self.stat.total_space - min_free_space,
                                      self.stat.total_space * (1 - min_free_space_rel)), 0.0)
 
-            res['free_effective_space'] = '{0:.3f} Gb'.format(
-                max(self.stat.free_space - (self.stat.total_space - node_eff_space), 0.0) / (1024.0 * 1024.0 * 1024.0))
-            res['used_space'] = '{0:.3f} Gb'.format(self.stat.used_space / (1024.0 * 1024.0 * 1024.0))
+            res['free_effective_space'] = int(max(self.stat.free_space - (self.stat.total_space - node_eff_space), 0))
+            res['used_space'] = int(self.stat.used_space)
         res['path'] = port_to_path(int(res['addr'].split(':')[1]))
 
         return res
@@ -601,14 +600,13 @@ class Couple(object):
             min_free_space = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
             min_free_space_rel = config['balancer_config'].get('min_free_space_relative', 0.15)
 
-            res['free_space'] = '{0:.3f} Gb'.format(stat.free_space / (1024.0 * 1024.0 * 1024.0))
+            res['free_space'] = int(stat.free_space)
             node_eff_space = max(min(stat.total_space - min_free_space,
                                      stat.total_space * (1 - min_free_space_rel)), 0.0)
 
-            res['free_effective_space'] = '{0:.3f} Gb'.format(
-                max(stat.free_space - (stat.total_space - node_eff_space), 0.0) / (1024.0 * 1024.0 * 1024.0))
+            res['free_effective_space'] = int(max(stat.free_space - (stat.total_space - node_eff_space), 0))
 
-            res['used_space'] = '{0:.3f} Gb'.format(stat.used_space / (1024.0 * 1024.0 * 1024.0))
+            res['used_space'] = int(stat.used_space)
         return res
 
     def __contains__(self, group):

@@ -81,6 +81,14 @@ def evil_wrapper(func, decorator):
 groupDispatcher = Dispatcher(globaloptions=(host_param,))
 
 
+def convert_stats(d):
+    def to_gb(bytes):
+        return bytes / (1024.0 * 1024.0 * 1024.0)
+    d['free_space'] = '{0:.3f} Gb'.format(to_gb(d['free_space']))
+    d['free_effective_space'] = '{0:.3f} Gb'.format(to_gb(d['free_effective_space']))
+    d['used_space'] = '{0:.3f} Gb'.format(to_gb(d['used_space']))
+
+
 @groupDispatcher.command(name='info')
 @log_action
 def group_info(group, history=('l', False, 'History of group nodes'), host=None):
@@ -89,6 +97,8 @@ def group_info(group, history=('l', False, 'History of group nodes'), host=None)
     group = int(group)
 
     res = s.enqueue("get_group_info", msgpack.packb(group)).get()
+    for node in res.get('nodes', []):
+        convert_stats(node)
     pprint(res)
 
     if history:
@@ -312,6 +322,11 @@ def couple_info(group, host=None):
     group = int(group)
 
     res = s.enqueue("get_couple_info", msgpack.packb(group)).get()
+    for group in res.get('groups', []):
+        for node in group.get('nodes', []):
+            convert_stats(node)
+    if 'id' in res:
+        convert_stats(res)
 
     if 'Balancer error' in res or 'Error' in res:
         print res
@@ -375,6 +390,30 @@ def couple_list(namespace=('n', '', 'Filter by namespace'),
             key_mapper = lambda k: STATES.get(k, k)
 
     if not short and not verbose:
+
+        # convert stats
+        def convert_entities_stats(entities):
+
+            def convert_group_stats(group):
+                for node in group.get('nodes', []):
+                    convert_stats(node)
+
+            for entity in entities:
+                if 'couple_status' in entity:
+                    # entity is couple
+                    for group in entity.get('groups', []):
+                        convert_group_stats(group)
+                    convert_stats(entity)
+                else:
+                    # entity is group
+                    convert_group_stats(entity)
+
+        if grouped:
+            for key, entities in data.iteritems():
+                convert_entities_stats(entities)
+        else:
+            convert_entities_stats(data)
+
         if json:
             print dumps(data)
         else:
