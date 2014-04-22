@@ -84,6 +84,7 @@ class NodeStat(object):
             self.max_write_rps = 0
 
             self.fragmentation = 0.0
+            self.files = 0
             self.files_removed = 0
 
             self.fsid = None
@@ -124,6 +125,7 @@ class NodeStat(object):
         self.fragmentation = (float(raw_stat['counters']['DNET_CNTR_NODE_FILES_REMOVED'][0]) /
                                  ((raw_stat['counters']['DNET_CNTR_NODE_FILES'][0] +
                                    raw_stat['counters']['DNET_CNTR_NODE_FILES_REMOVED'][0]) or 1))
+        self.files = raw_stat['counters']['DNET_CNTR_NODE_FILES'][0]
         self.files_removed = raw_stat['counters']['DNET_CNTR_NODE_FILES_REMOVED'][0]
 
         self.fsid = raw_stat['counters']['DNET_CNTR_FSID'][0]
@@ -167,6 +169,10 @@ class NodeStat(object):
         res.max_read_rps = self.max_read_rps + other.max_read_rps
         res.max_write_rps = self.max_write_rps + other.max_write_rps
 
+        res.files = self.files + other.files
+        res.files_removed = self.files_removed + other.files_removed
+        res.fragmentation = float(res.files_removed) / (res.files_removed + res.files or 1)
+
         return res
 
     def __mul__(self, other):
@@ -184,6 +190,17 @@ class NodeStat(object):
 
         res.max_read_rps = min(self.max_read_rps, other.max_read_rps)
         res.max_write_rps = min(self.max_write_rps, other.max_write_rps)
+
+        # files and files_removed are taken from the stat object with maximum
+        # total number of keys. If total number of keys is equal,
+        # the stat object with larger number of removed keys is more up-to-date
+        files_stat = max(self, other, key=lambda stat: (stat.files + stat.files_removed, stat.files_removed))
+        res.files = files_stat.files
+        res.files_removed = files_stat.files_removed
+
+        # ATTENTION: fragmentation coefficient in this case would not necessary
+        # be equal to [removed keys / total keys]
+        res.fragmentation = max(self.fragmentation, other.fragmentation)
 
         return res
 
@@ -307,6 +324,8 @@ class Node(object):
 
             res['free_effective_space'] = int(max(self.stat.free_space - (self.stat.total_space - node_eff_space), 0))
             res['used_space'] = int(self.stat.used_space)
+            res['total_files'] = self.stat.files + self.stat.files_removed
+            res['fragmentation'] = self.stat.fragmentation
         res['path'] = port_to_path(int(res['addr'].split(':')[1]))
 
         return res
