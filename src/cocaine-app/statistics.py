@@ -298,6 +298,9 @@ class Statistics(object):
     def __stats_to_dict(self, stat):
         res = {}
 
+        if not stat:
+            return res
+
         res['total_space'] = stat.total_space
         res['free_space'] = stat.free_space
         node_eff_space = max(min(stat.total_space - self.MIN_FREE_SPACE,

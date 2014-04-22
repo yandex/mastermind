@@ -84,9 +84,9 @@ groupDispatcher = Dispatcher(globaloptions=(host_param,))
 def convert_stats(d):
     def to_gb(bytes):
         return bytes / (1024.0 * 1024.0 * 1024.0)
-    d['free_space'] = '{0:.3f} Gb'.format(to_gb(d['free_space']))
-    d['free_effective_space'] = '{0:.3f} Gb'.format(to_gb(d['free_effective_space']))
-    d['used_space'] = '{0:.3f} Gb'.format(to_gb(d['used_space']))
+    for k in ('free_space', 'free_effective_space', 'used_space'):
+        if k in d:
+            d[k] = '{0:.3f} Gb'.format(to_gb(d[k]))
 
 
 @groupDispatcher.command(name='info')
