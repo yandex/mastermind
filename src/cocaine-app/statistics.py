@@ -58,6 +58,12 @@ class Statistics(object):
         else:
             data['uncoupled_space'] += stat.total_space
 
+    @staticmethod
+    def account_keys(data, node):
+        stat = node.stat
+        data['total_keys'] += stat.files + stat.files_removed
+        data['removed_keys'] += stat.files_removed
+
     def per_entity_stat(self):
         default = lambda: {
             'free_space': 0.0,
@@ -72,6 +78,9 @@ class Statistics(object):
             'bad_couples': 0,
             'total_couples': 0,
             'uncoupled_groups': 0,
+
+            'total_keys': 0,
+            'removed_keys': 0,
         }
 
         by_dc = defaultdict(default)
@@ -110,6 +119,10 @@ class Statistics(object):
                 if ns and not node.stat.fsid in ns_host_fsid_map[ns][node.host]:
                     self.account_memory(by_ns[ns][dc], group, node.stat)
                     ns_host_fsid_map[ns][node.host].add(node.stat.fsid)
+
+                self.account_keys(by_dc[dc], node)
+                if ns:
+                    self.account_keys(by_ns[ns][dc], node)
 
         return dict(by_dc), dict((k, dict(v)) for k, v in by_ns.iteritems())
 
@@ -259,6 +272,7 @@ class Statistics(object):
                                'couple_status': group.couple and group.couple.status or None,
                                'free_space': stat.free_space,
                                'total_space': stat.total_space,
+                               'fragmentation': stat.fragmentation,
                                'status': group.couple and group.couple.status or None})
 
         return {'type': 'root', 'name': 'root',
@@ -309,5 +323,6 @@ class Statistics(object):
         res['free_effective_space'] = max(stat.free_space -
             (stat.total_space - node_eff_space), 0.0)
         res['used_space'] = stat.used_space
+        res['fragmentation'] = stat.fragmentation
 
         return res
