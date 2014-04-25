@@ -1,3 +1,9 @@
+mastermind (2.8.21) lucid; urgency=low
+
+  * Fix for couple namespace processing
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 25 Apr 2014 19:36:56 +0400
+
 mastermind (2.8.20) lucid; urgency=low
 
   * Keys statistics and fragmentation tree map
