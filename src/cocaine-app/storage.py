@@ -604,7 +604,19 @@ class Couple(object):
     @property
     def namespace(self):
         assert self.groups, "Couple %s has empty group list (id: %s)" % (repr(self), id(self))
-        return self.groups[0].meta and self.groups[0].meta['namespace'] or None
+        available_metas = [group.meta for group in self.groups
+                           if group.meta]
+
+        if not available_metas:
+            # could not read meta data from any group
+            return None
+
+        assert all(['namespace' in meta
+                    for meta in available_metas]), "Couple %s has broken namespace settings" % (repr(self),)
+        assert all([meta['namespace'] == available_metas[0]['namespace']
+                    for meta in available_metas]), "Couple %s has broken namespace settings" % (repr(self),)
+
+        return available_metas[0]['namespace']
 
     def as_tuple(self):
         return tuple(group.group_id for group in self.groups)
