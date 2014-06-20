@@ -1,3 +1,9 @@
+mastermind (2.8.22) lucid; urgency=low
+
+  * Multipurpose authkey namespace settings
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 20 Jun 2014 19:22:04 +0400
+
 mastermind (2.8.21) lucid; urgency=low
 
   * Fix for couple namespace processing
