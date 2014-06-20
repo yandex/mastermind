@@ -600,8 +600,9 @@ class Balancer(object):
 
 
     ALLOWED_NS_KEYS = set(['success-copies-num', 'groups-count',
-        'static-couple', 'auth-key', 'signature'])
+        'static-couple', 'auth-keys', 'signature'])
     ALLOWED_NS_SIGN_KEYS = set(['token', 'path_prefix', 'port'])
+    ALLOWED_NS_AUTH_KEYS = set(['write', 'read'])
 
 
     def namespace_setup(self, request):
@@ -617,6 +618,9 @@ class Balancer(object):
         for k in settings.get('signature', {}).keys():
             if k not in self.ALLOWED_NS_SIGN_KEYS:
                 del settings['signature'][k]
+        for k in settings.get('auth-keys', {}).keys():
+            if k not in self.ALLOWED_NS_AUTH_KEYS:
+                del settings['auth-keys'][k]
 
         if not namespace in self.__all_namespaces():
             raise ValueError('Namespace "{0}" does not exist'.format(namespace))

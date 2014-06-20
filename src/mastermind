@@ -566,7 +566,8 @@ nsDispatcher = Dispatcher(globaloptions=(host_param,))
 def ns_setup(namespace,
              groups_count=('g', '', 'Set number of groups per couple'),
              success_copies=('s', '', 'Success copy politics (any|quorum|all)'),
-             auth_key=('a', '', 'Proxy auth-key'),
+             auth_key_write=('', '', 'Proxy auth-key for writing'),
+             auth_key_read=('', '', 'Proxy auth-key for reading'),
              sign_token=('', '', 'Signature token'),
              sign_path_prefix=('', '', 'Signature path prefix'),
              sign_port=('', '', 'Signature scheme port'),
@@ -601,14 +602,17 @@ def ns_setup(namespace,
         settings['static-couple'] = couple
     elif groups_count:
         settings['groups-count'] = groups_count
-    if auth_key:
-        settings['auth-key'] = auth_key
     if sign_token:
         settings.setdefault('signature', {})['token'] = sign_token
     if sign_path_prefix:
         settings.setdefault('signature', {})['path_prefix'] = sign_path_prefix
     if sign_port:
         settings.setdefault('signature', {})['port'] = sign_port
+    if auth_key_read or auth_key_write:
+        settings['auth-keys'] = {
+            'read': auth_key_read or '',
+            'write': auth_key_write or '',
+        }
 
     res = s.enqueue('namespace_setup', msgpack.packb([namespace, settings])).get()
     print res
@@ -732,7 +736,7 @@ def restore_group(group, user=('u', os.environ['USER'],
                   dest=('d', '', 'Destination path on current host'),
                   group_file=('f', '', 'Write group id to specified file, '
                      'absolute or relative to destination path '
-                     '(will be overriten if exists)'),
+                     '(will be overwritten if exists)'),
                   host=None):
     '''Get command for restoring group from good symmetric group'''
     s = service(host)
