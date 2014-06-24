@@ -1,3 +1,9 @@
+mastermind (2.8.23) lucid; urgency=low
+
+  * Fix for cocaine crashlog content
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 24 Jun 2014 16:55:28 +0400
+
 mastermind (2.8.22) lucid; urgency=low
 
   * Multipurpose authkey namespace settings
