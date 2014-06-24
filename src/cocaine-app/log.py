@@ -28,7 +28,9 @@ class CocaineHandler(logging.Handler):
 
 
 root_logger = logging.getLogger('mm')
+root_logger.propagate = False
 tornado_logger = logging.getLogger('tornado')
+tornado_logger.propagate = False
 
 _handler = CocaineHandler()
 _handler.setFormatter(logging.Formatter(fmt='[%(name)s] %(message)s'))
