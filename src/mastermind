@@ -16,6 +16,7 @@ from functools import wraps
 import msgpack
 
 from opster import Dispatcher
+from cocaine.exceptions import ServiceError
 from cocaine.services import Service
 
 
@@ -800,7 +801,12 @@ def restore_group(group, user=('u', os.environ['USER'],
     task_id = res.keys()[0]
 
     while True:
-        status = s.enqueue('get_command', msgpack.packb([task_id])).get()
+        try:
+            status = s.enqueue('get_command', msgpack.packb([task_id])).get()
+        except ServiceError:
+            sleep(1)
+            continue
+
         if not status.get('uid') == task_id:
             print
             print warn('Something went wrong')
