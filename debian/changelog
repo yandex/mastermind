@@ -1,3 +1,9 @@
+mastermind (2.8.24) lucid; urgency=low
+
+  * Settings for elliptics client pools in mastermind config
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 03 Jul 2014 17:34:51 +0400
+
 mastermind (2.8.23) lucid; urgency=low
 
   * Fix for cocaine crashlog content
