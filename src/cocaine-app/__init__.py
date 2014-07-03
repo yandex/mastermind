@@ -36,7 +36,17 @@ logger.debug("config: %s" % str(config["elliptics_nodes"]))
 
 logger.info("trace %d" % (i.next()))
 log = elliptics.Logger(str(config["dnet_log"]), config["dnet_log_mask"])
-n = elliptics.Node(log)
+
+node_config = elliptics.Config()
+node_config.io_thread_num = config.get('io_thread_num', 1)
+node_config.nonblocking_io_thread_num = config.get('nonblocking_io_thread_num', 1)
+node_config.net_thread_num = config.get('net_thread_num', 1)
+
+logger.info('Node config: io_thread_num {0}, nonblocking_io_thread_num {1}, '
+    'net_thread_num {2}'.format(node_config.io_thread_num, node_config.nonblocking_io_thread_num,
+        node_config.net_thread_num))
+
+n = elliptics.Node(log, node_config)
 
 connected = False
 
@@ -57,7 +67,7 @@ if not connected:
 connected = False
 
 logger.info("trace %d" % (i.next()))
-meta_node = elliptics.Node(log)
+meta_node = elliptics.Node(log, node_config)
 for host in config["metadata"]["nodes"]:
     try:
         logger.info("host: " + str(host))
