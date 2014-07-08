@@ -33,7 +33,7 @@ tornado_logger = logging.getLogger('tornado')
 tornado_logger.propagate = False
 
 _handler = CocaineHandler()
-_handler.setFormatter(logging.Formatter(fmt='[%(name)s] %(message)s'))
+_handler.setFormatter(logging.Formatter(fmt='[%(name)s] [%(process)d] %(message)s'))
 
 root_logger.addHandler(_handler)
 tornado_logger.addHandler(_handler)
