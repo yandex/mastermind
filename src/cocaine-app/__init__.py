@@ -20,6 +20,7 @@ import log
 import balancer
 import balancelogicadapter
 import infrastructure
+import jobs
 import cache
 import minions
 import node_info_updater
