@@ -194,6 +194,7 @@ class Minions(object):
             raise ValueError('Invalid parameters')
 
         if not host in storage.hosts:
+            logger.debug('Host was not found: {0}, {1}'.format(host, type(host)))
             raise ValueError('Host {0} is not present in cluster'.format(host))
 
         url = self.START_URL_TPL.format(host=host, port=self.minion_port)
@@ -309,9 +310,6 @@ class AsyncHTTPBatch(object):
         self.responses = {}
 
     def get(self, emergency_timeout=None):
-        # self.emergency_timeout = self.ioloop.add_timeout(
-        #     time.time() + (emergency_timeout or self.timeout * 2),
-        #     self._emergency_halt)
         logger.debug('Minion states, creating async http clients')
         max_clients = len(self.urls)
         [AsyncHTTPClient(max_clients=max_clients).fetch(url, callback=self._process,
@@ -327,7 +325,6 @@ class AsyncHTTPBatch(object):
         self.left -= 1
         if not self.left:
             logger.debug('Minion states, stopping loop')
-            # self.ioloop.remove_timeout(self.emergency_timeout)
             self.ioloop.stop()
 
     def _emergency_halt(self):

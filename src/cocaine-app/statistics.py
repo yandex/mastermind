@@ -269,6 +269,8 @@ class Statistics(object):
                 groups.append({'type': 'group',
                                'name': str(group),
                                'couple': group.couple and str(group.couple) or None,
+                               'node_addr': '{0}:{1}'.format(node.host, node.port),
+                               'node_status': node.status,
                                'couple_status': group.couple and group.couple.status or None,
                                'free_space': stat.free_space,
                                'total_space': stat.total_space,

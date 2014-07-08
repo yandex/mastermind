@@ -127,6 +127,8 @@ def init_infrastructure():
     infstruct = infrastructure.infrastructure
     infstruct.init(n)
     register_handle(infstruct.restore_group_cmd)
+    register_handle(infstruct.shutdown_node_cmd)
+    register_handle(infstruct.start_node_cmd)
     b.set_infrastructure(infstruct)
 
 
