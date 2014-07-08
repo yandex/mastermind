@@ -18,3 +18,7 @@ class SecondaryIndex(object):
     def __getitem__(self, key):
         eid = elliptics.Id(self.key_tpl % key)
         return self.meta_session.list_indexes(eid).get()[0].data
+
+    def __delitem__(self, key):
+        eid = elliptics.Id(self.key_tpl % key)
+        self.meta_session.set_indexes(eid, [], [])
