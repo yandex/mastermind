@@ -1,3 +1,9 @@
+mastermind (2.8.27) lucid; urgency=low
+
+  * Fix for elliptics id transforming
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 09 Jul 2014 19:29:19 +0400
+
 mastermind (2.8.26) lucid; urgency=low
 
   * Fix for metakey parallel read
