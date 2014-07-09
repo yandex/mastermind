@@ -1,3 +1,9 @@
+mastermind (2.8.25) lucid; urgency=low
+
+  * Fix for ns settings fetching from elliptics indexes
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 09 Jul 2014 12:26:24 +0400
+
 mastermind (2.8.24) lucid; urgency=low
 
   * Settings for elliptics client pools in mastermind config
