@@ -20,11 +20,11 @@ import log
 import balancer
 import balancelogicadapter
 import infrastructure
-import jobs
+# import jobs
 import cache
 import minions
 import node_info_updater
-from smoother import Smoother
+# from smoother import Smoother
 import statistics
 from config import config
 
@@ -173,20 +173,20 @@ def init_minions():
     return m
 
 
-def init_smoother(job_processor):
-    smoother = Smoother(n.meta_session, job_processor)
+# def init_smoother(job_processor):
+#     smoother = Smoother(n.meta_session, job_processor)
 
 
-def init_job_processor(minions):
-    j = jobs.JobProcessor(n.meta_session, minions)
-    register_handle(j.create_job)
-    register_handle(j.cancel_job)
-    register_handle(j.approve_job)
-    register_handle(j.get_job_list)
-    register_handle(j.clear_jobs)
-    register_handle(j.retry_failed_job_task)
-    register_handle(j.skip_failed_job_task)
-    return j
+# def init_job_processor(minions):
+#     j = jobs.JobProcessor(n.meta_session, minions)
+#     register_handle(j.create_job)
+#     register_handle(j.cancel_job)
+#     register_handle(j.approve_job)
+#     register_handle(j.get_job_list)
+#     register_handle(j.clear_jobs)
+#     register_handle(j.retry_failed_job_task)
+#     register_handle(j.skip_failed_job_task)
+#     return j
 
 
 init_cache()
@@ -194,8 +194,8 @@ init_infrastructure()
 init_node_info_updater()
 init_statistics()
 m = init_minions()
-j = init_job_processor(m)
-init_smoother(j)
+# j = init_job_processor(m)
+# init_smoother(j)
 
 
 for handler in balancer.handlers(b):
