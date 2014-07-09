@@ -331,7 +331,7 @@ class Infrastructure(object):
                                  'timestamp': time.time()}
             group['couples'].append(new_couples_state)
 
-        eid = elliptics.Id(keys.MM_ISTRUCT_GROUP % group_id)
+        eid = self.meta_session.transform(keys.MM_ISTRUCT_GROUP % group_id)
         logger.info('Updating state for group %s' % group_id)
         self.meta_session.update_indexes(eid, [keys.MM_GROUPS_IDX],
                                               [self._serialize(group)])
@@ -565,7 +565,7 @@ class CacheItem(object):
                 self.sync_period, self._sync_cache)
 
     def _update_cache_item(self, key, val):
-        eid = elliptics.Id(self.key_key % key)
+        eid = self.meta_session.transform(self.key_key % key)
         cache_item = {'key': key,
                       'val': val,
                       'ts': time.time()}

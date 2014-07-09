@@ -253,7 +253,7 @@ class Minions(object):
                          'for command {0}'.format(uid))
             update_history_entry = False
             try:
-                eid = elliptics.Id(keys.MINION_HISTORY_ENTRY_KEY % uid.encode('utf-8'))
+                eid = self.meta_session.transform(keys.MINION_HISTORY_ENTRY_KEY % uid.encode('utf-8'))
                 # set to read_latest when it raises NotFoundError on non-existent keys
                 r = self.meta_session.read_data(eid).get()[0]
                 history_state = self._unserialize(r.data)
