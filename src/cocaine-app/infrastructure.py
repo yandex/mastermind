@@ -9,6 +9,7 @@ import traceback
 import elliptics
 import msgpack
 
+import indexes
 import inventory
 from config import config
 import storage
@@ -35,6 +36,7 @@ class Infrastructure(object):
 
     TASK_SYNC = 'infrastructure_sync'
     TASK_UPDATE = 'infrastructure_update'
+    NS_SETTINGS_SYNC = 'ns_settings_sync'
 
     TASK_DC_CACHE_SYNC = 'infrastructure_dc_cache_sync'
 
@@ -81,6 +83,14 @@ class Infrastructure(object):
         self.__tq.add_task_in(self.TASK_UPDATE,
             config.get('infrastructure_update_period', 300),
             self._update_state)
+
+        self.ns_settings_idx = \
+            indexes.SecondaryIndex(keys.MM_NAMESPACE_SETTINGS_IDX,
+                                   keys.MM_NAMESPACE_SETTINGS_KEY_TPL,
+                                   self.meta_session)
+
+        self.ns_settings = {}
+        self._sync_ns_settings()
 
     def get_group_history(self, group_id):
         couples_history = []
@@ -257,6 +267,41 @@ class Infrastructure(object):
             self.__tq.add_task_in(self.TASK_UPDATE,
                 config.get('infrastructure_update_period', 300),
                 self._update_state)
+
+    def _sync_ns_settings(self):
+        try:
+            logger.debug('fetching all namespace settings')
+            start = time.time()
+            for data in self.ns_settings_idx:
+                settings = msgpack.unpackb(data)
+                logger.debug('fetched namespace settings for "{0}" '
+                    '({1:.4f}s)'.format(settings['namespace'], time.time() - start))
+                ns = settings['namespace']
+                del settings['namespace']
+                self.ns_settings[ns] = settings
+        except Exception as e:
+            logger.error('Failed to sync ns settings: %s\n%s' %
+                          (e, traceback.format_exc()))
+        finally:
+            self.__tq.add_task_in(self.NS_SETTINGS_SYNC,
+                config.get('infrastructure_ns_settings_sync_period', 60),
+                self._sync_ns_settings)
+
+    def set_ns_settings(self, namespace, settings):
+
+        logger.debug('saving settings for namespace "{0}": {1}'.format(
+            namespace, settings))
+
+        settings['namespace'] = namespace
+        start = time.time()
+
+        self.ns_settings_idx[namespace] = msgpack.packb(settings)
+
+        logger.debug('namespace "{0}" settings saved to index '
+            '({1:.4f}s)'.format(namespace, time.time() - start))
+
+        del settings['namespace']
+        self.ns_settings[namespace] = settings
 
     def _update_group(self, group_id, new_nodes, new_couple, manual=False):
         group = self.state[group_id]

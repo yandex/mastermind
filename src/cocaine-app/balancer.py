@@ -16,7 +16,7 @@ import balancelogic
 from compat import EllAsyncResult, EllReadResult, EllLookupResult
 from config import config
 import helpers as h
-import indexes
+
 import infrastructure
 import keys
 import storage
@@ -34,10 +34,6 @@ class Balancer(object):
     def __init__(self, n):
         self.node = n
         self.infrastructure = None
-        self.ns_settings_idx = \
-            indexes.SecondaryIndex(keys.MM_NAMESPACE_SETTINGS_IDX,
-                                   keys.MM_NAMESPACE_SETTINGS_KEY_TPL,
-                                   self.node.meta_session)
 
     def set_infrastructure(self, infrastructure):
         self.infrastructure = infrastructure
@@ -631,14 +627,7 @@ class Balancer(object):
             logger.error(e)
             raise
 
-        logger.debug('saving settings for namespace "{0}": {1}'.format(
-            namespace, settings))
-
-        settings['namespace'] = namespace
-        start = time.time()
-        self.ns_settings_idx[namespace] = msgpack.packb(settings)
-        logger.debug('namespace "{0}" settings saved to index '
-            '({1:.4f}s)'.format(namespace, time.time() - start))
+        self.infrastructure.set_ns_settings(namespace, settings)
 
         return True
 
@@ -648,30 +637,13 @@ class Balancer(object):
         except Exception:
             raise ValueError('Invalid parameters')
 
-        if not namespace in self.__all_namespaces():
+        if not namespace in self.__all_namespaces() or not namespace in self.infrastructure.ns_settings:
             raise ValueError('Namespace "{0}" does not exist'.format(namespace))
 
-        logger.debug('fetching namespace "{0}" settings from index'.format(namespace))
-        start = time.time()
-        res = msgpack.unpackb(self.ns_settings_idx[namespace])
-        logger.debug('namespace "{0}" settings fetched from index '
-            '({1:.4f}s)'.format(namespace, time.time() - start))
-
-        del res['namespace']
-        logger.info('Namespace "{0}" settings: {1}'.format(namespace, res))
-        return res
+        return self.infrastructure.ns_settings[namespace]
 
     def get_namespaces_settings(self, request):
-        res = {}
-        logger.debug('fetching all namespace settings')
-        start = time.time()
-        for data in self.ns_settings_idx:
-            settings = msgpack.unpackb(data)
-            logger.debug('fetched namespace settings for "{0}" '
-                '({1:.4f}s)'.format(settings['namespace'], time.time() - start))
-            res[settings['namespace']] = settings
-            del settings['namespace']
-        return res
+        return self.infrastructure.ns_settings
 
     @h.handler
     def freeze_couple(self, request):
