@@ -233,7 +233,7 @@ class NodeInfoUpdater:
             read = getattr(session, 'read_latest_async', session.read_data)
 
             try:
-                results[result_key] = read(elliptics.Id(key))
+                results[result_key] = read(key)
             except Exception as e:
                 self.__logging.error('Failed to read {0} for groups '
                     '{1}: {2}, {3}'.format(key, result_key,
