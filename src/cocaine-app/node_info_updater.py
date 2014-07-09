@@ -39,7 +39,6 @@ class NodeInfoUpdater:
         self.__session = elliptics.Session(self.__node)
         self.__session.set_timeout(config.get('wait_timeout', 5))
         self.__nodeUpdateTimestamps = (time.time(), time.time())
-        self.__cache = Service('cache')
 
         self.loadNodes(delayed=False)
 

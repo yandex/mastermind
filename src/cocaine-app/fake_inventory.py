@@ -5,15 +5,16 @@ import socket
 def get_dc_by_host(addr):
     '''
     This is a fake implementation that always returns hostname.
-    Please write your own version that uses your server management framework.
+    Please provide your own version that uses your server management framework.
     '''
     host = socket.gethostbyaddr(addr)[0]
     return host
 
+
 def get_host_tree(host):
     '''
     This is a fake implementation that always one-level host infrastructure tree.
-    Please write your own version that uses your server management framework.
+    Please provide your own version that uses your server management framework.
 
     Return format example:
     {
@@ -31,3 +32,21 @@ def get_host_tree(host):
         'name': host,
         'type': 'host',
     }
+
+
+def node_start_command(node):
+    '''
+    Starting elliptics node is too complex to provide a fake implementation for.
+    If you really want to be able to use this functionality, you should
+    provide your own implementation that uses your server management framework.
+    '''
+    return None
+
+
+def node_shutdown_command(node):
+    '''
+    This is a fake implementation that shuts node down via dnet_ioclient command.
+    Please provide your own version that uses your server management framework
+    '''
+    cmd = 'dnet_ioclient -r {host}:{port}:{family} -U 1'
+    return cmd.format(host=node.host, port=node.port, family=node.family)

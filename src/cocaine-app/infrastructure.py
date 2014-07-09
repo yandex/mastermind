@@ -106,6 +106,18 @@ class Infrastructure(object):
         return {'couples': couples_history,
                 'nodes': nodes_history}
 
+    def node_in_last_history_state(self, group_id, host, port):
+        if not group_id in self.state:
+            raise ValueError('Group {0} history is not found'.format(group_id))
+
+        last_node_set = self.state[group_id]['nodes'][-1]['set']
+        for k in last_node_set:
+            node_host, node_port = k[:2]
+            if host == node_host and port == node_port:
+                return True
+
+        return False
+
     def _sync_state(self):
         try:
             logger.info('Syncing infrastructure state')
@@ -142,7 +154,7 @@ class Infrastructure(object):
 
                 for gid in set(self.state.keys()) - group_ids:
                     logger.info('Group %d is not found in infrastructure state, '
-                                 'removing' % gid)
+                                'removing' % gid)
                     del self.state[gid]
 
             self.sync_ts = time.time()
@@ -206,8 +218,8 @@ class Infrastructure(object):
                                   'skipping' % (g.group_id,))
                     continue
 
-                new_nodes = []
-                new_couple = []
+                new_nodes = None
+                new_couple = None
 
                 with self.__state_lock:
                     if not g.group_id in self.state:
@@ -303,9 +315,10 @@ class Infrastructure(object):
         del settings['namespace']
         self.ns_settings[namespace] = settings
 
-    def _update_group(self, group_id, new_nodes, new_couple, manual=False):
+    def _update_group(self, group_id, new_nodes=None, new_couple=None, manual=False):
         group = self.state[group_id]
-        if new_nodes:
+        # if new_nodes:
+        if new_nodes is not None:
             new_nodes_state = {'set': new_nodes,
                                'timestamp': time.time()}
             if manual:
@@ -313,7 +326,7 @@ class Infrastructure(object):
 
             group['nodes'].append(new_nodes_state)
 
-        if new_couple:
+        if new_couple is not None:
             new_couples_state = {'couple': new_couple,
                                  'timestamp': time.time()}
             group['couples'].append(new_couples_state)
@@ -327,8 +340,6 @@ class Infrastructure(object):
         with self.__state_lock:
             group_state = self.state[group.group_id]
             state_nodes = list(group_state['nodes'][-1]['set'][:])
-
-            new_state_nodes = []
 
             for i, state_node in enumerate(state_nodes):
                 state_host, state_port = state_node
@@ -430,19 +441,12 @@ class Infrastructure(object):
                          (group.group_id, source_group, source_node))
             warns.append('Source group %s (%s)' % (source_group, source_node))
 
-            if RSYNC_MODULE:
-                cmd = self.RSYNC_MODULE_CMD.format(
-                    user=RSYNC_USER,
-                    module=RSYNC_MODULE,
-                    src_host=source_node.host.addr,
-                    src_path=port_to_path(source_node.port).replace(BASE_STORAGE_PATH, ''),
-                    dst_path=dest or port_to_path(port))
-            else:
-                cmd = self.RSYNC_CMD.format(
-                    user=user,
-                    src_host=source_node.host.addr,
-                    src_path=port_to_path(source_node.port),
-                    dst_path=dest or port_to_path(port))
+            cmd = self.move_group_cmd(
+                src_host=source_node.host.addr,
+                src_port=source_node.port,
+                dst_path=dest,
+                dst_port=port_to_path(port),
+                user=user)
 
         except ValueError as e:
             warns.append(e.message)
@@ -453,6 +457,61 @@ class Infrastructure(object):
         logger.info('Restore cmd for group %s on %s, warns: %s, cmd %s' %
                      (group_id, addr, warns, cmd))
         return addr, cmd, warns
+
+    def move_group_cmd(self, src_host, src_port, dst_port, dst_path=None, user=None):
+        if RSYNC_MODULE:
+            cmd = self.RSYNC_MODULE_CMD.format(
+                user=RSYNC_USER,
+                module=RSYNC_MODULE,
+                src_host=src_host,
+                src_path=port_to_path(src_port).replace(BASE_STORAGE_PATH, ''),
+                dst_path=self.node_path(path=dst_path, port=dst_port))
+        else:
+            cmd = self.RSYNC_CMD.format(
+                user=user,
+                src_host=src_host,
+                src_path=port_to_path(src_port),
+                dst_path=self.node_path(path=dst_path, port=dst_port))
+        return cmd
+
+    @staticmethod
+    def node_path(path=None, port=None):
+        if not path and not port:
+            raise ValueError('Either path or port should be specified')
+        return path or port_to_path(port)
+
+    def start_node_cmd(self, request):
+        node_addr = request[0]
+
+        if not node_addr in storage.nodes:
+            raise ValueError("Node {0} doesn't exist".format(node_addr))
+
+        node = storage.nodes[node_addr]
+
+        cmd = inventory.node_start_command(node)
+
+        if cmd is None:
+            raise RuntimeError('Node start command is not provided '
+                'by inventory implementation')
+
+        logger.info('Command for starting elliptics node {0} '
+            'was requested: {1}'.format(node_addr, cmd))
+
+        return cmd
+
+    def shutdown_node_cmd(self, request):
+        node_addr = request[0]
+
+        if not node_addr in storage.nodes:
+            raise ValueError("Node {0} doesn't exist".format(node_addr))
+
+        node = storage.nodes[node_addr]
+
+        cmd = inventory.node_shutdown_command(node)
+        logger.info('Command for shutting down elliptics node {0} '
+            'was requested: {1}'.format(node_addr, cmd))
+
+        return cmd
 
     def get_dc_by_host(self, host):
         return self.dc_cache[host]

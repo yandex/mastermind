@@ -255,9 +255,10 @@ class Host(object):
 
 
 class Node(object):
-    def __init__(self, host, port):
+    def __init__(self, host, port, family):
         self.host = host
         self.port = int(port)
+        self.family = int(family)
         self.host.nodes.append(self)
 
         self.stat = None
@@ -672,69 +673,57 @@ nodes = Repositary(Node)
 couples = Repositary(Couple)
 
 
-def stat_result_entry_to_dict(sre):
-    cnt = sre.statistics.counters
-    stat = {'group_id': sre.address.group_id,
-            'addr': '{0}:{1}'.format(sre.address.host, sre.address.port)}
-    stat.update(sre.statistics.counters)
-    return stat
-
-
 def update_statistics(stats):
 
-    if getattr(stats, 'get', None):
-        stats = [stat_result_entry_to_dict(sre) for sre in stats.get()]
-
-    for stat in stats:
-        logger.info("Stats: %s %s" % (str(stat['group_id']), stat['addr']))
+    for stat in stats.get():
+        address = '{0}:{1}'.format(stat.address.host, stat.address.port)
+        logger.info('Stats: %s %s' % (str(stat.address.group_id), address))
 
         try:
+            gid = stat.address.group_id
 
-            gid = stat['group_id']
-
-            if not stat['addr'] in nodes:
-                addr = stat['addr'].split(':')
-                if not addr[0] in hosts:
-                    host = hosts.add(addr[0])
-                    logger.debug('Adding host %s' % (addr[0]))
+            if not address in nodes:
+                # addr = address.split(':')
+                if not stat.address.host in hosts:
+                    host = hosts.add(stat.address.host)
+                    logger.debug('Adding host %s' % (stat.address.host))
                 else:
-                    host = hosts[addr[0]]
+                    host = hosts[stat.address.host]
 
-                nodes.add(host, addr[1])
+                nodes.add(host, stat.address.port, stat.address.family)
 
             if not gid in groups:
                 group = groups.add(gid)
-                logger.debug('Adding group %d' % stat['group_id'])
+                logger.debug('Adding group %d' % gid)
             else:
                 group = groups[gid]
 
             logger.info('Stats for node %s' % gid)
 
-            node = nodes[stat['addr']]
+            node = nodes[address]
 
             if not node in group.nodes:
                 group.add_node(node)
                 logger.debug('Adding node %d -> %s:%s' %
                               (gid, node.host.addr, node.port))
 
-
             logger.info('Updating statistics for node %s' % (str(node)))
-            node.update_statistics(stat)
+            node.update_statistics(stat.statistics.counters)
             logger.info('Updating status for group %d' % gid)
             groups[gid].update_status()
 
         except Exception as e:
-            logger.error('Unable to process statictics for node %s group_id %d (%s): %s' % (stat['addr'], stat['group_id'], e, traceback.format_exc()))
+            logger.error('Unable to process statictics for node %s group_id %d (%s): %s' % (address, gid, e, traceback.format_exc()))
 
 
 '''
 h = hosts.add('95.108.228.31')
 g = groups.add(1)
-n = nodes.add(hosts['95.108.228.31'], 1025)
+n = nodes.add(hosts['95.108.228.31'], 1025, 2)
 g.add_node(n)
 
 g2 = groups.add(2)
-n2 = nodes.add(h, 1026)
+n2 = nodes.add(h, 1026. 2)
 g2.add_node(n2)
 
 couple = couples.add([g, g2])
