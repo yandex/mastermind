@@ -1,3 +1,9 @@
+mastermind (2.8.26) lucid; urgency=low
+
+  * Fix for metakey parallel read
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 09 Jul 2014 19:22:11 +0400
+
 mastermind (2.8.25) lucid; urgency=low
 
   * Fix for ns settings fetching from elliptics indexes
