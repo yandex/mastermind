@@ -748,7 +748,7 @@ def restore_group(group, user=('u', os.environ['USER'],
         print res
         return
 
-    dst_host, cmd, messages = res
+    dst_host, dst_port, cmd, messages = res
     for msg in messages:
         print '{prefix} {msg}'.format(prefix=warn('WARNING:'), msg=msg)
 
@@ -787,8 +787,51 @@ def restore_group(group, user=('u', os.environ['USER'],
             print warn('Failed to write to group file: %s' % e)
             return
     else:
-        print warn("\nDon't forget to set group id of the restored group "
-                   "to %s!" % group)
+        print warn("\nDon't forget to MANUALLY set group id "
+                   "of the restored group to %s!" % group)
+
+    print
+    res = s.enqueue('execute_cmd', msgpack.packb([dst_host, cmd, params])).get()
+    print res
+    print
+
+    if 'Balancer error' in res:
+        print res
+        return
+
+    task_id = res.keys()[0]
+
+    success = watch_progress(s, task_id)
+
+    if not success:
+        return
+
+    if 'Balancer error' in res:
+        print res
+        return
+
+    cmd = retry(s, 'start_node_cmd', [dst_host, dst_port])
+    if isinstance(cmd, dict):
+        print cmd
+        return
+
+    box(cmd, caption='Command')
+
+    # check and print warning if group has any other alive nodes
+    print 'Checking group nodes'
+    res = retry(s, 'get_group_info', group)
+    statuses = [node['status'] for node in res['nodes']
+                if node['addr'] != '{0}:{1}'.format(dst_host, dst_port)]
+    if not all([status in ('STALLED', 'INIT') for status in statuses]):
+        print
+        print 'Group {0} current node statuses are {1}'.format(group, statuses)
+        print warn('Looks like there are some active nodes in group {0}!'.format(group))
+
+    if not confirm('Do you want to start new node? [yes/no]: ', 'yes'):
+         print warn('I thought so...')
+         return
+
+    params = {'node': '{0}:{1}'.format(dst_host, dst_port)}
 
     print
     res = s.enqueue('execute_cmd', msgpack.packb([dst_host, cmd, params])).get()
@@ -800,9 +843,18 @@ def restore_group(group, user=('u', os.environ['USER'],
 
     task_id = res.keys()[0]
 
+    success = watch_progress(s, task_id)
+
+    if not success:
+        return
+
+    print '\nNode was successfully started'
+
+def watch_progress(session, task_id):
+    success = False
     while True:
         try:
-            status = s.enqueue('get_command', msgpack.packb([task_id])).get()
+            status = session.enqueue('get_command', msgpack.packb([task_id])).get()
         except ServiceError:
             sleep(1)
             continue
@@ -822,12 +874,32 @@ def restore_group(group, user=('u', os.environ['USER'],
             print
             pprint(status)
             if status['exit_code'] == 0:
+                success = True
                 print 'Task finished successfully'
             else:
                 print 'Exit code: {exit_code}\n{exit_message}'.format(**status)
             break
 
         sleep(1)
+
+    return success
+
+
+def retry(session, method, *params, **kwargs):
+    retries = kwargs.get('retries', 2)
+
+    tries = 0
+    while True:
+        try:
+            return session.enqueue(method, msgpack.packb(*params)).get()
+        except ServiceError:
+            tries += 1
+            if tries > retries:
+                print 'Failed to perform mastermind request: {0}, params {1}'.format(method, params)
+                raise
+
+            sleep(3)
+            continue
 
 
 # display-me-pretty formatters

@@ -445,18 +445,18 @@ class Infrastructure(object):
                 src_host=source_node.host.addr,
                 src_port=source_node.port,
                 dst_path=dest,
-                dst_port=port_to_path(port),
+                dst_port=port,
                 user=user)
 
         except ValueError as e:
             warns.append(e.message)
             logger.info('Restore cmd for group %s failed, warns: %s' %
                          (group_id, warns))
-            return '', '', warns
+            return '', 0, '', warns
 
         logger.info('Restore cmd for group %s on %s, warns: %s, cmd %s' %
                      (group_id, addr, warns, cmd))
-        return addr, cmd, warns
+        return addr, port, cmd, warns
 
     def move_group_cmd(self, src_host, src_port, dst_port, dst_path=None, user=None):
         if RSYNC_MODULE:
@@ -481,33 +481,31 @@ class Infrastructure(object):
         return path or port_to_path(port)
 
     def start_node_cmd(self, request):
-        node_addr = request[0]
+        host, port = request[:2]
 
-        if not node_addr in storage.nodes:
-            raise ValueError("Node {0} doesn't exist".format(node_addr))
-
-        node = storage.nodes[node_addr]
-
-        cmd = inventory.node_start_command(node)
+        # TODO: Fix family value
+        cmd = inventory.node_start_command(host, port, 2)
 
         if cmd is None:
             raise RuntimeError('Node start command is not provided '
                 'by inventory implementation')
 
-        logger.info('Command for starting elliptics node {0} '
-            'was requested: {1}'.format(node_addr, cmd))
+        logger.info('Command for starting elliptics node {0}:{1} '
+            'was requested: {2}'.format(host, port, cmd))
 
         return cmd
 
     def shutdown_node_cmd(self, request):
-        node_addr = request[0]
+        host, port = request[:2]
+
+        node_addr = '{0}:{1}'.format(host, port)
 
         if not node_addr in storage.nodes:
             raise ValueError("Node {0} doesn't exist".format(node_addr))
 
         node = storage.nodes[node_addr]
 
-        cmd = inventory.node_shutdown_command(node)
+        cmd = inventory.node_shutdown_command(node.host, node.port, node.family)
         logger.info('Command for shutting down elliptics node {0} '
             'was requested: {1}'.format(node_addr, cmd))
 
