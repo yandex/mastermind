@@ -1,3 +1,9 @@
+mastermind (2.8.29) lucid; urgency=low
+
+  * Group restore updated: checking for DHT rings and starting node up after restoration
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 10 Jul 2014 17:23:03 +0400
+
 mastermind (2.8.28) lucid; urgency=low
 
   * Temporary disabled new modules
