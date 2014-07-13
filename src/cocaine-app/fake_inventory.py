@@ -34,7 +34,7 @@ def get_host_tree(host):
     }
 
 
-def node_start_command(node):
+def node_start_command(host, port, family):
     '''
     Starting elliptics node is too complex to provide a fake implementation for.
     If you really want to be able to use this functionality, you should
@@ -43,10 +43,10 @@ def node_start_command(node):
     return None
 
 
-def node_shutdown_command(node):
+def node_shutdown_command(host, port, family):
     '''
     This is a fake implementation that shuts node down via dnet_ioclient command.
     Please provide your own version that uses your server management framework
     '''
     cmd = 'dnet_ioclient -r {host}:{port}:{family} -U 1'
-    return cmd.format(host=node.host, port=node.port, family=node.family)
+    return cmd.format(host=host, port=port, family=family)
