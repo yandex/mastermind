@@ -579,7 +579,7 @@ class CacheItem(object):
             if cache_item['ts'] + self.key_expire_time < time.time():
                 logger.debug(self.logprefix + 'Item for key %s expired' % (key,))
                 raise KeyError
-            logger.debug(self.logprefix + 'Using item for key %s from cache' % (key,))
+            # logger.debug(self.logprefix + 'Using item for key %s from cache' % (key,))
             val = cache_item['val']
         except KeyError:
             logger.debug(self.logprefix + 'Fetching value for key %s from source' % (key,))
