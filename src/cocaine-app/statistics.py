@@ -301,7 +301,11 @@ class Statistics(object):
         res['groups'] = []
         for group in groups:
             g = group.info()
-            g['stats'] = self.__stats_to_dict(group.get_stat())
+            try:
+                group_stat = group.get_stat()
+            except TypeError:
+                group_stat = None
+            g['stats'] = self.__stats_to_dict(group_stat)
             for node in g['nodes']:
                 node['stats'] = self.__stats_to_dict(storage.nodes[node['addr']].stat)
             res['groups'].append(g)
