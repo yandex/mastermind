@@ -553,6 +553,15 @@ class Balancer(object):
         except ValueError:
             raise ValueError('port should be positive integer')
 
+        try:
+            content_length_threshold = settings['content_length_threshold'] = int(settings['content_length_threshold'])
+            if not content_length_threshold > 0:
+                raise ValueError
+        except KeyError:
+            pass
+        except ValueError:
+            raise ValueError('content length threshold should be positive integer')
+
         if settings.get('success-copies-num', '') not in ('any', 'quorum', 'all'):
             raise ValueError('success-copies-num allowed values are "any", '
                              '"quorum" and "all"')
@@ -596,7 +605,7 @@ class Balancer(object):
 
 
     ALLOWED_NS_KEYS = set(['success-copies-num', 'groups-count',
-        'static-couple', 'auth-keys', 'signature'])
+        'static-couple', 'auth-keys', 'signature', 'content_length_threshold'])
     ALLOWED_NS_SIGN_KEYS = set(['token', 'path_prefix', 'port'])
     ALLOWED_NS_AUTH_KEYS = set(['write', 'read'])
 
