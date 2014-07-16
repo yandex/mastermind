@@ -573,6 +573,8 @@ def ns_setup(namespace,
              sign_path_prefix=('', '', 'Signature path prefix'),
              sign_port=('', '', 'Signature scheme port'),
              couple=('c', '', 'Set static couple for namespace (1:2:10)'),
+             content_length_threshold=('', '', 'Set content length threshold for '
+                'proxy to return direct urls instead of balancer urls'),
              host=None):
     '''Namespace setup'''
     s = service(host)
@@ -614,6 +616,8 @@ def ns_setup(namespace,
             'read': auth_key_read or '',
             'write': auth_key_write or '',
         }
+    if content_length_threshold:
+        settings['content_length_threshold'] = content_length_threshold
 
     res = s.enqueue('namespace_setup', msgpack.packb([namespace, settings])).get()
     print res
@@ -852,6 +856,9 @@ def restore_group(group, user=('u', os.environ['USER'],
 
 def watch_progress(session, task_id):
     success = False
+    status_errors = 0
+    max_retries = 15
+
     while True:
         try:
             status = session.enqueue('get_command', msgpack.packb([task_id])).get()
@@ -860,11 +867,17 @@ def watch_progress(session, task_id):
             continue
 
         if not status.get('uid') == task_id:
-            print
-            print warn('Something went wrong')
-            print
-            pprint(status)
-            break
+            status_errors += 1
+            if status_errors > max_retries:
+                print
+                print warn('Failed to fetch command status after {0} retries'.format(max_retries))
+                print
+                pprint(status)
+                break
+            sleep(3)
+            continue
+
+        status_errors = 0
 
         sys.stdout.write('\rProgress: {0:.2f}%'.format(status['progress'] * 100))
 
