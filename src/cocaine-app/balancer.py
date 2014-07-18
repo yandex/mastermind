@@ -198,14 +198,20 @@ class Balancer(object):
         namespaces = {}
         all_symm_group_objects = []
         for couple in storage.couples:
+
+            try:
+                namespaces.setdefault(couple.namespace, set())
+            except Exception:
+                logger.error('Couple {0} has broken namespace settings'.format(couple))
+                continue
+
+            namespaces[couple.namespace].add(len(couple))
+
             if couple.status not in storage.GOOD_STATUSES:
                 continue
 
             symm_group = bla.SymmGroup(couple)
-            namespaces.setdefault(couple.namespace, set())
-            namespaces[couple.namespace].add(len(couple))
             all_symm_group_objects.append(symm_group)
-            # logger.debug(str(symm_group))
 
         result = {}
 
