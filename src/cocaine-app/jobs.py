@@ -141,7 +141,7 @@ class MoveJob(Job):
         return data
 
     def create_tasks(self):
-        shutdown_cmd = infrastructure.shutdown_node_cmd([self.src_node])
+        shutdown_cmd = infrastructure.shutdown_node_cmd([self.src_host, self.src_port])
 
         group_file_marker = (os.path.join(infrastructure.node_path(port=self.src_port),
                                           self.GROUP_FILE_MARKER_PATH)
@@ -155,7 +155,7 @@ class MoveJob(Job):
                                          'group_file_marker': group_file_marker})
         self.tasks.append(task)
 
-        shutdown_cmd = infrastructure.shutdown_node_cmd([self.dst_node])
+        shutdown_cmd = infrastructure.shutdown_node_cmd([self.dst_host, self.dst_port])
         task = MinionCmdTask.new(host=self.dst_host,
                                  cmd=shutdown_cmd,
                                  params={'node': self.dst_node,
@@ -177,7 +177,7 @@ class MoveJob(Job):
                                          'group_file': group_file})
         self.tasks.append(task)
 
-        start_cmd = infrastructure.start_node_cmd([self.dst_node])
+        start_cmd = infrastructure.start_node_cmd([self.dst_host, self.dst_port])
         task = MinionCmdTask.new(host=self.dst_host,
                                  cmd=start_cmd,
                                  params={'node': self.dst_node})
@@ -461,7 +461,6 @@ class JobProcessor(object):
         self.meta_session = meta_session
         self.minions = minions
 
-        # TODO: think about removing and using only jobs_index
         self.jobs = {}
         self.jobs_index = indexes.SecondaryIndex(keys.MM_JOBS_IDX,
             keys.MM_JOBS_KEY_TPL, self.meta_session)
@@ -498,7 +497,7 @@ class JobProcessor(object):
 
 
     def _do_update_jobs(self):
-        jobs = [self._load_job(job) for job in self.jobs_index]
+        [self._load_job(job) for job in self.jobs_index]
 
     def _execute_jobs(self):
 
