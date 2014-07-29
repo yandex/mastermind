@@ -218,13 +218,15 @@ class Statistics(object):
 
     def get_groups_tree(self, request):
         nodes = {}
-        root = None
+        root = {}
+        hosts = []
 
         try:
-            hosts = []
-            namespace = request[0]
+            options = request[0]
         except (TypeError, IndexError):
-            namespace = None
+            options = {}
+
+        namespace, status = options.get('namespace', None), options.get('couple_status', None)
 
         if namespace:
             for couple in storage.couples:
@@ -262,6 +264,11 @@ class Statistics(object):
             if namespace and (not group.couple or
                               group.couple.namespace != namespace):
                 continue
+            if status == 'UNCOUPLED' and group.couple:
+                # workaround for uncoupled groups, not a real status
+                continue
+            elif status and status != 'UNCOUPLED' and (not group.couple or status != group.couple.status):
+                continue
             stat = group.get_stat()
             for node in group.nodes:
                 group_parent = nodes['host'][node.host.hostname]
@@ -277,8 +284,19 @@ class Statistics(object):
                                'fragmentation': stat.fragmentation,
                                'status': group.couple and group.couple.status or None})
 
-        return {'type': 'root', 'name': 'root',
+        tree = {'type': 'root', 'name': 'root',
                 'children': root.values()}
+        self.__clean_tree(tree)
+
+        return tree
+
+    def __clean_tree(self, root):
+        if root['type'] == 'host':
+            return
+        for child in root.get('children', [])[:]:
+            self.__clean_tree(child)
+            if not child.get('children'):
+                root['children'].remove(child)
 
     def get_couple_statistics(self, request):
         group_id = int(request[0])
@@ -311,9 +329,6 @@ class Statistics(object):
             res['groups'].append(g)
 
         return res
-
-    MIN_FREE_SPACE = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
-    MIN_FREE_SPACE_REL = config['balancer_config'].get('min_free_space_relative', 0.15)
 
     def __stats_to_dict(self, stat):
         res = {}
