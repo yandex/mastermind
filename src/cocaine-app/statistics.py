@@ -125,7 +125,53 @@ class Statistics(object):
                 if ns:
                     self.account_keys(by_ns[ns][dc], node)
 
+        self.count_outaged_couples(by_dc, by_ns)
+
         return dict(by_dc), dict((k, dict(v)) for k, v in by_ns.iteritems())
+
+    def count_outaged_couples(self, by_dc_stats, by_ns_stats):
+        default = lambda: {
+            'open_couples': 0,
+            'frozen_couples': 0,
+            'closed_couples': 0,
+            'bad_couples': 0,
+            'total_couples': 0,
+        }
+
+        by_dc = defaultdict(default)
+        by_ns = defaultdict(lambda: defaultdict(default))
+
+        dcs = set(by_dc_stats.keys())
+        ns_dcs = {}
+        for ns, dc_stats in by_ns_stats.iteritems():
+            ns_dcs[ns] = set(dc_stats.keys())
+
+        for couple in storage.couples:
+            affected_dcs = set()
+            for group in couple.groups:
+                for node in group.nodes:
+                    affected_dcs.add(node.host.dc)
+
+            for dc in affected_dcs:
+                by_dc[dc]['bad_couples'] += 1
+                by_dc[dc]['total_couples'] += 1
+
+            for dc in dcs - affected_dcs:
+                self.account_couples(by_dc[dc], couple.groups[0])
+
+            ns = couple.namespace
+            if ns:
+                for dc in affected_dcs:
+                    by_ns[ns][dc]['bad_couples'] += 1
+                for dc in ns_dcs[ns] - affected_dcs:
+                    self.account_couples(by_ns[ns][dc], couple.groups[0])
+
+        for dc, dc_data in by_dc_stats.iteritems():
+            dc_data['outages'] = by_dc[dc]
+        for ns, stats in by_ns_stats.iteritems():
+            for dc, dc_data in stats.iteritems():
+                dc_data['outages'] = by_ns[ns][dc]
+
 
     def total_stats(self, per_dc_stat):
         return dict(reduce(self.dict_keys_sum, per_dc_stat.values()))
