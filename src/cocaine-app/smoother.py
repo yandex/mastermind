@@ -196,8 +196,6 @@ class Smoother(object):
 
         base_ms = candidate.state_ms_error(avg)
 
-        # TODO: use 2-combinations
-
         for c in itertools.combinations(candidate.iteritems(), 2):
             (src_dc, src_dc_state), (dst_dc, dst_dc_state) = c
 
@@ -219,12 +217,13 @@ class Smoother(object):
                 dst_group = None
                 for unc_group in dst_dc_state.uncoupled_groups:
                     unc_group_stat = candidate.stats(unc_group)
-                    # if unc_group_stat.total_space < src_group_stat.total_space:
-                    #     continue
-                    # elif unc_group_stat.free_space < stat.used_space:
-                    #     logger.warn('Uncoupled group {0} seems to have a lot of used space (supposed to be empty)'.format(
-                    #         unc_group.group_id))
-                    #     continue
+                    if unc_group_stat.total_space < src_group_stat.total_space:
+                        continue
+                    elif unc_group_stat.free_space < src_group_stat.used_space:
+                        logger.warn('Uncoupled group {0} seems to have a lot of '
+                            'used space (supposed to be empty)'.format(
+                                unc_group.group_id))
+                        continue
 
                     dst_group = unc_group
                     break

@@ -19,7 +19,8 @@ class Statistics(object):
 
     @staticmethod
     def dict_keys_sum(st1, st2):
-        return dict((k, st1[k] + st2[k]) for k in st1)
+        return dict((k, st1[k] + st2[k]) for k in st1
+                    if k not in ('outages',))
 
     @staticmethod
     def dict_keys_min(st1, st2):
