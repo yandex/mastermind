@@ -1,3 +1,11 @@
+mastermind (2.8.32) lucid; urgency=low
+
+  * Jobs processing turned on
+  * Treemap filtering
+  * Outages statistics
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 30 Jul 2014 19:02:53 +0400
+
 mastermind (2.8.31) lucid; urgency=low
 
   * Fix for namespace balancer couple weights
