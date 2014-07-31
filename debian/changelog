@@ -1,3 +1,9 @@
+mastermind (2.8.33) lucid; urgency=low
+
+  * Fix for cocaine app deployment
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 31 Jul 2014 12:57:17 +0400
+
 mastermind (2.8.32) lucid; urgency=low
 
   * Jobs processing turned on
