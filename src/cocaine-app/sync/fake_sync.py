@@ -1,4 +1,4 @@
-sfrom threading import Lock
+from threading import Lock
 
 
 class SyncManager(object):
