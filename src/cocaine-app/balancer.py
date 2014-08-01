@@ -19,6 +19,7 @@ import helpers as h
 
 import infrastructure
 import keys
+import statistics
 import storage
 
 
@@ -34,6 +35,7 @@ class Balancer(object):
     def __init__(self, n):
         self.node = n
         self.infrastructure = None
+        self.statistics = statistics.Statistics(self)
 
     def set_infrastructure(self, infrastructure):
         self.infrastructure = infrastructure
@@ -659,6 +661,14 @@ class Balancer(object):
 
     def get_namespaces_settings(self, request):
         return self.infrastructure.ns_settings
+
+    @h.handler
+    def get_namespaces_statistics(self, request):
+        per_dc_stat, per_ns_stat = self.statistics.per_entity_stat()
+        ns_stats = {}
+        for ns, stats in per_ns_stat.iteritems():
+            ns_stats[ns] = self.statistics.total_stats(stats)
+        return ns_stats
 
     @h.handler
     def freeze_couple(self, request):

@@ -25,7 +25,6 @@ import cache
 import minions
 import node_info_updater
 from smoother import Smoother
-import statistics
 from config import config
 
 
@@ -157,11 +156,10 @@ def init_cache():
 
 
 def init_statistics():
-    stat = statistics.Statistics(b)
-    register_handle(stat.get_flow_stats)
-    register_handle(stat.get_groups_tree)
-    register_handle(stat.get_couple_statistics)
-    return stat
+    register_handle(b.statistics.get_flow_stats)
+    register_handle(b.statistics.get_groups_tree)
+    register_handle(b.statistics.get_couple_statistics)
+    return b.statistics
 
 
 def init_minions():
