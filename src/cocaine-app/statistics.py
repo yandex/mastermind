@@ -67,11 +67,11 @@ class Statistics(object):
 
     def per_entity_stat(self):
         default = lambda: {
-            'free_space': 0.0,
-            'total_space': 0.0,
-            'effective_space': 0.0,
-            'effective_free_space': 0.0,
-            'uncoupled_space': 0.0,
+            'free_space': 0,
+            'total_space': 0,
+            'effective_space': 0,
+            'effective_free_space': 0,
+            'uncoupled_space': 0,
 
             'open_couples': 0,
             'frozen_couples': 0,

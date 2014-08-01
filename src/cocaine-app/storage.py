@@ -74,7 +74,7 @@ class NodeStat(object):
         if raw_stat:
             self.init(raw_stat, prev)
         else:
-            self.free_space = 0.0
+            self.free_space = 0
             self.rel_space = 0.0
             self.load_average = 0.0
 
@@ -114,8 +114,8 @@ class NodeStat(object):
         self.last_read = raw_stat['storage_commands']['READ'][0] + raw_stat['proxy_commands']['READ'][0]
         self.last_write = raw_stat['storage_commands']['WRITE'][0] + raw_stat['proxy_commands']['WRITE'][0]
 
-        self.total_space = float(raw_stat['counters']['DNET_CNTR_BLOCKS'][0]) * raw_stat['counters']['DNET_CNTR_BSIZE'][0]
-        self.free_space = float(raw_stat['counters']['DNET_CNTR_BAVAIL'][0]) * raw_stat['counters']['DNET_CNTR_BSIZE'][0]
+        self.total_space = raw_stat['counters']['DNET_CNTR_BLOCKS'][0] * raw_stat['counters']['DNET_CNTR_BSIZE'][0]
+        self.free_space = raw_stat['counters']['DNET_CNTR_BAVAIL'][0] * raw_stat['counters']['DNET_CNTR_BSIZE'][0]
         self.used_space = self.total_space - self.free_space
         self.rel_space = float(raw_stat['counters']['DNET_CNTR_BAVAIL'][0]) / raw_stat['counters']['DNET_CNTR_BLOCKS'][0]
         self.load_average = (float(raw_stat['counters']['DNET_CNTR_DU1'][0]) / 100
