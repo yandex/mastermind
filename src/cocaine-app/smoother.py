@@ -22,7 +22,6 @@ logger = getLogger('mm.smoother')
 class Smoother(object):
 
     MOVE_CANDIDATES = 'move_candidates'
-    # LOAD_CURRENT_PLAN = 'load_current_plan'
 
     def __init__(self, meta_session, job_processor):
 
@@ -36,47 +35,9 @@ class Smoother(object):
         self.__tq = timed_queue.TimedQueue()
         self.__tq.start()
 
-        # self.__tq.add_task_in(self.LOAD_CURRENT_PLAN,
-        #     9, self._load_current_plan)
-
-        self.__tq.add_task_in(self.MOVE_CANDIDATES,
-            10, self._move_candidates)
-
-
-    # def _load_current_plan(self):
-    #     try:
-    #         try:
-    #             logger.debug('Loading current groups move plan')
-    #             # TODO: read latest?
-    #             with __current_plan_lock:
-    #                 data = self.meta_session.read_latest(keys.MM_MOVE_FULL_GROUPS_KEY).get()[0].data
-    #                 self.current_plan = msgpack.unpackb(data)
-    #         except elliptics.NotFoundError:
-    #             logger.debug('Failed to load current groups move plan, not exists')
-    #             self.current_plan = None
-    #     except Exception as e:
-    #         logger.error('{0}: {1}'.format(e, traceback.format_exc()))
-    #     finally:
-    #         # TODO: Fix current plan reload period
-    #         self.__tq.add_task_in(self.LOAD_CURRENT_PLAN,
-    #             60, self._load_current_plan)
-
-
-    # def _save_plan(self, candidates):
-    #     plan = []
-    #     for i, candidates in enumerate(self.candidates):
-    #         for src_group, src_dc, dst_group, dst_dc in candidates[0].moved_groups:
-    #             plan.append({
-    #                 'src_group_id': src_group.group_id,
-    #                 'src_dc': src_dc,
-    #                 'dst_group_id': dst_group.group_id,
-    #                 'dst_dc': dst_dc,
-    #             })
-
-    #     self.meta_session.write_data(keys.MM_MOVE_FULL_GROUPS_KEY,
-    #         msgpack.packb(plan)).get()
-
-    #     self.current_plan = plan
+        if (config.get('smoother', {}).get('enabled', False)):
+            self.__tq.add_task_in(self.MOVE_CANDIDATES,
+                10, self._move_candidates)
 
     def _move_candidates(self):
         try:
@@ -172,13 +133,6 @@ class Smoother(object):
             return
 
         max_error_candidate = max(tmp_candidates, key=lambda c: c.delta.weight)
-        # self.candidates.append([tmp_candidates])
-
-        # if max_error_candidate.delta.weight < 0:
-        #     logger.info('Max error candidate is < 0: ({0}, {1})'.format(
-        #         max_error_candidate.delta.ms_error_delta, gb(max_error_candidate.delta.data_move_size)))
-        #     self.__apply_plan()
-        #     return
 
         self.candidates.append([max_error_candidate])
         logger.info('Max error candidate: {0}'.format(max_error_candidate))
