@@ -2,6 +2,7 @@
 import copy
 from datetime import datetime
 import logging
+import random
 import re
 import sys
 import time
@@ -389,6 +390,7 @@ class Balancer(object):
                                      node, node.status))
                     suitable = False
                     break
+
             if not suitable:
                 continue
 
@@ -400,12 +402,13 @@ class Balancer(object):
                 continue
 
             dc_by_group_id[group_id] = dc
-            groups_in_dc = group_by_dc.setdefault(dc, [])
-            groups_in_dc.append(group_id)
+            group_by_dc.setdefault(dc, []).append(group_id)
+
         logger.info('dc by group: %s' % str(dc_by_group_id))
         logger.info('group_by_dc: %s' % str(group_by_dc))
         size = int(request[0])
         mandatory_groups = [int(g) for g in request[1]]
+        ignore_space = request[2]
 
         # check mandatory set
         for group_id in mandatory_groups:
@@ -425,19 +428,54 @@ class Balancer(object):
         if n_groups_to_add < 0:
             raise Exception('Too many mandatory groups')
 
+        if mandatory_groups and not ignore_space:
+            # checking for disk size compatibility
+            cgroup = storage.groups[mandatory_groups[0]]
+            cstats = cgroup.get_stat()
+
+            def total_space_eq(stats):
+                tolerance = config.get('total_space_diff_tolerance', 0.05)
+                max_total_space = max(cstats.total_space, stats.total_space)
+                return (abs(cstats.total_space - stats.total_space) <
+                        max_total_space * tolerance)
+
+            for group_id in mandatory_groups[1:]:
+                group = storage.groups[group_id]
+                stats = group.get_stat()
+                if not total_space_eq(stats):
+                    raise Exception('Untolerable total space size difference: '
+                        'group {0} total space: {1}, '
+                        'group {2} total space {3}'.format(
+                            cgroup.group_id, cstats.total_space,
+                            group.group_id, stats.total_space))
+
+            for dc, dc_group_ids in group_by_dc.items():
+                # filtering groups with unmatching total space
+                for group_id in dc_group_ids[:]:
+                    group = storage.groups[group_id]
+                    stats = group.get_stat()
+                    if not total_space_eq(stats):
+                        group_by_dc[dc].remove(group_id)
+                if not group_by_dc[dc]:
+                    del group_by_dc[dc]
+
+            logger.info('group_by_dc after total space '
+                'checking: {0}'.format(str(group_by_dc)))
+
+            if n_groups_to_add > len(group_by_dc):
+                raise Exception('Not enough dcs with groups of equal total space')
+
         # why not use random.sample
-        some_dcs = group_by_dc.keys()[:n_groups_to_add]
+        some_dcs = random.sample(group_by_dc.keys(), n_groups_to_add)
 
         for dc in some_dcs:
             groups_to_couple.append(group_by_dc[dc].pop())
 
         try:
-            namespace = request[2]
+            namespace = request[3]
             logger.info('namespace from request: {0}'.format(namespace))
             if not self.valid_namespace(namespace):
-                logger.info('namespace from request: {0}, RaISING EXCEPTION!!!!111'.format(namespace))
                 raise ValueError('Namespace "{0}" is invalid'.format(namespace))
-            logger.info('namespace from request: {0}'.format(namespace))
         except IndexError:
             namespace = storage.Group.DEFAULT_NAMESPACE
 

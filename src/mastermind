@@ -495,8 +495,14 @@ def view_groups(data, grouped, key_mapper, short=False, verbose=False):
 @coupleDispatcher.command(name='build')
 @log_action
 def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:2)'),
+                 ignore_space=('s', False, 'Ignore checking of groups total space '
+                    'matching (when setting mandatory groups)'),
                  namespace=('n', '', 'Set custom namespace for couple'), host=None):
-    '''Make a couple of groups, number of groups is an argument'''
+    '''Make a couple of groups. If mandatory groups (-i option) are specified,
+    the default behaviour is to check their total space for equalilty
+    and try to select additional group with matching total space size.
+    This behaviour can be turned off by --ignore_space option.
+    The required argument for the command is the size of a couple (number of groups).'''
     s = service(host)
     size = int(size)
     if groups:
@@ -504,7 +510,7 @@ def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:
     else:
         groups = []
 
-    params = [size, groups]
+    params = [size, groups, ignore_space]
     if namespace:
         params.append(namespace)
 
