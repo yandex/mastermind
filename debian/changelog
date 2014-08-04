@@ -1,3 +1,9 @@
+mastermind (2.8.35) lucid; urgency=low
+
+  * Fix for minions commands status processing
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 04 Aug 2014 15:18:24 +0400
+
 mastermind (2.8.34) lucid; urgency=low
 
   * Namespaces statistics handle
