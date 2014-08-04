@@ -253,6 +253,7 @@ class Task(object):
 class MinionCmdTask(Task):
 
     PARAMS = ('host', 'cmd', 'params', 'minion_cmd_id')
+    TASK_TIMEOUT = 600
 
     def __init__(self):
         super(MinionCmdTask, self).__init__()
@@ -261,7 +262,11 @@ class MinionCmdTask(Task):
         self.type = TaskFactory.TYPE_MINION_CMD
 
     def update_status(self, minions):
-        self.minion_cmd = minions.get_command([self.minion_cmd_id])
+        try:
+            self.minion_cmd = minions.get_command([self.minion_cmd_id])
+        except ValueError:
+            # mastermind have not yet received minion cmd status
+            pass
 
     def execute(self, minions):
         self.id = uuid.uuid4().hex
@@ -279,12 +284,14 @@ class MinionCmdTask(Task):
     @property
     def finished(self):
         assert self.minion_cmd, "Task status should be fetched from minion"
-        return self.minion_cmd['progress'] == 1.0
+        return ((self.minion_cmd is None and
+                 time.time() - self.start_ts > self.TASK_TIMEOUT) or
+                self.minion_cmd['progress'] == 1.0)
 
     @property
     def failed(self):
         assert self.minion_cmd, "Task status should be fetched from minion"
-        return self.minion_cmd['exit_code'] != 0
+        return self.minion_cmd is None or self.minion_cmd['exit_code'] != 0
 
     def __str__(self):
         return 'MinionCmdTask<{0}>'.format(self.cmd)
@@ -585,10 +592,6 @@ class JobProcessor(object):
                     break
                 else:
                     continue
-                # update status from minion
-                # if finished - check status, else break
-                # if status ok, mark as completed, else mark as failed
-                # if marked as completed, continue, else stop processing job, mark job accordingly
                 pass
             elif task.status == Task.STATUS_QUEUED:
                 try:
@@ -604,8 +607,6 @@ class JobProcessor(object):
                     job.status = Job.STATUS_PENDING
                     job.finish_ts = time.time()
                 break
-                # run task, save its id, mark task as executing, break
-                # if failed to run - mark task as failed, job as pending (for manual conflict resolving)
 
         if all([task.status in (Task.STATUS_COMPLETED, Task.STATUS_SKIPPED)
                 for task in job.tasks]):
@@ -677,15 +678,15 @@ class JobProcessor(object):
         return [job.human_dump() for job in sorted(self.jobs.itervalues(),
             key=lambda j: (j.finish_ts, j.start_ts))]
 
-    def clear_jobs(self, request):
-        try:
-            for raw_job in self.jobs_index:
-                job = self.__load_job(raw_job)
-                del self.jobs_index[job['id'].encode('utf-8')]
-        except Exception as e:
-            logger.error('Failed to clear all jobs: {0}\n{1}'.format(e,
-                traceback.format_exc()))
-            raise
+    # def clear_jobs(self, request):
+    #     try:
+    #         for raw_job in self.jobs_index:
+    #             job = self.__load_job(raw_job)
+    #             del self.jobs_index[job['id'].encode('utf-8')]
+    #     except Exception as e:
+    #         logger.error('Failed to clear all jobs: {0}\n{1}'.format(e,
+    #             traceback.format_exc()))
+    #         raise
 
     def cancel_job(self, request):
         job_id = None

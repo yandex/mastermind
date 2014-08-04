@@ -182,6 +182,8 @@ class Minions(object):
             uid = request[0]
         except ValueError:
             raise ValueError('Invalid parameters')
+        if not uid in self.commands:
+            raise ValueError('Unknown minion command id {0}'.format(uid))
         return self.commands[uid]
 
     def get_commands(self, request):

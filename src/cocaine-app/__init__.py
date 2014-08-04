@@ -181,7 +181,7 @@ def init_job_processor(minions):
     register_handle(j.cancel_job)
     register_handle(j.approve_job)
     register_handle(j.get_job_list)
-    register_handle(j.clear_jobs)
+    # register_handle(j.clear_jobs)
     register_handle(j.retry_failed_job_task)
     register_handle(j.skip_failed_job_task)
     return j
