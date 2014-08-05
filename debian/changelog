@@ -1,3 +1,11 @@
+mastermind (2.8.36) lucid; urgency=low
+
+  * Filtering groups by total space for building couples
+  * All space counters of namespaces statistics as integers (bytes)
+  * Additional parameter for move jobs: group file path for removal
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 05 Aug 2014 17:58:56 +0400
+
 mastermind (2.8.35) lucid; urgency=low
 
   * Fix for minions commands status processing
