@@ -10,7 +10,7 @@ import uuid
 
 from config import config
 import indexes
-from infrastructure import infrastructure
+from infrastructure import infrastructure, port_to_dir
 import keys
 import storage
 import timed_queue
@@ -140,6 +140,18 @@ class MoveJob(Job):
         data['dst_hostname'] = infrastructure.get_hostname_by_addr(data['dst_host'])
         return data
 
+    def marker_format(self, marker):
+        return marker.format(
+            group_id=str(self.group),
+            src_host=self.src_host,
+            src_hostname=infrastructure.get_hostname_by_addr(self.src_host),
+            src_port=str(self.src_port),
+            src_base_dir=port_to_dir(self.src_port),
+            dst_host=self.dst_host,
+            dst_hostname=infrastructure.get_hostname_by_addr(self.dst_host),
+            dst_port=str(self.dst_port),
+            dst_base_dir=port_to_dir(self.dst_port))
+
     def create_tasks(self):
         shutdown_cmd = infrastructure.shutdown_node_cmd([self.src_host, self.src_port])
 
@@ -147,12 +159,17 @@ class MoveJob(Job):
                                           self.GROUP_FILE_MARKER_PATH)
                              if self.GROUP_FILE_MARKER_PATH else
                              '')
+        group_file = (os.path.join(infrastructure.node_path(port=self.src_port),
+                                   self.GROUP_FILE_PATH)
+                      if self.GROUP_FILE_PATH else
+                      '')
 
         task = MinionCmdTask.new(host=self.src_host,
                                  cmd=shutdown_cmd,
                                  params={'node': self.src_node,
                                          'group': str(self.group),
-                                         'group_file_marker': group_file_marker})
+                                         'group_file_marker': self.marker_format(group_file_marker),
+                                         'remove_group_file': group_file})
         self.tasks.append(task)
 
         shutdown_cmd = infrastructure.shutdown_node_cmd([self.dst_host, self.dst_port])

@@ -579,7 +579,6 @@ class CacheItem(object):
             if cache_item['ts'] + self.key_expire_time < time.time():
                 logger.debug(self.logprefix + 'Item for key %s expired' % (key,))
                 raise KeyError
-            # logger.debug(self.logprefix + 'Using item for key %s from cache' % (key,))
             val = cache_item['val']
         except KeyError:
             logger.debug(self.logprefix + 'Fetching value for key %s from source' % (key,))
@@ -641,4 +640,8 @@ def port_to_path(port):
     assert port >= BASE_PORT
     if port == CACHE_DEFAULT_PORT:
         return CACHE_DEFAULT_PATH
-    return os.path.join(BASE_STORAGE_PATH, str(port - BASE_PORT) + '/')
+    return os.path.join(BASE_STORAGE_PATH, port_to_dir(port) + '/')
+
+
+def port_to_dir(port):
+    return str(port - BASE_PORT)
