@@ -421,6 +421,12 @@ class Infrastructure(object):
                 raise ValueError('No symmetric groups with one node found, '
                                  'multiple nodes group restoration is not supported')
 
+            def alive_keys(g):
+                stat = g.get_stat()
+                return stat.files
+
+            group_candidates.sort(key=alive_keys, reverse=True)
+
             source_group = group_candidates[0]
             source_node = source_group.nodes[0]
 
