@@ -285,12 +285,7 @@ class Infrastructure(object):
             logger.debug('fetching all namespace settings')
             start = time.time()
             for data in self.ns_settings_idx:
-                settings = msgpack.unpackb(data)
-                logger.debug('fetched namespace settings for "{0}" '
-                    '({1:.4f}s)'.format(settings['namespace'], time.time() - start))
-                ns = settings['namespace']
-                del settings['namespace']
-                self.ns_settings[ns] = settings
+                self.__do_sync_ns_settings(data, start)
         except Exception as e:
             logger.error('Failed to sync ns settings: %s\n%s' %
                           (e, traceback.format_exc()))
@@ -298,6 +293,18 @@ class Infrastructure(object):
             self.__tq.add_task_in(self.NS_SETTINGS_SYNC,
                 config.get('infrastructure_ns_settings_sync_period', 60),
                 self._sync_ns_settings)
+
+    def sync_single_ns_settings(self, namespace):
+        logger.debug('fetching namespace {0} settings'.format(namespace))
+        self.__do_sync_ns_settings(self.ns_settings_idx[namespace], time.time())
+
+    def __do_sync_ns_settings(self, data, start_ts):
+        settings = msgpack.unpackb(data)
+        logger.debug('fetched namespace settings for "{0}" '
+            '({1:.4f}s)'.format(settings['namespace'], time.time() - start_ts))
+        ns = settings['namespace']
+        del settings['namespace']
+        self.ns_settings[ns] = settings
 
     def set_ns_settings(self, namespace, settings):
 

@@ -570,6 +570,7 @@ nsDispatcher = Dispatcher(globaloptions=(host_param,))
 @nsDispatcher.command(name='setup')
 @log_action
 def ns_setup(namespace,
+             overwrite=('o', False, 'Flag to setup namespace from scratch'),
              groups_count=('g', '', 'Set number of groups per couple'),
              success_copies=('s', '', 'Success copy politics (any|quorum|all)'),
              auth_key_write=('', '', 'Proxy auth-key for writing'),
@@ -581,7 +582,9 @@ def ns_setup(namespace,
              content_length_threshold=('', '', 'Set content length threshold for '
                 'proxy to return direct urls instead of balancer urls'),
              host=None):
-    '''Namespace setup'''
+    '''Namespace setup.
+    Updates settings by default with given keys.
+    Use --overwrite to completely overwrite namespace settings.'''
     s = service(host)
 
     settings = {}
@@ -591,18 +594,19 @@ def ns_setup(namespace,
     except ValueError:
         groups_count = 0
 
-    if not success_copies:
+    if not success_copies and overwrite:
         print warn('--success-copies is required parameter')
         return
 
-    settings = {'success-copies-num': success_copies}
+    if success_copies:
+        settings['success-copies-num'] = success_copies
 
     if couple:
         couple = [int(g) for g in couple.split(':')]
     else:
         couple = None
 
-    if not couple and not groups_count:
+    if (not couple and not groups_count) and overwrite:
         print warn('either --groups-count or --couple is required')
         return
 
@@ -616,15 +620,17 @@ def ns_setup(namespace,
         settings.setdefault('signature', {})['path_prefix'] = sign_path_prefix
     if sign_port:
         settings.setdefault('signature', {})['port'] = sign_port
-    if auth_key_read or auth_key_write:
-        settings['auth-keys'] = {
-            'read': auth_key_read or '',
-            'write': auth_key_write or '',
-        }
+    if auth_key_read:
+        settings.setdefault('auth-keys', {})['read'] = auth_key_read
+    if auth_key_write:
+        settings.setdefault('auth-keys', {})['write'] = auth_key_write
+    if overwrite and (auth_key_read or auth_key_write):
+        settings['auth-keys'].setdefault('read', '')
+        settings['auth-keys'].setdefault('write', '')
     if content_length_threshold:
         settings['content_length_threshold'] = content_length_threshold
 
-    res = s.enqueue('namespace_setup', msgpack.packb([namespace, settings])).get()
+    res = s.enqueue('namespace_setup', msgpack.packb([namespace, overwrite, settings])).get()
     print res
 
 

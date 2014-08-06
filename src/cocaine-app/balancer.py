@@ -679,18 +679,44 @@ class Balancer(object):
 
         settings['groups-count'] = groups_count
 
-
     ALLOWED_NS_KEYS = set(['success-copies-num', 'groups-count',
         'static-couple', 'auth-keys', 'signature', 'content_length_threshold'])
     ALLOWED_NS_SIGN_KEYS = set(['token', 'path_prefix', 'port'])
     ALLOWED_NS_AUTH_KEYS = set(['write', 'read'])
 
+    def __merge_dict(self, dst, src):
+        for k, val in src.iteritems():
+            if not k in dst:
+                dst[k] = val
+            else:
+                if not isinstance(val, dict):
+                    dst[k] = val
+                else:
+                    self.__merge_dict(dst[k], src[k])
 
     def namespace_setup(self, request):
         try:
-            namespace, settings = request[:2]
+            namespace, overwrite, settings = request[:3]
         except Exception:
             raise ValueError('Invalid parameters')
+
+        cur_settings = {}
+        if not overwrite:
+            try:
+                self.infrastructure.sync_single_ns_settings(namespace)
+                cur_settings = self.infrastructure.ns_settings[namespace]
+            except elliptics.NotFoundError:
+                pass
+            except Exception as e:
+                logger.error('Failed to update namespace {0} settings: '
+                    '{1}\n{2}'.format(namespace, str(e), traceback.format_exc()))
+                raise
+
+        logger.info('Namespace {0}, old settings found: {1}, '
+            'updating with {2}'.format(namespace, cur_settings, settings))
+
+        self.__merge_dict(cur_settings, settings)
+        settings = cur_settings
 
         # filtering settings
         for k in settings.keys():
