@@ -495,26 +495,51 @@ def view_groups(data, grouped, key_mapper, short=False, verbose=False):
 @coupleDispatcher.command(name='build')
 @log_action
 def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:2)'),
+                 couples=('c', 0, 'Number of couples to create. Mastermind will try '
+                    'to build couples using groups from different sets of dcs '
+                    'to prevent all couples falling out when a dc gets disconnected'),
                  ignore_space=('s', False, 'Ignore checking of groups total space '
                     'matching'),
                  namespace=('n', '', 'Set custom namespace for couple'), host=None):
     '''Make a couple of groups. The default behaviour is to use
     groups with approximately equal total space size.
     This behaviour can be turned off by --ignore-space option.
+    Options --couples and --groups are mutually exclusive.
     The required argument for the command is the size of a couple (number of groups).'''
     s = service(host)
     size = int(size)
+
+    if groups and couples:
+        print warn('Options --groups and --couples are mutually exclusive')
+        return
+
     if groups:
         groups = [int(g) for g in groups.split(':')]
     else:
         groups = []
 
-    params = [size, groups, not ignore_space]
+    params = [size, groups, couples, not ignore_space]
     if namespace:
         params.append(namespace)
 
     res = s.enqueue("couple_groups", msgpack.packb(tuple(params))).get()
-    print res
+
+    if not isinstance(res,  tuple):
+        print res
+        return
+
+    good_couples, bad_couples = res
+
+    if couples > 1:
+        print highlight('Successfully created {0} out of {1} couples:'.format(len(good_couples), couples))
+    for c in good_couples:
+        print c
+
+    if bad_couples:
+        print warn('Failed couples: {0}'.format(bad_couples))
+    elif len(good_couples) < couples:
+        print warn('Not enough valid dcs and/or groups of appropriate '
+            'total space for remaining couples creation')
 
 
 @coupleDispatcher.command(name='break')
@@ -625,8 +650,10 @@ def ns_setup(namespace,
     if auth_key_write:
         settings.setdefault('auth-keys', {})['write'] = auth_key_write
     if overwrite and (auth_key_read or auth_key_write):
+        # set empty read or write key if not specified
         settings['auth-keys'].setdefault('read', '')
         settings['auth-keys'].setdefault('write', '')
+
     if content_length_threshold:
         settings['content_length_threshold'] = content_length_threshold
 

@@ -1,6 +1,7 @@
 # encoding: utf-8
 import copy
 from datetime import datetime
+import itertools
 import logging
 import random
 import re
@@ -288,7 +289,7 @@ class Balancer(object):
 
         (good, bad) = make_symm_group(self.node, couple, namespace_to_use)
         if bad:
-            raise bad[1]
+            raise Exception(bad[1])
 
         return {'message': 'Successfully repaired couple', 'couple': str(couple)}
 
@@ -443,7 +444,13 @@ class Balancer(object):
 
         size = int(request[0])
         mandatory_groups = [int(g) for g in request[1]]
-        check_space = request[2]
+        couples_num = int(request[2]) or 1
+        check_space = request[3]
+
+        if mandatory_groups and couples_num > 1:
+            raise Exception('Batch couple building is prohibited when '
+                'mandatory groups are set')
+
         mandatory_ts = None
 
         if mandatory_groups and check_space:
@@ -495,26 +502,75 @@ class Balancer(object):
         if not len(dc_groups_by_total_space):
             raise Exception('Not enough dcs')
 
-        ts = random.choice(dc_groups_by_total_space.keys())
-        some_dcs = random.sample(dc_groups_by_total_space[ts].keys(), n_groups_to_add)
-
-        for dc in some_dcs:
-            groups_to_couple.append(dc_groups_by_total_space[ts][dc].pop())
-
         try:
-            namespace = request[3]
+            namespace = request[4]
             logger.info('namespace from request: {0}'.format(namespace))
             if not self.valid_namespace(namespace):
                 raise ValueError('Namespace "{0}" is invalid'.format(namespace))
         except IndexError:
             namespace = storage.Group.DEFAULT_NAMESPACE
 
-        couple = storage.couples.add([storage.groups[g] for g in groups_to_couple])
-        (good, bad) = make_symm_group(self.node, couple, namespace)
-        if bad:
-            raise bad[1]
 
-        return groups_to_couple
+        created_couples = []
+        bad_couples = []
+        stop = False
+
+        while len(created_couples) < couples_num:
+
+            if stop:
+                break
+
+            available_dcs = set()
+            for groups_by_dc in dc_groups_by_total_space.itervalues():
+                for dc in groups_by_dc.keys():
+                    available_dcs.add(dc)
+
+            groups_found = False
+
+            for comb in itertools.combinations(available_dcs, n_groups_to_add):
+                # selecting available total space with selected dcs combination
+                available_tss = dc_groups_by_total_space.keys()
+                random.shuffle(available_tss)
+
+                suitable_ts = None
+                for ts in available_tss:
+                    # checking if groups with total space == ts are available
+                    # in dcs given in 'comb'
+                    if all([dc in dc_groups_by_total_space[ts] for dc in comb]):
+                        suitable_ts = ts
+                        break
+
+                if not suitable_ts:
+                    continue
+
+                groups_found = True
+
+                for dc in comb:
+                    groups_to_couple.append(dc_groups_by_total_space[ts][dc].pop())
+
+                couple = storage.couples.add([storage.groups[g] for g in groups_to_couple])
+                (good, bad) = make_symm_group(self.node, couple, namespace)
+                if bad:
+                    bad_couples.append([good, bad])
+                    stop = True
+                    break
+                created_couples.append(couple)
+
+                if len(created_couples) >= couples_num:
+                    break
+
+                # removing total spaces with dcs that cannot be used anymore
+                groups_to_couple = []
+                for dc in dc_groups_by_total_space[suitable_ts].keys():
+                    if not dc_groups_by_total_space[suitable_ts][dc]:
+                        del dc_groups_by_total_space[suitable_ts][dc]
+                if len(dc_groups_by_total_space[suitable_ts]) < n_groups_to_add:
+                    del dc_groups_by_total_space[suitable_ts]
+
+            if not groups_found:
+                stop = True
+
+        return [c.as_tuple() for c in created_couples], bad_couples
 
     @h.handler
     def break_couple(self, request):
@@ -845,6 +901,6 @@ def make_symm_group(n, couple, namespace):
         except Exception as e:
             logger.error('Failed to write symm group info, group %d: %s\n%s'
                          % (group.group_id, str(e), traceback.format_exc()))
-            bad = (group.group_id, e)
+            bad = (group.group_id, str(e))
             break
     return (good, bad)
