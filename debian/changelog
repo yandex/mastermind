@@ -1,3 +1,12 @@
+mastermind (2.8.37) lucid; urgency=low
+
+  * Update namespaces settings by default, overwrite is optional
+  * Prefer using group with the most alive keys number for restoration
+  * Creation of +N nonoverlapping couples if dcs are available
+  * Independent timeout for elliptics nodes and elliptics meta nodes
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 07 Aug 2014 16:10:57 +0400
+
 mastermind (2.8.36) lucid; urgency=low
 
   * Filtering groups by total space for building couples
