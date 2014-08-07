@@ -129,7 +129,8 @@ class Balancer(object):
         logger.info('Creating elliptics session')
 
         s = elliptics.Session(self.node)
-        s.set_timeout(config.get('wait_timeout', 5))
+        wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or config.get('wait_timeout', 5)
+        s.set_timeout(wait_timeout)
         s.add_groups([group.group_id])
 
         data = s.read_data(key).get()[0]
@@ -869,7 +870,8 @@ def kill_symm_group(n, meta_session, couple):
     groups = [group.group_id for group in couple]
     logger.info('Killing symm groups: %s' % str(groups))
     s = elliptics.Session(n)
-    s.set_timeout(config.get('wait_timeout', 5))
+    wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or config.get('wait_timeout', 5)
+    s.set_timeout(wait_timeout)
     s.add_groups(groups)
     try:
         s.remove(keys.SYMMETRIC_GROUPS_KEY).get()
@@ -886,6 +888,7 @@ def make_symm_group(n, couple, namespace):
     logger.info('groups in couple %s are being assigned namespace "%s"' % (couple, namespace))
 
     s = elliptics.Session(n)
+    wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or config.get('wait_timeout', 5)
     s.set_timeout(config.get('wait_timeout', 5))
     good = []
     bad = ()

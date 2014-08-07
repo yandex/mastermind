@@ -33,7 +33,8 @@ logger = logging.getLogger('mm.init')
 i = iter(xrange(100))
 logger.info("trace %d" % (i.next()))
 
-logger.debug("config: %s" % str(config["elliptics_nodes"]))
+nodes = config.get('elliptics', {}).get('nodes', []) or config["elliptics_nodes"]
+logger.debug("config: %s" % str(nodes))
 
 logger.info("trace %d" % (i.next()))
 log = elliptics.Logger(str(config["dnet_log"]), config["dnet_log_mask"])
@@ -52,11 +53,11 @@ n = elliptics.Node(log, node_config)
 connected = False
 
 logger.info("trace %d" % (i.next()))
-for host in config["elliptics_nodes"]:
-    logger.debug("Adding node %s" % str(host))
+for node in nodes:
+    logger.debug("Adding node %s" % str(node))
     try:
-        logger.info("host: " + str(host))
-        n.add_remote(str(host[0]), host[1])
+        logger.info("node: " + str(node))
+        n.add_remote(str(node[0]), node[1])
         connected = True
     except Exception as e:
         logger.error("Error: " + str(e) + "\n" + traceback.format_exc())
@@ -69,10 +70,10 @@ connected = False
 
 logger.info("trace %d" % (i.next()))
 meta_node = elliptics.Node(log, node_config)
-for host in config["metadata"]["nodes"]:
+for node in config["metadata"]["nodes"]:
     try:
-        logger.info("host: " + str(host))
-        meta_node.add_remote(str(host[0]), host[1])
+        logger.info("node: " + str(node))
+        meta_node.add_remote(str(node[0]), node[1])
         connected = True
     except Exception as e:
         logger.error("Error: " + str(e) + "\n" + traceback.format_exc())
@@ -87,8 +88,10 @@ logger.info('sleeping for wait_timeout for nodes '
              'to collect data ({0} sec)'.format(wait_timeout))
 sleep(wait_timeout)
 
+meta_wait_timeout = config['metadata'].get('wait_timeout', 5)
+
 meta_session = elliptics.Session(meta_node)
-meta_session.set_timeout(wait_timeout)
+meta_session.set_timeout(meta_wait_timeout)
 meta_session.add_groups(list(config["metadata"]["groups"]))
 logger.info("trace %d" % (i.next()))
 n.meta_session = meta_session
