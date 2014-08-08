@@ -511,62 +511,62 @@ class Balancer(object):
         except IndexError:
             namespace = storage.Group.DEFAULT_NAMESPACE
 
-
         created_couples = []
         bad_couples = []
         stop = False
+
+        def chunks(l, n):
+            for i in xrange(0, len(l), n):
+                chunk = l[i:i + n]
+                if len(chunk) < n:
+                    break
+                yield chunk
 
         while len(created_couples) < couples_num:
 
             if stop:
                 break
 
-            available_dcs = set()
-            for groups_by_dc in dc_groups_by_total_space.itervalues():
-                for dc in groups_by_dc.keys():
-                    available_dcs.add(dc)
-
+            used_dcs = set()
             groups_found = False
 
-            for comb in itertools.combinations(available_dcs, n_groups_to_add):
-                # selecting available total space with selected dcs combination
-                available_tss = dc_groups_by_total_space.keys()
-                random.shuffle(available_tss)
+            ts_dcs = [(ts, set(group_by_dc.keys()))
+                      for ts, group_by_dc in dc_groups_by_total_space.iteritems()]
+            ts_dcs.sort(key=lambda x: len(x[1]))
 
-                suitable_ts = None
-                for ts in available_tss:
-                    # checking if groups with total space == ts are available
-                    # in dcs given in 'comb'
-                    if all([dc in dc_groups_by_total_space[ts] for dc in comb]):
-                        suitable_ts = ts
+            for ts, dcs in ts_dcs:
+                if stop:
+                    break
+                not_used_dcs = list(dcs - used_dcs)
+                random.shuffle(not_used_dcs)
+                logger.info('Ts: {0}, not used dcs {1}'.format(ts, not_used_dcs))
+                for selected_dcs in chunks(not_used_dcs, n_groups_to_add):
+                    logger.info('Ts: {0}, taken dcs {1}'.format(ts, selected_dcs))
+                    # build couple from selected dcs, mark loop as successful
+                    for dc in selected_dcs:
+                        used_dcs.add(dc)
+                        groups_to_couple.append(dc_groups_by_total_space[ts][dc].pop())
+
+                    couple = storage.couples.add([storage.groups[g] for g in groups_to_couple])
+                    (good, bad) = make_symm_group(self.node, couple, namespace)
+                    if bad:
+                        bad_couples.append([good, bad])
+                        stop = True
+                        break
+                    created_couples.append(couple)
+
+                    groups_found = True
+
+                    if len(created_couples) >= couples_num:
+                        stop = True
                         break
 
-                if not suitable_ts:
-                    continue
-
-                groups_found = True
-
-                for dc in comb:
-                    groups_to_couple.append(dc_groups_by_total_space[ts][dc].pop())
-
-                couple = storage.couples.add([storage.groups[g] for g in groups_to_couple])
-                (good, bad) = make_symm_group(self.node, couple, namespace)
-                if bad:
-                    bad_couples.append([good, bad])
-                    stop = True
-                    break
-                created_couples.append(couple)
-
-                if len(created_couples) >= couples_num:
-                    break
-
-                # removing total spaces with dcs that cannot be used anymore
-                groups_to_couple = []
-                for dc in dc_groups_by_total_space[suitable_ts].keys():
-                    if not dc_groups_by_total_space[suitable_ts][dc]:
-                        del dc_groups_by_total_space[suitable_ts][dc]
-                if len(dc_groups_by_total_space[suitable_ts]) < n_groups_to_add:
-                    del dc_groups_by_total_space[suitable_ts]
+                    groups_to_couple = []
+                    for dc in dc_groups_by_total_space[ts].keys():
+                        if not dc_groups_by_total_space[ts][dc]:
+                            del dc_groups_by_total_space[ts][dc]
+                    if len(dc_groups_by_total_space[ts]) < n_groups_to_add:
+                        del dc_groups_by_total_space[ts]
 
             if not groups_found:
                 stop = True
