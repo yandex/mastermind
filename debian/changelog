@@ -1,3 +1,9 @@
+mastermind (2.8.38) lucid; urgency=low
+
+  * Creation of +N nonoverlapping couples if dcs are available
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 08 Aug 2014 19:43:38 +0400
+
 mastermind (2.8.37) lucid; urgency=low
 
   * Update namespaces settings by default, overwrite is optional
