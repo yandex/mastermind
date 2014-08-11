@@ -56,9 +56,6 @@ class Infrastructure(object):
 
         self.state = {}
         self.__state_lock = threading.Lock()
-        self.sync_ts = None
-        self.state_valid_time = config.get('infrastructure_state_valid_time',
-                                           120)
         self.__tq = timed_queue.TimedQueue()
         self.__tq.start()
 
@@ -121,44 +118,7 @@ class Infrastructure(object):
     def _sync_state(self):
         try:
             logger.info('Syncing infrastructure state')
-            group_ids = set()
-            with self.__state_lock:
-
-                idxs = self.meta_session.find_all_indexes([keys.MM_GROUPS_IDX])
-                for idx in idxs:
-                    data = idx.indexes[0].data
-
-                    state_group = self._unserialize(data)
-                    logger.debug('Fetched infrastructure item: %s' %
-                                  (state_group,))
-
-                    if (self.state.get(state_group['id']) and
-                        state_group['id'] in storage.groups):
-
-                        group = storage.groups[state_group['id']]
-
-                        for nodes_state in reversed(state_group['nodes']):
-                            if nodes_state['timestamp'] <= self.state[state_group['id']]['nodes'][-1]['timestamp']:
-                                break
-
-                            if nodes_state.get('manual', False):
-                                nodes_set = set(nodes_state['set'])
-                                for node in group.nodes:
-                                    if not (node.host.addr, node.port) in nodes_set:
-                                        logger.info('Removing {0} from group {1} due to manual group detaching'.format(node, group.group_id))
-                                        group.remove_node(node)
-                            group.update_status_recursive()
-
-                    self.state[state_group['id']] = state_group
-                    group_ids.add(state_group['id'])
-
-                for gid in set(self.state.keys()) - group_ids:
-                    logger.info('Group %d is not found in infrastructure state, '
-                                'removing' % gid)
-                    del self.state[gid]
-
-            self.sync_ts = time.time()
-
+            self.__do_sync_state()
             logger.info('Finished syncing infrastructure state')
         except Exception as e:
             logger.error('Failed to sync infrastructure state: %s\n%s' %
@@ -167,6 +127,43 @@ class Infrastructure(object):
             self.__tq.add_task_in(self.TASK_SYNC,
                 config.get('infrastructure_sync_period', 60),
                 self._sync_state)
+
+    def __do_sync_state(self):
+        group_ids = set()
+        with self.__state_lock:
+
+            idxs = self.meta_session.find_all_indexes([keys.MM_GROUPS_IDX])
+            for idx in idxs:
+                data = idx.indexes[0].data
+
+                state_group = self._unserialize(data)
+                logger.debug('Fetched infrastructure item: %s' %
+                              (state_group,))
+
+                if (self.state.get(state_group['id']) and
+                    state_group['id'] in storage.groups):
+
+                    group = storage.groups[state_group['id']]
+
+                    for nodes_state in reversed(state_group['nodes']):
+                        if nodes_state['timestamp'] <= self.state[state_group['id']]['nodes'][-1]['timestamp']:
+                            break
+
+                        if nodes_state.get('manual', False):
+                            nodes_set = set(nodes_state['set'])
+                            for node in group.nodes:
+                                if not (node.host.addr, node.port) in nodes_set:
+                                    logger.info('Removing {0} from group {1} due to manual group detaching'.format(node, group.group_id))
+                                    group.remove_node(node)
+                        group.update_status_recursive()
+
+                self.state[state_group['id']] = state_group
+                group_ids.add(state_group['id'])
+
+            for gid in set(self.state.keys()) - group_ids:
+                logger.info('Group %d is not found in infrastructure state, '
+                            'removing' % gid)
+                del self.state[gid]
 
     @staticmethod
     def _serialize(data):
@@ -194,13 +191,9 @@ class Infrastructure(object):
         try:
             logger.info('Updating infrastructure state')
 
-            if self.sync_ts is None:
-                raise ValueError('Nothing to update')
-            state_time = time.time() - self.sync_ts
-            if state_time > self.state_valid_time:
-                raise ValueError(
-                    'State was not updated for %s seconds, '
-                    'considered stale' % (time.time() - self.sync_ts))
+            logger.info('Fetching fresh infrastructure state')
+            self.__do_sync_state()
+            logger.info('Done fetching fresh infrastructure state')
 
             for g in storage.groups.keys():
 
