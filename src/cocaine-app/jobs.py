@@ -40,7 +40,6 @@ class Job(object):
         self.finish_ts = None
         self.type = None
         self.tasks = []
-        # self.fixes = []
         self.__tasklist_lock = threading.Lock()
 
     @contextmanager
@@ -72,8 +71,6 @@ class Job(object):
         self.finish_ts = data['finish_ts']
         self.type = data['type']
 
-        # self.fixes = [FixFactory.make_fix(fix_data) for fix_data in data.get('fixes', [])]
-
         with self.__tasklist_lock:
             self.tasks = [TaskFactory.make_task(task_data) for task_data in data['tasks']]
 
@@ -91,7 +88,6 @@ class Job(object):
                 'start_ts': self.start_ts,
                 'finish_ts': self.finish_ts,
                 'type': self.type,
-                # 'fixes': [fix.dump() for fix in self.fixes],
                 }
 
         data.update(dict([(k, getattr(self, k)) for k in self.PARAMS]))
@@ -281,8 +277,11 @@ class MinionCmdTask(Task):
     def update_status(self, minions):
         try:
             self.minion_cmd = minions.get_command([self.minion_cmd_id])
+            logger.debug('Task {0}, minion command status was updated: {1}'.format(
+                self.id, self.minion_cmd))
         except ValueError:
-            # mastermind have not yet received minion cmd status
+            logger.warn('Task {0}, minion command status {1} is not fetched '
+                'from minions'.format(self.id, self.minion_cmd_id))
             pass
 
     def execute(self, minions):
@@ -290,7 +289,7 @@ class MinionCmdTask(Task):
         minion_response = minions.execute_cmd([self.host,
             self.cmd, self.params])
         self.minion_cmd = minion_response.values()[0]
-        logger.info('Minions task execution: {0}'.format(self.minion_cmd))
+        logger.info('Task {0}, minions task execution: {1}'.format(self.id, self.minion_cmd))
         self.minion_cmd_id = self.minion_cmd['uid']
 
     def human_dump(self):
@@ -300,18 +299,16 @@ class MinionCmdTask(Task):
 
     @property
     def finished(self):
-        assert self.minion_cmd, "Task status should be fetched from minion"
         return ((self.minion_cmd is None and
                  time.time() - self.start_ts > self.TASK_TIMEOUT) or
                 self.minion_cmd['progress'] == 1.0)
 
     @property
     def failed(self):
-        assert self.minion_cmd, "Task status should be fetched from minion"
         return self.minion_cmd is None or self.minion_cmd['exit_code'] != 0
 
     def __str__(self):
-        return 'MinionCmdTask<{0}>'.format(self.cmd)
+        return 'MinionCmdTask[id: {0}]<{1}>'.format(self.id, self.cmd)
 
 
 class HistoryRemoveNodeTask(Task):
@@ -382,8 +379,8 @@ class HistoryRemoveNodeTask(Task):
         return node_in_group or node_in_history
 
     def __str__(self):
-        return 'HistoryRemoveNodeTask<remove {0}:{1} from group {2}>'.format(
-            self.host, self.port, self.group)
+        return 'HistoryRemoveNodeTask[id: {0}]<remove {1}:{2} from group {3}>'.format(
+            self.id, self.host, self.port, self.group)
 
 
 class JobFactory(object):
@@ -413,65 +410,6 @@ class TaskFactory(object):
         raise ValueError('Unknown task type {0}'.format(task_type))
 
 
-# class FixFactory(object):
-
-#     TYPE_GROUP_NODE_SWAP = 'group_node_swap'
-
-#     @classmethod
-#     def make_fix(cls, data):
-#         fix_type, params = data
-#         if fix_type == cls.TYPE_GROUP_NODE_SWAP:
-#             return GroupNodeSwapFix.from_data(data)
-#         raise ValueError('Unknown fix type {0}'.format(fix_type))
-
-
-# class Fix(object):
-
-#     GROUP_NODE_SWAP = 'group_node_swap'
-
-#     def __init__(self, params):
-#         self.params = params
-
-#     def apply(self):
-#         raise AttributeError('Apply method should be implemented '
-#             'in derived class')
-
-#     def node_addr(self, host, port):
-#         return '{0}:{1}'.format(host, port)
-
-#     def dump(self):
-#         return (self.fix_type, self.params)
-
-#     @classmethod
-#     def from_data(cls, data):
-#         fix = cls(data[1])
-#         return fix
-
-
-# class GroupNodeSwapFix(Fix):
-#     def apply(self):
-#         for group_id, src_host, src_port, dst_host, dst_port in self.params:
-#             group = storage.groups[group_id]
-
-#             src_node_addr = self.node_addr(src_host, src_port)
-#             if src_node_addr in storage.nodes:
-#                 src_node = storage.nodes[src_node_addr]
-#                 if group.has_node(src_node):
-#                     group.remove_node(src_node)
-
-#             dst_node_addr = self.node_addr(dst_host, dst_port)
-#             if dst_node_addr in storage.nodes:
-#                 dst_node = storage.nodes[dst_node_addr]
-#                 if not group.has_node(dst_node):
-#                     group.add_node(dst_node)
-
-#             try:
-#                 infrastructure.detach_node(group_id, src_host, src_port)
-#             except ValueError as e:
-#                 # Node seems to have already been removed
-#                 pass
-
-
 class JobProcessor(object):
 
     JOBS_EXECUTE = 'jobs_execute'
@@ -499,13 +437,12 @@ class JobProcessor(object):
 
     def _load_job(self, job_rawdata):
         job_data = json.loads(job_rawdata)
-        logger.debug('job data: {0}'.format(job_data))
         if not job_data['id'] in self.jobs:
             job = self.jobs[job_data['id']] = JobFactory.make_job(job_data)
+            logger.info('Job loaded from job index: {0}'.format(job.id))
         else:
             # TODO: Think about other ways of updating job
             job = self.jobs[job_data['id']].load(job_data)
-        logger.info('Job loaded from job index: {0}'.format(job))
         return job
 
     def _update_jobs(self):
@@ -527,14 +464,12 @@ class JobProcessor(object):
 
         logger.info('Jobs execution started')
         try:
-            # fetch zookeeper mutex
             logger.debug('Lock acquiring')
             with sync_manager.lock(self.JOBS_LOCK):
                 logger.debug('Lock acquired')
                 # TODO: check! # fetch jobs - read_latest!!!
                 self._do_update_jobs()
 
-                # jobs = [self._load_job(job) for job in self.jobs_index]
                 (new_jobs, executing_jobs) = ([], [])
                 for job in self.jobs.itervalues():
                     if job.status == Job.STATUS_EXECUTING:
@@ -549,7 +484,6 @@ class JobProcessor(object):
                 logger.debug('{0} jobs to process'.format(len(ready_jobs)))
 
                 for job in ready_jobs:
-                    logger.info('Processing job {0}'.format(job.id))
                     try:
                         with job.tasks_lock():
                             self.__process_job(job)
@@ -563,13 +497,14 @@ class JobProcessor(object):
             logger.error('Failed to process existing jobs: {0}\n{1}'.format(
                 e, traceback.format_exc()))
         finally:
+            logger.info('Jobs execution finished')
             self.__tq.add_task_in(self.JOBS_EXECUTE,
                 config.get('jobs', {}).get('execute_period', 60),
                 self._execute_jobs)
 
     def __process_job(self, job):
 
-        logger.debug('Processing job {0}: {1}'.format(job.id, job.dump()))
+        logger.debug('Job {0}, processing started: {1}'.format(job.id, job.dump()))
 
         if all([task.status == Task.STATUS_QUEUED for task in job.tasks]):
             logger.info('Setting job {0} start time'.format(job.id))
@@ -578,11 +513,13 @@ class JobProcessor(object):
         for task in job.tasks:
             if task.status == Task.STATUS_EXECUTING:
 
+                logger.info('Job {0}, task {1} status update'.format(
+                    job.id, task))
                 try:
                     self.__update_task_status(task)
                 except Exception as e:
-                    logger.error('Failed to update task status: '
-                        '{0}\n{1}'.format(e, traceback.format_exc()))
+                    logger.error('Job {0}, failed to update task {1} status: '
+                        '{2}\n{3}'.format(job.id, task, e, traceback.format_exc()))
                     task.error_msg.append(str(e))
                     task.status = Task.STATUS_FAILED
                     job.status = Job.STATUS_PENDING
@@ -590,10 +527,9 @@ class JobProcessor(object):
                     break
 
                 if not task.finished:
-                    logger.debug('Task {0} not finished'.format(task))
+                    logger.debug('Job {0}, task {1} is not finished'.format(
+                        job.id, task))
                     break
-
-                logger.debug('Task {0} is finished'.format(task))
 
                 task.finish_ts = time.time()
 
@@ -601,7 +537,8 @@ class JobProcessor(object):
                                if task.failed else
                                Task.STATUS_COMPLETED)
 
-                logger.debug('Task {0} status: {1}'.format(task, task.status))
+                logger.debug('Job {0}, task {1} is finished, status {2}'.format(
+                    job.id, task, task.status))
 
                 if task.status == Task.STATUS_FAILED:
                     job.status = Job.STATUS_PENDING
@@ -612,14 +549,15 @@ class JobProcessor(object):
                 pass
             elif task.status == Task.STATUS_QUEUED:
                 try:
-                    logger.info('Executing new task "{0}"'.format(task))
+                    logger.info('Job {0}, executing new task {1}'.format(job.id, task))
                     self.__execute_task(task)
-                    logger.info('Task {0} execution was requested'.format(task))
+                    logger.info('Job {0}, task {1} execution was successfully requested'.format(
+                        job.id, task))
                     task.status = Task.STATUS_EXECUTING
                     job.status = Job.STATUS_EXECUTING
                 except Exception as e:
-                    logger.error('Failed to execute task: {0}\n{1}'.format(e,
-                        traceback.format_exc()))
+                    logger.error('Job {0}, failed to execute task {1}: {2}\n{3}'.format(
+                        job.id, task, e, traceback.format_exc()))
                     task.status = Task.STATUS_FAILED
                     job.status = Job.STATUS_PENDING
                     job.finish_ts = time.time()
@@ -627,6 +565,7 @@ class JobProcessor(object):
 
         if all([task.status in (Task.STATUS_COMPLETED, Task.STATUS_SKIPPED)
                 for task in job.tasks]):
+            logger.info('Job {0}, tasks processing is finished'.format(job.id))
             job.status = Job.STATUS_COMPLETED
             job.finish_ts = time.time()
 
@@ -680,7 +619,7 @@ class JobProcessor(object):
             job.create_tasks()
 
             with sync_manager.lock(self.JOBS_LOCK):
-                logger.info('created job: {0}'.format(job.dump()))
+                logger.info('Job {0} created: {1}'.format(job.id, job.dump()))
                 self.jobs_index[job.id] = self.__dump_job(job)
 
             self.jobs[job.id] = job
@@ -726,6 +665,8 @@ class JobProcessor(object):
                 job.status = Job.STATUS_CANCELLED
                 self.jobs_index[job.id] = self.__dump_job(job)
 
+                logger.info('Job {0}: status set to {1}'.format(job.id, job.status))
+
         except Exception as e:
             logger.error('Failed to cancel job {0}: {1}\n{2}'.format(
                 job_id, e, traceback.format_exc()))
@@ -753,6 +694,8 @@ class JobProcessor(object):
 
                 job.status = Job.STATUS_NEW
                 self.jobs_index[job.id] = self.__dump_job(job)
+
+                logger.info('Job {0}: status set to {1}'.format(job.id, job.status))
 
         except Exception as e:
             logger.error('Failed to cancel job {0}: {1}\n{2}'.format(
@@ -824,4 +767,6 @@ class JobProcessor(object):
             task.status = status
             job.status = Job.STATUS_EXECUTING
             self.jobs_index[job.id] = self.__dump_job(job)
-            logger.info('Job {0}: task {1} was skipped'.format(job.id, task.id))
+            logger.info('Job {0}: task {1} status was reset to {2}, '
+                'job status was reset to {3}'.format(
+                    job.id, task.id, task.status, job.status))
