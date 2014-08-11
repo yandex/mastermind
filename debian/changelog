@@ -1,3 +1,10 @@
+mastermind (2.8.39) lucid; urgency=low
+
+  * Jobs logging changed
+  * Syncing infrastructure state before updating
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 11 Aug 2014 16:25:39 +0400
+
 mastermind (2.8.38) lucid; urgency=low
 
   * Creation of +N nonoverlapping couples if dcs are available
