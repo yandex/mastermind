@@ -26,6 +26,7 @@ class Job(object):
     STATUS_NEW = 'new'
     STATUS_EXECUTING = 'executing'
     STATUS_PENDING = 'pending'
+    STATUS_BROKEN = 'broken'
     STATUS_COMPLETED = 'completed'
     STATUS_CANCELLED = 'cancelled'
 
@@ -41,6 +42,7 @@ class Job(object):
         self.type = None
         self.tasks = []
         self.__tasklist_lock = threading.Lock()
+        self.error_msg = []
 
     @contextmanager
     def tasks_lock(self):
@@ -70,6 +72,7 @@ class Job(object):
         self.start_ts = data['start_ts']
         self.finish_ts = data['finish_ts']
         self.type = data['type']
+        self.error_msg = data.get('error_msg', [])
 
         with self.__tasklist_lock:
             self.tasks = [TaskFactory.make_task(task_data) for task_data in data['tasks']]
@@ -88,7 +91,7 @@ class Job(object):
                 'start_ts': self.start_ts,
                 'finish_ts': self.finish_ts,
                 'type': self.type,
-                }
+                'error_msg': self.error_msg}
 
         data.update(dict([(k, getattr(self, k)) for k in self.PARAMS]))
         return data
@@ -116,7 +119,7 @@ class MoveJob(Job):
     # used to mark source node that content has been moved away from it
     GROUP_FILE_MARKER_PATH = config.get('restore', {}).get('group_file_marker', None)
 
-    PARAMS = ('group', 'src_host', 'src_port', 'dst_host', 'dst_port')
+    PARAMS = ('group', 'uncoupled_group', 'src_host', 'src_port', 'dst_host', 'dst_port')
 
     def __init__(self, **kwargs):
         super(MoveJob, self).__init__(**kwargs)
@@ -149,6 +152,16 @@ class MoveJob(Job):
             dst_base_dir=port_to_dir(self.dst_port))
 
     def create_tasks(self):
+
+        shutdown_cmd = infrastructure.shutdown_node_cmd([self.dst_host, self.dst_port])
+        task = NodeStopTask.new(group=self.uncoupled_group,
+                                uncoupled=True,
+                                host=self.dst_host,
+                                cmd=shutdown_cmd,
+                                params={'node': self.dst_node,
+                                        'group': str(self.group)})
+        self.tasks.append(task)
+
         shutdown_cmd = infrastructure.shutdown_node_cmd([self.src_host, self.src_port])
 
         group_file_marker = (os.path.join(infrastructure.node_path(port=self.src_port),
@@ -160,19 +173,13 @@ class MoveJob(Job):
                       if self.GROUP_FILE_PATH else
                       '')
 
-        task = MinionCmdTask.new(host=self.src_host,
-                                 cmd=shutdown_cmd,
-                                 params={'node': self.src_node,
-                                         'group': str(self.group),
-                                         'group_file_marker': self.marker_format(group_file_marker),
-                                         'remove_group_file': group_file})
-        self.tasks.append(task)
-
-        shutdown_cmd = infrastructure.shutdown_node_cmd([self.dst_host, self.dst_port])
-        task = MinionCmdTask.new(host=self.dst_host,
-                                 cmd=shutdown_cmd,
-                                 params={'node': self.dst_node,
-                                         'group': str(self.group)})
+        task = NodeStopTask.new(group=self.group,
+                                host=self.src_host,
+                                cmd=shutdown_cmd,
+                                params={'node': self.src_node,
+                                        'group': str(self.group),
+                                        'group_file_marker': self.marker_format(group_file_marker),
+                                        'remove_group_file': group_file})
         self.tasks.append(task)
 
         move_cmd = infrastructure.move_group_cmd(
@@ -202,6 +209,10 @@ class MoveJob(Job):
         self.tasks.append(task)
 
 
+class JobBrokenError(Exception):
+    pass
+
+
 class Task(object):
 
     STATUS_QUEUED = 'queued'
@@ -212,7 +223,7 @@ class Task(object):
 
     def __init__(self):
         self.status = self.STATUS_QUEUED
-        self.id = None
+        self.id = uuid.uuid4().hex
         self.type = None
         self.start_ts = None
         self.finish_ts = None
@@ -232,7 +243,8 @@ class Task(object):
         return task
 
     def load(self, data):
-        self.id = data['id']
+        # TODO: remove 'or' part
+        self.id = data['id'] or uuid.uuid4().hex
         self.status = data['status']
         self.type = data['type']
         self.start_ts = data['start_ts']
@@ -265,7 +277,7 @@ class Task(object):
 
 class MinionCmdTask(Task):
 
-    PARAMS = ('host', 'cmd', 'params', 'minion_cmd_id')
+    PARAMS = ('group', 'host', 'cmd', 'params', 'minion_cmd_id')
     TASK_TIMEOUT = 600
 
     def __init__(self):
@@ -285,7 +297,6 @@ class MinionCmdTask(Task):
             pass
 
     def execute(self, minions):
-        self.id = uuid.uuid4().hex
         minion_response = minions.execute_cmd([self.host,
             self.cmd, self.params])
         self.minion_cmd = minion_response.values()[0]
@@ -309,6 +320,37 @@ class MinionCmdTask(Task):
 
     def __str__(self):
         return 'MinionCmdTask[id: {0}]<{1}>'.format(self.id, self.cmd)
+
+
+class NodeStopTask(MinionCmdTask):
+
+    PARAMS = MinionCmdTask.PARAMS + ('uncoupled',)
+
+    def __init__(self):
+        super(NodeStopTask, self).__init__()
+        self.type = TaskFactory.TYPE_NODE_STOP_TASK
+
+    def execute(self, minions):
+
+        if self.group:
+            # checking if task still applicable
+            logger.info('Task {0}: checking group {1} and host {2} '
+                'consistency'.format(self, self.group, self.host))
+
+            if not self.group in storage.groups:
+                raise JobBrokenError('Group {0} is not found')
+
+            group = storage.groups[self.group]
+            if len(group.nodes) != 1 or group.nodes[0].host.addr != self.host:
+                raise JobBrokenError('Task {0}: group {1} has more than '
+                    'one node: {2}, expected host {3}'.format(self, self.group,
+                        [str(node) for node in group.nodes], self.host))
+
+            if self.uncoupled and group.couple:
+                raise JobBrokenError('Task {0}: group {1} happens to be '
+                    'already coupled'.format(self, self.group))
+
+        super(NodeStopTask, self).execute(minions)
 
 
 class HistoryRemoveNodeTask(Task):
@@ -398,11 +440,14 @@ class JobFactory(object):
 class TaskFactory(object):
 
     TYPE_MINION_CMD = 'minion_cmd'
+    TYPE_NODE_STOP_TASK = 'node_stop_task'
     TYPE_HISTORY_REMOVE_NODE = 'history_remove_node'
 
     @classmethod
     def make_task(cls, data):
         task_type = data.get('type', None)
+        if task_type == cls.TYPE_NODE_STOP_TASK:
+            return NodeStopTask.from_data(data)
         if task_type == cls.TYPE_MINION_CMD:
             return MinionCmdTask.from_data(data)
         if task_type == cls.TYPE_HISTORY_REMOVE_NODE:
@@ -555,6 +600,17 @@ class JobProcessor(object):
                         job.id, task))
                     task.status = Task.STATUS_EXECUTING
                     job.status = Job.STATUS_EXECUTING
+                except JobBrokenError as e:
+                    logger.error('Job {0}, cannot execute task {1}, '
+                        'not applicable for current storage state: {2}'.format(
+                            job.id, task, e))
+                    task.status = Task.STATUS_FAILED
+                    job.status = Job.STATUS_BROKEN
+                    job.error_msg.append({
+                        'ts': time.time(),
+                        'msg': str(e)
+                    })
+                    job.finish_ts = time.time()
                 except Exception as e:
                     logger.error('Job {0}, failed to execute task {1}: {2}\n{3}'.format(
                         job.id, task, e, traceback.format_exc()))
@@ -658,9 +714,11 @@ class JobProcessor(object):
             with sync_manager.lock(self.JOBS_LOCK), job.tasks_lock():
                 logger.debug('Lock acquired')
 
-                if job.status not in (Job.STATUS_PENDING, Job.STATUS_NOT_APPROVED):
+                if job.status not in (Job.STATUS_PENDING,
+                    Job.STATUS_NOT_APPROVED, Job.STATUS_BROKEN):
                     raise ValueError('Job {0}: status is "{1}", should have been '
-                        '"{2}|{3}"'.format(job.id, job.status, Job.STATUS_PENDING, Job.STATUS_NOT_APPROVED))
+                        '"{2}|{3}"'.format(job.id, job.status,
+                            Job.STATUS_PENDING, Job.STATUS_NOT_APPROVED))
 
                 job.status = Job.STATUS_CANCELLED
                 self.jobs_index[job.id] = self.__dump_job(job)
@@ -712,7 +770,7 @@ class JobProcessor(object):
             except ValueError as e:
                 raise ValueError('Job id and task id are required')
 
-            self.__change_failed_task_status(job_id, task_id, Task.STATUS_QUEUED)
+            job = self.__change_failed_task_status(job_id, task_id, Task.STATUS_QUEUED)
 
         except Exception as e:
             logger.error('Failed to retry job task, job {0}, task {1}: '
@@ -729,7 +787,7 @@ class JobProcessor(object):
             except ValueError as e:
                 raise ValueError('Job id and task id are required')
 
-            self.__change_failed_task_status(job_id, task_id, Task.STATUS_SKIPPED)
+            job = self.__change_failed_task_status(job_id, task_id, Task.STATUS_SKIPPED)
 
         except Exception as e:
             logger.error('Failed to skip job task, job {0}, task {1}: '
@@ -743,9 +801,9 @@ class JobProcessor(object):
             raise ValueError('Job {0}: job is not found'.format(job_id))
         job = self.jobs[job_id]
 
-        if job.status != Job.STATUS_PENDING:
+        if job.status not in (Job.STATUS_PENDING, Job.STATUS_BROKEN):
             raise ValueError('Job {0}: status is "{1}", should have been '
-                '"{2}"'.format(job.id, job.status, Job.STATUS_PENDING))
+                '{2}|{3}'.format(job.id, job.status, Job.STATUS_PENDING, Job.STATUS_BROKEN))
 
         logger.debug('Lock acquiring')
         with sync_manager.lock(self.JOBS_LOCK), job.tasks_lock():
@@ -770,3 +828,5 @@ class JobProcessor(object):
             logger.info('Job {0}: task {1} status was reset to {2}, '
                 'job status was reset to {3}'.format(
                     job.id, task.id, task.status, job.status))
+
+        return job

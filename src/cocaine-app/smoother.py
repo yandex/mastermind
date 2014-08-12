@@ -100,6 +100,7 @@ class Smoother(object):
                         job = self.job_processor.create_job([
                             jobs.JobFactory.TYPE_MOVE_JOB,
                             {'group': src_group.group_id,
+                             'uncoupled_group': dst_group.group_id,
                              'src_host': src_group.nodes[0].host.addr,
                              'src_port': src_group.nodes[0].port,
                              'dst_host': dst_group.nodes[0].host.addr,
