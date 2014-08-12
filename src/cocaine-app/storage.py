@@ -610,7 +610,8 @@ class Couple(object):
 
         if not available_metas:
             # could not read meta data from any group
-            return None
+            logger.error('Couple {0} has broken namespace settings'.format(self))
+            raise ValueError
 
         assert all(['namespace' in meta
                     for meta in available_metas]), "Couple %s has broken namespace settings" % (repr(self),)
@@ -625,8 +626,11 @@ class Couple(object):
     def info(self):
         res = {'couple_status': self.status,
                'id': str(self),
-               'tuple': self.as_tuple(),
-               'namespace': self.namespace}
+               'tuple': self.as_tuple()}
+        try:
+            res['ns'] = self.namespace
+        except ValueError:
+            pass
         stat = self.get_stat()
         if stat:
             min_free_space = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024

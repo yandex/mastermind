@@ -194,7 +194,10 @@ class Balancer(object):
                 'couple_status': couple.status,
                 'nodes': [n.info() for g in couple for n in g.nodes]
             }
-            couples_by_nss.setdefault(couple.namespace, []).append(couple_data)
+            try:
+                couples_by_nss.setdefault(couple.namespace, []).append(couple_data)
+            except ValueError as e:
+                continue
 
         return couples_by_nss
 
@@ -206,8 +209,7 @@ class Balancer(object):
 
             try:
                 namespaces.setdefault(couple.namespace, set())
-            except Exception:
-                logger.error('Couple {0} has broken namespace settings'.format(couple))
+            except ValueError:
                 continue
 
             namespaces[couple.namespace].add(len(couple))

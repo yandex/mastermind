@@ -101,7 +101,10 @@ class Statistics(object):
                           str(group.group_id))
 
                 dc = node.host.dc
-                ns = group.couple and group.couple.namespace or None
+                try:
+                    ns = group.couple and group.couple.namespace or None
+                except ValueError as e:
+                    ns = None
 
                 if not couple in dc_couple_map[dc]:
                     self.account_couples(by_dc[dc], group)
@@ -159,7 +162,11 @@ class Statistics(object):
             for dc in dcs - affected_dcs:
                 self.account_couples(by_dc[dc], couple.groups[0])
 
-            ns = couple.namespace
+            try:
+                ns = couple.namespace
+            except ValueError:
+                ns = None
+
             if ns:
                 for dc in affected_dcs:
                     by_ns[ns][dc]['bad_couples'] += 1
@@ -277,8 +284,11 @@ class Statistics(object):
 
         if namespace:
             for couple in storage.couples:
-                if couple.namespace == namespace:
-                    hosts.extend([n.host for g in couple for n in g.nodes])
+                try:
+                    if couple.namespace == namespace:
+                        hosts.extend([n.host for g in couple for n in g.nodes])
+                except ValueError:
+                    continue
             hosts = list(set(hosts))
         else:
             hosts = storage.hosts.keys()
@@ -308,8 +318,11 @@ class Statistics(object):
         for group in storage.groups.keys():
             if not group.nodes:
                 continue
-            if namespace and (not group.couple or
-                              group.couple.namespace != namespace):
+            try:
+                if namespace and (not group.couple or
+                                  group.couple.namespace != namespace):
+                    continue
+            except ValueError:
                 continue
             if status == 'UNCOUPLED' and group.couple:
                 # workaround for uncoupled groups, not a real status
