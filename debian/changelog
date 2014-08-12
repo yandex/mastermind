@@ -1,3 +1,9 @@
+mastermind (2.8.40) lucid; urgency=low
+
+  * Fix for couple broken namespace checking
+  * Implemented broken jobs and dedicated node stop tasks for enhanced checking
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 12 Aug 2014 15:53:54 +0400
 mastermind (2.8.39) lucid; urgency=low
 
   * Jobs logging changed
