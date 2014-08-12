@@ -57,7 +57,7 @@ for node in nodes:
     logger.debug("Adding node %s" % str(node))
     try:
         logger.info("node: " + str(node))
-        n.add_remote(str(node[0]), node[1])
+        n.add_remote(str(node[0]), node[1], node[2])
         connected = True
     except Exception as e:
         logger.error("Error: " + str(e) + "\n" + traceback.format_exc())
@@ -73,7 +73,7 @@ meta_node = elliptics.Node(log, node_config)
 for node in config["metadata"]["nodes"]:
     try:
         logger.info("node: " + str(node))
-        meta_node.add_remote(str(node[0]), node[1])
+        meta_node.add_remote(str(node[0]), node[1], node[2])
         connected = True
     except Exception as e:
         logger.error("Error: " + str(e) + "\n" + traceback.format_exc())
