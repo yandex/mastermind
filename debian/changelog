@@ -1,3 +1,9 @@
+mastermind (2.8.41) lucid; urgency=low
+
+  * Explicit family for elliptics nodes
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 12 Aug 2014 16:34:29 +0400
+
 mastermind (2.8.40) lucid; urgency=low
 
   * Fix for couple broken namespace checking
