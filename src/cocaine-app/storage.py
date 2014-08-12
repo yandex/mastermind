@@ -628,7 +628,7 @@ class Couple(object):
                'id': str(self),
                'tuple': self.as_tuple()}
         try:
-            res['ns'] = self.namespace
+            res['namespace'] = self.namespace
         except ValueError:
             pass
         stat = self.get_stat()
