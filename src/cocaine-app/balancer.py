@@ -518,11 +518,14 @@ class Balancer(object):
         stop = False
 
         def chunks(l, n):
-            for i in xrange(0, len(l), n):
-                chunk = l[i:i + n]
-                if len(chunk) < n:
-                    break
-                yield chunk
+            if n == 0:
+                yield []
+            else:
+                for i in xrange(0, len(l), n):
+                    chunk = l[i:i + n]
+                    if len(chunk) < n:
+                        break
+                    yield chunk
 
         while len(created_couples) < couples_num:
 
