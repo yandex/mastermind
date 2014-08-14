@@ -346,9 +346,18 @@ class NodeStopTask(MinionCmdTask):
                     'one node: {2}, expected host {3}'.format(self, self.group,
                         [str(node) for node in group.nodes], self.host))
 
-            if self.uncoupled and group.couple:
-                raise JobBrokenError('Task {0}: group {1} happens to be '
-                    'already coupled'.format(self, self.group))
+            if group.nodes[0].status != storage.Status.OK:
+                raise JobBrokenError('Task {0}: node of group {1} has '
+                    'status {2}, should be {3}'.format(self, self.group,
+                        self.nodes[0].status, storage.Status.OK))
+
+            if self.uncoupled:
+                if group.couple:
+                    raise JobBrokenError('Task {0}: group {1} happens to be '
+                        'already coupled'.format(self, self.group))
+                if group.nodes[0].stat.files + group.nodes[1].stat.files_removed > 0:
+                    raise JobBrokenError('Task {0}: group {1} has non-zero '
+                        'number of keys (including removed)')
 
         super(NodeStopTask, self).execute(minions)
 

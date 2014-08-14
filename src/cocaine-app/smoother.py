@@ -174,6 +174,8 @@ class Smoother(object):
                     unc_group_stat = candidate.stats(unc_group)
                     if unc_group_stat.total_space < src_group_stat.total_space:
                         continue
+                    if unc_group_stat.files + unc_group_stat.files_removed > 0:
+                        continue
                     elif unc_group_stat.free_space < src_group_stat.used_space:
                         logger.warn('Uncoupled group {0} seems to have a lot of '
                             'used space (supposed to be empty)'.format(
