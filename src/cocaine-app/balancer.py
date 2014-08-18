@@ -634,6 +634,11 @@ class Balancer(object):
 
         return range(max_group + 1, max_group + 1 + groups_count)
 
+    @h.handler
+    def get_config_remotes(self, request):
+        nodes = config.get('elliptics', {}).get('nodes', []) or config["elliptics_nodes"]
+        return tuple(nodes)
+
     def __get_couple(self, groups):
         couple_str = ':'.join(map(str, sorted(groups, key=lambda x: int(x))))
         try:
