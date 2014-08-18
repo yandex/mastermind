@@ -1,3 +1,9 @@
+mastermind (2.8.44) lucid; urgency=low
+
+  * Additional checkings for move jobs: number of keys of uncoupled group
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 14 Aug 2014 12:47:09 +0400
+
 mastermind (2.8.43) lucid; urgency=low
 
   * Fix for couple build with all n groups are mandatory
