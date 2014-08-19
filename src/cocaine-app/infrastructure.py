@@ -572,9 +572,8 @@ class Infrastructure(object):
 class CacheItem(object):
 
     def __init__(self, meta_session, idx_key, key_key, tq):
-        self.meta_session = meta_session
-        self.idx_key = idx_key
-        self.key_key = key_key
+        self.meta_session = meta_session.clone()
+        self.idx = indexes.SecondaryIndex(idx_key, key_key, self.meta_session)
         self.__tq = tq
         self.cache = {}
 
@@ -590,9 +589,8 @@ class CacheItem(object):
     def _sync_cache(self):
         try:
             logger.info(self.logprefix + 'syncing')
-            idxs = self.meta_session.find_all_indexes([self.idx_key])
-            for idx in idxs:
-                data = msgpack.unpackb(idx.indexes[0].data)
+            for data in self.idx:
+                data = msgpack.unpackb(data)
 
                 logger.debug(self.logprefix + 'Fetched item: %s' %
                               (data,))
@@ -611,14 +609,12 @@ class CacheItem(object):
                 self.sync_period, self._sync_cache)
 
     def _update_cache_item(self, key, val):
-        eid = self.meta_session.transform(self.key_key % key)
         cache_item = {'key': key,
                       'val': val,
                       'ts': time.time()}
         logger.info(self.logprefix + 'Updating item for key %s '
                                       'to value %s' % (key, val))
-        self.meta_session.update_indexes(eid, [self.idx_key],
-                                              [msgpack.packb(cache_item)])
+        self.idx[key] = msgpack.packb(cache_item)
         self.cache[key] = cache_item
 
     def __getitem__(self, key):
