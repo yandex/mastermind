@@ -324,10 +324,17 @@ class NodeBackend(object):
 
         self.destroyed = False
         self.read_only = False
+        self.disabled = False
         self.status = Status.INIT
         self.status_text = "Node %s is not inititalized yet" % (self.__str__())
 
         self.base_path = None
+
+    def disable(self):
+        self.disabled = True
+
+    def enable(self):
+        self.disabled = False
 
     def update_statistics(self, new_stat):
         self.stat = NodeBackendStat(self.node.stat, new_stat, self.stat)
@@ -341,6 +348,10 @@ class NodeBackend(object):
         elif not self.stat:
             self.status = Status.INIT
             self.status_text = 'No statistics gathered for node backend {0}'.format(self.__str__())
+
+        elif self.disabled:
+            self.status = Status.STALLED
+            self.status_text = 'Node backend {0} has been disabled'.format(str(self))
 
         elif self.stat.ts < (time.time() - 120):
             self.status = Status.STALLED
@@ -382,8 +393,8 @@ class NodeBackend(object):
             res['used_space'] = int(self.stat.used_space)
             res['total_files'] = self.stat.files + self.stat.files_removed
             res['fragmentation'] = self.stat.fragmentation
-        # res['path'] = port_to_path(int(res['addr'].split(':')[1]))
-        res['path'] = self.base_path
+        if self.base_path:
+            res['path'] = self.base_path
 
         return res
 

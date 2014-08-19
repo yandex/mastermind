@@ -174,8 +174,13 @@ class NodeInfoUpdater(object):
                                   (gid, node_backend))
                     group.add_node_backend(node_backend)
 
-                logger.info('Updating statistics for node backend %s' % (str(node_backend)))
-                node_backend.update_statistics(b_stat)
+                if b_stat['status']['state'] == 0:
+                    logger.info('Disabling node backend %s' % (str(node_backend)))
+                    node_backend.disable()
+                else:
+                    logger.info('Updating statistics for node backend %s' % (str(node_backend)))
+                    node_backend.enable()
+                    node_backend.update_statistics(b_stat)
                 logger.info('Updating status for group %d' % gid)
                 group.update_status()
 
