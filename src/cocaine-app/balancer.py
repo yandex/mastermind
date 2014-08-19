@@ -156,9 +156,6 @@ class Balancer(object):
                 'group': group.group_id,
                 'node_backends': [nb.info() for nb in group.node_backends],
             }
-            for node in group_data['nodes']:
-                node['path'] = infrastructure.port_to_path(
-                    int(node['addr'].split(':')[1]))
             if group.couple:
                 group_data.update({
                     'couple': str(group.couple),

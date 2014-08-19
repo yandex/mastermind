@@ -98,7 +98,7 @@ def group_info(group, history=('l', False, 'History of group nodes'), host=None)
     group = int(group)
 
     res = s.enqueue("get_group_info", msgpack.packb(group)).get()
-    for node in res.get('nodes', []):
+    for node in res.get('node_backends', []):
         convert_stats(node)
     pprint(res)
 
@@ -324,7 +324,7 @@ def couple_info(group, host=None):
 
     res = s.enqueue("get_couple_info", msgpack.packb(group)).get()
     for group in res.get('groups', []):
-        for node in group.get('nodes', []):
+        for node in group.get('node_backends', []):
             convert_stats(node)
     if 'id' in res:
         convert_stats(res)
@@ -396,7 +396,7 @@ def couple_list(namespace=('n', '', 'Filter by namespace'),
         def convert_entities_stats(entities):
 
             def convert_group_stats(group):
-                for node in group.get('nodes', []):
+                for node in group.get('node_backends', []):
                     convert_stats(node)
 
             for entity in entities:
@@ -443,7 +443,7 @@ def group_by_dc(couples):
     for c in couples:
         for g in c['groups']:
             dcs = set()
-            for node in g['nodes']:
+            for node in g['node_backends']:
                 dcs.add(node['dc'])
             if not dcs:
                 dcs.add('unknown')
@@ -862,7 +862,7 @@ def restore_group(group, user=('u', os.environ['USER'],
     # check and print warning if group has any other alive nodes
     print 'Checking group nodes'
     res = retry(s, 'get_group_info', group)
-    statuses = [node['status'] for node in res['nodes']
+    statuses = [node['status'] for node in res['node_backends']
                 if node['addr'] != '{0}:{1}'.format(dst_host, dst_port)]
     if not all([status in ('STALLED', 'INIT') for status in statuses]):
         print
@@ -958,13 +958,14 @@ def retry(session, method, *params, **kwargs):
 def print_by_dcs(groups_by_dc, as_json):
 
     for dc in groups_by_dc:
+        print groups_by_dc[dc]
         groups_by_dc[dc] = groups_by_dc[dc].values()
 
     if as_json:
         print json.dumps(groups_by_dc, indent=4)
         return
 
-    field_order = dict((y, x) for x, y in enumerate(['group', 'nodes', 'couple']))
+    field_order = dict((y, x) for x, y in enumerate(['group', 'node_backends', 'couple']))
 
     for dc, groups in sorted(groups_by_dc.iteritems(), key=lambda x: '' if x[0] == 'unknown' else x[0]):
         print '\n' + '=' * 30
@@ -978,21 +979,21 @@ def print_by_dcs(groups_by_dc, as_json):
                 couple_status if couple_status == 'OK' else warn(couple_status))
 
             nodes = []
-            for node in sorted(group['nodes'], key=lambda x: x['addr']):
-                node_status = (node['status']
-                               if node['status'] == 'OK' else
-                               warn(node['status']))
+            for nb in sorted(group['node_backends'], key=lambda x: x['addr']):
+                node_status = (nb['status']
+                               if nb['status'] == 'OK' else
+                               warn(nb['status']))
                 nodes.append('{0}, status {1}, path {2} ({3})'.format(
-                             node['addr'], node_status, node['path'],
-                             node['last_stat_update']))
-            group['nodes'] = nodes
+                             nb['addr'], node_status, nb.get('path', 'unknown'),
+                             nb['last_stat_update']))
+            group['node_backends'] = nodes
 
             for k, v in sorted(group.iteritems(),
                                key=lambda x: field_order.get(x[0], x[0])):
                 if not k in field_order:
                     continue
 
-                if k == 'nodes':
+                if k == 'node_backends':
                     for node in v[:1]:
                         print '{0:15}: {1}'.format(k, node)
                     for node in v[1:]:
@@ -1010,7 +1011,7 @@ def print_by_namespaces(couples_by_nss, as_json):
         print json.dumps(couples_by_nss, indent=4)
         return
 
-    field_order = dict((y, x) for x, y in enumerate(['couple', 'nodes']))
+    field_order = dict((y, x) for x, y in enumerate(['couple', 'node_backends']))
 
     for ns, couples in sorted(couples_by_nss.iteritems(), key=lambda x: '' if x[0] == None else x[0]):
         print '\n' + '=' * 30
@@ -1025,21 +1026,21 @@ def print_by_namespaces(couples_by_nss, as_json):
                 couple_status if couple_status == 'OK' else warn(couple_status))
 
             nodes = []
-            for node in sorted(couple['nodes'], key=lambda x: x['addr']):
-                node_status = (node['status']
-                               if node['status'] == 'OK' else
-                               warn(node['status']))
+            for nb in sorted(couple['node_backends'], key=lambda x: x['addr']):
+                node_status = (nb['status']
+                               if nb['status'] == 'OK' else
+                               warn(nb['status']))
                 nodes.append('{0}, status {1}, dc {2}, updated {3}'.format(
-                             node['addr'], node_status,
-                             color(node['dc'], DEFAULT_BOLD),
-                             node['last_stat_update']))
+                             nb['addr'], node_status,
+                             color(nb['dc'], DEFAULT_BOLD),
+                             nb['last_stat_update']))
             couple['nodes'] = nodes
 
             for k, v in sorted(couple.iteritems()):
                 if not k in field_order:
                     continue
 
-                if k == 'nodes':
+                if k == 'node_backends':
                     for node in v[:1]:
                         print '{0:15}: {1}'.format(k, node)
                     for node in v[1:]:
@@ -1064,12 +1065,12 @@ def print_couple(couple):
 
         print '  {0:13}: {1}'.format('group', group_s)
 
-        for i, node in enumerate(group['nodes']):
-            node_status = node['status']
+        for i, nb in enumerate(group['node_backends']):
+            node_status = nb['status']
             print '    {0:11}: {1}, status {2}, dc {3} ({4})'.format(
-                'nodes' if i == 0 else '', node['addr'], node_status,
-                color(node['dc'], DEFAULT_BOLD),
-                node['last_stat_update'])
+                'nodes' if i == 0 else '', nb['addr'], node_status,
+                color(nb['dc'], DEFAULT_BOLD),
+                nb['last_stat_update'])
 
     print '-' * 30
 
@@ -1080,12 +1081,12 @@ def print_group(group):
         group_status if group_status == 'COUPLED' else warn(group_status))
     print '{0:15}: {1}'.format('group', group_s)
 
-    for i, node in enumerate(group['nodes']):
-        node_status = node['status']
+    for i, nb in enumerate(group['node_backends']):
+        node_status = nb['status']
         print '  {0:13}: {1}, status {2}, path {3} ({4})'.format(
-            'nodes' if i == 0 else '', node['addr'], node_status,
-            node['path'],
-            node['last_stat_update'])
+            'nodes' if i == 0 else '', nb['addr'], node_status,
+            nb.get('path', 'unknown'),
+            nb['last_stat_update'])
 
     print '-' * 30
 

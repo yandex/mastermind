@@ -328,7 +328,6 @@ class Infrastructure(object):
 
     def _update_group(self, group_id, new_nodes=None, new_couple=None, manual=False):
         group = self.state[group_id]
-        # if new_nodes:
         if new_nodes is not None:
             new_nodes_state = {'set': new_nodes,
                                'timestamp': time.time()}
