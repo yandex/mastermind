@@ -11,6 +11,7 @@ import msgpack
 from config import config
 from infrastructure import infrastructure
 import jobs
+from sync import sync_manager
 import timed_queue
 
 logger = getLogger('mm.smoother')
@@ -71,55 +72,64 @@ class Smoother(object):
         candidates = [c[0] for c in self.candidates]
 
         try:
-            assert not self.__executing_jobs(), 'Not finished jobs are found'
 
-            for i, candidate in enumerate(candidates):
-                logger.info('Candidate {0}: data {1}, ms_error delta {2}:'.format(
-                    i, gb(candidate.delta.data_move_size), candidate.delta.ms_error_delta))
+            logger.debug('Lock acquiring')
 
-                for src_group, src_dc, dst_group, dst_dc in candidate.moved_groups:
+            with sync_manager.lock(self.job_processor.JOBS_LOCK):
+                logger.debug('Lock acquired')
 
-                    assert len(src_group.node_backends) == 1, 'Src group {0} should have only 1 node backend'.format(src_group.group_id)
-                    assert len(dst_group.node_backends) == 1, 'Dst group {0} should have only 1 node backend'.format(dst_group.group_id)
+                self.job_processor._do_update_jobs()
 
-                    src_dc_cnt = infrastructure.get_dc_by_host(src_group.node_backends[0].node.host.addr)
-                    dst_dc_cnt = infrastructure.get_dc_by_host(dst_group.node_backends[0].node.host.addr)
+                if self.__executing_jobs():
+                    raise ValueError('Not finished jobs are found')
 
-                    assert (src_dc_cnt == src_dc,
-                        'Dc for src group {0} has been changed: {1} != {2}'.format(
-                            src_group.group_id, src_dc_cnt, src_dc))
-                    assert (dst_dc_cnt == dst_dc,
-                        'Dc for dst group {0} has been changed: {1} != {2}'.format(
-                            dst_group.group_id, dst_dc_cnt, dst_dc))
+                for i, candidate in enumerate(candidates):
+                    logger.info('Candidate {0}: data {1}, ms_error delta {2}:'.format(
+                        i, gb(candidate.delta.data_move_size), candidate.delta.ms_error_delta))
 
-                    logger.info('Group {0} ({1}) moves to {2} ({3})'.format(
-                        src_group.group_id, src_dc,
-                        dst_group.group_id, dst_dc))
+                    for src_group, src_dc, dst_group, dst_dc in candidate.moved_groups:
 
-                    try:
-                        job = self.job_processor.create_job([
-                            jobs.JobFactory.TYPE_MOVE_JOB,
-                            {'group': src_group.group_id,
-                             'uncoupled_group': dst_group.group_id,
-                             'src_host': src_group.node_backends[0].node.host.addr,
-                             'src_port': src_group.node_backends[0].node.port,
-                             'src_backend_id': src_group.node_backends[0].backend_id,
-                             'src_base_path': src_group.node_backends[0].base_path,
-                             'dst_host': dst_group.node_backends[0].node.host.addr,
-                             'dst_port': dst_group.node_backends[0].node.port,
-                             'dst_backend_id': dst_group.node_backends[0].backend_id,
-                             'dst_base_path': dst_group.node_backends[0].base_path,
-                             }])
-                        logger.info('Job successfully created: {0}'.format(job['id']))
-                    except Exception as e:
-                        logger.error('Failed to create move job for moving '
-                            'group {0} ({1}) to {2} ({3}): {4}\n{5}'.format(
-                                src_group.group_id, src_dc,
-                                dst_group.group_id, dst_dc,
-                                e, traceback.format_exc()))
-                        raise AssertionError('Job creation failed')
+                        assert len(src_group.node_backends) == 1, 'Src group {0} should have only 1 node backend'.format(src_group.group_id)
+                        assert len(dst_group.node_backends) == 1, 'Dst group {0} should have only 1 node backend'.format(dst_group.group_id)
 
-        except AssertionError as e:
+                        src_dc_cnt = infrastructure.get_dc_by_host(src_group.node_backends[0].node.host.addr)
+                        dst_dc_cnt = infrastructure.get_dc_by_host(dst_group.node_backends[0].node.host.addr)
+
+                        assert (src_dc_cnt == src_dc,
+                            'Dc for src group {0} has been changed: {1} != {2}'.format(
+                                src_group.group_id, src_dc_cnt, src_dc))
+                        assert (dst_dc_cnt == dst_dc,
+                            'Dc for dst group {0} has been changed: {1} != {2}'.format(
+                                dst_group.group_id, dst_dc_cnt, dst_dc))
+
+                        logger.info('Group {0} ({1}) moves to {2} ({3})'.format(
+                            src_group.group_id, src_dc,
+                            dst_group.group_id, dst_dc))
+
+                        try:
+                            job = self.job_processor.create_job([
+                                jobs.JobFactory.TYPE_MOVE_JOB,
+                                {'group': src_group.group_id,
+                                 'uncoupled_group': dst_group.group_id,
+                                 'src_host': src_group.node_backends[0].node.host.addr,
+                                 'src_port': src_group.node_backends[0].node.port,
+                                 'src_backend_id': src_group.node_backends[0].backend_id,
+                                 'src_base_path': src_group.node_backends[0].base_path,
+                                 'dst_host': dst_group.node_backends[0].node.host.addr,
+                                 'dst_port': dst_group.node_backends[0].node.port,
+                                 'dst_backend_id': dst_group.node_backends[0].backend_id,
+                                 'dst_base_path': dst_group.node_backends[0].base_path,
+                                 }])
+                            logger.info('Job successfully created: {0}'.format(job['id']))
+                        except Exception as e:
+                            logger.error('Failed to create move job for moving '
+                                'group {0} ({1}) to {2} ({3}): {4}\n{5}'.format(
+                                    src_group.group_id, src_dc,
+                                    dst_group.group_id, dst_dc,
+                                    e, traceback.format_exc()))
+                            raise AssertionError('Job creation failed')
+
+        except ValueError as e:
             logger.error('Plan cannot be applied: {0}'.format(e))
 
     def _do_move_candidates(self, step=0):
