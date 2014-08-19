@@ -8,6 +8,7 @@ pre-build::
 	mkdir -p $(CURDIR)/debian/tmp/usr/lib/mastermind/cocaine-app/
 	mkdir -p $(CURDIR)/debian/tmp/usr/bin/
 	cp $(CURDIR)/usr/bin/mastermind_deploy.sh $(CURDIR)/debian/tmp/usr/bin/mastermind_deploy.sh
+	cp $(CURDIR)/usr/bin/mastermind_app_name.sh $(CURDIR)/debian/tmp/usr/bin/mastermind_app_name.sh
 	$(CURDIR)/make_tree.sh $(CURDIR)
 
 install/mastermind-utils::

@@ -1,2 +1,3 @@
 usr/bin/mastermind_deploy.sh
+usr/bin/mastermind_app_name.sh
 usr/lib/mastermind/*
