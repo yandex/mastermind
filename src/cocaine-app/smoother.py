@@ -11,6 +11,7 @@ import msgpack
 from config import config
 from infrastructure import infrastructure
 import jobs
+from sync import sync_manager
 import timed_queue
 
 logger = getLogger('mm.smoother')
@@ -71,50 +72,58 @@ class Smoother(object):
         candidates = [c[0] for c in self.candidates]
 
         try:
-            assert not self.__executing_jobs(), 'Not finished jobs are found'
 
-            for i, candidate in enumerate(candidates):
-                logger.info('Candidate {0}: data {1}, ms_error delta {2}:'.format(
-                    i, gb(candidate.delta.data_move_size), candidate.delta.ms_error_delta))
+            logger.debug('Lock acquiring')
+            with sync_manager.lock(self.job_processor.JOBS_LOCK):
+                logger.debug('Lock acquired')
 
-                for src_group, src_dc, dst_group, dst_dc in candidate.moved_groups:
+                self.job_processor._do_update_jobs()
 
-                    assert len(src_group.nodes) == 1, 'Src group {0} should have only 1 node'.format(src_group.group_id)
-                    assert len(dst_group.nodes) == 1, 'Dst group {0} should have only 1 node'.format(dst_group.group_id)
+                if self.__executing_jobs():
+                    raise ValueError('Not finished jobs are found')
 
-                    src_dc_cnt = infrastructure.get_dc_by_host(src_group.nodes[0].host.addr)
-                    dst_dc_cnt = infrastructure.get_dc_by_host(dst_group.nodes[0].host.addr)
+                for i, candidate in enumerate(candidates):
+                    logger.info('Candidate {0}: data {1}, ms_error delta {2}:'.format(
+                        i, gb(candidate.delta.data_move_size), candidate.delta.ms_error_delta))
 
-                    assert (src_dc_cnt == src_dc,
-                        'Dc for src group {0} has been changed: {1} != {2}'.format(
-                            src_group.group_id, src_dc_cnt, src_dc))
-                    assert (dst_dc_cnt == dst_dc,
-                        'Dc for dst group {0} has been changed: {1} != {2}'.format(
-                            dst_group.group_id, dst_dc_cnt, dst_dc))
+                    for src_group, src_dc, dst_group, dst_dc in candidate.moved_groups:
 
-                    logger.info('Group {0} ({1}) moves to {2} ({3})'.format(
-                        src_group.group_id, src_dc,
-                        dst_group.group_id, dst_dc))
+                        assert len(src_group.nodes) == 1, 'Src group {0} should have only 1 node'.format(src_group.group_id)
+                        assert len(dst_group.nodes) == 1, 'Dst group {0} should have only 1 node'.format(dst_group.group_id)
 
-                    try:
-                        job = self.job_processor.create_job([
-                            jobs.JobFactory.TYPE_MOVE_JOB,
-                            {'group': src_group.group_id,
-                             'uncoupled_group': dst_group.group_id,
-                             'src_host': src_group.nodes[0].host.addr,
-                             'src_port': src_group.nodes[0].port,
-                             'dst_host': dst_group.nodes[0].host.addr,
-                             'dst_port': dst_group.nodes[0].port}])
-                        logger.info('Job successfully created: {0}'.format(job['id']))
-                    except Exception as e:
-                        logger.error('Failed to create move job for moving '
-                            'group {0} ({1}) to {2} ({3}): {4}\n{5}'.format(
-                                src_group.group_id, src_dc,
-                                dst_group.group_id, dst_dc,
-                                e, traceback.format_exc()))
-                        raise AssertionError('Job creation failed')
+                        src_dc_cnt = infrastructure.get_dc_by_host(src_group.nodes[0].host.addr)
+                        dst_dc_cnt = infrastructure.get_dc_by_host(dst_group.nodes[0].host.addr)
 
-        except AssertionError as e:
+                        assert (src_dc_cnt == src_dc,
+                            'Dc for src group {0} has been changed: {1} != {2}'.format(
+                                src_group.group_id, src_dc_cnt, src_dc))
+                        assert (dst_dc_cnt == dst_dc,
+                            'Dc for dst group {0} has been changed: {1} != {2}'.format(
+                                dst_group.group_id, dst_dc_cnt, dst_dc))
+
+                        logger.info('Group {0} ({1}) moves to {2} ({3})'.format(
+                            src_group.group_id, src_dc,
+                            dst_group.group_id, dst_dc))
+
+                        try:
+                            job = self.job_processor.create_job([
+                                jobs.JobFactory.TYPE_MOVE_JOB,
+                                {'group': src_group.group_id,
+                                 'uncoupled_group': dst_group.group_id,
+                                 'src_host': src_group.nodes[0].host.addr,
+                                 'src_port': src_group.nodes[0].port,
+                                 'dst_host': dst_group.nodes[0].host.addr,
+                                 'dst_port': dst_group.nodes[0].port}])
+                            logger.info('Job successfully created: {0}'.format(job['id']))
+                        except Exception as e:
+                            logger.error('Failed to create move job for moving '
+                                'group {0} ({1}) to {2} ({3}): {4}\n{5}'.format(
+                                    src_group.group_id, src_dc,
+                                    dst_group.group_id, dst_dc,
+                                    e, traceback.format_exc()))
+                            raise AssertionError('Job creation failed')
+
+        except ValueError as e:
             logger.error('Plan cannot be applied: {0}'.format(e))
 
     def _do_move_candidates(self, step=0):
