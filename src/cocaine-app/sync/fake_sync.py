@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from threading import Lock
 
 
@@ -11,6 +12,7 @@ class SyncManager(object):
     # def put(self, task):
     #     self.tasks[task['key']] = task
 
+    @contextmanager
     def lock(self, lockid):
         """ Locks mastermind jobs list.
         This is just a demo implementation that provides locking among

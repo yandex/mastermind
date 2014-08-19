@@ -15,7 +15,6 @@ import msgpack
 
 import balancelogicadapter as bla
 import balancelogic
-from compat import EllAsyncResult, EllReadResult, EllLookupResult
 from config import config
 import helpers as h
 
@@ -155,7 +154,7 @@ class Balancer(object):
             group = storage.groups[g]
             group_data = {
                 'group': group.group_id,
-                'nodes': [n.info() for n in group.nodes],
+                'node_backends': [nb.info() for nb in group.node_backends],
             }
             for node in group_data['nodes']:
                 node['path'] = infrastructure.port_to_path(
@@ -165,13 +164,14 @@ class Balancer(object):
                     'couple': str(group.couple),
                     'couple_status': group.couple.status})
 
-            if not group.nodes:
+            if not group.node_backends:
                 dc_groups = groups_by_dcs.setdefault('unknown', {})
                 dc_groups[group.group_id] = group_data
                 continue
 
-            for node in group.nodes:
-                dc_groups = groups_by_dcs.setdefault(node.host.dc, {})
+            for node_backend in group.node_backends:
+                dc = node_backend.node.host.dc
+                dc_groups = groups_by_dcs.setdefault(dc, {})
                 dc_groups[group.group_id] = group_data
 
         return groups_by_dcs
@@ -192,7 +192,7 @@ class Balancer(object):
             couple_data = {
                 'couple': str(couple),
                 'couple_status': couple.status,
-                'nodes': [n.info() for g in couple for n in g.nodes]
+                'node_backends': [nb.info() for g in couple for nb in g.node_backends]
             }
             try:
                 couples_by_nss.setdefault(couple.namespace, []).append(couple_data)
@@ -322,34 +322,41 @@ class Balancer(object):
 
         return group_history
 
+    NODE_BACKEND_RE = re.compile('(.+):(\d+)/(\d+)')
+
     @h.handler
     def group_detach_node(self, request):
         group_id = int(request[0])
-        node_str = request[1]
+        node_backend_str = request[1]
 
         if not group_id in storage.groups:
             raise ValueError('Group %d is not found' % group_id)
 
         group = storage.groups[group_id]
-        node = node_str in storage.nodes and storage.nodes[node_str] or None
-        try:
-            host, port = node_str.split(':')
-            port = int(port)
-        except ValueError:
-            raise ValueError('Node should have form <host>:<port>')
+        node_backend = (node_backend_str in storage.node_backends and
+                        storage.node_backends[node_backend_str] or
+                        None)
 
-        if node and node in group.nodes:
-            logger.info('Removing node {0} from group {1} nodes'.format(node, group))
-            group.remove_node(node)
+        logger.info('Node backend: {0}'.format(node_backend))
+        try:
+            host, port, backend_id = self.NODE_BACKEND_RE.match(node_backend_str).groups()
+            port, backend_id = int(port), int(backend_id)
+            logger.info('host, port, backend_id: {0}'.format((host, port, backend_id)))
+        except (IndexError, ValueError):
+            raise ValueError('Node backend should be of form <host>:<port>:<backend_id>')
+
+        if node_backend and node_backend in group.node_backends:
+            logger.info('Removing node backend {0} from group {1} nodes'.format(node_backend, group))
+            group.remove_node_backend(node_backend)
             group.update_status_recursive()
-            logger.info('Removed node {0} from group {1} nodes'.format(node, group))
+            logger.info('Removed node backend {0} from group {1} nodes'.format(node_backend, group))
 
-        logger.info('Removing node {0} from group {1} history'.format(node, group))
+        logger.info('Removing node backend {0} from group {1} history'.format(node_backend, group))
         try:
-            self.infrastructure.detach_node(group, host, port)
-            logger.info('Removed node {0} from group {1} history'.format(node, group))
+            self.infrastructure.detach_node(group, host, port, backend_id)
+            logger.info('Removed node backend {0} from group {1} history'.format(node_backend, group))
         except Exception as e:
-            logger.error('Failed to remove {0} from group {1} history: {2}'.format(node, group, str(e)))
+            logger.error('Failed to remove {0} from group {1} history: {2}'.format(node_backend, group, str(e)))
             raise
 
         return True
@@ -387,17 +394,17 @@ class Balancer(object):
         for group_id in self.get_empty_groups(self.node):
             group = storage.groups[group_id]
 
-            if not len(group.nodes):
+            if not len(group.node_backends):
                 logger.info('Group {0} cannot be used, it has '
                     'empty node list'.format(group.group_id))
                 continue
 
             suitable = True
-            for node in group.nodes:
-                if node.status != storage.Status.OK:
-                    logger.info('Group {0} cannot be used, node {1} status '
+            for node_backend in group.node_backends:
+                if node_backend.status != storage.Status.OK:
+                    logger.info('Group {0} cannot be used, node backend {1} status '
                                 'is {2} (not OK)'.format(group.group_id,
-                                     node, node.status))
+                                     node_backend, node.status))
                     suitable = False
                     break
 
@@ -426,7 +433,7 @@ class Balancer(object):
 
         for group_id in suitable_groups:
             group = storage.groups[group_id]
-            dc = group.nodes[0].host.dc
+            dc = group.node_backends[0].node.host.dc
 
             dc_by_group_id[group_id] = dc
 
@@ -620,17 +627,14 @@ class Balancer(object):
             raise Exception('Incorrect groups count')
 
         try:
-            max_group = int(EllAsyncResult(
-                self.node.meta_session.read_data(keys.MASTERMIND_MAX_GROUP_KEY),
-                EllReadResult
-            ).get()[0].data)
+            max_group = int(self.node.meta_session.read_data(
+                keys.MASTERMIND_MAX_GROUP_KEY).get()[0].data)
         except elliptics.NotFoundError:
             max_group = 0
 
         new_max_group = max_group + groups_count
-        EllAsyncResult(self.node.meta_session.write_data(
-            keys.MASTERMIND_MAX_GROUP_KEY, str(new_max_group)),
-            EllLookupResult).get()
+        self.node.meta_session.write_data(
+            keys.MASTERMIND_MAX_GROUP_KEY, str(new_max_group)).get()
 
         return range(max_group + 1, max_group + 1 + groups_count)
 
@@ -652,8 +656,7 @@ class Balancer(object):
         key = keys.MASTERMIND_COUPLE_META_KEY % str(couple)
 
         try:
-            meta = (EllAsyncResult(self.node.meta_session.read_latest(key),
-                                   EllReadResult).get()[0].data)
+            meta = self.node.meta_session.read_latest(key).get()[0].data
         except elliptics.NotFoundError:
             meta = None
         couple.parse_meta(meta)
@@ -664,8 +667,7 @@ class Balancer(object):
 
         packed = msgpack.packb(couple.meta)
         logger.info('packed meta for couple %s: "%s"' % (couple, str(packed).encode('hex')))
-        EllAsyncResult(self.node.meta_session.write_data(key, packed),
-                       EllLookupResult).get()
+        self.node.meta_session.write_data(key, packed).get()
 
         couple.update_status()
 
@@ -907,8 +909,7 @@ def make_symm_group(n, couple, namespace):
             packed = msgpack.packb(couple.compose_group_meta(namespace))
             logger.info('packed couple for group %d: "%s"' % (group.group_id, str(packed).encode('hex')))
             s.add_groups([group.group_id])
-            EllAsyncResult(s.write_data(keys.SYMMETRIC_GROUPS_KEY, packed),
-                           EllLookupResult).get()
+            s.write_data(keys.SYMMETRIC_GROUPS_KEY, packed).get()
             group.parse_meta(packed)
             good.append(group.group_id)
         except Exception as e:

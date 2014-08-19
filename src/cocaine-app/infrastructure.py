@@ -96,21 +96,32 @@ class Infrastructure(object):
                                     'timestamp': couple['timestamp']})
         nodes_history = []
         for node_set in self.state[group_id]['nodes']:
-            nodes_history.append({'set': [node + (port_to_path(node[1]),)
-                                          for node in node_set['set']],
+
+            nb_list = []
+            for node in node_set['set']:
+                if len(node) == 2:
+                    # old version history
+                    nb_list.append(node + (port_to_path(node[1]),))
+                else:
+                    nb_list.append(node)
+
+            nodes_history.append({'set': nb_list,
                                   'timestamp': node_set['timestamp'],
                                   'manual': node_set.get('manual', False)})
         return {'couples': couples_history,
                 'nodes': nodes_history}
 
-    def node_in_last_history_state(self, group_id, host, port):
+    def node_backend_in_last_history_state(self, group_id, host, port, backend_id):
         if not group_id in self.state:
             raise ValueError('Group {0} history is not found'.format(group_id))
 
         last_node_set = self.state[group_id]['nodes'][-1]['set']
         for k in last_node_set:
-            node_host, node_port = k[:2]
-            if host == node_host and port == node_port:
+            if len(k) == 2:
+                # old style history record
+                continue
+            nb_host, nb_port, nb_backend_id = k[:3]
+            if host == nb_host and port == nb_port and backend_id == nb_backend_id:
                 return True
 
         return False
@@ -151,10 +162,10 @@ class Infrastructure(object):
 
                         if nodes_state.get('manual', False):
                             nodes_set = set(nodes_state['set'])
-                            for node in group.nodes:
-                                if not (node.host.addr, node.port) in nodes_set:
-                                    logger.info('Removing {0} from group {1} due to manual group detaching'.format(node, group.group_id))
-                                    group.remove_node(node)
+                            for nb in group.node_backends:
+                                if not (nb.node.host.addr, nb.node.port, nb.backend_id, nb.base_path) in nodes_set:
+                                    logger.info('Removing {0} from group {1} due to manual group detaching'.format(nb, group.group_id))
+                                    group.remove_node_backend(nb)
                         group.update_status_recursive()
 
                 self.state[state_group['id']] = state_group
@@ -200,8 +211,8 @@ class Infrastructure(object):
                 group_state = self.state.get(g.group_id,
                                              self._new_group_state(g.group_id))
 
-                storage_nodes = tuple((node.host.addr, node.port)
-                                      for node in g.nodes)
+                storage_nodes = tuple((nb.node.host.addr, nb.node.port, nb.backend_id, nb.base_path)
+                                      for nb in g.node_backends)
                 storage_couple = (tuple([group.group_id for group in g.couple])
                                   if g.couple is not None else
                                   tuple())
@@ -223,14 +234,14 @@ class Infrastructure(object):
                                        group_state['nodes'][-1]
                                        or {'set': []})
 
-                    state_nodes = tuple(nodes
-                                        for nodes in cur_group_state['set'])
+                    state_nodes = tuple(nbs
+                                        for nbs in cur_group_state['set'])
                     state_nodes_set = set(state_nodes)
 
                     # extended storage nodes set which includes newly seen nodes,
                     # do not discard lost nodes
                     ext_storage_nodes = (state_nodes + tuple(
-                        n for n in storage_nodes if n not in state_nodes_set))
+                        nb for nb in storage_nodes if nb not in state_nodes_set))
 
                     logger.debug('Comparing %s and %s' %
                                   (ext_storage_nodes, state_nodes))
@@ -336,21 +347,25 @@ class Infrastructure(object):
         self.meta_session.update_indexes(eid, [keys.MM_GROUPS_IDX],
                                               [self._serialize(group)])
 
-    def detach_node(self, group, host, port):
+    def detach_node(self, group, host, port, backend_id):
         with self.__state_lock:
             group_state = self.state[group.group_id]
             state_nodes = list(group_state['nodes'][-1]['set'][:])
 
+            logger.info('{0}'.format(state_nodes))
             for i, state_node in enumerate(state_nodes):
-                state_host, state_port = state_node
-                if state_host == host and state_port == port:
-                    logger.debug('Removing node {0}:{1} from '
-                        'group {2} history state'.format(host, port, group.group_id))
+                if len(state_node) == 2:
+                    # old elliptics pre-26 record, should not be removed
+                    continue
+                state_host, state_port, state_backend_id = state_node[:3]
+                if state_host == host and state_port == port and state_backend_id == backend_id:
+                    logger.debug('Removing node backend {0}:{1}/{2} from '
+                        'group {3} history state'.format(host, port, backend_id, group.group_id))
                     del state_nodes[i]
                     break
             else:
-                raise ValueError('Node {0}:{1} not found in '
-                    'group {2} history state'.format(host, port, group.group_id))
+                raise ValueError('Node backend {0}:{1}/{2} not found in '
+                    'group {3} history state'.format(host, port, backend_id, group.group_id))
 
             self._update_group(group.group_id, state_nodes, None, manual=True)
 
@@ -408,10 +423,10 @@ class Infrastructure(object):
             if not group_candidates:
                 raise ValueError('No symmetric groups to restore from')
 
-            group_candidates = filter(lambda g: len(g.nodes) == 1, group_candidates)
+            group_candidates = filter(lambda g: len(g.node_backends) == 1, group_candidates)
 
             if not group_candidates:
-                raise ValueError('No symmetric groups with one node found, '
+                raise ValueError('No symmetric groups with one node backend found, '
                                  'multiple nodes group restoration is not supported')
 
             def alive_keys(g):
@@ -421,37 +436,40 @@ class Infrastructure(object):
             group_candidates.sort(key=alive_keys, reverse=True)
 
             source_group = group_candidates[0]
-            source_node = source_group.nodes[0]
+            source_node_backend = source_group.node_backends[0]
 
             state = self.get_group_history(group.group_id)['nodes'][-1]['set']
             if len(state) > 1:
-                raise ValueError('Restoring group has more than one node, '
-                                 'multiple nodes group restoration is not supported')
+                raise ValueError('Restoring group has more than one node backend, '
+                    'multiple node backends group restoration is not supported')
 
-            addr, port = state[0][:2]
+            if len(state[0]) == 2:
+                raise ValueError('Restoring group has no valid history records')
+
+            addr, port, backend_id, path = state[0][:3]
 
             if (dest and
-                (group.nodes[0].host.addr != addr or
-                 group.nodes[0].port != port)):
+                (group.node_backends[0].node.host.addr != addr or
+                 group.node_backends[0].node.port != port or
+                 group.node_backends[0].backend_id != backend_id)):
                 warns.append('Restoring group history state does not match '
                              'current state, history will be used for '
-                             'path construction: history %s:%s, current %s' %
-                             (addr, port, group.nodes[0]))
+                             'path construction: history {0}:{1}/{2}, current {3}' %
+                             (addr, port, backend_id, group.node_backends[0]))
 
-            if len(source_group.nodes) > 1 or len(state) > 1:
+            if len(source_group.node_backends) > 1 or len(state) > 1:
                 raise ValueError('Do not know how to restore group '
-                                 'with more than one node')
+                                 'with more than one node backend')
 
             logger.info('Constructing restore cmd for group %s '
                          'from group %s, (%s)' %
-                         (group.group_id, source_group, source_node))
-            warns.append('Source group %s (%s)' % (source_group, source_node))
+                         (group.group_id, source_group, source_node_backend))
+            warns.append('Source group %s (%s)' % (source_group, source_node_backend))
 
             cmd = self.move_group_cmd(
-                src_host=source_node.host.addr,
-                src_port=source_node.port,
-                dst_path=dest,
-                dst_port=port,
+                src_host=source_node_backend.node.host.addr,
+                src_port=source_node_backend.base_path,
+                dst_path=path,
                 user=user)
 
         except ValueError as e:
@@ -464,19 +482,20 @@ class Infrastructure(object):
                      (group_id, addr, warns, cmd))
         return addr, port, cmd, warns
 
-    def move_group_cmd(self, src_host, src_port, dst_port, dst_path=None, user=None):
+    def move_group_cmd(self, src_host, src_port=None, dst_port=None, src_path=None, dst_path=None, user=None):
+        cmd_src_path = self.node_path(path=src_path, port=src_port)
         if RSYNC_MODULE:
             cmd = self.RSYNC_MODULE_CMD.format(
                 user=RSYNC_USER,
                 module=RSYNC_MODULE,
                 src_host=src_host,
-                src_path=port_to_path(src_port).replace(BASE_STORAGE_PATH, ''),
+                src_path=cmd_src_path.replace(BASE_STORAGE_PATH, ''),
                 dst_path=self.node_path(path=dst_path, port=dst_port))
         else:
             cmd = self.RSYNC_CMD.format(
                 user=user,
                 src_host=src_host,
-                src_path=port_to_path(src_port),
+                src_path=cmd_src_path,
                 dst_path=self.node_path(path=dst_path, port=dst_port))
         return cmd
 
@@ -487,35 +506,59 @@ class Infrastructure(object):
         return path or port_to_path(port)
 
     def start_node_cmd(self, request):
-        host, port = request[:2]
 
-        # TODO: Fix family value
-        cmd = inventory.node_start_command(host, port, 2)
 
-        if cmd is None:
-            raise RuntimeError('Node start command is not provided '
-                'by inventory implementation')
+        # -------------
 
-        logger.info('Command for starting elliptics node {0}:{1} '
-            'was requested: {2}'.format(host, port, cmd))
 
-        return cmd
+
+        raise ValueError('Should be adapted to node backends')
+
+
+
+        # --------------
+
+        # host, port = request[:2]
+
+        # # TODO: Fix family value
+        # cmd = inventory.node_start_command(host, port, 2)
+
+        # if cmd is None:
+        #     raise RuntimeError('Node start command is not provided '
+        #         'by inventory implementation')
+
+        # logger.info('Command for starting elliptics node {0}:{1} '
+        #     'was requested: {2}'.format(host, port, cmd))
+
+        # return cmd
 
     def shutdown_node_cmd(self, request):
-        host, port = request[:2]
 
-        node_addr = '{0}:{1}'.format(host, port)
+        # -------------
 
-        if not node_addr in storage.nodes:
-            raise ValueError("Node {0} doesn't exist".format(node_addr))
 
-        node = storage.nodes[node_addr]
 
-        cmd = inventory.node_shutdown_command(node.host, node.port, node.family)
-        logger.info('Command for shutting down elliptics node {0} '
-            'was requested: {1}'.format(node_addr, cmd))
+        raise ValueError('Should be adapted to node backends')
 
-        return cmd
+
+
+        # --------------
+        
+    
+        # host, port = request[:2]
+
+        # node_addr = '{0}:{1}'.format(host, port)
+
+        # if not node_addr in storage.nodes:
+        #     raise ValueError("Node {0} doesn't exist".format(node_addr))
+
+        # node = storage.nodes[node_addr]
+
+        # cmd = inventory.node_shutdown_command(node.host, node.port, node.family)
+        # logger.info('Command for shutting down elliptics node {0} '
+        #     'was requested: {1}'.format(node_addr, cmd))
+
+        # return cmd
 
     def get_dc_by_host(self, host):
         return self.dc_cache[host]

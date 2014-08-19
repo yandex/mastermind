@@ -79,11 +79,11 @@ class Smoother(object):
 
                 for src_group, src_dc, dst_group, dst_dc in candidate.moved_groups:
 
-                    assert len(src_group.nodes) == 1, 'Src group {0} should have only 1 node'.format(src_group.group_id)
-                    assert len(dst_group.nodes) == 1, 'Dst group {0} should have only 1 node'.format(dst_group.group_id)
+                    assert len(src_group.node_backends) == 1, 'Src group {0} should have only 1 node backend'.format(src_group.group_id)
+                    assert len(dst_group.node_backends) == 1, 'Dst group {0} should have only 1 node backend'.format(dst_group.group_id)
 
-                    src_dc_cnt = infrastructure.get_dc_by_host(src_group.nodes[0].host.addr)
-                    dst_dc_cnt = infrastructure.get_dc_by_host(dst_group.nodes[0].host.addr)
+                    src_dc_cnt = infrastructure.get_dc_by_host(src_group.node_backends[0].node.host.addr)
+                    dst_dc_cnt = infrastructure.get_dc_by_host(dst_group.node_backends[0].node.host.addr)
 
                     assert (src_dc_cnt == src_dc,
                         'Dc for src group {0} has been changed: {1} != {2}'.format(
@@ -101,10 +101,15 @@ class Smoother(object):
                             jobs.JobFactory.TYPE_MOVE_JOB,
                             {'group': src_group.group_id,
                              'uncoupled_group': dst_group.group_id,
-                             'src_host': src_group.nodes[0].host.addr,
-                             'src_port': src_group.nodes[0].port,
-                             'dst_host': dst_group.nodes[0].host.addr,
-                             'dst_port': dst_group.nodes[0].port}])
+                             'src_host': src_group.node_backends[0].node.host.addr,
+                             'src_port': src_group.node_backends[0].node.port,
+                             'src_backend_id': src_group.node_backends[0].backend_id,
+                             'src_base_path': src_group.node_backends[0].base_path,
+                             'dst_host': dst_group.node_backends[0].node.host.addr,
+                             'dst_port': dst_group.node_backends[0].node.port,
+                             'dst_backend_id': dst_group.node_backends[0].backend_id,
+                             'dst_base_path': dst_group.node_backends[0].base_path,
+                             }])
                         logger.info('Job successfully created: {0}'.format(job['id']))
                     except Exception as e:
                         logger.error('Failed to create move job for moving '
@@ -263,12 +268,12 @@ class StorageState(object):
         obj = cls()
         for couple in cls.__get_full_couples():
             for group in couple.groups:
-                dc = group.nodes[0].host.dc
+                dc = group.node_backends[0].node.host.dc
                 obj._stats[group.group_id] = group.get_stat()
                 obj.state[dc].add_group(group)
 
         for group in cls.__get_uncoupled_groups():
-            dc = group.nodes[0].host.dc
+            dc = group.node_backends[0].node.host.dc
             obj._stats[group.group_id] = group.get_stat()
             obj.state[dc].add_uncoupled_group(group)
 
@@ -317,7 +322,7 @@ class StorageState(object):
                 continue
 
             for group in couple.groups:
-                if len(group.nodes) > 1:
+                if len(group.node_backends) > 1:
                     break
             else:
                 couples.append(couple)
@@ -329,7 +334,7 @@ class StorageState(object):
         groups = []
 
         for group in storage.groups:
-            if not len(group.nodes):
+            if not len(group.node_backends):
                 continue
 
             if group.status != storage.Status.INIT:
@@ -343,8 +348,8 @@ class StorageState(object):
     def __dcs():
         dcs = set()
         for group in storage.groups:
-            for node in group.nodes:
-                dcs.add(node.host.dc)
+            for nb in group.node_backends:
+                dcs.add(nb.node.host.dc)
         return dcs
 
 
@@ -359,7 +364,7 @@ class StorageState(object):
 
         # do this only in case if no other group from this couple is located in src_dc
         for group in src_group.couple:
-            if group != src_group and group.nodes[0].host.dc == src_dc:
+            if group != src_group and group.node_backends[0].node.host.dc == src_dc:
                 break
         else:
             self.state[src_dc].couples.remove(src_group.couple)

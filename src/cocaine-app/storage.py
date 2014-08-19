@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import datetime
 import logging
+import os.path
 import time
 import traceback
 
@@ -67,27 +68,95 @@ class Repositary(object):
     def keys(self):
         return self.elements.keys()
 
+    def __len__(self):
+        return len(self.elements)
 
-class NodeStat(object):
+
+class NewNodeStat(object):
     def __init__(self, raw_stat=None, prev=None):
+        if raw_stat:
+            self.init(raw_stat, prev)
+        else:
+            self.load_average = 0.0
+        self.ts = None
+
+    def init(self, raw_stat, prev=None):
+        self.ts = time.time()
+        self.load_average = float(raw_stat['procfs']['vm']['la'][0]) / 100
+
+    def __add__(self, other):
+        res = NewNodeStat()
+
+        res.ts = min(self.ts, other.ts)
+        res.load_average = max(self.load_average, other.load_average)
+
+        return res
+
+    def __mul__(self, other):
+        res = NewNodeStat()
+        res.ts = min(self.ts, other.ts)
+        res.load_average = max(self.load_average, other.load_average)
+
+        return res
+
+
+class NodeBackendStat(object):
+    def __init__(self, node_stat, raw_stat=None, prev=None):
+        self.node_stat = node_stat
+        self.ts = None
 
         if raw_stat:
             self.init(raw_stat, prev)
         else:
             self.free_space = 0
             self.rel_space = 0.0
-            self.load_average = 0.0
 
-            self.read_rps = 0
-            self.write_rps = 0
-            self.max_read_rps = 0
-            self.max_write_rps = 0
+            self.last_read, self.last_write = 0, 0
+            self.read_rps, self.write_rps = 0, 0
+            self.max_read_rps, self.max_write_rps = 0, 0
 
             self.fragmentation = 0.0
             self.files = 0
             self.files_removed = 0
 
             self.fsid = None
+
+    def init(self, raw_stat, prev=None):
+        self.ts = time.time()
+
+        self.last_read = raw_stat['backend']['dstat']['read_ios']
+        self.last_write = raw_stat['backend']['dstat']['write_ios']
+
+        self.total_space = raw_stat['backend']['vfs']['blocks'] * raw_stat['backend']['vfs']['bsize']
+        self.free_space = raw_stat['backend']['vfs']['bavail'] * raw_stat['backend']['vfs']['bsize']
+        self.used_space = self.total_space - self.free_space
+        self.rel_space = float(raw_stat['backend']['vfs']['bavail']) / raw_stat['backend']['vfs']['blocks']
+
+        self.files = raw_stat['backend']['summary_stats']['records_total'] - raw_stat['backend']['summary_stats']['records_removed']
+        self.files_removed = raw_stat['backend']['summary_stats']['records_removed']
+        self.fragmentation = (float(self.files_removed) /
+                                 ((self.files + self.files_removed) or 1))
+
+        self.fsid = raw_stat['backend']['vfs']['fsid']
+
+        if prev:
+            dt = self.ts - prev.ts
+
+            self.read_rps = (self.last_read - prev.last_read) / dt
+            self.write_rps = (self.last_write - prev.last_write) / dt
+
+            # Disk usage should be used here instead of load average
+            self.max_read_rps = self.max_rps(self.read_rps, self.node_stat.load_average)
+            self.max_write_rps = self.max_rps(self.write_rps, self.node_stat.load_average)
+
+        else:
+            self.read_rps = 0
+            self.write_rps = 0
+
+            # Tupical SATA HDD performance is 100 IOPS
+            # It will be used as first estimation for maximum node performance
+            self.max_read_rps = 100
+            self.max_write_rps = 100
 
     def max_rps(self, rps, load_avg, variant=RPS_FORMULA_VARIANT):
 
@@ -108,60 +177,17 @@ class NodeStat(object):
 
         return max_rps
 
-    def init(self, raw_stat, prev=None):
-        self.ts = time.time()
-
-        self.last_read = raw_stat['storage_commands']['READ'][0] + raw_stat['proxy_commands']['READ'][0]
-        self.last_write = raw_stat['storage_commands']['WRITE'][0] + raw_stat['proxy_commands']['WRITE'][0]
-
-        self.total_space = raw_stat['counters']['DNET_CNTR_BLOCKS'][0] * raw_stat['counters']['DNET_CNTR_BSIZE'][0]
-        self.free_space = raw_stat['counters']['DNET_CNTR_BAVAIL'][0] * raw_stat['counters']['DNET_CNTR_BSIZE'][0]
-        self.used_space = self.total_space - self.free_space
-        self.rel_space = float(raw_stat['counters']['DNET_CNTR_BAVAIL'][0]) / raw_stat['counters']['DNET_CNTR_BLOCKS'][0]
-        self.load_average = (float(raw_stat['counters']['DNET_CNTR_DU1'][0]) / 100
-                             if raw_stat['counters'].get('DNET_CNTR_DU1') else
-                             float(raw_stat['counters']['DNET_CNTR_LA1'][0]) / 100)
-
-        self.fragmentation = (float(raw_stat['counters']['DNET_CNTR_NODE_FILES_REMOVED'][0]) /
-                                 ((raw_stat['counters']['DNET_CNTR_NODE_FILES'][0] +
-                                   raw_stat['counters']['DNET_CNTR_NODE_FILES_REMOVED'][0]) or 1))
-        self.files = raw_stat['counters']['DNET_CNTR_NODE_FILES'][0]
-        self.files_removed = raw_stat['counters']['DNET_CNTR_NODE_FILES_REMOVED'][0]
-
-        self.fsid = raw_stat['counters']['DNET_CNTR_FSID'][0]
-
-        if prev:
-            dt = self.ts - prev.ts
-
-            self.read_rps = (self.last_read - prev.last_read) / dt
-            self.write_rps = (self.last_write - prev.last_write) / dt
-
-            # Disk usage should be used here instead of load average
-            # self.max_read_rps = max(self.read_rps / max(self.load_average, 0.01), 100)
-            self.max_read_rps = self.max_rps(self.read_rps, self.load_average)
-
-            # self.max_write_rps = max(self.write_rps / max(self.load_average, 0.01), 100)
-            self.max_write_rps = self.max_rps(self.write_rps, self.load_average)
-
-        else:
-            self.read_rps = 0
-            self.write_rps = 0
-
-            # Tupical SATA HDD performance is 100 IOPS
-            # It will be used as first estimation for maximum node performance
-            self.max_read_rps = 100
-            self.max_write_rps = 100
-
     def __add__(self, other):
-        res = NodeStat()
+        node_stat = self.node_stat + other.node_stat
+        res = NodeBackendStat(node_stat)
 
         res.ts = min(self.ts, other.ts)
+
 
         res.total_space = self.total_space + other.total_space
         res.free_space = self.free_space + other.free_space
         res.used_space = self.used_space + other.used_space
         res.rel_space = min(self.rel_space, other.rel_space)
-        res.load_average = max(self.load_average, other.load_average)
 
         res.read_rps = self.read_rps + other.read_rps
         res.write_rps = self.write_rps + other.write_rps
@@ -176,8 +202,10 @@ class NodeStat(object):
         return res
 
     def __mul__(self, other):
-        res = NodeStat()
+        res = NodeBackendStat()
         res.ts = min(self.ts, other.ts)
+
+        res.node_stat = self.node_stat * other.node_stat
 
         res.total_space = min(self.total_space, other.total_space)
         res.free_space = min(self.free_space, other.free_space)
@@ -205,12 +233,12 @@ class NodeStat(object):
         return res
 
     def __repr__(self):
-        return ('<NodeStat object: ts=%s, write_rps=%d, max_write_rps=%d, read_rps=%d, '
-                'max_read_rps=%d, total_space=%d, free_space=%d, files_removed=%s, '
-                'fragmentation=%s, load_average=%s>' % (
+        return ('<NodeBackendStat object: ts=%s, write_rps=%d, max_write_rps=%d, read_rps=%d, '
+                'max_read_rps=%d, total_space=%d, free_space=%d, files=%s, files_removed=%s, '
+                'fragmentation=%s, node_load_average=%s>' % (
                     ts_str(self.ts), self.write_rps, self.max_write_rps, self.read_rps,
-                    self.max_read_rps, self.total_space, self.free_space, self.files_removed,
-                    self.fragmentation, self.load_average))
+                    self.max_read_rps, self.total_space, self.free_space, self.files,
+                    self.files_removed, self.fragmentation, self.node_stat.load_average))
 
 
 class Host(object):
@@ -263,55 +291,80 @@ class Node(object):
 
         self.stat = None
 
+    def update_statistics(self, new_stat):
+        self.stat = NewNodeStat(new_stat, self.stat)
+
+    def __repr__(self):
+        return '<Node object: host={host}, port={port}>'.format(
+            host=str(self.host), port=self.port)
+
+    def __str__(self):
+        return '{host}:{port}'.format(host=self.host.addr, port=self.port)
+
+    def __hash__(self):
+        return hash(self.__str__())
+
+    def __eq__(self, other):
+        if isinstance(other, (str, unicode)):
+            return self.__str__() == other
+
+        if isinstance(other, Node):
+            return self.host.addr == other.host.addr and self.port == other.port
+
+
+class NodeBackend(object):
+    def __init__(self, node, backend_id):
+
+        self.node = node
+        self.backend_id = backend_id
+
+        self.stat = None
+
         self.destroyed = False
         self.read_only = False
         self.status = Status.INIT
         self.status_text = "Node %s is not inititalized yet" % (self.__str__())
 
-    def get_host(self):
-        return self.host
-
-    def destroy(self):
-        self.destroyed = True
-        self.host.nodes.remove(self)
-        self.host = None
-        # if there is a group using this node, remove node from the list
-        # self.group.remove_node(self)
+        self.base_path = None
 
     def update_statistics(self, new_stat):
-        stat = NodeStat(new_stat, self.stat)
-        self.stat = stat
+        self.stat = NodeBackendStat(self.node.stat, new_stat, self.stat)
+        self.base_path = os.path.dirname(new_stat['backend']['config']['file']) + '/'
 
     def update_status(self):
         if self.destroyed:
             self.status = Status.BAD
-            self.status_text = "Node %s is destroyed" % (self.__str__())
+            self.status_text = 'Node backend {0} is destroyed'.format(self.__str__())
 
         elif not self.stat:
             self.status = Status.INIT
-            self.status_text = "No statistics gathered for node %s" % (self.__str__())
+            self.status_text = 'No statistics gathered for node backend {0}'.format(self.__str__())
 
         elif self.stat.ts < (time.time() - 120):
             self.status = Status.STALLED
-            self.status_text = "Statistics for node %s is too old: it was gathered %d seconds ago" % (self.__str__(), int(time.time() - self.stat.ts))
+            self.status_text = ('Statistics for node backend {0} is too old: '
+                'it was gathered {1} seconds ago'.format(self.__str__(),
+                    int(time.time() - self.stat.ts)))
 
         elif self.read_only:
             self.status = Status.RO
-            self.status_text = "Node %s is in Read-Only state" % (self.__str__())
+            self.status_text = 'Node {0} is in Read-Only state'.format(self.__str__())
 
         else:
             self.status = Status.OK
-            self.status_text = "Node %s is OK" % (self.__str__())
+            self.status_text = 'Node {0} is OK'.format(self.__str__())
 
         return self.status
 
     def info(self):
         res = {}
 
-        res['addr'] = self.__str__()
-        res['hostname'] = infrastructure.get_hostname_by_addr(self.host.addr)
+        res['node'] = str(self.node)
+        res['backend_id'] = self.backend_id
+        res['addr'] = str(self)
+        res['hostname'] = infrastructure.get_hostname_by_addr(self.node.host.addr)
         res['status'] = self.status
-        res['dc'] = self.host.dc
+        res['dc'] = self.node.host.dc
         res['last_stat_update'] = (self.stat and
             datetime.datetime.fromtimestamp(self.stat.ts).strftime('%Y-%m-%d %H:%M:%S') or
             'unknown')
@@ -320,64 +373,68 @@ class Node(object):
             min_free_space_rel = config['balancer_config'].get('min_free_space_relative', 0.15)
 
             res['free_space'] = int(self.stat.free_space)
-            node_eff_space = max(min(self.stat.total_space - min_free_space,
-                                     self.stat.total_space * (1 - min_free_space_rel)), 0.0)
+            eff_space = max(min(self.stat.total_space - min_free_space,
+                                self.stat.total_space * (1 - min_free_space_rel)), 0.0)
 
-            res['free_effective_space'] = int(max(self.stat.free_space - (self.stat.total_space - node_eff_space), 0))
+            res['free_effective_space'] = int(max(self.stat.free_space - (self.stat.total_space - eff_space), 0))
             res['used_space'] = int(self.stat.used_space)
             res['total_files'] = self.stat.files + self.stat.files_removed
             res['fragmentation'] = self.stat.fragmentation
-        res['path'] = port_to_path(int(res['addr'].split(':')[1]))
+        # res['path'] = port_to_path(int(res['addr'].split(':')[1]))
+        res['path'] = self.base_path
 
         return res
 
     def __repr__(self):
         if self.destroyed:
-            return '<Node object: DESTROYED!>'
+            return '<Node backend object: DESTROYED!>'
 
-        return '<Node object: host=%s, port=%d, status=%s, read_only=%s, stat=%s>' % (str(self.host), self.port, self.status, str(self.read_only), repr(self.stat))
+        return ('<Node backend object: node=%s, backend_id=%d, '
+            'status=%s, read_only=%s, stat=%s>' % (str(self.node), self.backend_id,
+                self.status, str(self.read_only), repr(self.stat)))
 
     def __str__(self):
         if self.destroyed:
-            raise Exception('Node object is destroyed')
+            raise Exception('Node backend object is destroyed')
 
-        return '%s:%d' % (self.host.addr, self.port)
+        return '%s:%d/%d' % (self.node.host.addr, self.node.port, self.backend_id)
 
     def __hash__(self):
         return hash(self.__str__())
 
     def __eq__(self, other):
-        if isinstance(other, str):
+        if isinstance(other, (str, unicode)):
             return self.__str__() == other
 
-        if isinstance(other, Node):
-            return self.host.addr == other.host.addr and self.port == other.port
+        if isinstance(other, NodeBackend):
+            return (self.node.host.addr == other.node.host.addr and
+                    self.node.port == other.node.port and
+                    self.backend_id == other.backend_id)
 
 
 class Group(object):
 
     DEFAULT_NAMESPACE = 'default'
 
-    def __init__(self, group_id, nodes=None):
+    def __init__(self, group_id, node_backends=None):
         self.group_id = group_id
         self.status = Status.INIT
-        self.nodes = []
+        self.node_backends = []
         self.couple = None
         self.meta = None
         self.status_text = "Group %s is not inititalized yet" % (self.__str__())
 
-        if nodes:
-            for node in nodes:
-                self.add_node(node)
+        for node_backend in node_backends or []:
+            self.add_node_backend(node_backend)
 
-    def add_node(self, node):
-        self.nodes.append(node)
+    def add_node_backend(self, node_backend):
+        self.node_backends.append(node_backend)
 
-    def has_node(self, node):
-        return node in self.nodes
+    def has_node_backend(self, node_backend):
+        return node_backend in self.node_backends
 
-    def remove_node(self, node):
-        self.nodes.remove(node)
+    def remove_node_backend(self, node_backend):
+        self.node_backends.remove(node_backend)
 
     def parse_meta(self, meta):
         if meta is None:
@@ -394,7 +451,7 @@ class Group(object):
             raise Exception('Unable to parse meta')
 
     def get_stat(self):
-        return reduce(lambda res, x: res + x, [node.stat for node in self.nodes])
+        return reduce(lambda res, x: res + x, [nb.stat for nb in self.node_backends])
 
     def update_status_recursive(self):
         if self.couple:
@@ -403,51 +460,60 @@ class Group(object):
             self.update_status()
 
     def update_status(self):
-        if not self.nodes:
+        if not self.node_backends:
             self.status = Status.INIT
-            self.status_text = "Group %s is in INIT state because there is no nodes serving this group" % (self.__str__())
+            self.status_text = ('Group {0} is in INIT state because there is'
+                'no node backends serving this group'.format(self.__str__()))
 
         # node statuses should be updated before group status is set
-        statuses = tuple(node.update_status() for node in self.nodes)
+        statuses = tuple(nb.update_status() for nb in self.node_backends)
 
-        logger.info('In group %d meta = %s' % (self.group_id, str(self.meta)))
+        logger.info('In group {0} meta = {1}'.format(self.group_id, str(self.meta)))
         if (not self.meta) or (not 'couple' in self.meta) or (not self.meta['couple']):
             self.status = Status.INIT
-            self.status_text = "Group %s is in INIT state because there is no coupling info" % (self.__str__())
+            self.status_text = ('Group {0} is in INIT state because there is '
+                'no coupling info'.format(self.__str__()))
             return self.status
 
         if Status.RO in statuses:
             self.status = Status.RO
-            self.status_text = "Group %s is in Read-Only state because there is RO nodes" % (self.__str__())
+            self.status_text = ('Group {0} is in Read-Only state because '
+                'there is RO node backends'.format(self.__str__()))
             return self.status
 
         if not all([st == Status.OK for st in statuses]):
             self.status = Status.BAD
-            self.status_text = "Group %s is in Bad state because some node statuses are not OK" % (self.__str__())
+            self.status_text = ('Group {0} is in Bad state because '
+                'some node statuses are not OK'.format(self.__str__()))
             return self.status
 
         if (not self.couple) and self.meta['couple']:
             self.status = Status.BAD
-            self.status_text = "Group %s is in Bad state because couple did not created" % (self.__str__())
+            self.status_text = ('Group {0} is in Bad state because '
+                'couple did not created'.format(self.__str__()))
             return self.status
 
         elif not self.couple.check_groups(self.meta['couple']):
             self.status = Status.BAD
-            self.status_text = "Group %s is in Bad state because couple check fails" % (self.__str__())
+            self.status_text = ('Group {0} is in Bad state because '
+                'couple check fails'.format(self.__str__()))
             return self.status
 
         elif not self.meta['namespace']:
             self.status = Status.BAD
-            self.status_text = "Group %s is in Bad state because no namespace has been assigned to it" % (self.__str__())
+            self.status_text = ('Group {0} is in Bad state because '
+                'no namespace has been assigned to it'.format(self.__str__()))
             return self.status
 
         elif self.meta['namespace'] != self.couple.namespace:
             self.status = Status.BAD
-            self.status_text = "Group %s is in Bad state because its namespace doesn't correspond to couple namespace (%s)" % (self.__str__(), self.couple.namespace)
+            self.status_text = ('Group {0} is in Bad state because its namespace '
+                'doesn\'t correspond to couple namespace ({1})'.format(
+                    self.__str__(), self.couple.namespace))
             return self.status
 
         self.status = Status.COUPLED
-        self.status_text = "Group %s is OK" % (self.__str__())
+        self.status_text = 'Group {0} is OK'.format(self.__str__())
 
         return self.status
 
@@ -457,7 +523,7 @@ class Group(object):
         res['id'] = self.group_id
         res['status'] = self.status
         res['status_text'] = self.status_text
-        res['nodes'] = [n.info() for n in self.nodes]
+        res['node_backends'] = [nb.info() for nb in self.node_backends]
         if self.couple:
             res['couples'] = self.couple.as_tuple()
         else:
@@ -474,7 +540,7 @@ class Group(object):
         return '%d' % (self.group_id)
 
     def __repr__(self):
-        return '<Group object: group_id=%d, status=%s nodes=[%s], meta=%s, couple=%s>' % (self.group_id, self.status, ', '.join((repr(n) for n in self.nodes)), str(self.meta), str(self.couple))
+        return '<Group object: group_id=%d, status=%s node backends=[%s], meta=%s, couple=%s>' % (self.group_id, self.status, ', '.join((repr(nb) for nb in self.node_backends)), str(self.meta), str(self.couple))
 
     def __eq__(self, other):
         return self.group_id == other
@@ -674,6 +740,7 @@ class Couple(object):
 hosts = Repositary(Host)
 groups = Repositary(Group)
 nodes = Repositary(Node)
+node_backends = Repositary(NodeBackend)
 couples = Repositary(Couple)
 
 
@@ -681,10 +748,10 @@ def update_statistics(stats):
 
     for stat in stats.get():
         address = '{0}:{1}'.format(stat.address.host, stat.address.port)
-        logger.info('Stats: %s %s' % (str(stat.address.group_id), address))
+        logger.info('Stats: %s %s' % (str(stat.group_id), address))
 
         try:
-            gid = stat.address.group_id
+            gid = stat.group_id
 
             if not address in nodes:
                 # addr = address.split(':')

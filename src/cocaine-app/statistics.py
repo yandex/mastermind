@@ -60,8 +60,8 @@ class Statistics(object):
             data['uncoupled_space'] += stat.total_space
 
     @staticmethod
-    def account_keys(data, node):
-        stat = node.stat
+    def account_keys(data, node_backend):
+        stat = node_backend.stat
         data['total_keys'] += stat.files + stat.files_removed
         data['removed_keys'] += stat.files_removed
 
@@ -94,13 +94,13 @@ class Statistics(object):
         ns_host_fsid_map = defaultdict(lambda: defaultdict(set))
 
         for group in sorted(storage.groups, key=lambda g: not bool(g.couple)):
-            for node in group.nodes:
+            for node_backend in group.node_backends:
 
                 couple = (group.couple
                           if group.couple else
                           str(group.group_id))
 
-                dc = node.host.dc
+                dc = node_backend.node.host.dc
                 try:
                     ns = group.couple and group.couple.namespace or None
                 except ValueError as e:
@@ -113,20 +113,20 @@ class Statistics(object):
                     self.account_couples(by_ns[ns][dc], group)
                     ns_dc_couple_map[ns][dc].add(couple)
 
-                if not node.stat:
-                    logger.debug('No stats available for node %s' % str(node))
+                if not node_backend.stat:
+                    logger.debug('No stats available for node %s' % str(node_backend))
                     continue
 
-                if not node.stat.fsid in host_fsid_map[node.host]:
-                    self.account_memory(by_dc[dc], group, node.stat)
-                    host_fsid_map[node.host].add(node.stat.fsid)
-                if ns and not node.stat.fsid in ns_host_fsid_map[ns][node.host]:
-                    self.account_memory(by_ns[ns][dc], group, node.stat)
-                    ns_host_fsid_map[ns][node.host].add(node.stat.fsid)
+                if not node_backend.stat.fsid in host_fsid_map[node_backend.node.host]:
+                    self.account_memory(by_dc[dc], group, node_backend.stat)
+                    host_fsid_map[node_backend.node.host].add(node_backend.stat.fsid)
+                if ns and not node_backend.stat.fsid in ns_host_fsid_map[ns][node_backend.node.host]:
+                    self.account_memory(by_ns[ns][dc], group, node_backend.stat)
+                    ns_host_fsid_map[ns][node_backend.node.host].add(node_backend.stat.fsid)
 
-                self.account_keys(by_dc[dc], node)
+                self.account_keys(by_dc[dc], node_backend)
                 if ns:
-                    self.account_keys(by_ns[ns][dc], node)
+                    self.account_keys(by_ns[ns][dc], node_backend)
 
         self.count_outaged_couples(by_dc, by_ns)
 
@@ -152,8 +152,8 @@ class Statistics(object):
         for couple in storage.couples:
             affected_dcs = set()
             for group in couple.groups:
-                for node in group.nodes:
-                    affected_dcs.add(node.host.dc)
+                for node_backend in group.node_backends:
+                    affected_dcs.add(node_backend.node.host.dc)
 
             for dc in affected_dcs:
                 by_dc[dc]['bad_couples'] += 1
@@ -165,7 +165,7 @@ class Statistics(object):
             try:
                 ns = couple.namespace
             except ValueError:
-                ns = None
+                continue
 
             if ns:
                 for dc in affected_dcs:
@@ -178,7 +178,6 @@ class Statistics(object):
         for ns, stats in by_ns_stats.iteritems():
             for dc, dc_data in stats.iteritems():
                 dc_data['outages'] = by_ns[ns][dc]
-
 
     def total_stats(self, per_dc_stat):
         return dict(reduce(self.dict_keys_sum, per_dc_stat.values()))
@@ -213,18 +212,19 @@ class Statistics(object):
         }
 
         for group in storage.groups:
-            for node in group.nodes:
-                if not node.stat:
+            for node_backend in group.node_backends:
+                if not node_backend.stat:
                     continue
 
-                if not (node.host.addr, node.stat.fsid) in host_fsid_memory_map:
-                    eff_space = max(min(node.stat.total_space - self.MIN_FREE_SPACE,
-                                        node.stat.total_space * (1 - self.MIN_FREE_SPACE_REL)), 0.0)
-                    host_fsid_memory_map[(node.host.addr, node.stat.fsid)] = {
-                        'total_space': node.stat.total_space,
-                        'free_space': node.stat.free_space,
+                if not (node_backend.node.host.addr, node_backend.stat.fsid) in host_fsid_memory_map:
+                    eff_space = max(min(node_backend.stat.total_space - self.MIN_FREE_SPACE,
+                                        node_backend.stat.total_space * (1 - self.MIN_FREE_SPACE_REL)), 0.0)
+                    host_fsid_memory_map[(node_backend.node.host.addr, node_backend.stat.fsid)] = {
+                        'total_space': node_backend.stat.total_space,
+                        'free_space': node_backend.stat.free_space,
                         'effective_space': eff_space,
-                        'effective_free_space': max(node.stat.free_space - (node.stat.total_space - eff_space), 0.0),
+                        'effective_free_space': max(node_backend.stat.free_space -
+                            (node_backend.stat.total_space - eff_space), 0.0),
                     }
 
         for couple in storage.couples:
@@ -236,9 +236,9 @@ class Statistics(object):
 
             group_top_stats = []
             for group in couple.groups:
-                # space is summed through all the group nodes
+                # space is summed through all the group node backends
                 group_top_stats.append(reduce(self.dict_keys_sum,
-                       [host_fsid_memory_map[(node.host.addr, node.stat.fsid)] for node in group.nodes]))
+                       [host_fsid_memory_map[(nb.node.host.addr, nb.stat.fsid)] for nb in group.node_backends]))
 
             # max space available for the couple
             couple_top_stats = reduce(self.dict_keys_min, group_top_stats)
@@ -248,9 +248,9 @@ class Statistics(object):
 
             for group in couple.groups:
                 couple_top_stats_copy = copy.copy(couple_top_stats)
-                for node in group.nodes:
+                for node_backend in group.node_backends:
                     # decrease filesystems space counters
-                    self.redeem_space(host_fsid_memory_map[(node.host.addr, node.stat.fsid)],
+                    self.redeem_space(host_fsid_memory_map[(node_backend.node.host.addr, node_backend.stat.fsid)],
                                       couple_top_stats_copy)
 
         return res
@@ -286,7 +286,7 @@ class Statistics(object):
             for couple in storage.couples:
                 try:
                     if couple.namespace == namespace:
-                        hosts.extend([n.host for g in couple for n in g.nodes])
+                        hosts.extend([nb.node.host for g in couple for nb in g.node_backends])
                 except ValueError:
                     continue
             hosts = list(set(hosts))
@@ -316,7 +316,7 @@ class Statistics(object):
                 tree_node = tree_node['parent']
 
         for group in storage.groups.keys():
-            if not group.nodes:
+            if not group.node_backends:
                 continue
             try:
                 if namespace and (not group.couple or
@@ -330,14 +330,15 @@ class Statistics(object):
             elif status and status != 'UNCOUPLED' and (not group.couple or status != group.couple.status):
                 continue
             stat = group.get_stat()
-            for node in group.nodes:
-                group_parent = nodes['host'][node.host.hostname]
+            for node_backend in group.node_backends:
+                group_parent = nodes['host'][node_backend.node.host.hostname]
                 groups = group_parent.setdefault('children', [])
                 groups.append({'type': 'group',
                                'name': str(group),
                                'couple': group.couple and str(group.couple) or None,
-                               'node_addr': '{0}:{1}'.format(node.host, node.port),
-                               'node_status': node.status,
+                               'node_addr': '{0}:{1}'.format(node_backend.node.host, node_backend.node.port),
+                               'backend_id': node_backend.backend_id,
+                               'node_status': node_backend.status,
                                'couple_status': group.couple and group.couple.status or None,
                                'free_space': stat.free_space,
                                'total_space': stat.total_space,
@@ -384,8 +385,8 @@ class Statistics(object):
             except TypeError:
                 group_stat = None
             g['stats'] = self.__stats_to_dict(group_stat)
-            for node in g['nodes']:
-                node['stats'] = self.__stats_to_dict(storage.nodes[node['addr']].stat)
+            for nb in g['node_backends']:
+                nb['stats'] = self.__stats_to_dict(storage.node_backends[nb['addr']].stat)
             res['groups'].append(g)
 
         return res

@@ -410,8 +410,8 @@ class CacheManager(object):
 
         shosts = set()
         for g in sgroups:
-            for n in storage.groups[g].nodes:
-                shosts.add(n)
+            for nb in storage.groups[g].node_backends:
+                shosts.add(nb)
 
         logger.info('Source hosts: %s' % shosts)
 

@@ -119,7 +119,9 @@ class MoveJob(Job):
     # used to mark source node that content has been moved away from it
     GROUP_FILE_MARKER_PATH = config.get('restore', {}).get('group_file_marker', None)
 
-    PARAMS = ('group', 'uncoupled_group', 'src_host', 'src_port', 'dst_host', 'dst_port')
+    PARAMS = ('group', 'uncoupled_group',
+              'src_host', 'src_port', 'src_backend_id', 'src_base_path',
+              'dst_host', 'dst_port', 'dst_backend_id', 'dst_base_path')
 
     def __init__(self, **kwargs):
         super(MoveJob, self).__init__(**kwargs)
@@ -144,16 +146,21 @@ class MoveJob(Job):
             group_id=str(self.group),
             src_host=self.src_host,
             src_hostname=infrastructure.get_hostname_by_addr(self.src_host),
+            src_backend_id=self.src_backend_id,
             src_port=str(self.src_port),
-            src_base_dir=port_to_dir(self.src_port),
+            src_base_path=self.src_base_path,
             dst_host=self.dst_host,
             dst_hostname=infrastructure.get_hostname_by_addr(self.dst_host),
             dst_port=str(self.dst_port),
-            dst_base_dir=port_to_dir(self.dst_port))
+            dst_base_path=self.dst_base_path,
+            dst_backend_id=self.dst_backend_id)
 
     def create_tasks(self):
 
-        shutdown_cmd = infrastructure.shutdown_node_cmd([self.dst_host, self.dst_port])
+        # TODO: add src/dst base paths because they are now subjected to change
+
+        shutdown_cmd = infrastructure.shutdown_node_cmd([
+            self.dst_host, self.dst_port, self.dst_backend_id])
         task = NodeStopTask.new(group=self.uncoupled_group,
                                 uncoupled=True,
                                 host=self.dst_host,
@@ -162,7 +169,8 @@ class MoveJob(Job):
                                         'group': str(self.group)})
         self.tasks.append(task)
 
-        shutdown_cmd = infrastructure.shutdown_node_cmd([self.src_host, self.src_port])
+        shutdown_cmd = infrastructure.shutdown_node_cmd([
+            self.src_host, self.src_port, self.src_backend_id])
 
         group_file_marker = (os.path.join(infrastructure.node_path(port=self.src_port),
                                           self.GROUP_FILE_MARKER_PATH)
@@ -364,7 +372,7 @@ class NodeStopTask(MinionCmdTask):
 
 class HistoryRemoveNodeTask(Task):
 
-    PARAMS = ('group', 'host', 'port')
+    PARAMS = ('group', 'host', 'port', 'backend_id')
     TASK_TIMEOUT = 600
 
     def __init__(self):
@@ -379,7 +387,7 @@ class HistoryRemoveNodeTask(Task):
         self.id = uuid.uuid4().hex
         group = storage.groups[self.group]
         try:
-            infrastructure.detach_node(group, self.host, self.port)
+            infrastructure.detach_node(group, self.host, self.port, self.backend_id)
         except ValueError as e:
             # TODO: Think about changing ValueError to some dedicated exception
             # to differentiate between event when there is no such node in group
@@ -387,13 +395,13 @@ class HistoryRemoveNodeTask(Task):
             logger.error('Failed to execute {0}: {1}'.format(str(self), e))
             pass
 
-        node_str = '{0}:{1}'.format(self.host, self.port).encode('utf-8')
-        node = node_str in storage.nodes and storage.nodes[node_str] or None
-        if node and node in group.nodes:
-            logger.info('Removing node {0} from group {1} nodes'.format(node, group))
-            group.remove_node(node)
+        nb_str = '{0}:{1}/{2}'.format(self.host, self.port, self.backend_id).encode('utf-8')
+        node_backend = nb_str in storage.node_backends and storage.node_backends[nb_str] or None
+        if node_backend and node_backend in group.node_backends:
+            logger.info('Removing node backend {0} from group {1} node backends'.format(node_backend, group))
+            group.remove_node_backend(node_backend)
             group.update_status_recursive()
-            logger.info('Removed node {0} from group {1} nodes'.format(node, group))
+            logger.info('Removed node backend {0} from group {1} node backends'.format(node_backend, group))
 
     def human_dump(self):
         data = super(HistoryRemoveNodeTask, self).human_dump()
@@ -412,26 +420,26 @@ class HistoryRemoveNodeTask(Task):
 
     def __node_in_group(self):
         group = storage.groups[self.group]
-        node = '{0}:{1}'.format(self.host, self.port).encode('utf-8')
-        logger.debug('Checking node {0} with group {1} nodes: {2}'.format(
-            node, group, group.nodes))
-        node_in_group = group.has_node(node)
+        node_backend = '{0}:{1}/{2}'.format(self.host, self.port, self.backend_id).encode('utf-8')
+        logger.debug('Checking node backend {0} with group {1} node backends: {2}'.format(
+            node_backend, group, group.node_backends))
+        nb_in_group = group.has_node_backend(node_backend)
 
-        node_in_history = infrastructure.node_in_last_history_state(
-            group.group_id, self.host, self.port)
-        logger.debug('Checking node {0} in group {1} history set: {2}'.format(
-            node, group.group_id, node_in_history))
+        nb_in_history = infrastructure.node_backend_in_last_history_state(
+            group.group_id, self.host, self.port, self.backend_id)
+        logger.debug('Checking node backend {0} in group {1} history set: {2}'.format(
+            node_backend, group.group_id, node_in_history))
 
-        if node_in_group:
-            logger.info('Node {0} is still in group {1}'.format(node, group))
-        if node_in_history:
-            logger.info('Node {0} is still in group\'s {1} history'.format(node, group))
+        if nb_in_group:
+            logger.info('Node backend {0} is still in group {1}'.format(node_backend, group))
+        if nb_in_history:
+            logger.info('Node backend {0} is still in group\'s {1} history'.format(node_backend, group))
 
-        return node_in_group or node_in_history
+        return nb_in_group or nb_in_history
 
     def __str__(self):
-        return 'HistoryRemoveNodeTask[id: {0}]<remove {1}:{2} from group {3}>'.format(
-            self.id, self.host, self.port, self.group)
+        return 'HistoryRemoveNodeTask[id: {0}]<remove {1}:{2}/{3} from group {4}>'.format(
+            self.id, self.host, self.port, self.backend_id, self.group)
 
 
 class JobFactory(object):

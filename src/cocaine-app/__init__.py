@@ -50,37 +50,31 @@ logger.info('Node config: io_thread_num {0}, nonblocking_io_thread_num {1}, '
 
 n = elliptics.Node(log, node_config)
 
-connected = False
-
 logger.info("trace %d" % (i.next()))
-for node in nodes:
-    logger.debug("Adding node %s" % str(node))
-    try:
-        logger.info("node: " + str(node))
-        n.add_remote(str(node[0]), node[1], node[2])
-        connected = True
-    except Exception as e:
-        logger.error("Error: " + str(e) + "\n" + traceback.format_exc())
 
-if not connected:
-    logger.error('Failed to connect to any elliptics storage node')
+addresses = [elliptics.Address(host=str(node[0]), port=node[1], family=node[2])
+             for node in nodes]
+
+try:
+    n.add_remotes(addresses)
+except Exception as e:
+    logger.error('Failed to connect to any elliptics storage node: {0}'.format(
+        e))
     raise ValueError('Failed to connect to any elliptics storage node')
-
-connected = False
 
 logger.info("trace %d" % (i.next()))
 meta_node = elliptics.Node(log, node_config)
-for node in config["metadata"]["nodes"]:
-    try:
-        logger.info("node: " + str(node))
-        meta_node.add_remote(str(node[0]), node[1], node[2])
-        connected = True
-    except Exception as e:
-        logger.error("Error: " + str(e) + "\n" + traceback.format_exc())
 
-if not connected:
-    logger.error('Failed to connect to any elliptics meta storage node')
-    raise ValueError('Failed to connect to any elliptics storage node')
+addresses = [elliptics.Address(host=str(node[0]), port=node[1], family=node[2])
+             for node in config["metadata"]["nodes"]]
+logger.info('Connecting to meta nodes: {0}'.format(config["metadata"]["nodes"]))
+
+try:
+    meta_node.add_remotes(addresses)
+except Exception as e:
+    logger.error('Failed to connect to any elliptics meta storage node: {0}'.format(
+        e))
+    raise ValueError('Failed to connect to any elliptics storage META node')
 
 
 wait_timeout = config.get('wait_timeout', 5)
@@ -138,7 +132,7 @@ def init_infrastructure():
 
 def init_node_info_updater():
     logger.info("trace node info updater %d" % (i.next()))
-    niu = node_info_updater.NodeInfoUpdater(logging.getLogger('mm.nodes'), n)
+    niu = node_info_updater.NodeInfoUpdater(n)
     register_handle(niu.force_nodes_update)
 
     return niu
@@ -190,13 +184,13 @@ def init_job_processor(minions):
     return j
 
 
-init_cache()
+# init_cache()
 init_infrastructure()
 init_node_info_updater()
 init_statistics()
 m = init_minions()
-j = init_job_processor(m)
-init_smoother(j)
+# j = init_job_processor(m)
+# init_smoother(j)
 
 
 for handler in balancer.handlers(b):
