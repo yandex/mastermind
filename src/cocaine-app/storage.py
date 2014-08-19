@@ -183,6 +183,7 @@ class NodeBackendStat(object):
 
         res.ts = min(self.ts, other.ts)
 
+        res.node_stat = node_stat
 
         res.total_space = self.total_space + other.total_space
         res.free_space = self.free_space + other.free_space
@@ -202,16 +203,17 @@ class NodeBackendStat(object):
         return res
 
     def __mul__(self, other):
-        res = NodeBackendStat()
+        node_stat = self.node_stat * other.node_stat
+        res = NodeBackendStat(node_stat)
+
         res.ts = min(self.ts, other.ts)
 
-        res.node_stat = self.node_stat * other.node_stat
+        res.node_stat = node_stat
 
         res.total_space = min(self.total_space, other.total_space)
         res.free_space = min(self.free_space, other.free_space)
         res.used_space = min(self.used_space, other.used_space)
         res.rel_space = min(self.rel_space, other.rel_space)
-        res.load_average = max(self.load_average, other.load_average)
 
         res.read_rps = max(self.read_rps, other.read_rps)
         res.write_rps = max(self.write_rps, other.write_rps)

@@ -212,7 +212,7 @@ class NodeInfoUpdater(object):
                         logger.info("Group {0} doesn't exist in "
                             "all_groups, add fake data with couple={1}".format(gid, couple))
                         storage.groups.add(gid)
-                c = storage.couples.add([storage.groups[gid] for gid in couples])
+                c = storage.couples.add([storage.groups[gid] for gid in couple])
                 logger.info('Created couple {0} {1}'.format(c, repr(c)))
             return
 
