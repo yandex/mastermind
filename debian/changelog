@@ -1,3 +1,11 @@
+mastermind (2.8.45) lucid; urgency=low
+
+  * Added optional move task for move jobs
+  * Fix for applying smoother plan simultaneously from several workers
+  * Handler for elliptics remote nodes list
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 20 Aug 2014 17:38:25 +0400
+
 mastermind (2.8.44) lucid; urgency=low
 
   * Additional checkings for move jobs: number of keys of uncoupled group
