@@ -74,7 +74,6 @@ class Smoother(object):
         try:
 
             logger.debug('Lock acquiring')
-
             with sync_manager.lock(self.job_processor.JOBS_LOCK):
                 logger.debug('Lock acquired')
 

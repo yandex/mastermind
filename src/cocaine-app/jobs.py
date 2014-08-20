@@ -119,6 +119,8 @@ class MoveJob(Job):
     # used to mark source node that content has been moved away from it
     GROUP_FILE_MARKER_PATH = config.get('restore', {}).get('group_file_marker', None)
 
+    GROUP_FILE_DIR_MOVE_DST = config.get('restore', {}).get('group_file_dir_move_dst', None)
+
     PARAMS = ('group', 'uncoupled_group',
               'src_host', 'src_port', 'src_backend_id', 'src_base_path',
               'dst_host', 'dst_port', 'dst_backend_id', 'dst_base_path')
@@ -181,13 +183,21 @@ class MoveJob(Job):
                       if self.GROUP_FILE_PATH else
                       '')
 
+        params = {'node': self.src_node,
+                  'group': str(self.group),
+                  'group_file_marker': self.marker_format(group_file_marker),
+                  'remove_group_file': group_file}
+
+        if self.GROUP_FILE_DIR_MOVE_DST and group_file:
+            params['move_src'] = os.path.join(os.path.dirname(group_file))
+            params['move_dst'] = os.path.join(
+                infrastructure.node_path(port=self.src_port),
+                self.GROUP_FILE_DIR_MOVE_DST)
+
         task = NodeStopTask.new(group=self.group,
                                 host=self.src_host,
                                 cmd=shutdown_cmd,
-                                params={'node': self.src_node,
-                                        'group': str(self.group),
-                                        'group_file_marker': self.marker_format(group_file_marker),
-                                        'remove_group_file': group_file})
+                                params=params)
         self.tasks.append(task)
 
         move_cmd = infrastructure.move_group_cmd(
@@ -363,7 +373,7 @@ class NodeStopTask(MinionCmdTask):
                 if group.couple:
                     raise JobBrokenError('Task {0}: group {1} happens to be '
                         'already coupled'.format(self, self.group))
-                if group.nodes[0].stat.files + group.nodes[1].stat.files_removed > 0:
+                if group.nodes[0].stat.files + group.nodes[0].stat.files_removed > 0:
                     raise JobBrokenError('Task {0}: group {1} has non-zero '
                         'number of keys (including removed)')
 
