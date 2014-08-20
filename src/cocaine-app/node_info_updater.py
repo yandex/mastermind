@@ -120,7 +120,7 @@ class NodeInfoUpdater(object):
             session.set_direct_id(address)
             logger.debug('Request for monitor_stat of node {0}'.format(
                 address))
-            requests.append((session.monitor_stat(eid), address))
+            requests.append((session.monitor_stat(address), address))
 
         for result, address in requests:
             try:
