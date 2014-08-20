@@ -475,11 +475,11 @@ class Infrastructure(object):
             warns.append(e.message)
             logger.info('Restore cmd for group %s failed, warns: %s' %
                          (group_id, warns))
-            return '', 0, '', warns
+            return '', 0, 0, '', warns
 
         logger.info('Restore cmd for group %s on %s, warns: %s, cmd %s' %
                      (group_id, addr, warns, cmd))
-        return addr, port, cmd, warns
+        return addr, port, backend_id, cmd, warns
 
     def move_group_cmd(self, src_host, src_port=None, dst_port=None, src_path=None, dst_path=None, user=None):
         cmd_src_path = self.node_path(path=src_path, port=src_port)
@@ -506,58 +506,72 @@ class Infrastructure(object):
 
     def start_node_cmd(self, request):
 
+        host, port = request[:2]
 
-        # -------------
+        # TODO: Fix family value
+        cmd = inventory.node_start_command(host, port, 2)
 
+        if cmd is None:
+            raise RuntimeError('Node start command is not provided '
+                'by inventory implementation')
 
+        logger.info('Command for starting elliptics node {0}:{1} '
+            'was requested: {2}'.format(host, port, cmd))
 
-        raise ValueError('Should be adapted to node backends')
-
-
-
-        # --------------
-
-        # host, port = request[:2]
-
-        # # TODO: Fix family value
-        # cmd = inventory.node_start_command(host, port, 2)
-
-        # if cmd is None:
-        #     raise RuntimeError('Node start command is not provided '
-        #         'by inventory implementation')
-
-        # logger.info('Command for starting elliptics node {0}:{1} '
-        #     'was requested: {2}'.format(host, port, cmd))
-
-        # return cmd
+        return cmd
 
     def shutdown_node_cmd(self, request):
 
-        # -------------
+        host, port = request[:2]
+
+        node_addr = '{0}:{1}'.format(host, port)
+
+        if not node_addr in storage.nodes:
+            raise ValueError("Node {0} doesn't exist".format(node_addr))
+
+        node = storage.nodes[node_addr]
+
+        cmd = inventory.node_shutdown_command(node.host, node.port, node.family)
+        logger.info('Command for shutting down elliptics node {0} '
+            'was requested: {1}'.format(node_addr, cmd))
+
+        return cmd
+
+    def enable_node_backend_cmd(self, request):
+
+        host, port, family, backend_id = request[:4]
+
+        nb_addr = '{0}:{1}/{2}'.format(host, port, backend_id)
+
+        cmd = inventory.enable_node_backend_cmd(host, port, family, backend_id)
+
+        if cmd is None:
+            raise RuntimeError('Node backend start command is not provided '
+                'by inventory implementation')
+
+        logger.info('Command for starting elliptics node {0} '
+            'was requested: {1}'.format(nb_addr, cmd))
+
+        return cmd
 
 
+    def disable_node_backend_cmd(self, request):
 
-        raise ValueError('Should be adapted to node backends')
+        host, port, family, backend_id = request[:3]
 
+        nb_addr = '{0}:{1}/{2}'.format(host, port, backend_id).encode('utf-8')
 
+        if not nb_addr in storage.node_backends:
+            raise ValueError("Node backend {0} doesn't exist".format(nb_addr))
 
-        # --------------
-        
-    
-        # host, port = request[:2]
+        nb = storage.node_backends[nb_addr]
 
-        # node_addr = '{0}:{1}'.format(host, port)
+        cmd = inventory.disable_node_backend_command(
+            nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id)
+        logger.info('Command for shutting down elliptics node backend {0} '
+            'was requested: {1}'.format(nb_addr, cmd))
 
-        # if not node_addr in storage.nodes:
-        #     raise ValueError("Node {0} doesn't exist".format(node_addr))
-
-        # node = storage.nodes[node_addr]
-
-        # cmd = inventory.node_shutdown_command(node.host, node.port, node.family)
-        # logger.info('Command for shutting down elliptics node {0} '
-        #     'was requested: {1}'.format(node_addr, cmd))
-
-        # return cmd
+        return cmd
 
     def get_dc_by_host(self, host):
         return self.dc_cache[host]

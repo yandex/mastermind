@@ -790,7 +790,7 @@ def restore_group(group, user=('u', os.environ['USER'],
         print res
         return
 
-    dst_host, dst_port, cmd, messages = res
+    dst_host, dst_port, backend_id, cmd, messages = res
     for msg in messages:
         print '{prefix} {msg}'.format(prefix=warn('WARNING:'), msg=msg)
 
@@ -852,7 +852,7 @@ def restore_group(group, user=('u', os.environ['USER'],
         print res
         return
 
-    cmd = retry(s, 'start_node_cmd', [dst_host, dst_port])
+    cmd = retry(s, 'enable_node_backend_cmd', [dst_host, dst_port, 2, backend_id])
     if isinstance(cmd, dict):
         print cmd
         return

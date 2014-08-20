@@ -112,10 +112,12 @@ class Smoother(object):
                                  'uncoupled_group': dst_group.group_id,
                                  'src_host': src_group.node_backends[0].node.host.addr,
                                  'src_port': src_group.node_backends[0].node.port,
+                                 'src_family': src_group.node_backends[0].node.family,
                                  'src_backend_id': src_group.node_backends[0].backend_id,
                                  'src_base_path': src_group.node_backends[0].base_path,
                                  'dst_host': dst_group.node_backends[0].node.host.addr,
                                  'dst_port': dst_group.node_backends[0].node.port,
+                                 'dst_family': dst_group.node_backends[0].node.family,
                                  'dst_backend_id': dst_group.node_backends[0].backend_id,
                                  'dst_base_path': dst_group.node_backends[0].base_path,
                                  }])

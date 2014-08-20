@@ -122,8 +122,8 @@ class MoveJob(Job):
     GROUP_FILE_DIR_MOVE_DST = config.get('restore', {}).get('group_file_dir_move_dst', None)
 
     PARAMS = ('group', 'uncoupled_group',
-              'src_host', 'src_port', 'src_backend_id', 'src_base_path',
-              'dst_host', 'dst_port', 'dst_backend_id', 'dst_base_path')
+              'src_host', 'src_port', 'src_backend_id', 'src_family', 'src_base_path',
+              'dst_host', 'dst_port', 'dst_backend_id', 'dst_family', 'dst_base_path')
 
     def __init__(self, **kwargs):
         super(MoveJob, self).__init__(**kwargs)
@@ -161,8 +161,8 @@ class MoveJob(Job):
 
         # TODO: add src/dst base paths because they are now subjected to change
 
-        shutdown_cmd = infrastructure.shutdown_node_cmd([
-            self.dst_host, self.dst_port, self.dst_backend_id])
+        shutdown_cmd = infrastructure.disable_node_backend_cmd([
+            self.dst_host, self.dst_port, self.dst_family, self.dst_backend_id])
         task = NodeStopTask.new(group=self.uncoupled_group,
                                 uncoupled=True,
                                 host=self.dst_host,
@@ -171,8 +171,8 @@ class MoveJob(Job):
                                         'group': str(self.group)})
         self.tasks.append(task)
 
-        shutdown_cmd = infrastructure.shutdown_node_cmd([
-            self.src_host, self.src_port, self.src_backend_id])
+        shutdown_cmd = infrastructure.disable_node_backend_cmd([
+            self.src_host, self.src_port, self.src_family, self.src_backend_id])
 
         group_file_marker = (os.path.join(infrastructure.node_path(port=self.src_port),
                                           self.GROUP_FILE_MARKER_PATH)
@@ -215,7 +215,8 @@ class MoveJob(Job):
                                          'group_file': group_file})
         self.tasks.append(task)
 
-        start_cmd = infrastructure.start_node_cmd([self.dst_host, self.dst_port])
+        start_cmd = infrastructure.enable_node_backend_cmd([
+            self.dst_host, self.dst_port, self.dst_family, self.dst_backend_id])
         task = MinionCmdTask.new(host=self.dst_host,
                                  cmd=start_cmd,
                                  params={'node': self.dst_node})
