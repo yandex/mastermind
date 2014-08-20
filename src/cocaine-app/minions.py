@@ -189,6 +189,14 @@ class Minions(object):
     def get_commands(self, request):
         return sorted(self.commands.itervalues(), key=lambda c: c['start_ts'])
 
+    def __check_dict_values(self, d, types=(basestring,)):
+        for k, v in d.iteritems():
+            if k == 'command':
+                raise ValueError('Parameter "command" is not accepted as command parameter')
+            if not isinstance(v, types):
+                logger.warn('Failed parameter: %s' % (v,))
+                raise ValueError('Only strings are accepted as command parameters')
+
     def execute_cmd(self, request):
         try:
             host, command, params = request[0:3]
@@ -201,13 +209,8 @@ class Minions(object):
 
         url = self.START_URL_TPL.format(host=host, port=self.minion_port)
         data = {'command': command}
-        for k, v in params.iteritems():
-            if k == 'command':
-                raise ValueError('Parameter "command" is not accepted as command parameter')
-            if not isinstance(v, basestring):
-                logger.warn('Failed parameter: %s' % (v,))
-                raise ValueError('Only strings are accepted as command parameters')
-            data[k] = v
+        self.__check_dict_values(params)
+        data.update(params)
 
         try:
             response = HTTPClient().fetch(url, method='POST',
