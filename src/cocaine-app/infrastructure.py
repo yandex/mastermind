@@ -212,7 +212,7 @@ class Infrastructure(object):
                                              self._new_group_state(g.group_id))
 
                 storage_nodes = tuple((nb.node.host.addr, nb.node.port, nb.backend_id, nb.base_path)
-                                      for nb in g.node_backends)
+                                      for nb in g.node_backends if nb.stat)
                 storage_couple = (tuple([group.group_id for group in g.couple])
                                   if g.couple is not None else
                                   tuple())
@@ -445,7 +445,7 @@ class Infrastructure(object):
             if len(state[0]) == 2:
                 raise ValueError('Restoring group has no valid history records')
 
-            addr, port, backend_id, path = state[0][:3]
+            addr, port, backend_id, path = state[0][:4]
 
             if (dest and
                 (group.node_backends[0].node.host.addr != addr or
@@ -467,14 +467,14 @@ class Infrastructure(object):
 
             cmd = self.move_group_cmd(
                 src_host=source_node_backend.node.host.addr,
-                src_port=source_node_backend.base_path,
+                src_path=source_node_backend.base_path,
                 dst_path=path,
                 user=user)
 
         except ValueError as e:
             warns.append(e.message)
-            logger.info('Restore cmd for group %s failed, warns: %s' %
-                         (group_id, warns))
+            logger.info('Restore cmd for group %s failed, warns: %s\n%s' %
+                         (group_id, warns, traceback.format_exc()))
             return '', 0, 0, '', warns
 
         logger.info('Restore cmd for group %s on %s, warns: %s, cmd %s' %
@@ -554,10 +554,9 @@ class Infrastructure(object):
 
         return cmd
 
-
     def disable_node_backend_cmd(self, request):
 
-        host, port, family, backend_id = request[:3]
+        host, port, family, backend_id = request[:4]
 
         nb_addr = '{0}:{1}/{2}'.format(host, port, backend_id).encode('utf-8')
 
@@ -570,6 +569,26 @@ class Infrastructure(object):
             nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id)
         logger.info('Command for shutting down elliptics node backend {0} '
             'was requested: {1}'.format(nb_addr, cmd))
+
+        return cmd
+
+    def reconfigure_node_cmd(self, request):
+
+        host, port, family = request[:3]
+
+        node_addr = '{0}:{1}'.format(host, port)
+
+        if not node_addr in storage.nodes:
+            raise ValueError("Node {0} doesn't exist".format(node_addr))
+
+        cmd = inventory.node_reconfigure(host, port, family)
+
+        if cmd is None:
+            raise RuntimeError('Node reconfiguration command is not provided '
+                'by inventory implementation')
+
+        logger.info('Command for reconfiguring elliptics node {0} '
+            'was requested: {1}'.format(node_addr, cmd))
 
         return cmd
 

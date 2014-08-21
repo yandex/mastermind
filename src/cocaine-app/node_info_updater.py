@@ -163,16 +163,15 @@ class NodeInfoUpdater(object):
 
                 gid = b_stat['config']['group']
 
+                if gid == 0:
+                    # skip zero group ids
+                    continue
+
                 if not gid in storage.groups:
                     logger.debug('Adding group {0}'.format(gid))
                     group = storage.groups.add(gid)
                 else:
                     group = storage.groups[gid]
-
-                if not node_backend in group.node_backends:
-                    logger.debug('Adding node backend %d -> %s' %
-                                  (gid, node_backend))
-                    group.add_node_backend(node_backend)
 
                 if b_stat['status']['state'] == 0:
                     logger.info('Disabling node backend %s' % (str(node_backend)))
@@ -181,6 +180,12 @@ class NodeInfoUpdater(object):
                     logger.info('Updating statistics for node backend %s' % (str(node_backend)))
                     node_backend.enable()
                     node_backend.update_statistics(b_stat)
+
+                    if not node_backend in group.node_backends:
+                        logger.debug('Adding node backend %d -> %s' %
+                                      (gid, node_backend))
+                        group.add_node_backend(node_backend)
+
                 logger.info('Updating status for group %d' % gid)
                 group.update_status()
 

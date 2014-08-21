@@ -174,11 +174,11 @@ class MoveJob(Job):
         shutdown_cmd = infrastructure.disable_node_backend_cmd([
             self.src_host, self.src_port, self.src_family, self.src_backend_id])
 
-        group_file_marker = (os.path.join(infrastructure.node_path(port=self.src_port),
+        group_file_marker = (os.path.join(self.src_base_path,
                                           self.GROUP_FILE_MARKER_PATH)
                              if self.GROUP_FILE_MARKER_PATH else
                              '')
-        group_file = (os.path.join(infrastructure.node_path(port=self.src_port),
+        group_file = (os.path.join(self.src_base_path,
                                    self.GROUP_FILE_PATH)
                       if self.GROUP_FILE_PATH else
                       '')
@@ -191,8 +191,7 @@ class MoveJob(Job):
         if self.GROUP_FILE_DIR_MOVE_DST and group_file:
             params['move_src'] = os.path.join(os.path.dirname(group_file))
             params['move_dst'] = os.path.join(
-                infrastructure.node_path(port=self.src_port),
-                self.GROUP_FILE_DIR_MOVE_DST)
+                self.src_base_path, self.GROUP_FILE_DIR_MOVE_DST)
 
         task = NodeStopTask.new(group=self.group,
                                 host=self.src_host,
@@ -202,10 +201,9 @@ class MoveJob(Job):
 
         move_cmd = infrastructure.move_group_cmd(
             src_host=self.src_host,
-            src_port=self.src_port,
-            dst_port=self.dst_port)
-        group_file = (os.path.join(infrastructure.node_path(port=self.dst_port),
-                                   self.GROUP_FILE_PATH)
+            src_path=self.src_base_path,
+            dst_path=self.dst_base_path)
+        group_file = (os.path.join(self.dst_base_path, self.GROUP_FILE_PATH)
                       if self.GROUP_FILE_PATH else
                       '')
 
@@ -213,6 +211,24 @@ class MoveJob(Job):
                                  cmd=move_cmd,
                                  params={'group': str(self.group),
                                          'group_file': group_file})
+        self.tasks.append(task)
+
+        reconfigure_cmd = infrastructure.reconfigure_node_cmd(
+            [self.src_host, self.src_port, self.src_family])
+
+        task = MinionCmdTask.new(host=self.src_host,
+                                 cmd=reconfigure_cmd,
+                                 params={'node': self.src_node})
+
+        self.tasks.append(task)
+
+        reconfigure_cmd = infrastructure.reconfigure_node_cmd(
+            [self.dst_host, self.dst_port, self.dst_family])
+
+        task = MinionCmdTask.new(host=self.dst_host,
+                                 cmd=reconfigure_cmd,
+                                 params={'node': self.dst_node})
+
         self.tasks.append(task)
 
         start_cmd = infrastructure.enable_node_backend_cmd([
@@ -224,7 +240,8 @@ class MoveJob(Job):
 
         task = HistoryRemoveNodeTask.new(group=self.group,
                                          host=self.src_host,
-                                         port=self.src_port)
+                                         port=self.src_port,
+                                         backend_id=self.src_backend_id)
         self.tasks.append(task)
 
 
@@ -357,24 +374,24 @@ class NodeStopTask(MinionCmdTask):
                 'consistency'.format(self, self.group, self.host))
 
             if not self.group in storage.groups:
-                raise JobBrokenError('Group {0} is not found')
+                raise JobBrokenError('Group {0} is not found'.format(self.group))
 
             group = storage.groups[self.group]
-            if len(group.nodes) != 1 or group.nodes[0].host.addr != self.host:
+            if len(group.node_backends) != 1 or group.node_backends[0].node.host.addr != self.host:
                 raise JobBrokenError('Task {0}: group {1} has more than '
-                    'one node: {2}, expected host {3}'.format(self, self.group,
-                        [str(node) for node in group.nodes], self.host))
+                    'one node backend: {2}, expected host {3}'.format(self, self.group,
+                        [str(nb) for nb in group.node_backends], self.host))
 
-            if group.nodes[0].status != storage.Status.OK:
+            if group.node_backends[0].status != storage.Status.OK:
                 raise JobBrokenError('Task {0}: node of group {1} has '
                     'status {2}, should be {3}'.format(self, self.group,
-                        self.nodes[0].status, storage.Status.OK))
+                        self.node_backends[0].status, storage.Status.OK))
 
             if self.uncoupled:
                 if group.couple:
                     raise JobBrokenError('Task {0}: group {1} happens to be '
                         'already coupled'.format(self, self.group))
-                if group.nodes[0].stat.files + group.nodes[0].stat.files_removed > 0:
+                if group.node_backends[0].stat.files + group.node_backends[0].stat.files_removed > 0:
                     raise JobBrokenError('Task {0}: group {1} has non-zero '
                         'number of keys (including removed)')
 
@@ -439,7 +456,7 @@ class HistoryRemoveNodeTask(Task):
         nb_in_history = infrastructure.node_backend_in_last_history_state(
             group.group_id, self.host, self.port, self.backend_id)
         logger.debug('Checking node backend {0} in group {1} history set: {2}'.format(
-            node_backend, group.group_id, node_in_history))
+            node_backend, group.group_id, nb_in_history))
 
         if nb_in_group:
             logger.info('Node backend {0} is still in group {1}'.format(node_backend, group))

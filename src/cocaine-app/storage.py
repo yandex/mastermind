@@ -372,7 +372,7 @@ class NodeBackend(object):
     def info(self):
         res = {}
 
-        res['node'] = str(self.node)
+        res['node'] = '{0}:{1}:{2}'.format(self.node.host, self.node.port, self.node.family)
         res['backend_id'] = self.backend_id
         res['addr'] = str(self)
         res['hostname'] = infrastructure.get_hostname_by_addr(self.node.host.addr)
@@ -464,7 +464,7 @@ class Group(object):
             raise Exception('Unable to parse meta')
 
     def get_stat(self):
-        return reduce(lambda res, x: res + x, [nb.stat for nb in self.node_backends])
+        return reduce(lambda res, x: res + x, [nb.stat for nb in self.node_backends if nb.stat])
 
     def update_status_recursive(self):
         if self.couple:

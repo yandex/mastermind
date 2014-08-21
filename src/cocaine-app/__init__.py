@@ -191,8 +191,8 @@ init_infrastructure()
 init_node_info_updater()
 init_statistics()
 m = init_minions()
-# j = init_job_processor(m)
-# init_smoother(j)
+j = init_job_processor(m)
+init_smoother(j)
 
 
 for handler in balancer.handlers(b):

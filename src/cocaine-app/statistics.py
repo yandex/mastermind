@@ -238,7 +238,7 @@ class Statistics(object):
             for group in couple.groups:
                 # space is summed through all the group node backends
                 group_top_stats.append(reduce(self.dict_keys_sum,
-                       [host_fsid_memory_map[(nb.node.host.addr, nb.stat.fsid)] for nb in group.node_backends]))
+                       [host_fsid_memory_map[(nb.node.host.addr, nb.stat.fsid)] for nb in group.node_backends if nb.stat]))
 
             # max space available for the couple
             couple_top_stats = reduce(self.dict_keys_min, group_top_stats)

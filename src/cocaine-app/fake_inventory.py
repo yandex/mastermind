@@ -62,3 +62,11 @@ def dnet_client_backend_command(command):
 
 enable_node_backend_cmd = dnet_client_backend_command('enable')
 disable_node_backend_command = dnet_client_backend_command('disable')
+
+
+def node_reconfigure(host, port, family):
+    '''
+    Command that is executed on elliptics node for elliptics configs regeneration.
+    E. g., reconfiguration is required for backend restart with updated group id.
+    '''
+    return None
