@@ -6,7 +6,7 @@ APP_NAME=$1
 
 echo "Clean old version of Mastermind:"
 
-for app in 'mastermind';
+for app in $APP_NAME;
 do 
 	rm -rf /var/lib/cocaine/apps/$app
 	rm -rf /var/spool/cocaine/$app
