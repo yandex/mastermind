@@ -20,7 +20,7 @@ from cocaine.exceptions import ServiceError
 from cocaine.services import Service
 
 
-SERVICE_APP_NAME = 'mastermind'
+SERVICE_APP_NAME = 'mastermind2.26'
 SERVICE_DEFAULT_HOST = 'localhost'
 SERVICE_DEFAULT_PORT = 10053
 
@@ -29,6 +29,12 @@ host_param = ['h',
               '{host}:{port}'.format(host=SERVICE_DEFAULT_HOST,
                                      port=SERVICE_DEFAULT_PORT),
               'Mastermind application host[:port]']
+
+app_param = ['a',
+             'app',
+             '{app}'.format(app=SERVICE_APP_NAME),
+             'Mastermind application name']
+
 
 def logger_setup():
     logger = logging.getLogger('mastermind.commands')
@@ -42,10 +48,10 @@ def logger_setup():
 logger = logger_setup()
 
 
-def service(host):
+def service(host, app):
     parts = host.split(':', 1)
     hostname, port = parts[0], len(parts) == 2 and int(parts[1]) or SERVICE_DEFAULT_PORT
-    return Service(SERVICE_APP_NAME, host=hostname, port=port)
+    return Service(app or SERVICE_APP_NAME, host=hostname, port=port)
 
 
 def log_action(func):
@@ -79,7 +85,7 @@ def evil_wrapper(func, decorator):
 
 
 # group commands
-groupDispatcher = Dispatcher(globaloptions=(host_param,))
+groupDispatcher = Dispatcher(globaloptions=(host_param, app_param))
 
 
 def convert_stats(d):
@@ -92,9 +98,9 @@ def convert_stats(d):
 
 @groupDispatcher.command(name='info')
 @log_action
-def group_info(group, history=('l', False, 'History of group nodes'), host=None):
+def group_info(group, history=('l', False, 'History of group nodes'), host=None, app=None):
     '''Get group info'''
-    s = service(host)
+    s = service(host, app)
     group = int(group)
 
     res = s.enqueue("get_group_info", msgpack.packb(group)).get()
@@ -128,9 +134,9 @@ def group_info(group, history=('l', False, 'History of group nodes'), host=None)
 @groupDispatcher.command(name='meta')
 @log_action
 def group_meta(group, key=('k', '', 'Read data from arbitrary key'),
-               unpack=('u', False, 'Unpack key with msgpack'), host=None):
+               unpack=('u', False, 'Unpack key with msgpack'), host=None, app=None):
     '''Read group metadata'''
-    s = service(host)
+    s = service(host, app)
     group = int(group)
 
     params = [group, key, unpack]
@@ -141,9 +147,9 @@ def group_meta(group, key=('k', '', 'Read data from arbitrary key'),
 
 @groupDispatcher.command(name='next-number')
 @log_action
-def group_next_number(count, host=None):
+def group_next_number(count, host=None, app=None):
     '''Get unused group numbers, number of groups is an argument'''
-    s = service(host)
+    s = service(host, app)
     count = int(count)
 
     res = s.enqueue("get_next_group_number", msgpack.packb(count)).get()
@@ -154,9 +160,9 @@ def group_next_number(count, host=None):
 @log_action
 def group_list_uncoupled(by_dc=('', None, 'Group by dc and provide some useful data'),
                          json=('', None, 'Format additional data as json'),
-                         host=None):
+                         host=None, app=None):
     '''Get list of uncoupled groups from balancer'''
-    s = service(host)
+    s = service(host, app)
     res = s.enqueue("get_empty_groups", "").get()
 
     if not by_dc:
@@ -171,12 +177,12 @@ def group_list_uncoupled(by_dc=('', None, 'Group by dc and provide some useful d
 @groupDispatcher.command(name='detach-node')
 @log_action
 def group_detach_node(group, node=None,
-                      host=None):
+                      host=None, app=None):
     '''Detach node from a group. Used when elliptics instance is
        transferred to another host and/or port.
 
        Node parameter is <host>:<port>'''
-    s = service(host)
+    s = service(host, app)
 
     if not node:
         res = s.enqueue('get_group_info', msgpack.packb(group)).get()
@@ -190,9 +196,9 @@ def group_detach_node(group, node=None,
 
 @groupDispatcher.command(name='force-update')
 @log_action
-def group_force_update(host=None):
+def group_force_update(host=None, app=None):
     '''Force mastermind node data collection'''
-    s = service(host)
+    s = service(host, app)
 
     res = s.enqueue('force_nodes_update', '').get()
     print res
@@ -201,11 +207,11 @@ def group_force_update(host=None):
 @groupDispatcher.command(name='move')
 @log_action
 def group_move(group, uncoupled_group,
-               host=None):
+               host=None, app=None):
     '''Move group's node backend to uncoupled group's node backend.
        Uncoupled group will be replaced, source group node backend will be disabled.
        Applicable only for single node backend groups'''
-    s = service(host)
+    s = service(host, app)
 
     (group, uncoupled_group) = map(int, (group, uncoupled_group))
     group_data = retry(s, 'get_group_info', group)
@@ -258,7 +264,7 @@ def group_move(group, uncoupled_group,
 
 
 # couple commands
-coupleDispatcher = Dispatcher(globaloptions=(host_param,))
+coupleDispatcher = Dispatcher(globaloptions=(host_param, app_param))
 
 
 def deprecated(state, by_ns=None, by_dc=None, json=None):
@@ -279,11 +285,11 @@ def deprecated(state, by_ns=None, by_dc=None, json=None):
 def couple_list_bad(by_dc=('', None, 'Group by dc and provide some useful data'),
                     by_ns=('', None, 'Group by namespaces'),
                     json=('', None, 'Format additional data as json'),
-                    host=None):
+                    host=None, app=None):
     '''Get list of broken couples from balancer'''
     deprecated('bad', by_ns=by_ns, by_dc=by_dc, json=json)
 
-    s = service(host)
+    s = service(host, app)
     res = s.enqueue('get_bad_groups', '').get()
 
     if not by_dc and not by_ns:
@@ -304,11 +310,11 @@ def couple_list_bad(by_dc=('', None, 'Group by dc and provide some useful data')
 def couple_list_symmetric(by_dc=('', None, 'Group by dc and provide some useful data'),
                           by_ns=('', None, 'Group by namespaces'),
                           json=('', None, 'Format additional data as json'),
-                          host=None):
+                          host=None, app=None):
     '''Get list of good couples from balancer'''
     deprecated('good', by_ns=by_ns, by_dc=by_dc, json=json)
 
-    s = service(host)
+    s = service(host, app)
     res = s.enqueue("get_symmetric_groups", "").get()
 
     if not by_dc and not by_ns:
@@ -329,11 +335,11 @@ def couple_list_symmetric(by_dc=('', None, 'Group by dc and provide some useful 
 def couple_list_frozen(by_dc=('', None, 'Group by dc and provide some useful data'),
                        by_ns=('', None, 'Group by namespaces'),
                        json=('', None, 'Format additional data as json'),
-                       host=None):
+                       host=None, app=None):
     '''Get list of frozen couples from balancer'''
     deprecated('frozen', by_ns=by_ns, by_dc=by_dc, json=json)
 
-    s = service(host)
+    s = service(host, app)
     res = s.enqueue("get_frozen_groups", "").get()
 
     if not by_dc and not by_ns:
@@ -354,11 +360,11 @@ def couple_list_frozen(by_dc=('', None, 'Group by dc and provide some useful dat
 def couple_list_closed(by_dc=('', None, 'Group by dc and provide some useful data'),
                        by_ns=('', None, 'Group by namespaces'),
                        json=('', None, 'Format additional data as json'),
-                       host=None):
+                       host=None, app=None):
     '''Get list of couples closed to balancer'''
     deprecated('full', by_ns=by_ns, by_dc=by_dc, json=json)
 
-    s = service(host)
+    s = service(host, app)
     res = s.enqueue('get_closed_groups', '').get()
 
     if not by_dc and not by_ns:
@@ -376,9 +382,9 @@ def couple_list_closed(by_dc=('', None, 'Group by dc and provide some useful dat
 
 @coupleDispatcher.command(name='info')
 @log_action
-def couple_info(group, host=None):
+def couple_info(group, host=None, app=None):
     '''Get couple info'''
-    s = service(host)
+    s = service(host, app)
     group = int(group)
 
     res = s.enqueue("get_couple_info", msgpack.packb(group)).get()
@@ -425,10 +431,10 @@ def couple_list(namespace=('n', '', 'Filter by namespace'),
                 by_dc=('', False, 'Output by dc'),
                 by_state=('', False, 'Output by state'),
                 json=('', False, 'Output in json format (overrided by --short and --verbose options)'),
-                host=None):
+                host=None, app=None):
     '''List couples with various view options. Default format is json,
     use '--short' or '--verbose' option for human readable formats.'''
-    s = service(host)
+    s = service(host, app)
 
     options = {'namespace': namespace,
                'state': state}
@@ -559,13 +565,13 @@ def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:
                     'to prevent all couples falling out when a dc gets disconnected'),
                  ignore_space=('s', False, 'Ignore checking of groups total space '
                     'matching'),
-                 namespace=('n', '', 'Set custom namespace for couple'), host=None):
+                 namespace=('n', '', 'Set custom namespace for couple'), host=None, app=None):
     '''Make a couple of groups. The default behaviour is to use
     groups with approximately equal total space size.
     This behaviour can be turned off by --ignore-space option.
     Options --couples and --groups are mutually exclusive.
     The required argument for the command is the size of a couple (number of groups).'''
-    s = service(host)
+    s = service(host, app)
     size = int(size)
 
     if groups and couples:
@@ -604,10 +610,10 @@ def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:
 @coupleDispatcher.command(name='break')
 @log_action
 def couple_break(couple, confirm=None,
-                 host=None):
+                 host=None, app=None):
     '''Break the couple of groups, couple is an argument
         confirm parameter is a message "Yes, I want to break (bad|good) couple [1:2:3]"'''
-    s = service(host)
+    s = service(host, app)
     groups = [int(g) for g in couple.split(':')]
 
     res = s.enqueue('break_couple', msgpack.packb((groups, confirm))).get()
@@ -616,9 +622,9 @@ def couple_break(couple, confirm=None,
 
 @coupleDispatcher.command(name='weights')
 @log_action
-def couple_get_weights(host=None):
+def couple_get_weights(host=None, app=None):
     '''Get weights for symmetric groups'''
-    s = service(host)
+    s = service(host, app)
     res = s.enqueue("get_group_weights", "").get()
     print res
 
@@ -628,9 +634,9 @@ def couple_get_weights(host=None):
 def couple_repair(group,
                   namespace=('n', '', 'Use namespace for couple if there are '
                                       'no neighbour groups to fetch definite namespace'),
-                  host=None):
+                  host=None, app=None):
     '''Repair broken symmetric groups'''
-    s = service(host)
+    s = service(host, app)
     params = [int(group)]
     if namespace:
         params.append(namespace)
@@ -641,15 +647,15 @@ def couple_repair(group,
 
 @coupleDispatcher.command(name='list-namespaces')
 @log_action
-def couple_list_namespaces(host=None):
+def couple_list_namespaces(host=None, app=None):
     '''List all couple namespaces'''
-    s = service(host)
+    s = service(host, app)
     res = s.enqueue('get_namespaces', '').get()
     print res
 
 
 # namespace commands
-nsDispatcher = Dispatcher(globaloptions=(host_param,))
+nsDispatcher = Dispatcher(globaloptions=(host_param, app_param))
 
 @nsDispatcher.command(name='setup')
 @log_action
@@ -665,11 +671,11 @@ def ns_setup(namespace,
              couple=('c', '', 'Set static couple for namespace (1:2:10)'),
              content_length_threshold=('', '', 'Set content length threshold for '
                 'proxy to return direct urls instead of balancer urls'),
-             host=None):
+             host=None, app=None):
     '''Namespace setup.
     Updates settings by default with given keys.
     Use --overwrite to completely overwrite namespace settings.'''
-    s = service(host)
+    s = service(host, app)
 
     settings = {}
 
@@ -722,22 +728,22 @@ def ns_setup(namespace,
 
 @nsDispatcher.command(name='settings')
 @log_action
-def ns_settings(namespace, host=None):
+def ns_settings(namespace, host=None, app=None):
     '''Get namespace settings'''
-    s = service(host)
+    s = service(host, app)
 
     res = s.enqueue('get_namespace_settings', msgpack.packb([namespace])).get()
     print res
 
 # cache commands
-cacheDispatcher = Dispatcher(globaloptions=(host_param,))
+cacheDispatcher = Dispatcher(globaloptions=(host_param, app_param))
 
 
 @cacheDispatcher.command(name='keys')
 @log_action
-def cache_keys(host=None):
+def cache_keys(host=None, app=None):
     '''Fetch cached keys'''
-    s = service(host)
+    s = service(host, app)
 
     res = s.enqueue('get_cached_keys', '').get()
     print res
@@ -745,9 +751,9 @@ def cache_keys(host=None):
 
 @cacheDispatcher.command(name='keys-by-group')
 @log_action
-def cache_keys_by_group(group, host=None):
+def cache_keys_by_group(group, host=None, app=None):
     '''Fetch cached keys for certain group id'''
-    s = service(host)
+    s = service(host, app)
     group = int(group)
 
     res = s.enqueue('get_cached_keys_by_group', msgpack.packb(group)).get()
@@ -755,9 +761,9 @@ def cache_keys_by_group(group, host=None):
 
 @coupleDispatcher.command(name='freeze')
 @log_action
-def couple_freeze(couple, host=None):
+def couple_freeze(couple, host=None, app=None):
     '''Freeze symmetric group (freeze couples are excluded from balancing)'''
-    s = service(host)
+    s = service(host, app)
     groups = [int(g) for g in couple.split(':')]
 
     res = s.enqueue('freeze_couple', msgpack.packb(groups)).get()
@@ -766,9 +772,9 @@ def couple_freeze(couple, host=None):
 
 @coupleDispatcher.command(name='unfreeze')
 @log_action
-def couple_unfreeze(couple, host=None):
+def couple_unfreeze(couple, host=None, app=None):
     '''Unfreeze symmetric group'''
-    s = service(host)
+    s = service(host, app)
     groups = [int(g) for g in couple.split(':')]
 
     res = s.enqueue('unfreeze_couple', msgpack.packb(groups)).get()
@@ -776,7 +782,7 @@ def couple_unfreeze(couple, host=None):
 
 
 # cmd commands
-cmdDispatcher = Dispatcher(globaloptions=(host_param,))
+cmdDispatcher = Dispatcher(globaloptions=(host_param, app_param))
 
 
 DEFAULT = '\033[0m'
@@ -839,9 +845,9 @@ def restore_group(group, user=('u', os.environ['USER'],
                   group_file=('f', '', 'Write group id to specified file, '
                      'absolute or relative to destination path '
                      '(will be overwritten if exists)'),
-                  host=None):
+                  host=None, app=None):
     '''Get command for restoring group from good symmetric group'''
-    s = service(host)
+    s = service(host, app)
     group = int(group)
 
     res = s.enqueue('restore_group_cmd', msgpack.packb([group, user, dest])).get()
