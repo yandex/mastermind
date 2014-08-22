@@ -1,3 +1,9 @@
+mastermind (2.9.0) lucid; urgency=low
+
+  * Support for elliptics26
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 21 Aug 2014 18:57:53 +0400
+
 mastermind (2.8.45) lucid; urgency=low
 
   * Added optional move task for move jobs
