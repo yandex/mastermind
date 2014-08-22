@@ -1,3 +1,9 @@
+mastermind (2.9.1) lucid; urgency=low
+
+  * Optional mastermind app name for mastermind util
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 22 Aug 2014 12:37:16 +0400
+
 mastermind (2.9.0) lucid; urgency=low
 
   * Support for elliptics26
