@@ -1,3 +1,9 @@
+mastermind (2.9.3) lucid; urgency=low
+
+  * Fix for mixing old and new history records
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 22 Aug 2014 17:11:34 +0400
+
 mastermind (2.9.2) lucid; urgency=low
 
   * Fix for deployment script
