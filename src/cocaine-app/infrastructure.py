@@ -240,8 +240,10 @@ class Infrastructure(object):
 
                     # extended storage nodes set which includes newly seen nodes,
                     # do not discard lost nodes
-                    ext_storage_nodes = (state_nodes + tuple(
-                        nb for nb in storage_nodes if nb not in state_nodes_set))
+                    # also filter out old history nodes
+                    ext_storage_nodes = (storage_nodes + tuple(
+                        nb for nb in state_nodes
+                            if nb not in state_nodes and len(nb) != 2))
 
                     logger.debug('Comparing %s and %s' %
                                   (ext_storage_nodes, state_nodes))
