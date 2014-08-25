@@ -130,12 +130,12 @@ class MoveJob(Job):
         self.type = JobFactory.TYPE_MOVE_JOB
 
     @property
-    def src_node(self):
-        return '{0}:{1}'.format(self.src_host, self.src_port).encode('utf-8')
+    def src_node_backend(self):
+        return '{0}:{1}/{2}'.format(self.src_host, self.src_port, self.src_backend_id).encode('utf-8')
 
     @property
-    def dst_node(self):
-        return '{0}:{1}'.format(self.dst_host, self.dst_port).encode('utf-8')
+    def dst_node_backend(self):
+        return '{0}:{1}/{2}'.format(self.dst_host, self.dst_port, self.dst_backend_id).encode('utf-8')
 
     def human_dump(self):
         data = super(MoveJob, self).human_dump()
@@ -159,15 +159,13 @@ class MoveJob(Job):
 
     def create_tasks(self):
 
-        # TODO: add src/dst base paths because they are now subjected to change
-
         shutdown_cmd = infrastructure.disable_node_backend_cmd([
             self.dst_host, self.dst_port, self.dst_family, self.dst_backend_id])
         task = NodeStopTask.new(group=self.uncoupled_group,
                                 uncoupled=True,
                                 host=self.dst_host,
                                 cmd=shutdown_cmd,
-                                params={'node': self.dst_node,
+                                params={'node_backend': self.dst_node_backend,
                                         'group': str(self.group)})
         self.tasks.append(task)
 
@@ -183,7 +181,7 @@ class MoveJob(Job):
                       if self.GROUP_FILE_PATH else
                       '')
 
-        params = {'node': self.src_node,
+        params = {'node_backend': self.src_node_backend,
                   'group': str(self.group),
                   'group_file_marker': self.marker_format(group_file_marker),
                   'remove_group_file': group_file}
@@ -218,7 +216,7 @@ class MoveJob(Job):
 
         task = MinionCmdTask.new(host=self.src_host,
                                  cmd=reconfigure_cmd,
-                                 params={'node': self.src_node})
+                                 params={'node_backend': self.src_node_backend})
 
         self.tasks.append(task)
 
@@ -227,7 +225,7 @@ class MoveJob(Job):
 
         task = MinionCmdTask.new(host=self.dst_host,
                                  cmd=reconfigure_cmd,
-                                 params={'node': self.dst_node})
+                                 params={'node_backend': self.dst_node_backend})
 
         self.tasks.append(task)
 
@@ -235,7 +233,7 @@ class MoveJob(Job):
             self.dst_host, self.dst_port, self.dst_family, self.dst_backend_id])
         task = MinionCmdTask.new(host=self.dst_host,
                                  cmd=start_cmd,
-                                 params={'node': self.dst_node})
+                                 params={'node_backend': self.dst_node_backend})
         self.tasks.append(task)
 
         task = HistoryRemoveNodeTask.new(group=self.group,
