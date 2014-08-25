@@ -1,3 +1,10 @@
+mastermind (2.9.4) lucid; urgency=low
+
+  * Cache handlers turned back on
+  * Using only necessary monitor stat categories
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 25 Aug 2014 11:01:18 +0400
+
 mastermind (2.9.3) lucid; urgency=low
 
   * Fix for mixing old and new history records
