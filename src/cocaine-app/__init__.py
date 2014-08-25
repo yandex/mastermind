@@ -186,7 +186,7 @@ def init_job_processor(minions):
     return j
 
 
-# init_cache()
+init_cache()
 init_infrastructure()
 init_node_info_updater()
 init_statistics()
