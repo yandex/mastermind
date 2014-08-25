@@ -72,7 +72,7 @@ class Repositary(object):
         return len(self.elements)
 
 
-class NewNodeStat(object):
+class NodeStat(object):
     def __init__(self, raw_stat=None, prev=None):
         if raw_stat:
             self.init(raw_stat, prev)
@@ -85,7 +85,7 @@ class NewNodeStat(object):
         self.load_average = float(raw_stat['procfs']['vm']['la'][0]) / 100
 
     def __add__(self, other):
-        res = NewNodeStat()
+        res = NodeStat()
 
         res.ts = min(self.ts, other.ts)
         res.load_average = max(self.load_average, other.load_average)
@@ -93,7 +93,7 @@ class NewNodeStat(object):
         return res
 
     def __mul__(self, other):
-        res = NewNodeStat()
+        res = NodeStat()
         res.ts = min(self.ts, other.ts)
         res.load_average = max(self.load_average, other.load_average)
 
@@ -294,7 +294,7 @@ class Node(object):
         self.stat = None
 
     def update_statistics(self, new_stat):
-        self.stat = NewNodeStat(new_stat, self.stat)
+        self.stat = NodeStat(new_stat, self.stat)
 
     def __repr__(self):
         return '<Node object: host={host}, port={port}>'.format(
