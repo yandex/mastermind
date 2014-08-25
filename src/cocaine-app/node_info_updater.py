@@ -47,9 +47,6 @@ class NodeInfoUpdater(object):
     def execute_tasks(self, delayed):
         try:
 
-            # stat = getattr(self.__session, 'stat_log_count',
-            #                self.__session.stat_log)
-            # storage.update_statistics(stat())
             self.monitor_stats()
 
             if delayed:

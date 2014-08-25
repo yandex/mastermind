@@ -757,49 +757,6 @@ node_backends = Repositary(NodeBackend)
 couples = Repositary(Couple)
 
 
-def update_statistics(stats):
-
-    for stat in stats.get():
-        address = '{0}:{1}'.format(stat.address.host, stat.address.port)
-        logger.info('Stats: %s %s' % (str(stat.group_id), address))
-
-        try:
-            gid = stat.group_id
-
-            if not address in nodes:
-                # addr = address.split(':')
-                if not stat.address.host in hosts:
-                    host = hosts.add(stat.address.host)
-                    logger.debug('Adding host %s' % (stat.address.host))
-                else:
-                    host = hosts[stat.address.host]
-
-                nodes.add(host, stat.address.port, stat.address.family)
-
-            if not gid in groups:
-                group = groups.add(gid)
-                logger.debug('Adding group %d' % gid)
-            else:
-                group = groups[gid]
-
-            logger.info('Stats for node %s' % gid)
-
-            node = nodes[address]
-
-            if not node in group.nodes:
-                group.add_node(node)
-                logger.debug('Adding node %d -> %s:%s' %
-                              (gid, node.host.addr, node.port))
-
-            logger.info('Updating statistics for node %s' % (str(node)))
-            node.update_statistics(stat.statistics.counters)
-            logger.info('Updating status for group %d' % gid)
-            groups[gid].update_status()
-
-        except Exception as e:
-            logger.error('Unable to process statictics for node %s group_id %d (%s): %s' % (address, gid, e, traceback.format_exc()))
-
-
 '''
 h = hosts.add('95.108.228.31')
 g = groups.add(1)
