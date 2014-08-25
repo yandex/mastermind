@@ -108,6 +108,8 @@ class NodeInfoUpdater(object):
             self.__tq.hurry('load_nodes')
         return True
 
+    MONITOR_STAT_CATEGORIES = (elliptics.monitor_stat_categories.procfs |
+                               elliptics.monitor_stat_categories.backend)
     def monitor_stats(self):
         hosts_id = {}
         for r in self.__session.routes.get_unique_routes():
@@ -120,7 +122,8 @@ class NodeInfoUpdater(object):
             session.set_direct_id(address)
             logger.debug('Request for monitor_stat of node {0}'.format(
                 address))
-            requests.append((session.monitor_stat(address), address))
+            requests.append((session.monitor_stat(address,
+                self.MONITOR_STAT_CATEGORIES), address))
 
         for result, address in requests:
             try:
