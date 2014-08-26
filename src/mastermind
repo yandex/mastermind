@@ -30,10 +30,10 @@ host_param = ['h',
                                      port=SERVICE_DEFAULT_PORT),
               'Mastermind application host[:port]']
 
-app_param = ['a',
+app_param = ('a',
              'app',
              '{app}'.format(app=SERVICE_APP_NAME),
-             'Mastermind application name']
+             'Mastermind application name')
 
 
 def logger_setup():
@@ -1156,7 +1156,7 @@ def print_group(group):
     print '-' * 30
 
 
-d = Dispatcher()
+d = Dispatcher(globaloptions=(app_param,))
 d.nest('group', groupDispatcher, 'Perform group action')
 d.nest('couple', coupleDispatcher, 'Perform couple action')
 d.nest('ns', nsDispatcher, 'Perform namespace action')
