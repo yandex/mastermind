@@ -1,3 +1,9 @@
+mastermind (2.9.7) lucid; urgency=low
+
+  * Fix for jobs processor logs messages
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 26 Aug 2014 19:40:37 +0400
+
 mastermind (2.9.6) lucid; urgency=low
 
   * Manual move job creation: checking uncoupled group dc
