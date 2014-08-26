@@ -75,7 +75,7 @@ class Job(object):
         self.error_msg = data.get('error_msg', [])
 
         with self.__tasklist_lock:
-            self.tasks = [TaskFactory.make_task(task_data) for task_data in data['tasks']]
+            self.tasks = [TaskFactory.make_task(task_data, self) for task_data in data['tasks']]
 
         for param in self.PARAMS:
             val = data.get(param, None)
@@ -255,13 +255,14 @@ class Task(object):
     STATUS_SKIPPED = 'skipped'
     STATUS_COMPLETED = 'completed'
 
-    def __init__(self):
+    def __init__(self, job):
         self.status = self.STATUS_QUEUED
         self.id = uuid.uuid4().hex
         self.type = None
         self.start_ts = None
         self.finish_ts = None
         self.error_msg = []
+        self.parent_job = job
 
     @classmethod
     def new(cls, **kwargs):
@@ -271,8 +272,8 @@ class Task(object):
         return task
 
     @classmethod
-    def from_data(cls, data):
-        task = cls()
+    def from_data(cls, data, job):
+        task = cls(job)
         task.load(data)
         return task
 
@@ -314,8 +315,8 @@ class MinionCmdTask(Task):
     PARAMS = ('group', 'host', 'cmd', 'params', 'minion_cmd_id')
     TASK_TIMEOUT = 600
 
-    def __init__(self):
-        super(MinionCmdTask, self).__init__()
+    def __init__(self, job):
+        super(MinionCmdTask, self).__init__(job)
         self.minion_cmd = None
         self.minion_cmd_id = None
         self.type = TaskFactory.TYPE_MINION_CMD
@@ -323,18 +324,19 @@ class MinionCmdTask(Task):
     def update_status(self, minions):
         try:
             self.minion_cmd = minions.get_command([self.minion_cmd_id])
-            logger.debug('Task {0}, minion command status was updated: {1}'.format(
-                self.id, self.minion_cmd))
+            logger.debug('Job {0}, task {1}, minion command status was updated: {2}'.format(
+                self.parent_job.id, self.id, self.minion_cmd))
         except ValueError:
-            logger.warn('Task {0}, minion command status {1} is not fetched '
-                'from minions'.format(self.id, self.minion_cmd_id))
+            logger.warn('Job {0}, task {1}, minion command status {2} is not fetched '
+                'from minions'.format(self.parent_job.id, self.id, self.minion_cmd_id))
             pass
 
     def execute(self, minions):
         minion_response = minions.execute_cmd([self.host,
             self.cmd, self.params])
         self.minion_cmd = minion_response.values()[0]
-        logger.info('Task {0}, minions task execution: {1}'.format(self.id, self.minion_cmd))
+        logger.info('Job {0}, task {1}, minions task execution: {2}'.format(
+            self.parent_job.id, self.id, self.minion_cmd))
         self.minion_cmd_id = self.minion_cmd['uid']
 
     def human_dump(self):
@@ -360,16 +362,16 @@ class NodeStopTask(MinionCmdTask):
 
     PARAMS = MinionCmdTask.PARAMS + ('uncoupled',)
 
-    def __init__(self):
-        super(NodeStopTask, self).__init__()
+    def __init__(self, job):
+        super(NodeStopTask, self).__init__(job)
         self.type = TaskFactory.TYPE_NODE_STOP_TASK
 
     def execute(self, minions):
 
         if self.group:
             # checking if task still applicable
-            logger.info('Task {0}: checking group {1} and host {2} '
-                'consistency'.format(self, self.group, self.host))
+            logger.info('Job {0}, task {1}: checking group {2} and host {3} '
+                'consistency'.format(self.parent_job.id, self.id, self.group, self.host))
 
             if not self.group in storage.groups:
                 raise JobBrokenError('Group {0} is not found'.format(self.group))
@@ -401,8 +403,8 @@ class HistoryRemoveNodeTask(Task):
     PARAMS = ('group', 'host', 'port', 'backend_id')
     TASK_TIMEOUT = 600
 
-    def __init__(self):
-        super(HistoryRemoveNodeTask, self).__init__()
+    def __init__(self, job):
+        super(HistoryRemoveNodeTask, self).__init__(job)
         self.type = TaskFactory.TYPE_HISTORY_REMOVE_NODE
 
     def update_status(self):
@@ -418,16 +420,21 @@ class HistoryRemoveNodeTask(Task):
             # TODO: Think about changing ValueError to some dedicated exception
             # to differentiate between event when there is no such node in group
             # and an actual ValueError being raised
-            logger.error('Failed to execute {0}: {1}'.format(str(self), e))
+            logger.error('Job {0}, task {1}: failed to execute {2}: {3}'.format(
+                self.parent_job.id, self.id, str(self), e))
             pass
 
         nb_str = '{0}:{1}/{2}'.format(self.host, self.port, self.backend_id).encode('utf-8')
         node_backend = nb_str in storage.node_backends and storage.node_backends[nb_str] or None
         if node_backend and node_backend in group.node_backends:
-            logger.info('Removing node backend {0} from group {1} node backends'.format(node_backend, group))
+            logger.info('Job {0}, task {1}: removing node backend {2} '
+                'from group {3} node backends'.format(
+                    self.parent_job.id, self.id, node_backend, group))
             group.remove_node_backend(node_backend)
             group.update_status_recursive()
-            logger.info('Removed node backend {0} from group {1} node backends'.format(node_backend, group))
+            logger.info('Job {0}, task {1}: removed node backend {2} '
+                'from group {3} node backends'.format(
+                    self.parent_job.id, self.id, node_backend, group))
 
     def human_dump(self):
         data = super(HistoryRemoveNodeTask, self).human_dump()
@@ -447,19 +454,24 @@ class HistoryRemoveNodeTask(Task):
     def __node_in_group(self):
         group = storage.groups[self.group]
         node_backend = '{0}:{1}/{2}'.format(self.host, self.port, self.backend_id).encode('utf-8')
-        logger.debug('Checking node backend {0} with group {1} node backends: {2}'.format(
-            node_backend, group, group.node_backends))
+        logger.debug('Job {0}, task {1}: checking node backend {2} '
+            'with group {3} node backends: {4}'.format(
+                self.parent_job.id, self.id, node_backend, group, group.node_backends))
         nb_in_group = group.has_node_backend(node_backend)
 
         nb_in_history = infrastructure.node_backend_in_last_history_state(
             group.group_id, self.host, self.port, self.backend_id)
-        logger.debug('Checking node backend {0} in group {1} history set: {2}'.format(
-            node_backend, group.group_id, nb_in_history))
+        logger.debug('Job {0}, task {1}: checking node backend {2} '
+            'in group {3} history set: {4}'.format(
+                self.parent_job.id, self.id, node_backend, group.group_id, nb_in_history))
 
         if nb_in_group:
-            logger.info('Node backend {0} is still in group {1}'.format(node_backend, group))
+            logger.info('Job {0}, task {1}: node backend {2} is still '
+                'in group {3}'.format(self.parent_job.id, self.id, node_backend, group))
         if nb_in_history:
-            logger.info('Node backend {0} is still in group\'s {1} history'.format(node_backend, group))
+            logger.info('Job {0}, task {1}: node backend {2} is still '
+                'in group\'s {3} history'.format(
+                    self.parent_job.id, self.id, node_backend, group))
 
         return nb_in_group or nb_in_history
 
@@ -487,14 +499,14 @@ class TaskFactory(object):
     TYPE_HISTORY_REMOVE_NODE = 'history_remove_node'
 
     @classmethod
-    def make_task(cls, data):
+    def make_task(cls, data, job):
         task_type = data.get('type', None)
         if task_type == cls.TYPE_NODE_STOP_TASK:
-            return NodeStopTask.from_data(data)
+            return NodeStopTask.from_data(data, job)
         if task_type == cls.TYPE_MINION_CMD:
-            return MinionCmdTask.from_data(data)
+            return MinionCmdTask.from_data(data, job)
         if task_type == cls.TYPE_HISTORY_REMOVE_NODE:
-            return HistoryRemoveNodeTask.from_data(data)
+            return HistoryRemoveNodeTask.from_data(data, job)
         raise ValueError('Unknown task type {0}'.format(task_type))
 
 
@@ -527,7 +539,7 @@ class JobProcessor(object):
         job_data = json.loads(job_rawdata)
         if not job_data['id'] in self.jobs:
             job = self.jobs[job_data['id']] = JobFactory.make_job(job_data)
-            logger.info('Job loaded from job index: {0}'.format(job.id))
+            logger.info('Job {0}: loaded from job index'.format(job.id))
         else:
             # TODO: Think about other ways of updating job
             job = self.jobs[job_data['id']].load(job_data)
@@ -595,7 +607,7 @@ class JobProcessor(object):
         logger.debug('Job {0}, processing started: {1}'.format(job.id, job.dump()))
 
         if all([task.status == Task.STATUS_QUEUED for task in job.tasks]):
-            logger.info('Setting job {0} start time'.format(job.id))
+            logger.info('Job {0}: setting job start time'.format(job.id))
             job.start_ts = time.time()
 
         for task in job.tasks:
@@ -606,7 +618,7 @@ class JobProcessor(object):
                 try:
                     self.__update_task_status(task)
                 except Exception as e:
-                    logger.error('Job {0}, failed to update task {1} status: '
+                    logger.error('Job {0}, task {1}: failed to update status: '
                         '{2}\n{3}'.format(job.id, task, e, traceback.format_exc()))
                     task.error_msg.append(str(e))
                     task.status = Task.STATUS_FAILED
@@ -644,7 +656,7 @@ class JobProcessor(object):
                     task.status = Task.STATUS_EXECUTING
                     job.status = Job.STATUS_EXECUTING
                 except JobBrokenError as e:
-                    logger.error('Job {0}, cannot execute task {1}, '
+                    logger.error('Job {0}, task {1}: cannot execute task, '
                         'not applicable for current storage state: {2}'.format(
                             job.id, task, e))
                     task.status = Task.STATUS_FAILED
@@ -655,7 +667,7 @@ class JobProcessor(object):
                     })
                     job.finish_ts = time.time()
                 except Exception as e:
-                    logger.error('Job {0}, failed to execute task {1}: {2}\n{3}'.format(
+                    logger.error('Job {0}, task {1}: failed to execute: {2}\n{3}'.format(
                         job.id, task, e, traceback.format_exc()))
                     task.status = Task.STATUS_FAILED
                     job.status = Job.STATUS_PENDING
