@@ -46,6 +46,10 @@ class Infrastructure(object):
                         '"rsync://{user}@{src_host}/{module}/{src_path}data*" '
                         '"{dst_path}"')
 
+    HISTORY_RECORD_AUTOMATIC = 'automatic'
+    HISTORY_RECORD_MANUAL = 'manual'
+    HISTORY_RECORD_JOB = 'job'
+
     def __init__(self):
 
         # actual init happens in 'init' method
@@ -105,9 +109,11 @@ class Infrastructure(object):
                 else:
                     nb_list.append(node)
 
-            nodes_history.append({'set': nb_list,
-                                  'timestamp': node_set['timestamp'],
-                                  'manual': node_set.get('manual', False)})
+            nodes_history.append(
+                {'set': nb_list,
+                 'timestamp': node_set['timestamp'],
+                 'type': self.__node_state_type(node_set)
+                })
         return {'couples': couples_history,
                 'nodes': nodes_history}
 
@@ -139,6 +145,12 @@ class Infrastructure(object):
                 config.get('infrastructure_sync_period', 60),
                 self._sync_state)
 
+    @classmethod
+    def __node_state_type(cls, node_state):
+        return node_state.get('type',
+            node_state.get('manual', False) and cls.HISTORY_RECORD_MANUAL or
+                cls.HISTORY_RECORD_AUTOMATIC)
+
     def __do_sync_state(self):
         group_ids = set()
         with self.__state_lock:
@@ -160,7 +172,7 @@ class Infrastructure(object):
                         if nodes_state['timestamp'] <= self.state[state_group['id']]['nodes'][-1]['timestamp']:
                             break
 
-                        if nodes_state.get('manual', False):
+                        if self.__node_state_type(node_state) != self.HISTORY_RECORD_AUTOMATIC:
                             nodes_set = set(nodes_state['set'])
                             for nb in group.node_backends:
                                 if not (nb.node.host.addr, nb.node.port, nb.backend_id, nb.base_path) in nodes_set:
@@ -328,13 +340,12 @@ class Infrastructure(object):
         del settings['namespace']
         self.ns_settings[namespace] = settings
 
-    def _update_group(self, group_id, new_nodes=None, new_couple=None, manual=False):
+    def _update_group(self, group_id, new_nodes=None, new_couple=None, record_type=None):
         group = self.state[group_id]
         if new_nodes is not None:
             new_nodes_state = {'set': new_nodes,
                                'timestamp': time.time()}
-            if manual:
-                new_nodes_state['manual'] = True
+            new_nodes_state['type'] = record_type or self.HISTORY_RECORD_AUTOMATIC
 
             group['nodes'].append(new_nodes_state)
 
@@ -348,7 +359,7 @@ class Infrastructure(object):
         self.meta_session.update_indexes(eid, [keys.MM_GROUPS_IDX],
                                               [self._serialize(group)])
 
-    def detach_node(self, group, host, port, backend_id):
+    def detach_node(self, group, host, port, backend_id, record_type=None):
         with self.__state_lock:
             group_state = self.state[group.group_id]
             state_nodes = list(group_state['nodes'][-1]['set'][:])
@@ -368,7 +379,7 @@ class Infrastructure(object):
                 raise ValueError('Node backend {0}:{1}/{2} not found in '
                     'group {3} history state'.format(host, port, backend_id, group.group_id))
 
-            self._update_group(group.group_id, state_nodes, None, manual=True)
+            self._update_group(group.group_id, state_nodes, None, record_type=record_type or self.HISTORY_RECORD_MANUAL)
 
 
     def restore_group_cmd(self, request):

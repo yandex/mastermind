@@ -415,7 +415,8 @@ class HistoryRemoveNodeTask(Task):
         self.id = uuid.uuid4().hex
         group = storage.groups[self.group]
         try:
-            infrastructure.detach_node(group, self.host, self.port, self.backend_id)
+            infrastructure.detach_node(group, self.host, self.port, self.backend_id,
+                infrastructure.HISTORY_RECORD_JOB)
         except ValueError as e:
             # TODO: Think about changing ValueError to some dedicated exception
             # to differentiate between event when there is no such node in group
@@ -614,7 +615,7 @@ class JobProcessor(object):
             if task.status == Task.STATUS_EXECUTING:
 
                 logger.info('Job {0}, task {1} status update'.format(
-                    job.id, task))
+                    job.id, task.id))
                 try:
                     self.__update_task_status(task)
                 except Exception as e:
@@ -628,7 +629,7 @@ class JobProcessor(object):
 
                 if not task.finished:
                     logger.debug('Job {0}, task {1} is not finished'.format(
-                        job.id, task))
+                        job.id, task.id))
                     break
 
                 task.finish_ts = time.time()
@@ -638,7 +639,7 @@ class JobProcessor(object):
                                Task.STATUS_COMPLETED)
 
                 logger.debug('Job {0}, task {1} is finished, status {2}'.format(
-                    job.id, task, task.status))
+                    job.id, task.id, task.status))
 
                 if task.status == Task.STATUS_FAILED:
                     job.status = Job.STATUS_PENDING
@@ -652,7 +653,7 @@ class JobProcessor(object):
                     logger.info('Job {0}, executing new task {1}'.format(job.id, task))
                     self.__execute_task(task)
                     logger.info('Job {0}, task {1} execution was successfully requested'.format(
-                        job.id, task))
+                        job.id, task.id))
                     task.status = Task.STATUS_EXECUTING
                     job.status = Job.STATUS_EXECUTING
                 except JobBrokenError as e:
