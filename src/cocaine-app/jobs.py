@@ -161,7 +161,8 @@ class MoveJob(Job):
 
         shutdown_cmd = infrastructure.disable_node_backend_cmd([
             self.dst_host, self.dst_port, self.dst_family, self.dst_backend_id])
-        task = NodeStopTask.new(group=self.uncoupled_group,
+        task = NodeStopTask.new(self,
+                                group=self.uncoupled_group,
                                 uncoupled=True,
                                 host=self.dst_host,
                                 cmd=shutdown_cmd,
@@ -191,7 +192,8 @@ class MoveJob(Job):
             params['move_dst'] = os.path.join(
                 self.src_base_path, self.GROUP_FILE_DIR_MOVE_DST)
 
-        task = NodeStopTask.new(group=self.group,
+        task = NodeStopTask.new(self,
+                                group=self.group,
                                 host=self.src_host,
                                 cmd=shutdown_cmd,
                                 params=params)
@@ -205,7 +207,8 @@ class MoveJob(Job):
                       if self.GROUP_FILE_PATH else
                       '')
 
-        task = MinionCmdTask.new(host=self.dst_host,
+        task = MinionCmdTask.new(self,
+                                 host=self.dst_host,
                                  cmd=move_cmd,
                                  params={'group': str(self.group),
                                          'group_file': group_file})
@@ -214,7 +217,8 @@ class MoveJob(Job):
         reconfigure_cmd = infrastructure.reconfigure_node_cmd(
             [self.src_host, self.src_port, self.src_family])
 
-        task = MinionCmdTask.new(host=self.src_host,
+        task = MinionCmdTask.new(self,
+                                 host=self.src_host,
                                  cmd=reconfigure_cmd,
                                  params={'node_backend': self.src_node_backend})
 
@@ -223,7 +227,8 @@ class MoveJob(Job):
         reconfigure_cmd = infrastructure.reconfigure_node_cmd(
             [self.dst_host, self.dst_port, self.dst_family])
 
-        task = MinionCmdTask.new(host=self.dst_host,
+        task = MinionCmdTask.new(self,
+                                 host=self.dst_host,
                                  cmd=reconfigure_cmd,
                                  params={'node_backend': self.dst_node_backend})
 
@@ -231,12 +236,14 @@ class MoveJob(Job):
 
         start_cmd = infrastructure.enable_node_backend_cmd([
             self.dst_host, self.dst_port, self.dst_family, self.dst_backend_id])
-        task = MinionCmdTask.new(host=self.dst_host,
+        task = MinionCmdTask.new(self,
+                                 host=self.dst_host,
                                  cmd=start_cmd,
                                  params={'node_backend': self.dst_node_backend})
         self.tasks.append(task)
 
-        task = HistoryRemoveNodeTask.new(group=self.group,
+        task = HistoryRemoveNodeTask.new(self,
+                                         group=self.group,
                                          host=self.src_host,
                                          port=self.src_port,
                                          backend_id=self.src_backend_id)
@@ -265,8 +272,8 @@ class Task(object):
         self.parent_job = job
 
     @classmethod
-    def new(cls, **kwargs):
-        task = cls()
+    def new(cls, job, **kwargs):
+        task = cls(job)
         for param in cls.PARAMS:
             setattr(task, param, kwargs.get(param, None))
         return task
