@@ -355,7 +355,7 @@ class MinionCmdTask(Task):
     def finished(self):
         return ((self.minion_cmd is None and
                  time.time() - self.start_ts > self.TASK_TIMEOUT) or
-                self.minion_cmd['progress'] == 1.0)
+                (self.minion_cmd and self.minion_cmd['progress'] == 1.0))
 
     @property
     def failed(self):
