@@ -1,3 +1,9 @@
+mastermind (2.9.9) lucid; urgency=low
+
+  * Tasks fixes
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 28 Aug 2014 13:55:09 +0400
+
 mastermind (2.9.8) lucid; urgency=low
 
   * Jobs fixes
