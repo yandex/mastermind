@@ -94,12 +94,12 @@ class Smoother(object):
                         src_dc_cnt = infrastructure.get_dc_by_host(src_group.node_backends[0].node.host.addr)
                         dst_dc_cnt = infrastructure.get_dc_by_host(dst_group.node_backends[0].node.host.addr)
 
-                        assert (src_dc_cnt == src_dc,
+                        assert src_dc_cnt == src_dc, \
                             'Dc for src group {0} has been changed: {1} != {2}'.format(
-                                src_group.group_id, src_dc_cnt, src_dc))
-                        assert (dst_dc_cnt == dst_dc,
+                                src_group.group_id, src_dc_cnt, src_dc)
+                        assert dst_dc_cnt == dst_dc, \
                             'Dc for dst group {0} has been changed: {1} != {2}'.format(
-                                dst_group.group_id, dst_dc_cnt, dst_dc))
+                                dst_group.group_id, dst_dc_cnt, dst_dc)
 
                         logger.info('Group {0} ({1}) moves to {2} ({3})'.format(
                             src_group.group_id, src_dc,
