@@ -1,3 +1,10 @@
+mastermind (2.9.10) lucid; urgency=low
+
+  * Fix for fetching the list of all namespaces when there are broken couples
+  * Support of new elliptics 26 monitor stat format
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 03 Sep 2014 17:32:57 +0400
+
 mastermind (2.9.9) lucid; urgency=low
 
   * Tasks fixes
