@@ -161,7 +161,11 @@ class NodeInfoUpdater(object):
                 else:
                     node_backend = storage.node_backends[node_backend_addr]
 
-                gid = b_stat['config']['group']
+                nb_config = (b_stat['config']
+                             if 'config' in b_stat else
+                             b_stat['backend']['config'])
+
+                gid = nb_config['group']
 
                 if gid == 0:
                     # skip zero group ids
