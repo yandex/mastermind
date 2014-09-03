@@ -861,8 +861,13 @@ class Balancer(object):
         return tuple(self.__all_namespaces())
 
     def __all_namespaces(self):
-        namespaces = [c.namespace for c in storage.couples]
-        return set(filter(None, namespaces))
+        namespaces = []
+        for c in storage.couples:
+            try:
+                namespaces.append(c.namespace)
+            except ValueError:
+                pass
+        return set(namespaces)
 
 
 def handlers(b):
