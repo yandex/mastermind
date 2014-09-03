@@ -14,35 +14,35 @@ import jobs
 from sync import sync_manager
 import timed_queue
 
-logger = getLogger('mm.smoother')
+logger = getLogger('mm.planner')
 
 
 # TODO: select appropriate stat value: used_space, free_space, total_space
 
 
-class Smoother(object):
+class Planner(object):
 
     MOVE_CANDIDATES = 'move_candidates'
 
     def __init__(self, meta_session, job_processor):
 
+        self.params = config.get('planner', config.get('smoother')) or {}
+
         logger.info('draft initializing')
         self.candidates = []
         self.meta_session = meta_session
         self.job_processor = job_processor
-        self.current_plan = None
-        self.__current_plan_lock = threading.Lock()
-        self.__max_plan_length = config.get('smoother', {}).get('max_plan_length', 5)
+        self.__max_plan_length = self.params.get('max_plan_length', 5)
         self.__tq = timed_queue.TimedQueue()
         self.__tq.start()
 
-        if (config.get('smoother', {}).get('enabled', False)):
+        if (self.params.get('enabled', False)):
             self.__tq.add_task_in(self.MOVE_CANDIDATES,
                 10, self._move_candidates)
 
     def _move_candidates(self):
         try:
-            logger.info('Starting smoother planning')
+            logger.info('Starting planner')
 
             # prechecking for new or pending tasks
             if self.__executing_jobs():
@@ -53,14 +53,14 @@ class Smoother(object):
             logger.error('{0}: {1}'.format(e, traceback.format_exc()))
         finally:
             self.__tq.add_task_in(self.MOVE_CANDIDATES,
-                config.get('smoother', {}).get('generate_plan_period', 1800),
+                self.params.get('generate_plan_period', 1800),
                 self._move_candidates)
 
     def __executing_jobs(self):
         for job in self.job_processor.jobs.itervalues():
             if job.status not in (jobs.Job.STATUS_COMPLETED, jobs.Job.STATUS_CANCELLED):
-                logger.info('Smoother planer found at least one '
-                    'not finished job ({0}, status {1}'.format(job.id, job.status))
+                logger.info('Planer found at least one not finished job '
+                    '({0}, status {1}'.format(job.id, job.status))
                 return True
         return False
 

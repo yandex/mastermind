@@ -24,7 +24,7 @@ import jobs
 import cache
 import minions
 import node_info_updater
-from smoother import Smoother
+from planner import Planner
 from config import config
 
 
@@ -170,8 +170,8 @@ def init_minions():
     return m
 
 
-def init_smoother(job_processor):
-    smoother = Smoother(n.meta_session, job_processor)
+def init_planner(job_processor):
+    planner = Planner(n.meta_session, job_processor)
 
 
 def init_job_processor(minions):
@@ -192,7 +192,7 @@ init_node_info_updater()
 init_statistics()
 m = init_minions()
 j = init_job_processor(m)
-init_smoother(j)
+init_planner(j)
 
 
 for handler in balancer.handlers(b):
