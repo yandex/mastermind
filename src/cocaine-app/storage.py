@@ -338,7 +338,8 @@ class NodeBackend(object):
 
     def update_statistics(self, new_stat):
         self.stat = NodeBackendStat(self.node.stat, new_stat, self.stat)
-        self.base_path = os.path.dirname(new_stat['backend']['config']['file']) + '/'
+        self.base_path = os.path.dirname(new_stat['backend']['config'].get('data') or
+                                         new_stat['backend']['config'].get('file')) + '/'
 
     def update_status(self):
         if self.destroyed:
