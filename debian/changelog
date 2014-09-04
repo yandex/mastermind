@@ -1,3 +1,9 @@
+mastermind (2.9.11) lucid; urgency=low
+
+  * Compatible fetching eblob path from config
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 04 Sep 2014 12:42:34 +0400
+
 mastermind (2.9.10) lucid; urgency=low
 
   * Fix for fetching the list of all namespaces when there are broken couples
