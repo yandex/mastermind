@@ -245,7 +245,7 @@ class Planner(object):
         finally:
             logger.info('Updating recover dc queue finished')
             self.__tq.add_task_in(self.RECOVER_DC_QUEUE_UPDATE,
-                self.params.get('recover_dc_queue_period', 60),
+                self.params.get('recover_dc_queue_update_period', 60),
                 self._recover_dc_queue_update)
 
     def _do_sync_recover_dc_queue(self):
@@ -274,7 +274,7 @@ class Planner(object):
         finally:
             logger.info('Recover dc planner finished')
             self.__tq.add_task_in(self.RECOVER_DC,
-                self.params.get('generate_plan_period', 60),
+                self.params.get('recover_dc_period', 60),
                 self._recover_dc)
 
     def _do_recover_dc(self):
