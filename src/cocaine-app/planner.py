@@ -1,6 +1,7 @@
 from copy import copy
 import itertools
 from logging import getLogger
+import msgpack
 import storage
 import threading
 import traceback
@@ -11,6 +12,7 @@ import msgpack
 from config import config
 from infrastructure import infrastructure
 import jobs
+import keys
 from sync import sync_manager
 import timed_queue
 
@@ -23,13 +25,17 @@ logger = getLogger('mm.planner')
 class Planner(object):
 
     MOVE_CANDIDATES = 'move_candidates'
+    RECOVER_DC_QUEUE_UPDATE = 'recover_dc_queue_update'
+    RECOVER_DC = 'recover_dc'
 
     def __init__(self, meta_session, job_processor):
 
         self.params = config.get('planner', config.get('smoother')) or {}
 
-        logger.info('draft initializing')
+        logger.info('Planner initializing')
         self.candidates = []
+        self.recover_dc_queue = []
+        self._recover_dc_queue_lock = threading.Lock()
         self.meta_session = meta_session
         self.job_processor = job_processor
         self.__max_plan_length = self.params.get('max_plan_length', 5)
@@ -39,28 +45,36 @@ class Planner(object):
         if (self.params.get('enabled', False)):
             self.__tq.add_task_in(self.MOVE_CANDIDATES,
                 10, self._move_candidates)
+            self.__tq.add_task_in(self.RECOVER_DC_QUEUE_UPDATE,
+                10, self._recover_dc_queue_update)
+            self.__tq.add_task_in(self.RECOVER_DC,
+                11, self._recover_dc)
+
 
     def _move_candidates(self):
         try:
-            logger.info('Starting planner')
+            logger.info('Starting move candidates planner')
 
             # prechecking for new or pending tasks
-            if self.__executing_jobs():
+            if self.__executing_jobs(jobs.JobFactory.TYPE_MOVE_JOB):
                 return
 
             self._do_move_candidates()
         except Exception as e:
             logger.error('{0}: {1}'.format(e, traceback.format_exc()))
         finally:
+            logger.info('Move candidates planner finished')
             self.__tq.add_task_in(self.MOVE_CANDIDATES,
                 self.params.get('generate_plan_period', 1800),
                 self._move_candidates)
 
-    def __executing_jobs(self):
+    def __executing_jobs(self, job_type):
         for job in self.job_processor.jobs.itervalues():
+            if job_type != job.type:
+                continue
             if job.status not in (jobs.Job.STATUS_COMPLETED, jobs.Job.STATUS_CANCELLED):
                 logger.info('Planer found at least one not finished job '
-                    '({0}, status {1}'.format(job.id, job.status))
+                    '({0}, status {1})'.format(job.id, job.status))
                 return True
         return False
 
@@ -79,8 +93,8 @@ class Planner(object):
 
                 self.job_processor._do_update_jobs()
 
-                if self.__executing_jobs():
-                    raise ValueError('Not finished jobs are found')
+                if self.__executing_jobs(jobs.JobFactory.TYPE_MOVE_JOB):
+                    raise ValueError('Not finished move jobs are found')
 
                 for i, candidate in enumerate(candidates):
                     logger.info('Candidate {0}: data {1}, ms_error delta {2}:'.format(
@@ -143,7 +157,7 @@ class Planner(object):
 
         logger.info('Candidates: {0}, step {1}'.format(len(self.candidates[-1]), step))
 
-        tmp_candidates = self.generate_candidates(self.candidates[-1][0])
+        tmp_candidates = self._generate_candidates(self.candidates[-1][0])
 
         if not tmp_candidates:
             self.__apply_plan()
@@ -160,7 +174,7 @@ class Planner(object):
         self._do_move_candidates(step=step + 1)
 
 
-    def generate_candidates(self, candidate):
+    def _generate_candidates(self, candidate):
         _candidates = []
 
         avg = candidate.full_space_mean()
@@ -217,6 +231,131 @@ class Planner(object):
                     _candidates.append(new_candidate)
 
         return _candidates
+
+    def _recover_dc_queue_update(self):
+        try:
+            logger.info('Updating recover dc queue')
+
+            with self._recover_dc_queue_lock:
+                self._do_sync_recover_dc_queue()
+
+        except Exception as e:
+            logger.error('Failed to update recover dc queue: {0}\n{1}'.format(
+                e, traceback.format_exc()))
+        finally:
+            logger.info('Updating recover dc queue finished')
+            self.__tq.add_task_in(self.RECOVER_DC_QUEUE_UPDATE,
+                self.params.get('recover_dc_queue_period', 60),
+                self._recover_dc_queue_update)
+
+    def _do_sync_recover_dc_queue(self):
+        try:
+            self.recover_dc_queue = list(msgpack.unpackb(self.meta_session.read_data(
+                    keys.MM_PLANNER_RECOVER_DC_QUEUE).get()[0].data))
+        except elliptics.NotFoundError:
+            self.recover_dc_queue = []
+
+    def _do_update_recover_dc_queue(self):
+        self.meta_session.write_data(keys.MM_PLANNER_RECOVER_DC_QUEUE,
+            msgpack.packb(self.recover_dc_queue)).get()
+
+    def _recover_dc(self):
+        try:
+            logger.info('Starting recover dc planner')
+
+            # prechecking for new or pending tasks
+            if self.__executing_jobs(jobs.JobFactory.TYPE_RECOVER_DC_JOB):
+                logger.info('Unfinished recover dc jobs found')
+                return
+
+            self._do_recover_dc()
+        except Exception as e:
+            logger.error('{0}: {1}'.format(e, traceback.format_exc()))
+        finally:
+            logger.info('Recover dc planner finished')
+            self.__tq.add_task_in(self.RECOVER_DC,
+                self.params.get('generate_plan_period', 60),
+                self._recover_dc)
+
+    def _do_recover_dc(self):
+
+        self.job_processor._do_update_jobs()
+
+        logger.debug('Lock acquiring')
+        with sync_manager.lock(self.job_processor.JOBS_LOCK):
+            logger.debug('Lock acquired')
+
+            self.job_processor._do_update_jobs()
+
+            if self.__executing_jobs(jobs.JobFactory.TYPE_RECOVER_DC_JOB):
+                logger.info('Unfinished recover dc jobs found')
+                return
+
+            with self._recover_dc_queue_lock:
+                self._do_sync_recover_dc_queue()
+
+                if not self.recover_dc_queue:
+                    # create new recover dc queue
+                    logger.info('Recover dc queue is empty, setting it up')
+                    self.recover_dc_queue = self.__construct_recover_dc_queue()
+
+                for i in xrange(min(self.params.get('recover_dc', {}).get('jobs_batch_size', 10),
+                                    len(self.recover_dc_queue))):
+                    couple_tuple, group_id = self.recover_dc_queue.pop()
+
+                    couple_str = ':'.join((str(gid) for gid in sorted(couple_tuple)))
+                    if not couple_str in storage.couples:
+                        logger.warn('Couple {0} is not found in storage'.format(couple_str))
+                        continue
+                    couple = storage.couples[couple_str]
+                    group = storage.groups[group_id]
+
+                    # check if backend exists
+                    node_backend = group.node_backends[0]
+
+                    try:
+                        job = self.job_processor.create_job(['recover_dc_job', {
+                            'group': group.group_id,
+                            'host': node_backend.node.host.addr,
+                            'port': node_backend.node.port,
+                            'family': node_backend.node.family,
+                            'backend_id': node_backend.backend_id}])
+                        logger.info('Created recover dc job for couple {0}, '
+                            'group {1}'.format(couple, group))
+                    except Exception as e:
+                        logger.error('Failed to create recover dc job: {0}'.format(e))
+                        continue
+
+                self._do_update_recover_dc_queue()
+
+    def __construct_recover_dc_queue(self):
+        couples_to_recover = []
+        for couple in storage.couples:
+            # TODO: GOOD_STATUSES or NOT_BAD_STATUSES?
+            if couple.status not in storage.GOOD_STATUSES:
+                continue
+            group_alive_keys = {}
+            for group in couple:
+                for nb in group.node_backends:
+                    group_alive_keys.setdefault(group, 0)
+                    group_alive_keys[group] += nb.stat.files
+            alive_keys = group_alive_keys.values()
+            if all([k == alive_keys[0] for k in alive_keys]):
+                # number of keys in all groups is equal
+                continue
+            min_group = min(group_alive_keys.keys(), key=lambda k: group_alive_keys[k])
+            max_group = max(group_alive_keys.keys(), key=lambda k: group_alive_keys[k])
+            keys_diff = group_alive_keys[max_group] - group_alive_keys[min_group]
+
+            logger.info('Adding couple {0} to recover dc queue, number of keys '
+                'in groups: {1}, recover will be launched on group {2}'.format(
+                    min_group.couple.as_tuple(), alive_keys, min_group.group_id))
+
+            couples_to_recover.append((couple, min_group, keys_diff))
+
+        couples_to_recover.sort(key=lambda c: c[2])
+
+        return [(c[0].as_tuple(), c[1].group_id,) for c in couples_to_recover]
 
 
 class Delta(object):

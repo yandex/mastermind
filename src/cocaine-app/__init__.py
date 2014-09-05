@@ -129,6 +129,8 @@ def init_infrastructure():
     register_handle(infstruct.start_node_cmd)
     register_handle(infstruct.disable_node_backend_cmd)
     register_handle(infstruct.enable_node_backend_cmd)
+    register_handle(infstruct.reconfigure_node_cmd)
+    register_handle(infstruct.recover_group_cmd)
     b.set_infrastructure(infstruct)
 
 

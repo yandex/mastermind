@@ -45,6 +45,8 @@ class Infrastructure(object):
     RSYNC_MODULE_CMD = ('rsync -av --progress '
                         '"rsync://{user}@{src_host}/{module}/{src_path}data*" '
                         '"{dst_path}"')
+    DNET_RECOVERY_DC_CMD = ('dnet_recovery dc -r {host}:{port}:{family} '
+                            '-g {groups}')
 
     HISTORY_RECORD_AUTOMATIC = 'automatic'
     HISTORY_RECORD_MANUAL = 'manual'
@@ -602,6 +604,31 @@ class Infrastructure(object):
 
         logger.info('Command for reconfiguring elliptics node {0} '
             'was requested: {1}'.format(node_addr, cmd))
+
+        return cmd
+
+    def recover_group_cmd(self, request):
+
+        try:
+            group_id = int(request[0])
+            if not group_id in storage.groups:
+                raise ValueError
+        except (ValueError, TypeError):
+            raise ValueError('Group {0} is not found'.format(request[0]))
+
+        group = storage.groups[group_id]
+        if not group.couple:
+            raise ValueError('Group {0} is not coupled'.format(group_id))
+
+        node_backend = group.node_backends[0]
+        cmd = self.DNET_RECOVERY_DC_CMD.format(
+            host=node_backend.node.host.addr,
+            port=node_backend.node.port,
+            family=node_backend.node.family,
+            groups=','.join(str(g) for g in group.couple.groups))
+
+        logger.info('Command for dc recovery for group {0} '
+            'was requested: {1}'.format(group_id, cmd))
 
         return cmd
 

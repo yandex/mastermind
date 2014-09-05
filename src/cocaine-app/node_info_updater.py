@@ -28,10 +28,6 @@ COUPLES_META_UPDATE_TASK_ID = 'update_meta_for_couples'
 
 class NodeInfoUpdater(object):
 
-    STORAGE_STATE_CACHE_KEY = 'mastermind_storage'
-    STORAGE_STATE_VERSION = '1'
-    DEFAULT_STORAGE_STATE_VALID_TIME = 600
-
     def __init__(self, node):
         logger.info("Created NodeInfoUpdater")
         self.__node = node

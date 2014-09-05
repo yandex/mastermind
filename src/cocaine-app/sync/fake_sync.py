@@ -1,16 +1,14 @@
 from contextlib import contextmanager
 from threading import Lock
 
+from sync.error import LockAlreadyAcquiredError
+
 
 class SyncManager(object):
 
     def __init__(self, *args, **kwargs):
-        # self.tasks = {}
         self.locks = {}
         self.__locks_lock = Lock()
-
-    # def put(self, task):
-    #     self.tasks[task['key']] = task
 
     @contextmanager
     def lock(self, lockid):
@@ -24,3 +22,24 @@ class SyncManager(object):
             lock = self.locks.setdefault(lockid, Lock())
         with lock:
             yield
+
+    def persistent_locks_acquire(self, locks, data=''):
+        with self.__locks_lock:
+            acquired_locks = []
+            for lockid in locks:
+                lock = self.locks.setdefault(lockid, Lock())
+                if lock.locked():
+                    for alock in acquired_locks:
+                        alock.release()
+                    raise LockAlreadyAcquiredError
+                lock.acquire()
+                acquired_locks.append(lock)
+        return True
+
+    def persistent_locks_release(self, locks, check=''):
+        for lockid in locks:
+            lock = self.locks.get(lockid)
+            if lock and lock.locked():
+                return lock.release()
+            else:
+                logger.warn('Persistent lock {0} is already removed')

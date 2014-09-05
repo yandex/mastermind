@@ -15,6 +15,12 @@ import keys
 import storage
 import timed_queue
 from sync import sync_manager
+from sync.error import (
+    LockError,
+    LockFailedError,
+    LockAlreadyAcquiredError,
+    InconsistentLockError,
+)
 
 
 logger = logging.getLogger('mm.jobs')
@@ -29,6 +35,8 @@ class Job(object):
     STATUS_BROKEN = 'broken'
     STATUS_COMPLETED = 'completed'
     STATUS_CANCELLED = 'cancelled'
+
+    GROUP_LOCK_PREFIX = 'group/'
 
     COMMON_PARAMS = ('need_approving',)
 
@@ -110,6 +118,24 @@ class Job(object):
         raise RuntimeError('Job creation should be implemented '
             'in derived class')
 
+    def perform_locks(self):
+        pass
+
+    def release_locks(self):
+        pass
+
+    def complete(self):
+        self.finish_ts = time.time()
+        self.release_locks()
+
+    def add_error(self, e):
+        error_msg = e.dump()
+        error_msg['ts'] = time.time()
+        self.error_msg.append(error_msg)
+
+    def add_error_msg(self, msg):
+        self.error_msg.append({'ts': time.time(), 'msg': msg})
+
 
 class MoveJob(Job):
 
@@ -118,7 +144,6 @@ class MoveJob(Job):
 
     # used to mark source node that content has been moved away from it
     GROUP_FILE_MARKER_PATH = config.get('restore', {}).get('group_file_marker', None)
-
     GROUP_FILE_DIR_MOVE_DST = config.get('restore', {}).get('group_file_dir_move_dst', None)
 
     PARAMS = ('group', 'uncoupled_group',
@@ -248,6 +273,74 @@ class MoveJob(Job):
                                          port=self.src_port,
                                          backend_id=self.src_backend_id)
         self.tasks.append(task)
+
+    def perform_locks(self):
+        locks = ['{0}{1}'.format(self.GROUP_LOCK_PREFIX, group)
+                 for group in (self.group, self.uncoupled_group)]
+        try:
+            sync_manager.persistent_locks_acquire(locks, self.id)
+        except LockAlreadyAcquiredError as e:
+            logger.error('Job {0}: some of the groups is already '
+                'being processed by job {1}'.format(self.id, e.holder_id))
+            self.add_error(e)
+            raise
+
+    def release_locks(self):
+        locks = ['{0}{1}'.format(self.GROUP_LOCK_PREFIX, group)
+                 for group in (self.group, self.uncoupled_group)]
+        try:
+            sync_manager.persistent_locks_release(locks, self.id)
+        except InconsistentLockError as e:
+            logger.error('Job {0}: lock for some job groups is already '
+                'acquired by another job {1}'.format(self.id, e.holder_id))
+            pass
+
+
+class RecoverDcJob(Job):
+
+    PARAMS = ('group', 'host', 'port', 'family', 'backend_id')
+
+    def __init__(self, **kwargs):
+        super(RecoverDcJob, self).__init__(**kwargs)
+        self.type = JobFactory.TYPE_RECOVER_DC_JOB
+
+    @property
+    def node_backend(self):
+        return '{0}:{1}/{2}'.format(self.host, self.port, self.backend_id).encode('utf-8')
+
+    def human_dump(self):
+        data = super(RecoverDcJob, self).human_dump()
+        data['hostname'] = infrastructure.get_hostname_by_addr(data['host'])
+        return data
+
+    def create_tasks(self):
+        recover_cmd = infrastructure.recover_group_cmd([self.group])
+        task = RecoverGroupDcTask.new(self,
+                                group=self.group,
+                                host=self.host,
+                                cmd=recover_cmd,
+                                params={'node_backend': self.node_backend,
+                                        'group': str(self.group)})
+        self.tasks.append(task)
+
+    def perform_locks(self):
+        try:
+            sync_manager.persistent_locks_acquire(
+                ['{0}{1}'.format(self.GROUP_LOCK_PREFIX, self.group)], self.id)
+        except LockAlreadyAcquiredError as e:
+            logger.error('Job {0}: group {1} is already '
+                'being processed by job {2}'.format(self.id, self.group, e.holder_id))
+            self.add_error(e)
+            raise
+
+    def release_locks(self):
+        try:
+            sync_manager.persistent_locks_release(
+                ['{0}{1}'.format(self.GROUP_LOCK_PREFIX, self.group)], self.id)
+        except InconsistentLockError as e:
+            logger.error('Job {0}: lock for group {1} is already acquired by another '
+                'job {2}'.format(self.id, self.group, e.holder_id))
+            pass
 
 
 class JobBrokenError(Exception):
@@ -405,6 +498,49 @@ class NodeStopTask(MinionCmdTask):
         super(NodeStopTask, self).execute(minions)
 
 
+class RecoverGroupDcTask(MinionCmdTask):
+
+    PARAMS = MinionCmdTask.PARAMS + ('couple',)
+
+    def __init__(self, job):
+        super(RecoverGroupDcTask, self).__init__(job)
+        self.type = TaskFactory.TYPE_RECOVER_DC_GROUP_TASK
+
+    @classmethod
+    def new(cls, job, **kwargs):
+        task = super(RecoverGroupDcTask, cls).new(job, **kwargs)
+        task.check(task.group)
+        task.couple = storage.groups[task.group].couple.as_tuple()
+        return task
+
+    def check(self, group_id):
+        if not group_id in storage.groups:
+            raise JobBrokenError('Group {0} is not found'.format(group_id))
+
+        group = storage.groups[group_id]
+
+        if group.status != storage.Status.COUPLED:
+            raise JobBrokenError('Task {0}: group {1} has status {2}, '
+                'should be {3}'.format(self, self.group,
+                                       group.status, storage.Status.COUPLED))
+
+    def execute(self, minions):
+
+        # checking if task still applicable
+        logger.info('Job {0}, task {1}: checking group {2} and couple {3} '
+            'consistency'.format(self.parent_job.id, self.id, self.group, self.couple))
+
+        self.check(self.group)
+        group = storage.groups[self.group]
+
+        if set(self.couple) != set(group.couple.as_tuple()):
+            raise JobBrokenError('Task {0}: group {1} has changed couple to {2}, '
+                'expected {3}'.format(self, self.group,
+                                       group.couple, self.couple))
+
+        super(RecoverGroupDcTask, self).execute(minions)
+
+
 class HistoryRemoveNodeTask(Task):
 
     PARAMS = ('group', 'host', 'port', 'backend_id')
@@ -491,12 +627,15 @@ class HistoryRemoveNodeTask(Task):
 class JobFactory(object):
 
     TYPE_MOVE_JOB = 'move_job'
+    TYPE_RECOVER_DC_JOB = 'recover_dc_job'
 
     @classmethod
     def make_job(cls, data):
         job_type = data.get('type', None)
         if job_type == cls.TYPE_MOVE_JOB:
             return MoveJob.from_data(data)
+        elif job_type == cls.TYPE_RECOVER_DC_JOB:
+            return RecoverDcJob.from_data(data)
         raise ValueError('Unknown job type {0}'.format(job_type))
 
 
@@ -504,6 +643,7 @@ class TaskFactory(object):
 
     TYPE_MINION_CMD = 'minion_cmd'
     TYPE_NODE_STOP_TASK = 'node_stop_task'
+    TYPE_RECOVER_DC_GROUP_TASK = 'recover_dc_group_task'
     TYPE_HISTORY_REMOVE_NODE = 'history_remove_node'
 
     @classmethod
@@ -515,6 +655,8 @@ class TaskFactory(object):
             return MinionCmdTask.from_data(data, job)
         if task_type == cls.TYPE_HISTORY_REMOVE_NODE:
             return HistoryRemoveNodeTask.from_data(data, job)
+        if task_type == cls.TYPE_RECOVER_DC_GROUP_TASK:
+            return RecoverGroupDcTask.from_data(data, job)
         raise ValueError('Unknown task type {0}'.format(task_type))
 
 
@@ -524,7 +666,7 @@ class JobProcessor(object):
     JOBS_UPDATE = 'jobs_update'
     JOBS_LOCK = 'jobs'
 
-    MAX_EXECUTING_JOBS = config.get('jobs', {}).get('max_executing_jobs', 2)
+    MAX_EXECUTING_JOBS = config.get('jobs', {}).get('max_executing_jobs', 3)
 
     def __init__(self, meta_session, minions):
         logger.info('Starting JobProcessor')
@@ -669,10 +811,7 @@ class JobProcessor(object):
                             job.id, task, e))
                     task.status = Task.STATUS_FAILED
                     job.status = Job.STATUS_BROKEN
-                    job.error_msg.append({
-                        'ts': time.time(),
-                        'msg': str(e)
-                    })
+                    job.add_error_msg(str(e))
                     job.finish_ts = time.time()
                 except Exception as e:
                     logger.error('Job {0}, task {1}: failed to execute: {2}\n{3}'.format(
@@ -686,7 +825,7 @@ class JobProcessor(object):
                 for task in job.tasks]):
             logger.info('Job {0}, tasks processing is finished'.format(job.id))
             job.status = Job.STATUS_COMPLETED
-            job.finish_ts = time.time()
+            job.complete()
 
     def __update_task_status(self, task):
         if isinstance(task, MinionCmdTask):
@@ -721,7 +860,7 @@ class JobProcessor(object):
             except IndexError:
                 raise ValueError('Job type is required')
 
-            if job_type not in (JobFactory.TYPE_MOVE_JOB,):
+            if job_type not in (JobFactory.TYPE_MOVE_JOB, JobFactory.TYPE_RECOVER_DC_JOB):
                 raise ValueError('Invalid job type: {0}'.format(job_type))
 
             try:
@@ -734,6 +873,8 @@ class JobProcessor(object):
 
             if job_type == JobFactory.TYPE_MOVE_JOB:
                 JobType = MoveJob
+            elif job_type == JobFactory.TYPE_RECOVER_DC_JOB:
+                JobType = RecoverDcJob
             job = JobType.new(**params)
             job.create_tasks()
 
@@ -750,8 +891,20 @@ class JobProcessor(object):
         return job.dump()
 
     def get_job_list(self, request):
-        return [job.human_dump() for job in sorted(self.jobs.itervalues(),
-            key=lambda j: (j.finish_ts, j.start_ts))]
+        try:
+            options = request[0]
+        except TypeError:
+            options = {}
+
+        def job_filter(j):
+            if options.get('job_type', None) and j.type != options['job_type']:
+                return False
+            return True
+
+        res = [job.human_dump() for job in sorted(self.jobs.itervalues(),
+                   key=lambda j: (j.finish_ts, j.start_ts))
+               if job_filter(job)]
+        return res
 
     # def clear_jobs(self, request):
     #     try:
@@ -784,6 +937,7 @@ class JobProcessor(object):
                             Job.STATUS_PENDING, Job.STATUS_NOT_APPROVED))
 
                 job.status = Job.STATUS_CANCELLED
+                job.complete()
                 self.jobs_index[job.id] = self.__dump_job(job)
 
                 logger.info('Job {0}: status set to {1}'.format(job.id, job.status))
@@ -813,13 +967,19 @@ class JobProcessor(object):
                     raise ValueError('Job {0}: status is "{1}", should have been '
                         '"{2}"'.format(job.id, job.status, Job.STATUS_NOT_APPROVED))
 
-                job.status = Job.STATUS_NEW
+                try:
+                    job.perform_locks()
+                except LockError:
+                    logger.error('Job {0}: failed to lock target groups'.format(job.id))
+                else:
+                    job.status = Job.STATUS_NEW
+                    logger.info('Job {0}: status set to {1}'.format(job.id, job.status))
+
                 self.jobs_index[job.id] = self.__dump_job(job)
 
-                logger.info('Job {0}: status set to {1}'.format(job.id, job.status))
 
         except Exception as e:
-            logger.error('Failed to cancel job {0}: {1}\n{2}'.format(
+            logger.error('Failed to approve job {0}: {1}\n{2}'.format(
                 job_id, e, traceback.format_exc()))
             raise
 
