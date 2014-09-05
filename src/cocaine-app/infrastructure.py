@@ -45,8 +45,8 @@ class Infrastructure(object):
     RSYNC_MODULE_CMD = ('rsync -av --progress '
                         '"rsync://{user}@{src_host}/{module}/{src_path}data*" '
                         '"{dst_path}"')
-    DNET_RECOVERY_DC_CMD = ('dnet_recovery dc -r {host}:{port}:{family} '
-                            '-g {groups}')
+    DNET_RECOVERY_DC_CMD = 'dnet_recovery dc {remotes} -g {groups}'
+    DNET_RECOVER_REMOTE_TPL = '-r {host}:{port}:{family}'
 
     HISTORY_RECORD_AUTOMATIC = 'automatic'
     HISTORY_RECORD_MANUAL = 'manual'
@@ -620,11 +620,16 @@ class Infrastructure(object):
         if not group.couple:
             raise ValueError('Group {0} is not coupled'.format(group_id))
 
-        node_backend = group.node_backends[0]
+        remotes = []
+        for g in group.couple.groups:
+            for nb in g.node_backends:
+                remotes.append(self.DNET_RECOVER_REMOTE_TPL.format(
+                    host=nb.node.host.addr,
+                    port=nb.node.port,
+                    family=nb.node.family,))
+
         cmd = self.DNET_RECOVERY_DC_CMD.format(
-            host=node_backend.node.host.addr,
-            port=node_backend.node.port,
-            family=node_backend.node.family,
+            remotes=' '.join(remotes),
             groups=','.join(str(g) for g in group.couple.groups))
 
         logger.info('Command for dc recovery for group {0} '
