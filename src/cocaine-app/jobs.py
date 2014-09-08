@@ -837,8 +837,7 @@ class JobProcessor(object):
                 'updated'.format(type(task)))
 
     def __execute_task(self, task):
-        if not task.start_ts:
-            task.start_ts = time.time()
+        task.start_ts = time.time()
         if isinstance(task, MinionCmdTask):
             task.execute(self.minions)
         elif isinstance(task, HistoryRemoveNodeTask):
