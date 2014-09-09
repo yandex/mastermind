@@ -224,16 +224,22 @@ class Balancer(object):
 
         for namespace, sizes in namespaces.iteritems():
             for size in sizes:
-                (group_weights, info) = balancelogic.rawBalance(all_symm_group_objects,
+                try:
+                    logger.info('Cluster info for namespace {0}, size {1}'.format(namespace, size))
+                    (group_weights, info) = balancelogic.rawBalance(all_symm_group_objects,
                                                                 bla.getConfig(),
                                                                 bla._and(bla.GroupSizeEquals(size),
                                                                          bla.GroupNamespaceEquals(namespace)))
-                result.setdefault(namespace, {})[size] = \
-                    [([g.group_id for g in item[0].groups],) +
-                         item[1:] +
-                         (int(item[0].get_stat().free_space),)
-                     for item in group_weights.items()]
-                logger.info('Cluster info: ' + str(info))
+                    result.setdefault(namespace, {})[size] = \
+                        [([g.group_id for g in item[0].groups],) +
+                             item[1:] +
+                             (int(item[0].get_stat().free_space),)
+                         for item in group_weights.items()]
+                    logger.info('Cluster info: ' + str(info))
+                except Exception as e:
+                    logger.error('Error: {0}'.format(e))
+                    result.setdefault(namespace, {})[size] = []
+                    continue
 
         logger.info(str(result))
         return result
