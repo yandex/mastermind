@@ -45,6 +45,7 @@ class Job(object):
         self.status = (self.STATUS_NOT_APPROVED
                        if need_approving else
                        self.STATUS_NEW)
+        self.create_ts = None
         self.start_ts = None
         self.finish_ts = None
         self.type = None
@@ -66,6 +67,7 @@ class Job(object):
         job = cls(**cparams)
         for param in cls.PARAMS:
             setattr(job, param, kwargs.get(param, None))
+        job.create_ts = time.time()
         return job
 
     @classmethod
@@ -77,6 +79,7 @@ class Job(object):
     def load(self, data):
         self.id = data['id'].encode('utf-8')
         self.status = data['status']
+        self.create_ts = data.get('create_ts') or data['start_ts']
         self.start_ts = data['start_ts']
         self.finish_ts = data['finish_ts']
         self.type = data['type']
@@ -96,6 +99,7 @@ class Job(object):
     def _dump(self):
         data = {'id': self.id,
                 'status': self.status,
+                'create_ts': self.create_ts,
                 'start_ts': self.start_ts,
                 'finish_ts': self.finish_ts,
                 'type': self.type,
@@ -720,27 +724,32 @@ class JobProcessor(object):
                 # TODO: check! # fetch jobs - read_latest!!!
                 self._do_update_jobs()
 
-                (new_jobs, executing_jobs) = ([], [])
+                new_jobs, executing_jobs = [], []
                 for job in self.jobs.itervalues():
                     if job.status == Job.STATUS_EXECUTING:
                         executing_jobs.append(job)
                     elif job.status == Job.STATUS_NEW:
                         new_jobs.append(job)
 
-                # check number of running jobs
-                free_slots = max(0, self.MAX_EXECUTING_JOBS - len(executing_jobs))
-                ready_jobs = executing_jobs + new_jobs[:free_slots]
+                new_jobs.sort(key=lambda j: j.create_ts)
+                ready_jobs = executing_jobs + new_jobs
+                logger.debug('Ready jobs: {0}'.format(len(ready_jobs)))
 
-                logger.debug('{0} jobs to process'.format(len(ready_jobs)))
-
+                executing_count = 0
                 for job in ready_jobs:
+                    if executing_count >= self.MAX_EXECUTING_JOBS:
+                        break
                     try:
                         with job.tasks_lock():
                             self.__process_job(job)
+                    except LockError:
+                        pass
                     except Exception as e:
                         logger.error('Failed to process job {0}: '
                             '{1}\n{2}'.format(job.id, e, traceback.format_exc()))
                         continue
+                    else:
+                        executing_count += 1
                     self.jobs_index[job.id] = self.__dump_job(job)
 
         except Exception as e:
@@ -756,9 +765,16 @@ class JobProcessor(object):
 
         logger.debug('Job {0}, processing started: {1}'.format(job.id, job.dump()))
 
-        if all([task.status == Task.STATUS_QUEUED for task in job.tasks]):
+        if job.status == Job.STATUS_NEW:
             logger.info('Job {0}: setting job start time'.format(job.id))
             job.start_ts = time.time()
+            try:
+                job.perform_locks()
+            except LockError:
+                logger.error('Job {0}: failed to perform required locks'.format(job.id))
+                raise
+            else:
+                logger.info('Job {0}: status set to {1}'.format(job.id, job.status))
 
         for task in job.tasks:
             if task.status == Task.STATUS_EXECUTING:
@@ -837,7 +853,7 @@ class JobProcessor(object):
                 'updated'.format(type(task)))
 
     def __execute_task(self, task):
-        task.start_ts = time.time()
+        task.start_ts, task.finish_ts = time.time(), None
         if isinstance(task, MinionCmdTask):
             task.execute(self.minions)
         elif isinstance(task, HistoryRemoveNodeTask):
@@ -901,7 +917,7 @@ class JobProcessor(object):
             return True
 
         res = [job.human_dump() for job in sorted(self.jobs.itervalues(),
-                   key=lambda j: (j.finish_ts, j.start_ts))
+                   key=lambda j: (j.start_ts, j.finish_ts))
                if job_filter(job)]
         return res
 
@@ -966,13 +982,7 @@ class JobProcessor(object):
                     raise ValueError('Job {0}: status is "{1}", should have been '
                         '"{2}"'.format(job.id, job.status, Job.STATUS_NOT_APPROVED))
 
-                try:
-                    job.perform_locks()
-                except LockError:
-                    logger.error('Job {0}: failed to lock target groups'.format(job.id))
-                else:
-                    job.status = Job.STATUS_NEW
-                    logger.info('Job {0}: status set to {1}'.format(job.id, job.status))
+                job.status = Job.STATUS_NEW
 
                 self.jobs_index[job.id] = self.__dump_job(job)
 
