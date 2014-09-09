@@ -1,3 +1,9 @@
+mastermind (2.8.46) lucid; urgency=low
+
+  * Fix for empty couples namespace
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 09 Sep 2014 16:52:50 +0400
+
 mastermind (2.8.45) lucid; urgency=low
 
   * Added optional move task for move jobs
