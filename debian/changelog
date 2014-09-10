@@ -1,3 +1,9 @@
+mastermind (2.8.47) lucid; urgency=low
+
+  * Fix for minion async http fetcher
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 10 Sep 2014 18:08:33 +0400
+
 mastermind (2.8.46) lucid; urgency=low
 
   * Fix for empty couples namespace
