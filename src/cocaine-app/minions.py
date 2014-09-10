@@ -316,6 +316,9 @@ class AsyncHTTPBatch(object):
 
     def get(self, emergency_timeout=None):
         logger.debug('Minion states, creating async http clients')
+        if not self.urls:
+            logger.warn('Empty url list for async http batch')
+            return self.responses
         max_clients = len(self.urls)
         [AsyncHTTPClient(max_clients=max_clients).fetch(url, callback=self._process,
             request_timeout=self.timeout, headers=self.headers) for url in self.urls]
