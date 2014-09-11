@@ -234,7 +234,7 @@ class Balancer(object):
         if ns and not ns in namespaces:
             return result
 
-        namespaces = (((ns, namespaces[ns]))
+        namespaces = ([(ns, namespaces[ns])]
                       if ns in namespaces else
                       namespaces.iteritems())
 
