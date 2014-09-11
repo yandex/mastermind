@@ -634,10 +634,10 @@ class Infrastructure(object):
             remotes=' '.join(remotes),
             groups=','.join(str(g) for g in group.couple.groups),
             tmp_dir=RECOVERY_DC_CNF.get('tmp_dir',
-                '/var/tmp/dnet_recovery_dc_{group_id}'.format(group_id=group_id)),
+                '/var/tmp/dnet_recovery_dc_{group_id}').format(group_id=group_id),
             attempts=RECOVERY_DC_CNF.get('attempts', 1),
             batch=RECOVERY_DC_CNF.get('batch', 2000),
-            log=RECOVERY_DC_CNF.get('log', 'dnet_recovery.log'))
+            log=RECOVERY_DC_CNF.get('log', 'dnet_recovery.log').format(group_id=group_id))
 
         logger.info('Command for dc recovery for group {0} '
             'was requested: {1}'.format(group_id, cmd))
