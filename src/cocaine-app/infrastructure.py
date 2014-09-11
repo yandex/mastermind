@@ -28,6 +28,8 @@ RSYNC_MODULE = config.get('restore', {}).get('rsync_use_module') and \
                config['restore'].get('rsync_module')
 RSYNC_USER = config.get('restore', {}).get('rsync_user', 'rsync')
 
+RECOVERY_DC_CNF = config.get('infrastructure', {}).get('recovery_dc', {})
+
 logger.info('Rsync module using: %s' % RSYNC_MODULE)
 logger.info('Rsync user: %s' % RSYNC_USER)
 
@@ -45,8 +47,8 @@ class Infrastructure(object):
     RSYNC_MODULE_CMD = ('rsync -av --progress '
                         '"rsync://{user}@{src_host}/{module}/{src_path}data*" '
                         '"{dst_path}"')
-    DNET_RECOVERY_DC_CMD = 'dnet_recovery dc {remotes} -g {groups}'
-    DNET_RECOVER_REMOTE_TPL = '-r {host}:{port}:{family}'
+    DNET_RECOVERY_DC_CMD = 'dnet_recovery dc {remotes} -g {groups} -D {tmp_dir} -a {attempts} -b {batch} -l {log}'
+    DNET_RECOVERY_DC_REMOTE_TPL = '-r {host}:{port}:{family}'
 
     HISTORY_RECORD_AUTOMATIC = 'automatic'
     HISTORY_RECORD_MANUAL = 'manual'
@@ -623,14 +625,19 @@ class Infrastructure(object):
         remotes = []
         for g in group.couple.groups:
             for nb in g.node_backends:
-                remotes.append(self.DNET_RECOVER_REMOTE_TPL.format(
+                remotes.append(self.DNET_RECOVERY_DC_REMOTE_TPL.format(
                     host=nb.node.host.addr,
                     port=nb.node.port,
                     family=nb.node.family,))
 
         cmd = self.DNET_RECOVERY_DC_CMD.format(
             remotes=' '.join(remotes),
-            groups=','.join(str(g) for g in group.couple.groups))
+            groups=','.join(str(g) for g in group.couple.groups),
+            tmp_dir=RECOVERY_DC_CNF.get('tmp_dir',
+                '/var/tmp/dnet_recovery_dc_{group_id}'.format(group_id=group_id)),
+            attempts=RECOVERY_DC_CNF.get('attempts', 1),
+            batch=RECOVERY_DC_CNF.get('batch', 2000),
+            log=RECOVERY_DC_CNF.get('log', 'dnet_recovery.log'))
 
         logger.info('Command for dc recovery for group {0} '
             'was requested: {1}'.format(group_id, cmd))
