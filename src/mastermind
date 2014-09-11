@@ -557,10 +557,15 @@ def couple_break(couple, confirm=None,
 
 @coupleDispatcher.command(name='weights')
 @log_action
-def couple_get_weights(host=None):
+def couple_get_weights(namespace=('n', '', 'Use namespace for couple if there are '
+                                      'no neighbour groups to fetch definite namespace'),
+                       host=None):
     '''Get weights for symmetric groups'''
     s = service(host)
-    res = s.enqueue("get_group_weights", "").get()
+    params = []
+    if namespace:
+        params.append(namespace)
+    res = s.enqueue("get_group_weights", msgpack.packb(params)).get()
     print res
 
 
