@@ -817,7 +817,7 @@ class Balancer(object):
             if k not in self.ALLOWED_NS_AUTH_KEYS:
                 del settings['auth-keys'][k]
 
-        if not namespace in self.__all_namespaces():
+        if not namespace in self.__couple_namespaces():
             raise ValueError('Namespace "{0}" does not exist'.format(namespace))
 
         try:
@@ -836,7 +836,7 @@ class Balancer(object):
         except Exception:
             raise ValueError('Invalid parameters')
 
-        if not namespace in self.__all_namespaces() or not namespace in self.infrastructure.ns_settings:
+        if not namespace in self.__couple_namespaces() or not namespace in self.infrastructure.ns_settings:
             raise ValueError('Namespace "{0}" does not exist'.format(namespace))
 
         return self.infrastructure.ns_settings[namespace]
@@ -880,9 +880,10 @@ class Balancer(object):
 
     @h.handler
     def get_namespaces(self, request):
-        return tuple(self.__all_namespaces())
+        return tuple(self.__couple_namespaces().union(
+                        self.infrastructure.ns_settings.keys()))
 
-    def __all_namespaces(self):
+    def __couple_namespaces(self):
         namespaces = []
         for c in storage.couples:
             try:
