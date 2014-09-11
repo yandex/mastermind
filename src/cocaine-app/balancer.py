@@ -202,6 +202,12 @@ class Balancer(object):
     def get_group_weights(self, request):
         namespaces = {}
         all_symm_group_objects = []
+
+        try:
+            ns = request[0]
+        except IndexError:
+            ns = None
+
         for couple in storage.couples:
 
             try:
@@ -217,16 +223,26 @@ class Balancer(object):
             symm_group = bla.SymmGroup(couple)
             all_symm_group_objects.append(symm_group)
 
+        if ns and not ns in namespaces and not ns in self.infrastructure.ns_settings:
+            raise ValueError('Namespace "{0}" does not exist'.format(ns))
+
         result = {}
 
-        for namespace, sizes in namespaces.iteritems():
+        if ns and not ns in namespaces:
+            return result
+
+        namespaces = ([(ns, namespaces[ns])]
+                      if ns in namespaces else
+                      namespaces.iteritems())
+
+        for namespace, sizes in namespaces:
             for size in sizes:
                 try:
                     logger.info('Cluster info for namespace {0}, size {1}'.format(namespace, size))
-                    (group_weights, info) = balancelogic.rawBalance(all_symm_group_objects,
-                                                                bla.getConfig(),
-                                                                bla._and(bla.GroupSizeEquals(size),
-                                                                         bla.GroupNamespaceEquals(namespace)))
+                    (group_weights, info) = balancelogic.rawBalance(
+                        all_symm_group_objects, bla.getConfig(),
+                        bla._and(bla.GroupSizeEquals(size),
+                                 bla.GroupNamespaceEquals(namespace)))
                     result.setdefault(namespace, {})[size] = \
                         [([g.group_id for g in item[0].groups],) +
                              item[1:] +
