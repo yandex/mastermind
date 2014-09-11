@@ -1,3 +1,9 @@
+mastermind (2.9.17) lucid; urgency=low
+
+  * Minor fix
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 11 Sep 2014 16:58:42 +0400
+
 mastermind (2.9.16) lucid; urgency=low
 
   * Additional parameters for recovery dc
