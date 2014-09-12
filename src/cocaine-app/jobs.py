@@ -129,7 +129,10 @@ class Job(object):
         pass
 
     def complete(self):
-        self.finish_ts = time.time()
+        ts = time.time()
+        if not self.start_ts:
+            self.start_ts = ts
+        self.finish_ts = ts
         self.release_locks()
 
     def add_error(self, e):
@@ -302,11 +305,21 @@ class MoveJob(Job):
 
 class RecoverDcJob(Job):
 
-    PARAMS = ('group', 'host', 'port', 'family', 'backend_id')
+    PARAMS = ('group', 'host', 'port', 'family', 'backend_id', 'keys')
 
     def __init__(self, **kwargs):
         super(RecoverDcJob, self).__init__(**kwargs)
         self.type = JobFactory.TYPE_RECOVER_DC_JOB
+
+    @classmethod
+    def new(cls, **kwargs):
+        job = super(RecoverDcJob, cls).new(**kwargs)
+        group = storage.groups[kwargs['group']]
+        keys = []
+        for g in group.couple.groups:
+            keys.append(g.get_stat().files)
+        job.keys = keys
+        return job
 
     @property
     def node_backend(self):
