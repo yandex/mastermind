@@ -1,3 +1,9 @@
+mastermind (2.9.20) lucid; urgency=low
+
+  * Groups key count for recovery jobs
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 12 Sep 2014 15:30:24 +0400
+
 mastermind (2.9.19) lucid; urgency=low
 
   * Minor fix
