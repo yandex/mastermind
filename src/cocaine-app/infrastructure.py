@@ -47,7 +47,8 @@ class Infrastructure(object):
     RSYNC_MODULE_CMD = ('rsync -av --progress '
                         '"rsync://{user}@{src_host}/{module}/{src_path}data*" '
                         '"{dst_path}"')
-    DNET_RECOVERY_DC_CMD = 'dnet_recovery dc {remotes} -g {groups} -D {tmp_dir} -a {attempts} -b {batch} -l {log}'
+    DNET_RECOVERY_DC_CMD = ('dnet_recovery dc {remotes} -g {groups} -D {tmp_dir} '
+        '-a {attempts} -b {batch} -l {log} -n {processes_num}')
     DNET_RECOVERY_DC_REMOTE_TPL = '-r {host}:{port}:{family}'
 
     HISTORY_RECORD_AUTOMATIC = 'automatic'
@@ -637,7 +638,8 @@ class Infrastructure(object):
                 '/var/tmp/dnet_recovery_dc_{group_id}').format(group_id=group_id),
             attempts=RECOVERY_DC_CNF.get('attempts', 1),
             batch=RECOVERY_DC_CNF.get('batch', 2000),
-            log=RECOVERY_DC_CNF.get('log', 'dnet_recovery.log').format(group_id=group_id))
+            log=RECOVERY_DC_CNF.get('log', 'dnet_recovery.log').format(group_id=group_id),
+            processes_num=len(group.couple.groups))
 
         logger.info('Command for dc recovery for group {0} '
             'was requested: {1}'.format(group_id, cmd))
