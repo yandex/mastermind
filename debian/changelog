@@ -1,3 +1,9 @@
+mastermind (2.8.48) lucid; urgency=low
+
+  * Group weights handler accepts namespace as optional parameter
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 12 Sep 2014 17:32:30 +0400
+
 mastermind (2.8.47) lucid; urgency=low
 
   * Fix for minion async http fetcher
