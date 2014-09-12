@@ -318,6 +318,7 @@ class RecoverDcJob(Job):
         keys = []
         for g in group.couple.groups:
             keys.append(g.get_stat().files)
+        keys.sort(reverse=True)
         job.keys = keys
         return job
 
@@ -930,7 +931,7 @@ class JobProcessor(object):
             return True
 
         res = [job.human_dump() for job in sorted(self.jobs.itervalues(),
-                   key=lambda j: (j.start_ts, j.finish_ts))
+                   key=lambda j: (j.create_ts, j.start_ts, j.finish_ts))
                if job_filter(job)]
         return res
 
