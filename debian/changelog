@@ -1,3 +1,9 @@
+mastermind (2.9.19) lucid; urgency=low
+
+  * Minor fix
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 12 Sep 2014 13:48:22 +0400
+
 mastermind (2.9.18) lucid; urgency=low
 
   * Additional option of processes number for recovery job
