@@ -127,6 +127,13 @@ mastermind (2.9.0) lucid; urgency=low
 
  -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 21 Aug 2014 18:57:53 +0400
 
+mastermind (2.8.49) lucid; urgency=low
+
+  * Storage location option for namespace setup
+  * Required parameters for couple build command: namespace and initial state
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 15 Sep 2014 15:28:50 +0400
+
 mastermind (2.8.48) lucid; urgency=low
 
   * Group weights handler accepts namespace as optional parameter
