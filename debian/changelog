@@ -1,3 +1,10 @@
+mastermind (2.9.21) lucid; urgency=low
+
+  * Storage location option for namespace setup
+  * Required parameters for couple build command: namespace and initial state
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 15 Sep 2014 15:31:32 +0400
+
 mastermind (2.9.20) lucid; urgency=low
 
   * Groups key count for recovery jobs
