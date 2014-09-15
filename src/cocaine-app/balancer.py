@@ -402,6 +402,8 @@ class Balancer(object):
 
         return res
 
+    VALID_COUPLE_INIT_STATES = (storage.Status.COUPLED, storage.Status.FROZEN)
+
     @h.handler
     def couple_groups(self, request):
         logger.info('----------------------------------------')
@@ -531,13 +533,14 @@ class Balancer(object):
         if not len(dc_groups_by_total_space):
             raise Exception('Not enough dcs')
 
-        try:
-            namespace = request[4]
-            logger.info('namespace from request: {0}'.format(namespace))
-            if not self.valid_namespace(namespace):
-                raise ValueError('Namespace "{0}" is invalid'.format(namespace))
-        except IndexError:
-            namespace = storage.Group.DEFAULT_NAMESPACE
+        namespace = request[4]
+        logger.info('namespace from request: {0}'.format(namespace))
+        if not self.valid_namespace(namespace):
+            raise ValueError('Namespace "{0}" is invalid'.format(namespace))
+
+        init_state = request[5].upper()
+        if not init_state in self.VALID_COUPLE_INIT_STATES:
+            raise ValueError('Couple "{0}" init state is invalid'.format(init_state))
 
         created_couples = []
         bad_couples = []
@@ -580,10 +583,17 @@ class Balancer(object):
 
                     couple = storage.couples.add([storage.groups[g] for g in groups_to_couple])
                     (good, bad) = make_symm_group(self.node, couple, namespace)
+
                     if bad:
                         bad_couples.append([good, bad])
                         stop = True
                         break
+
+                    if init_state == storage.Status.FROZEN:
+                        self.__do_set_meta_freeze(couple, freeze=True)
+                    elif init_state == storage.Status.COUPLED:
+                        self.__do_set_meta_freeze(couple, freeze=False)
+
                     created_couples.append(couple)
 
                     groups_found = True
@@ -860,8 +870,7 @@ class Balancer(object):
         self.__sync_couple_meta(couple)
         if couple.frozen:
             raise ValueError('Couple %s is already frozen' % couple)
-        couple.freeze()
-        self.__update_couple_meta(couple)
+        self.__do_set_meta_freeze(couple, freeze=True)
 
         return True
 
@@ -873,10 +882,16 @@ class Balancer(object):
         self.__sync_couple_meta(couple)
         if not couple.frozen:
             raise ValueError('Couple %s is not frozen' % couple)
-        couple.unfreeze()
-        self.__update_couple_meta(couple)
+        self.__do_set_meta_freeze(couple, freeze=False)
 
         return True
+
+    def __do_set_meta_freeze(self, couple, freeze):
+        if freeze:
+            couple.freeze()
+        else:
+            couple.unfreeze()
+        self.__update_couple_meta(couple)
 
     @h.handler
     def get_namespaces(self, request):
