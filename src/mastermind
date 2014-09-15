@@ -618,7 +618,7 @@ def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:
                  ignore_space=('s', False, 'Ignore checking of groups total space '
                     'matching'),
                  namespace=('n', '', 'Set custom namespace for couple'),
-                 state=('', '', 'Set couple initial state'), host=None, app=None):
+                 state=('', '', 'Set couple initial state (coupled|frozen)'), host=None, app=None):
     '''Make a couple of groups. The default behaviour is to use
     groups with approximately equal total space size.
     This behaviour can be turned off by --ignore-space option.
@@ -638,8 +638,11 @@ def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:
 
     if not namespace:
         print warn('Namespace should be set (--namespace | -n)')
+        return
+
     if not state or not state.lower() in ALLOWED_COUPLE_STATES:
         print warn('Initial couple state is required (--state): coupled | frozen')
+        return
 
     params = [size, groups, couples, not ignore_space, namespace, state]
 
