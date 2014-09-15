@@ -492,6 +492,8 @@ def view_groups(data, grouped, key_mapper, short=False, verbose=False):
         output(groups, short=short, verbose=verbose)
 
 
+ALLOWED_COUPLE_STATES = ('frozen', 'coupled')
+
 @coupleDispatcher.command(name='build')
 @log_action
 def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:2)'),
@@ -500,7 +502,8 @@ def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:
                     'to prevent all couples falling out when a dc gets disconnected'),
                  ignore_space=('s', False, 'Ignore checking of groups total space '
                     'matching'),
-                 namespace=('n', '', 'Set custom namespace for couple'), host=None):
+                 namespace=('n', '', 'Set custom namespace for couple'),
+                 state=('', '', 'Set couple initial state'), host=None):
     '''Make a couple of groups. The default behaviour is to use
     groups with approximately equal total space size.
     This behaviour can be turned off by --ignore-space option.
@@ -518,9 +521,12 @@ def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:
     else:
         groups = []
 
-    params = [size, groups, couples, not ignore_space]
-    if namespace:
-        params.append(namespace)
+    if not namespace:
+        print warn('Namespace should be set (--namespace | -n)')
+    if not state or not state.lower() in ALLOWED_COUPLE_STATES:
+        print warn('Initial couple state is required (--state): coupled | frozen')
+
+    params = [size, groups, couples, not ignore_space, namespace, state]
 
     res = s.enqueue("couple_groups", msgpack.packb(tuple(params))).get()
 
