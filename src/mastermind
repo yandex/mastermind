@@ -617,6 +617,7 @@ def ns_setup(namespace,
              sign_token=('', '', 'Signature token'),
              sign_path_prefix=('', '', 'Signature path prefix'),
              sign_port=('', '', 'Signature scheme port'),
+             storage_location=('', '', 'Storage location path'),
              couple=('c', '', 'Set static couple for namespace (1:2:10)'),
              content_length_threshold=('', '', 'Set content length threshold for '
                 'proxy to return direct urls instead of balancer urls'),
@@ -670,6 +671,8 @@ def ns_setup(namespace,
 
     if content_length_threshold:
         settings['content_length_threshold'] = content_length_threshold
+    if storage_location:
+        settings['storage-location'] = storage_location
 
     res = s.enqueue('namespace_setup', msgpack.packb([namespace, overwrite, settings])).get()
     print res

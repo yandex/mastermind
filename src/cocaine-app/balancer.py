@@ -779,7 +779,8 @@ class Balancer(object):
         settings['groups-count'] = groups_count
 
     ALLOWED_NS_KEYS = set(['success-copies-num', 'groups-count',
-        'static-couple', 'auth-keys', 'signature', 'content_length_threshold'])
+        'static-couple', 'auth-keys', 'signature', 'content_length_threshold',
+        'storage-location'])
     ALLOWED_NS_SIGN_KEYS = set(['token', 'path_prefix', 'port'])
     ALLOWED_NS_AUTH_KEYS = set(['write', 'read'])
 
