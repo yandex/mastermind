@@ -272,11 +272,13 @@ class Balancer(object):
                 ns_weights[size] = []
                 continue
 
-        if found_couples < self.MIN_NS_UNITS:
+        ns_min_units = self.infrastructure.ns_settings.get(namespace, {}).get(
+            'min-units', self.MIN_NS_UNITS)
+        if found_couples < ns_min_units:
 
             # TODO: remove logging, uncomment raise statement
             logger.warn('Namespace {0} has {1} available couples, '
-                '{2} required'.format(namespace, found_couples, self.MIN_NS_UNITS))
+                '{2} required'.format(namespace, found_couples, ns_min_units))
 
             # raise ValueError('Namespace {0} has {1} available couples, '
             #     '{2} required'.format(namespace, found_couples, self.MIN_NS_UNITS))
@@ -754,6 +756,15 @@ class Balancer(object):
             raise ValueError('port should be positive integer')
 
         try:
+            min_units = settings['min-units'] = int(settings['min-units'])
+            if not min_units > 0:
+                raise ValueError
+        except KeyError:
+            pass
+        except ValueError:
+            raise ValueError('min-units should be positive integer')
+
+        try:
             content_length_threshold = settings['content_length_threshold'] = int(settings['content_length_threshold'])
             if not content_length_threshold > 0:
                 raise ValueError
@@ -805,7 +816,7 @@ class Balancer(object):
 
     ALLOWED_NS_KEYS = set(['success-copies-num', 'groups-count',
         'static-couple', 'auth-keys', 'signature', 'content_length_threshold',
-        'storage-location'])
+        'storage-location', 'min-units'])
     ALLOWED_NS_SIGN_KEYS = set(['token', 'path_prefix', 'port'])
     ALLOWED_NS_AUTH_KEYS = set(['write', 'read'])
 
