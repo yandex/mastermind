@@ -32,6 +32,7 @@ logger.info('balancer.py')
 class Balancer(object):
 
     DT_FORMAT = '%Y-%m-%d %H:%M:%S'
+    MIN_NS_UNITS = config.get('balancer_config', {}).get('min_units', 1)
 
     def __init__(self, n):
         self.node = n
@@ -228,34 +229,51 @@ class Balancer(object):
 
         result = {}
 
-        if ns and not ns in namespaces:
-            return result
-
-        namespaces = ([(ns, namespaces[ns])]
-                      if ns in namespaces else
+        namespaces = ([(ns, namespaces.get(ns, set()))]
+                      if ns is not None else
                       namespaces.iteritems())
 
         for namespace, sizes in namespaces:
-            for size in sizes:
-                try:
-                    logger.info('Cluster info for namespace {0}, size {1}'.format(namespace, size))
-                    (group_weights, info) = balancelogic.rawBalance(
-                        all_symm_group_objects, bla.getConfig(),
-                        bla._and(bla.GroupSizeEquals(size),
-                                 bla.GroupNamespaceEquals(namespace)))
-                    result.setdefault(namespace, {})[size] = \
-                        [([g.group_id for g in item[0].groups],) +
-                             item[1:] +
-                             (int(item[0].get_stat().free_space),)
-                         for item in group_weights.items()]
-                    logger.info('Cluster info: ' + str(info))
-                except Exception as e:
-                    logger.error('Error: {0}'.format(e))
-                    result.setdefault(namespace, {})[size] = []
-                    continue
+            self._namespaces_weights(all_symm_group_objects, namespace, sizes, result)
+
+        if len(result) == 0:
+            raise ValueError('Failed to satisfy namespace availability settings')
 
         logger.info(str(result))
         return result
+
+    def _namespaces_weights(self, symm_groups, namespace, sizes, result):
+
+        found_couples = 0
+
+        ns_weights = {}
+
+        for size in sizes:
+            try:
+                logger.info('Calculating cluster info for namespace {0}, '
+                    'size {1}'.format(namespace, size))
+                (group_weights, info) = balancelogic.rawBalance(
+                    symm_groups, bla.getConfig(),
+                    bla._and(bla.GroupSizeEquals(size),
+                             bla.GroupNamespaceEquals(namespace)))
+                ns_weights[size] = \
+                    [([g.group_id for g in item[0].groups],) +
+                         item[1:] +
+                         (int(item[0].get_stat().free_space),)
+                     for item in group_weights.items()]
+                found_couples += len([item for item in ns_weights[size] if item[1] > 0])
+                logger.info('Cluster info: ' + str(info))
+            except Exception as e:
+                logger.error('Error: {0}'.format(e))
+                ns_weights[size] = []
+                continue
+
+        if found_couples < self.MIN_NS_UNITS:
+            logger.warn('Namespace {0} has {1} available couples, '
+                '{2} required'.format(namespace, found_couples, self.MIN_NS_UNITS))
+            return
+
+        result[namespace] = ns_weights
 
     @h.handler
     def repair_groups(self, request):
