@@ -234,7 +234,11 @@ class Balancer(object):
                       namespaces.iteritems())
 
         for namespace, sizes in namespaces:
-            self._namespaces_weights(all_symm_group_objects, namespace, sizes, result)
+            try:
+                self._namespaces_weights(all_symm_group_objects, namespace, sizes, result)
+            except ValueError:
+                if ns is not None:
+                    raise
 
         if len(result) == 0:
             raise ValueError('Failed to satisfy namespace availability settings')
@@ -269,9 +273,8 @@ class Balancer(object):
                 continue
 
         if found_couples < self.MIN_NS_UNITS:
-            logger.warn('Namespace {0} has {1} available couples, '
+            raise ValueError('Namespace {0} has {1} available couples, '
                 '{2} required'.format(namespace, found_couples, self.MIN_NS_UNITS))
-            return
 
         result[namespace] = ns_weights
 
