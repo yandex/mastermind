@@ -1,3 +1,10 @@
+mastermind (2.9.22) lucid; urgency=low
+
+  * Namespace couple weights are considered valid only if there is more than min_units of writeable couples
+  * Namespace settings for min-units number
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 16 Sep 2014 19:30:54 +0400
+
 mastermind (2.9.21) lucid; urgency=low
 
   * Storage location option for namespace setup
