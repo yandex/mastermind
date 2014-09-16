@@ -273,8 +273,13 @@ class Balancer(object):
                 continue
 
         if found_couples < self.MIN_NS_UNITS:
-            raise ValueError('Namespace {0} has {1} available couples, '
+
+            # TODO: remove logging, uncomment raise statement
+            logger.warn('Namespace {0} has {1} available couples, '
                 '{2} required'.format(namespace, found_couples, self.MIN_NS_UNITS))
+
+            # raise ValueError('Namespace {0} has {1} available couples, '
+            #     '{2} required'.format(namespace, found_couples, self.MIN_NS_UNITS))
 
         result[namespace] = ns_weights
 
