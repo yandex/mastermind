@@ -1,4 +1,5 @@
 #!/usr/bin/python
+from datetime import datetime
 import inspect
 import json
 from json import dumps
@@ -8,6 +9,7 @@ import os
 import os.path
 from pprint import pprint
 import re
+import socket
 import subprocess
 import sys
 from time import sleep
@@ -64,7 +66,7 @@ def log_action(func):
 
 
 def evil_wrapper(func, decorator):
-    '''This evil code is needed to be able to decorate opster dispacher
+    '''This evil code is required to be able to decorate opster dispacher
     commands. This workaround helps "inspect" module to parse
     command arguments properly'''
 
@@ -82,6 +84,14 @@ def evil_wrapper(func, decorator):
     f_with_good_sig = fakeglobals['wrapper']
 
     return wraps(func)(f_with_good_sig)
+
+
+DT_FORMAT = '%Y-%m-%d %H:%M:%S'
+
+
+def ts_to_dt(ts):
+    dt = datetime.fromtimestamp(ts)
+    return dt.strftime(DT_FORMAT)
 
 
 # group commands
@@ -311,6 +321,40 @@ def group_recover_dc(group,
          }])).get()
 
     print job_data
+
+
+@groupDispatcher.command(name='search-by-path')
+@log_action
+def group_search_by_path(group_host, group_path,
+                         host=None, app=None):
+    '''Search which group ever lived on a given path on a host'''
+    s = service(host, app)
+
+    try:
+        ip = socket.gethostbyname(group_host)
+    except Exception:
+        print warn('Failed to resolve hostname {0}'.format(group_host))
+        return
+
+    group_path = os.path.normpath(group_path) + '/'
+
+    res = s.enqueue('search_history_by_path', msgpack.packb([
+        {'host': ip,
+         'path': group_path}])).get()
+
+    if isinstance(res, dict):
+        # error
+        print res
+        return
+
+    print color('{0:^25} | {1:^10} | {2:^50} | {3:^15}'.format(
+        'Date', 'Group id', 'Nodes', 'Type of record'), GREEN)
+    for r in res:
+        for nodes in r['set'][:1]:
+            print '{0:25} | {1:>10} | {2:50} | {3}'.format(
+                ts_to_dt(r['timestamp']), r['group'], nodes, r['type'])
+        for nodes in r['set'][1:]:
+            print (' ' * 41) + '{0:50}'.format(nodes)
 
 
 # couple commands

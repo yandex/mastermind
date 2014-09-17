@@ -646,6 +646,52 @@ class Infrastructure(object):
 
         return cmd
 
+    def search_history_by_path(self, request):
+        params = request[0]
+
+        try:
+            host = params['host']
+            path = params['path']
+        except KeyError:
+            raise ValueError('Host and path parameters are required')
+
+        entries = []
+
+        def convert(node_set):
+            nb_list = []
+            for node in node_set['set']:
+                if len(node) == 2:
+                    # old version history
+                    nb_list.append(node + (port_to_path(node[1]),))
+                else:
+                    nb_list.append(node)
+            return nb_list
+
+        for group_id, group_history in self.state.iteritems():
+            for node_set in group_history['nodes']:
+                ts = node_set['timestamp']
+                for node in node_set['set']:
+                    if len(node) == 2:
+                        # old version history
+                        if port_to_path(node[1]) == path and node[0] == host:
+                            entries.append((ts, group_id, node_set))
+                            break
+                    elif node[3] == path and node[0] == host:
+                        entries.append((ts, group_id, node_set))
+                        break
+
+        entries.sort(key=lambda e: e[0])
+        result = []
+
+        for entry in entries:
+            result.append({'group': entry[1],
+                           'set': convert(entry[2]),
+                           'timestamp': entry[0],
+                           'type': self.__node_state_type(entry[2])})
+
+        return result
+
+
     def get_dc_by_host(self, host):
         return self.dc_cache[host]
 
