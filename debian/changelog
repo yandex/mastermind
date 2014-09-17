@@ -1,3 +1,9 @@
+mastermind (2.9.23) lucid; urgency=low
+
+  * Search group by hostname and path
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 17 Sep 2014 21:16:14 +0400
+
 mastermind (2.9.22) lucid; urgency=low
 
   * Namespace couple weights are considered valid only if there is more than min_units of writeable couples
