@@ -179,6 +179,14 @@ class NodeInfoUpdater(object):
                 else:
                     logger.info('Updating statistics for node backend %s' % (str(node_backend)))
                     node_backend.enable()
+                    if not 'procfs' in b_stat:
+                        logger.warn('No procfs in b_stat: {0}'.format(b_stat))
+                    elif not 'vm' in b_stat['procfs']:
+                        logger.warn('No vm in procfs: {0}'.format(b_stat['procfs']))
+                    if not 'backend' in b_stat:
+                        logger.warn('No backend in b_stat: {0}'.format(b_stat))
+                    elif not 'dstat' in b_stat['backend']:
+                        logger.warn('No dstat in backend: {0}'.format(b_stat['backend']))
                     node_backend.update_statistics(b_stat)
 
                     if not node_backend in group.node_backends:
