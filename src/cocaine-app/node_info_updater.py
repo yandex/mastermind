@@ -146,6 +146,10 @@ class NodeInfoUpdater(object):
             else:
                 node = storage.nodes[node_addr]
 
+            if not 'procfs' in stat:
+                logger.warn('No procfs in stat: {0}'.format(stat))
+            elif not 'vm' in stat['procfs']:
+                logger.warn('No vm in procfs: {0}'.format(stat['procfs']))
             node.update_statistics(stat)
 
             for b_stat in stat['backends'].itervalues():
@@ -179,10 +183,6 @@ class NodeInfoUpdater(object):
                 else:
                     logger.info('Updating statistics for node backend %s' % (str(node_backend)))
                     node_backend.enable()
-                    if not 'procfs' in b_stat:
-                        logger.warn('No procfs in b_stat: {0}'.format(b_stat))
-                    elif not 'vm' in b_stat['procfs']:
-                        logger.warn('No vm in procfs: {0}'.format(b_stat['procfs']))
                     if not 'backend' in b_stat:
                         logger.warn('No backend in b_stat: {0}'.format(b_stat))
                     elif not 'dstat' in b_stat['backend']:
