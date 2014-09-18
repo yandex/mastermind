@@ -106,7 +106,6 @@ class NodeInfoUpdater(object):
     def monitor_stats(self):
         hosts_id = {}
         logger.info('Before calculating routes')
-        logger.info('Routes length: {0}'.format(len(self.__session.routes)))
         for r in self.__session.routes.get_unique_routes():
             if not r.address in hosts_id:
                 hosts_id[r.address] = r.id
