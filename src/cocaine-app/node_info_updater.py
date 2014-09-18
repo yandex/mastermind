@@ -105,9 +105,12 @@ class NodeInfoUpdater(object):
                                elliptics.monitor_stat_categories.backend)
     def monitor_stats(self):
         hosts_id = {}
+        logger.info('Before calculating routes')
+        logger.info('Routes length: {0}'.format(len(self.__session.routes)))
         for r in self.__session.routes.get_unique_routes():
             if not r.address in hosts_id:
                 hosts_id[r.address] = r.id
+        logger.info('Unique routes calculated')
 
         requests = []
         for address, eid in hosts_id.iteritems():
