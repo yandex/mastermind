@@ -148,11 +148,11 @@ class NodeInfoUpdater(object):
             else:
                 node = storage.nodes[node_addr]
 
-            if not 'procfs' in stat:
-                logger.warn('No procfs in stat: {0}'.format(stat))
-            elif not 'vm' in stat['procfs']:
-                logger.warn('No vm in procfs: {0}'.format(stat['procfs']))
-            node.update_statistics(stat)
+            try:
+                node.update_statistics(stat)
+            except KeyError as e:
+                logger.warn('Bad procfs stat for node {0} ({1}): {2}'.format(node_addr, e, stat))
+                pass
 
             for b_stat in stat['backends'].itervalues():
                 backend_id = b_stat['backend_id']
@@ -189,7 +189,11 @@ class NodeInfoUpdater(object):
                         logger.warn('No backend in b_stat: {0}'.format(b_stat))
                     elif not 'dstat' in b_stat['backend']:
                         logger.warn('No dstat in backend: {0}'.format(b_stat['backend']))
-                    node_backend.update_statistics(b_stat)
+                    try:
+                        node_backend.update_statistics(b_stat)
+                    except KeyError as e:
+                        logger.warn('Bad stat for node backend {0} ({1}): {2}'.format(node_backend, e, b_stat))
+                        pass
 
                     if not node_backend in group.node_backends:
                         logger.debug('Adding node backend %d -> %s' %
