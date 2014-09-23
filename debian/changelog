@@ -1,3 +1,9 @@
+mastermind (2.9.29) lucid; urgency=low
+
+  * Fix for zookeeper lock ensuring path
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 23 Sep 2014 13:53:35 +0400
+
 mastermind (2.9.28) lucid; urgency=low
 
   * Failover in case of bad monitor_stat for node and/or node_backend
