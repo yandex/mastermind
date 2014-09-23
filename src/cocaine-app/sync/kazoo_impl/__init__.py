@@ -74,11 +74,12 @@ class ZkSyncManager(object):
 
         tr = self.client.transaction()
         for lockid in locks:
-            parts = lockid.rsplit('/', 1)
+            path = self.lock_path_prefix + lockid
+            parts = path.rsplit('/', 1)
             if len(parts) == 2 and parts[0] not in ensured_paths:
                 self.client.ensure_path(parts[0])
                 ensured_paths.add(parts[0])
-            tr.create(self.lock_path_prefix + lockid, data)
+            tr.create(path, data)
 
         failed = False
         failed_lock = None
