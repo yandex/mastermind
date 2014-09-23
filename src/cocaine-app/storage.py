@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import datetime
+import functools
 import logging
 import os.path
 import time
@@ -478,6 +479,7 @@ class Group(object):
             self.status = Status.INIT
             self.status_text = ('Group {0} is in INIT state because there is'
                 'no node backends serving this group'.format(self.__str__()))
+            return self.status
 
         # node statuses should be updated before group status is set
         statuses = tuple(nb.update_status() for nb in self.node_backends)
@@ -560,6 +562,18 @@ class Group(object):
         return self.group_id == other
 
 
+def status_change_log(f):
+    @functools.wraps(f)
+    def wrapper(self, *args, **kwargs):
+        status = self.status
+        new_status = f(self, *args, **kwargs)
+        if status != new_status:
+            logger.info('Couple {0} status updated from {1} to {2}'.format(
+                self, status, new_status))
+        return new_status
+    return wrapper
+
+
 class Couple(object):
     def __init__(self, groups):
         self.status = Status.INIT
@@ -577,6 +591,7 @@ class Couple(object):
         except TypeError:
             return None
 
+    @status_change_log
     def update_status(self):
         statuses = [group.update_status() for group in self.groups]
 

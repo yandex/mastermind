@@ -241,7 +241,8 @@ class Balancer(object):
                     raise
 
         if len(result) == 0:
-            raise ValueError('Failed to satisfy namespace availability settings')
+            raise ValueError('Failed to satisfy {0} availability settings'.format(
+                'namespace ' + ns if ns else 'all namespaces'))
 
         logger.info(str(result))
         return result
@@ -254,8 +255,8 @@ class Balancer(object):
 
         for size in sizes:
             try:
-                logger.info('Calculating cluster info for namespace {0}, '
-                    'size {1}'.format(namespace, size))
+                logger.info('Namespace {0}, size {1}: calculating '
+                    'cluster info'.format(namespace, size))
                 (group_weights, info) = balancelogic.rawBalance(
                     symm_groups, bla.getConfig(),
                     bla._and(bla.GroupSizeEquals(size),
@@ -266,9 +267,10 @@ class Balancer(object):
                          (int(item[0].get_stat().free_space),)
                      for item in group_weights.items()]
                 found_couples += len([item for item in ns_weights[size] if item[1] > 0])
-                logger.info('Cluster info: ' + str(info))
+                logger.info('Namespace {0}, size {1}: '
+                    'cluster info: {2}'.format(namespace, size, info))
             except Exception as e:
-                logger.error('Error: {0}'.format(e))
+                logger.error('Namespace {0}, size {1}: error {2}'.format(namespace, size, e))
                 ns_weights[size] = []
                 continue
 
@@ -281,7 +283,7 @@ class Balancer(object):
                 '{2} required'.format(namespace, found_couples, ns_min_units))
 
             # raise ValueError('Namespace {0} has {1} available couples, '
-            #     '{2} required'.format(namespace, found_couples, self.MIN_NS_UNITS))
+            #     '{2} required'.format(namespace, found_couples, ns_min_units))
 
         result[namespace] = ns_weights
 
