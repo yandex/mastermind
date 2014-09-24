@@ -1,3 +1,10 @@
+mastermind (2.9.32) lucid; urgency=low
+
+  * New algorithm for move jobs generation
+  * Minor bug fixes
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 24 Sep 2014 17:51:09 +0400
+
 mastermind (2.9.31) lucid; urgency=low
 
   * create_group_ids uses new service name
