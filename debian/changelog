@@ -1,3 +1,9 @@
+mastermind (2.9.31) lucid; urgency=low
+
+  * create_group_ids uses new service name
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 24 Sep 2014 14:28:17 +0400
+
 mastermind (2.9.30) lucid; urgency=low
 
   * cmd restore should now work with old history records
