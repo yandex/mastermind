@@ -177,7 +177,7 @@ class Infrastructure(object):
                         if nodes_state['timestamp'] <= self.state[state_group['id']]['nodes'][-1]['timestamp']:
                             break
 
-                        if self.__node_state_type(node_state) != self.HISTORY_RECORD_AUTOMATIC:
+                        if self.__node_state_type(nodes_state) != self.HISTORY_RECORD_AUTOMATIC:
                             nodes_set = set(nodes_state['set'])
                             for nb in group.node_backends:
                                 if not (nb.node.host.addr, nb.node.port, nb.backend_id, nb.base_path) in nodes_set:
