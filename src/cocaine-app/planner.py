@@ -227,6 +227,15 @@ class Planner(object):
                             src_group.group_id, src_dc, dst_dc, base_ms,
                             new_candidate.state_ms_error, dst_group.group_id))
                     _candidates.append(new_candidate)
+                else:
+                    logger.debug('bad candidate: {0} group from {1} to {2}, '
+                        'deviation changed from {3} to {4} (swap with group {5})'.format(
+                            src_group.group_id, src_dc, dst_dc, base_ms,
+                            new_candidate.state_ms_error, dst_group.group_id))
+                    logger.debug('Base candidate:')
+                    candidate._debug()
+                    logger.debug('New candidate aftere moving:')
+                    new_candidate._debug()
 
         return _candidates
 
