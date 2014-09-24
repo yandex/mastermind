@@ -9,6 +9,7 @@ import traceback
 import elliptics
 import msgpack
 
+from coll import SortedCollection
 from config import config
 from infrastructure import infrastructure
 import jobs
@@ -17,9 +18,6 @@ from sync import sync_manager
 import timed_queue
 
 logger = getLogger('mm.planner')
-
-
-# TODO: select appropriate stat value: used_space, free_space, total_space
 
 
 class Planner(object):
@@ -73,8 +71,8 @@ class Planner(object):
             if job_type != job.type:
                 continue
             if job.status not in (jobs.Job.STATUS_COMPLETED, jobs.Job.STATUS_CANCELLED):
-                logger.info('Planer found at least one not finished job '
-                    '({0}, status {1})'.format(job.id, job.status))
+                logger.info('Planer found at least one not finished job of type {0} '
+                    '({1}, status {2})'.format(job_type, job.id, job.status))
                 return True
         return False
 
@@ -177,17 +175,17 @@ class Planner(object):
     def _generate_candidates(self, candidate):
         _candidates = []
 
-        avg = candidate.full_space_mean()
+        avg = candidate.mean_unc_percentage
 
-        base_ms = candidate.state_ms_error(avg)
+        base_ms = candidate.state_ms_error
 
         for c in itertools.combinations(candidate.iteritems(), 2):
             (src_dc, src_dc_state), (dst_dc, dst_dc_state) = c
 
-            if src_dc_state.full_space < avg:
+            if src_dc_state.unc_percentage > avg:
                 continue
 
-            if dst_dc_state.full_space >= src_dc_state.full_space:
+            if dst_dc_state.unc_percentage < avg:
                 continue
 
             for src_group in src_dc_state.groups:
@@ -223,11 +221,11 @@ class Planner(object):
 
                 new_candidate.move_group(src_dc, src_group, dst_dc, dst_group)
 
-                if new_candidate.state_ms_error(avg) < base_ms:
+                if new_candidate.state_ms_error < base_ms:
                     logger.debug('good candidate found: {0} group from {1} to {2}, '
-                        'error from {3} to {4} (swap with group {5})'.format(
+                        'deviation changed from {3} to {4} (swap with group {5})'.format(
                             src_group.group_id, src_dc, dst_dc, base_ms,
-                            new_candidate.state_ms_error(avg), dst_group.group_id))
+                            new_candidate.state_ms_error, dst_group.group_id))
                     _candidates.append(new_candidate)
 
         return _candidates
@@ -382,7 +380,8 @@ class Delta(object):
 class DcState(object):
     def __init__(self, storage_state):
         self.groups = []
-        self.full_space = 0.0
+        self.total_space = 0.0
+        self.uncoupled_space = 0.0
         self.storage_state = storage_state
         self.couples = set()
         self.uncoupled_keys = []
@@ -390,20 +389,27 @@ class DcState(object):
 
     def add_group(self, group):
         self.groups.append(group)
-        self.full_space += self.storage_state.stats(group).used_space
         assert group.couple
         self.couples.add(group.couple)
 
     def add_uncoupled_group(self, group):
         self.uncoupled_groups.insert(group)
+        self.uncoupled_space += self.storage_state.stats(group).total_space
 
     def copy(self, storage_state):
         obj = DcState(storage_state)
         obj.groups = copy(self.groups)
-        obj.full_space = self.full_space
+        obj.total_space, obj.uncoupled_space = self.total_space, self.uncoupled_space
         obj.couples = copy(self.couples)
         obj.uncoupled_groups = SortedCollection(iterable=self.uncoupled_groups._items, key=lambda x: storage_state.stats(x).total_space)
         return obj
+
+    def apply_stat(self, stat):
+        self.total_space += stat.total_space
+
+    @property
+    def unc_percentage(self):
+        return float(self.uncoupled_space) / self.total_space
 
 
 class StorageState(object):
@@ -427,6 +433,14 @@ class StorageState(object):
             obj._stats[group.group_id] = group.get_stat()
             obj.state[dc].add_uncoupled_group(group)
 
+        fsids = set()
+        for group in storage.groups:
+            for nb in group.node_backends:
+                if not nb.stat.fsid in fsids:
+                    dc = nb.node.host.dc
+                    obj.state[dc].apply_stat(nb.stat)
+                    fsids.add(nb.stat.fsid)
+
         return obj
 
     def copy(self):
@@ -441,22 +455,34 @@ class StorageState(object):
 
         return obj
 
-    def full_space_mean(self):
-        full_space = 0.0
-        for dc, dc_state in self.state.iteritems():
-            full_space += dc_state.full_space
+    @property
+    def mean_unc_percentage(self):
+        unc_space = sum([dc_state.uncoupled_space
+            for dc_state in self.state.itervalues()])
+        total_space = sum([dc_state.total_space
+            for dc_state in self.state.itervalues()])
 
-        return full_space / len(self.state)
+        return float(unc_space) / total_space
+
+
+    def _debug(self):
+        logger.debug('mean percentage: {0}'.format(self.mean_unc_percentage))
+        for dc, dc_state in self.state.iteritems():
+            logger.debug('dc: {0}, unc_percentage {1}, unc_space {2} '
+                'total_space {3}'.format(dc, dc_state.unc_percentage,
+                    dc_state.uncoupled_space, dc_state.total_space))
 
     def stats(self, group):
         return self._stats[group.group_id]
 
-    def state_ms_error(self, avg):
+    @property
+    def state_ms_error(self):
+
+        avg = self.mean_unc_percentage
 
         lms_error = 0.0
         for dc_state in self.state.itervalues():
-            # normalizing to TBs and square
-            lms_error += ((dc_state.full_space - avg) / (1024.0 * 1024.0 * 1024.0 * 1024.0)) ** 2
+            lms_error += ((dc_state.unc_percentage - avg) * 100) ** 2
 
         return lms_error
 
@@ -484,9 +510,10 @@ class StorageState(object):
         groups = []
 
         for group in storage.groups:
-            if not len(group.node_backends):
+            if group.couple is not None:
                 continue
-
+            if len(group.node_backends) != 1:
+                continue
             if group.status != storage.Status.INIT:
                 continue
 
@@ -505,8 +532,7 @@ class StorageState(object):
 
     def move_group(self, src_dc, src_group, dst_dc, dst_group):
 
-        avg = self.full_space_mean()
-        old_ms_error = self.state_ms_error(avg)
+        old_ms_error = self.state_ms_error
 
         # logger.info('{0}'.format(self.state))
         self.state[src_dc].groups.remove(src_group)
@@ -521,232 +547,20 @@ class StorageState(object):
 
         self.state[dst_dc].couples.add(src_group.couple)
 
-        used_space = self.stats(src_group).used_space
-        self.state[src_dc].full_space -= used_space
-        self.state[dst_dc].full_space += used_space
+        self.state[src_dc].uncoupled_space += self.stats(src_group).total_space
+        self.state[dst_dc].uncoupled_space -= self.stats(dst_group).total_space
 
         self.state[dst_dc].uncoupled_groups.remove(dst_group)
         # For now src_group is not swapped with dst_group but just replaces it
         # self.state[src_dc].uncoupled_groups.insert(dst_group)
 
-        # change total space and update used_space - group is being moved to another hdd
-        # TODO: fix src_stat - should change as well when moving to another node
-        src_stat = self.stats(src_group)
-        dst_stat = self.stats(dst_group)
-
-        # swapping total_space stats
-        dst_stat.total_space, src_stat.total_space = src_stat.total_space, dst_stat.total_space
-
-        # ... and updating used space accordingly
-        dst_stat.free_space = dst_stat.total_space - dst_stat.used_space
-        src_stat.free_space = src_stat.total_space - src_stat.used_space
-
         # updating delta object
-        self.delta.data_move_size += used_space
-        self.delta.ms_error_delta += self.state_ms_error(avg) - old_ms_error
+        self.delta.data_move_size += self.stats(src_group).used_space
+        self.delta.ms_error_delta += self.state_ms_error - old_ms_error
 
         self.moved_groups.append((src_group, src_dc, dst_group, dst_dc))
 
 
 def gb(bytes):
     return (bytes / (1024.0 * 1024.0 * 1024))
-
-
-
-
-
-from bisect import bisect_left, bisect_right
-
-class SortedCollection(object):
-    '''Sequence sorted by a key function.
-
-    SortedCollection() is much easier to work with than using bisect() directly.
-    It supports key functions like those use in sorted(), min(), and max().
-    The result of the key function call is saved so that keys can be searched
-    efficiently.
-
-    Instead of returning an insertion-point which can be hard to interpret, the
-    five find-methods return a specific item in the sequence. They can scan for
-    exact matches, the last item less-than-or-equal to a key, or the first item
-    greater-than-or-equal to a key.
-
-    Once found, an item's ordinal position can be located with the index() method.
-    New items can be added with the insert() and insert_right() methods.
-    Old items can be deleted with the remove() method.
-
-    The usual sequence methods are provided to support indexing, slicing,
-    length lookup, clearing, copying, forward and reverse iteration, contains
-    checking, item counts, item removal, and a nice looking repr.
-
-    Finding and indexing are O(log n) operations while iteration and insertion
-    are O(n).  The initial sort is O(n log n).
-
-    The key function is stored in the 'key' attibute for easy introspection or
-    so that you can assign a new key function (triggering an automatic re-sort).
-
-    In short, the class was designed to handle all of the common use cases for
-    bisect but with a simpler API and support for key functions.
-
-    >>> from pprint import pprint
-    >>> from operator import itemgetter
-
-    >>> s = SortedCollection(key=itemgetter(2))
-    >>> for record in [
-    ...         ('roger', 'young', 30),
-    ...         ('angela', 'jones', 28),
-    ...         ('bill', 'smith', 22),
-    ...         ('david', 'thomas', 32)]:
-    ...     s.insert(record)
-
-    >>> pprint(list(s))         # show records sorted by age
-    [('bill', 'smith', 22),
-     ('angela', 'jones', 28),
-     ('roger', 'young', 30),
-     ('david', 'thomas', 32)]
-
-    >>> s.find_le(29)           # find oldest person aged 29 or younger
-    ('angela', 'jones', 28)
-    >>> s.find_lt(28)           # find oldest person under 28
-    ('bill', 'smith', 22)
-    >>> s.find_gt(28)           # find youngest person over 28
-    ('roger', 'young', 30)
-
-    >>> r = s.find_ge(32)       # find youngest person aged 32 or older
-    >>> s.index(r)              # get the index of their record
-    3
-    >>> s[3]                    # fetch the record at that index
-    ('david', 'thomas', 32)
-
-    >>> s.key = itemgetter(0)   # now sort by first name
-    >>> pprint(list(s))
-    [('angela', 'jones', 28),
-     ('bill', 'smith', 22),
-     ('david', 'thomas', 32),
-     ('roger', 'young', 30)]
-
-    '''
-
-    def __init__(self, iterable=(), key=None):
-        self._given_key = key
-        key = (lambda x: x) if key is None else key
-        decorated = sorted((key(item), item) for item in iterable)
-        self._keys = [k for k, item in decorated]
-        self._items = [item for k, item in decorated]
-        self._key = key
-
-    def _getkey(self):
-        return self._key
-
-    def _setkey(self, key):
-        if key is not self._key:
-            self.__init__(self._items, key=key)
-
-    def _delkey(self):
-        self._setkey(None)
-
-    key = property(_getkey, _setkey, _delkey, 'key function')
-
-    def clear(self):
-        self.__init__([], self._key)
-
-    def copy(self):
-        return self.__class__(self, self._key)
-
-    def __len__(self):
-        return len(self._items)
-
-    def __getitem__(self, i):
-        return self._items[i]
-
-    def __iter__(self):
-        return iter(self._items)
-
-    def __reversed__(self):
-        return reversed(self._items)
-
-    def __repr__(self):
-        return '%s(%r, key=%s)' % (
-            self.__class__.__name__,
-            self._items,
-            getattr(self._given_key, '__name__', repr(self._given_key))
-        )
-
-    def __reduce__(self):
-        return self.__class__, (self._items, self._given_key)
-
-    def __contains__(self, item):
-        k = self._key(item)
-        i = bisect_left(self._keys, k)
-        j = bisect_right(self._keys, k)
-        return item in self._items[i:j]
-
-    def index(self, item):
-        'Find the position of an item.  Raise ValueError if not found.'
-        k = self._key(item)
-        i = bisect_left(self._keys, k)
-        j = bisect_right(self._keys, k)
-        return self._items[i:j].index(item) + i
-
-    def count(self, item):
-        'Return number of occurrences of item'
-        k = self._key(item)
-        i = bisect_left(self._keys, k)
-        j = bisect_right(self._keys, k)
-        return self._items[i:j].count(item)
-
-    def insert(self, item):
-        'Insert a new item.  If equal keys are found, add to the left'
-        k = self._key(item)
-        i = bisect_left(self._keys, k)
-        self._keys.insert(i, k)
-        self._items.insert(i, item)
-
-    def insert_right(self, item):
-        'Insert a new item.  If equal keys are found, add to the right'
-        k = self._key(item)
-        i = bisect_right(self._keys, k)
-        self._keys.insert(i, k)
-        self._items.insert(i, item)
-
-    def remove(self, item):
-        'Remove first occurence of item.  Raise ValueError if not found'
-        i = self.index(item)
-        del self._keys[i]
-        del self._items[i]
-
-    def find(self, k):
-        'Return first item with a key == k.  Raise ValueError if not found.'
-        i = bisect_left(self._keys, k)
-        if i != len(self) and self._keys[i] == k:
-            return self._items[i]
-        raise ValueError('No item found with key equal to: %r' % (k,))
-
-    def find_le(self, k):
-        'Return last item with a key <= k.  Raise ValueError if not found.'
-        i = bisect_right(self._keys, k)
-        if i:
-            return self._items[i-1]
-        raise ValueError('No item found with key at or below: %r' % (k,))
-
-    def find_lt(self, k):
-        'Return last item with a key < k.  Raise ValueError if not found.'
-        i = bisect_left(self._keys, k)
-        if i:
-            return self._items[i-1]
-        raise ValueError('No item found with key below: %r' % (k,))
-
-    def find_ge(self, k):
-        'Return first item with a key >= equal to k.  Raise ValueError if not found'
-        i = bisect_left(self._keys, k)
-        if i != len(self):
-            return self._items[i]
-        raise ValueError('No item found with key at or above: %r' % (k,))
-
-    def find_gt(self, k):
-        'Return first item with a key > k.  Raise ValueError if not found'
-        i = bisect_right(self._keys, k)
-        if i != len(self):
-            return self._items[i]
-        raise ValueError('No item found with key above: %r' % (k,))
-
 
