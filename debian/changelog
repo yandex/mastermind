@@ -1,3 +1,9 @@
+mastermind (2.9.30) lucid; urgency=low
+
+  * cmd restore should now work with old history records
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 24 Sep 2014 12:11:26 +0400
+
 mastermind (2.9.29) lucid; urgency=low
 
   * Fix for zookeeper lock ensuring path
