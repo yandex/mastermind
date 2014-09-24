@@ -237,8 +237,8 @@ class Balancer(object):
             try:
                 self._namespaces_weights(all_symm_group_objects, namespace, sizes, result)
             except ValueError:
-                if ns is not None:
-                    raise
+                # temporary proxy fix to prevent bad response caching
+                raise
 
         if len(result) == 0:
             raise ValueError('Failed to satisfy {0} availability settings'.format(
