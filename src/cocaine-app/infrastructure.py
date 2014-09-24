@@ -460,10 +460,13 @@ class Infrastructure(object):
                 raise ValueError('Restoring group has more than one node backend, '
                     'multiple node backends group restoration is not supported')
 
-            if len(state[0]) == 2:
-                raise ValueError('Restoring group has no valid history records')
-
-            addr, port, backend_id, path = state[0][:4]
+            if len(state[0]) == 3:
+                # convert old port to new backend id
+                addr, old_port, path = state[0][:3]
+                port = BASE_PORT + 1
+                backend_id = old_port - BASE_PORT
+            else:
+                addr, port, backend_id, path = state[0][:4]
 
             if (dest and
                 (group.node_backends[0].node.host.addr != addr or
