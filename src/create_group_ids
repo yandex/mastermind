@@ -113,7 +113,7 @@ class EllipticsUbicConfigParser(ConfigParser):
             raise e
 
 def get_group_from_mastermind(host):
-    s = Service("mastermind", host=host)
+    s = Service("mastermind2.26", host=host)
 
     while True:
         try:
