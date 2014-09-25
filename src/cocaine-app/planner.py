@@ -183,9 +183,13 @@ class Planner(object):
             (src_dc, src_dc_state), (dst_dc, dst_dc_state) = c
 
             if src_dc_state.unc_percentage > avg:
+                logger.debug('Pair src {0} and dst {1}: src_dc percentage > avg percentage'.format(
+                    src_dc, dst_dc, src_dc_state.unc_percentage, avg))
                 continue
 
             if dst_dc_state.unc_percentage < avg:
+                logger.debug('Pair src {0} and dst {1}: dst_dc percentage < avg percentage'.format(
+                    src_dc, dst_dc, dst_dc_state.unc_percentage, avg))
                 continue
 
             for src_group in src_dc_state.groups:
@@ -450,6 +454,10 @@ class StorageState(object):
                     obj.state[dc].apply_stat(nb.stat)
                     fsids.add(nb.stat.fsid)
 
+        logger.debug('Current state:')
+        for dc, dc_state in obj.state.iteritems():
+            logger.debug('dc: {0}, total_space {1}, uncoupled_space {2}, unc_percentage {3}'.format(
+                dc, dc_state.total_space, dc_state.uncoupled_space, dc_state.unc_percentage))
         return obj
 
     def copy(self):
