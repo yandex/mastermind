@@ -242,7 +242,8 @@ class Planner(object):
                     logger.debug('New candidate aftere moving:')
                     new_candidate._debug()
 
-                time.sleep(3)
+                time.sleep(0.1)
+            time.sleep(3)
 
         return _candidates
 
