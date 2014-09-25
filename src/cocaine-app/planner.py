@@ -4,6 +4,7 @@ from logging import getLogger
 import msgpack
 import storage
 import threading
+import time
 import traceback
 
 import elliptics
@@ -179,7 +180,7 @@ class Planner(object):
 
         base_ms = candidate.state_ms_error
 
-        for c in itertools.combinations(candidate.iteritems(), 2):
+        for c in itertools.permutations(candidate.iteritems(), 2):
             (src_dc, src_dc_state), (dst_dc, dst_dc_state) = c
 
             if src_dc_state.unc_percentage > avg:
@@ -240,6 +241,8 @@ class Planner(object):
                     candidate._debug()
                     logger.debug('New candidate aftere moving:')
                     new_candidate._debug()
+
+                time.sleep(3)
 
         return _candidates
 
