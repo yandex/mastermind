@@ -1,3 +1,9 @@
+mastermind (2.9.36) lucid; urgency=low
+
+  * Minor fixes
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 25 Sep 2014 14:46:47 +0400
+
 mastermind (2.9.35) lucid; urgency=low
 
   * Fix for selecting src and dst datacenters for move jobs
