@@ -1,3 +1,9 @@
+mastermind (2.9.34) lucid; urgency=low
+
+  * More logging
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 25 Sep 2014 12:49:21 +0400
+
 mastermind (2.9.33) lucid; urgency=low
 
   * temporary proxy fix to prevent bad response caching
