@@ -146,9 +146,11 @@ class Planner(object):
         except ValueError as e:
             logger.error('Plan cannot be applied: {0}'.format(e))
 
-    def _do_move_candidates(self, step=0):
+    def _do_move_candidates(self, step=0, busy_hosts=None):
         if step == 0:
             self.candidates = [[StorageState.current()]]
+        if busy_hosts is None:
+            busy_hosts = set()
 
         if step >= self.__max_plan_length:
             self.__apply_plan()
@@ -156,7 +158,7 @@ class Planner(object):
 
         logger.info('Candidates: {0}, step {1}'.format(len(self.candidates[-1]), step))
 
-        tmp_candidates = self._generate_candidates(self.candidates[-1][0])
+        tmp_candidates = self._generate_candidates(self.candidates[-1][0], busy_hosts)
 
         if not tmp_candidates:
             self.__apply_plan()
@@ -168,12 +170,14 @@ class Planner(object):
         logger.info('Max error candidate: {0}'.format(max_error_candidate))
         logger.info('Max error candidate moved groups: {0}'.format([
             (src_group, src_dc, dst_group, dst_dc) for src_group, src_dc, dst_group, dst_dc in max_error_candidate.moved_groups]))
+        for src_group, src_dc, dst_group, dst_dc in max_error_candidate.moved_groups:
+            busy_hosts.add(src_group.node_backends[0].node.host.addr)
+            busy_hosts.add(dst_group.node_backends[0].node.host.addr)
+
+        self._do_move_candidates(step=step + 1, busy_hosts=busy_hosts)
 
 
-        self._do_move_candidates(step=step + 1)
-
-
-    def _generate_candidates(self, candidate):
+    def _generate_candidates(self, candidate, busy_hosts):
         _candidates = []
 
         avg = candidate.mean_unc_percentage
@@ -202,6 +206,12 @@ class Planner(object):
                     # from the same couple is already located there
                     continue
 
+                src_host = src_group.node_backends[0].node.host.addr
+                if src_host in busy_hosts:
+                    logger.debug('src group {0} is skipped, {1} is in busy hosts'.format(
+                        src_group.group_id, src_host))
+                    continue
+
                 dst_group = None
                 for unc_group in dst_dc_state.uncoupled_groups:
                     unc_group_stat = candidate.stats(unc_group)
@@ -213,6 +223,12 @@ class Planner(object):
                         logger.warn('Uncoupled group {0} seems to have a lot of '
                             'used space (supposed to be empty)'.format(
                                 unc_group.group_id))
+                        continue
+
+                    dst_host = unc_group.node_backends[0].node.host.addr
+                    if dst_host in busy_hosts:
+                        logger.debug('dst group {0} is skipped, {1} is in busy hosts'.format(
+                            unc_group.group_id, dst_host))
                         continue
 
                     dst_group = unc_group
