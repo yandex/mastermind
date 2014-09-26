@@ -1,3 +1,10 @@
+mastermind (2.9.37) lucid; urgency=low
+
+  * Create maximum one move job per host
+  * Do not process jobs till minions status is fetched
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 26 Sep 2014 13:04:21 +0400
+
 mastermind (2.9.36) lucid; urgency=low
 
   * Minor fixes
