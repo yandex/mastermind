@@ -9,6 +9,7 @@ import traceback
 import uuid
 
 from config import config
+import errors
 import indexes
 from infrastructure import infrastructure, port_to_dir
 import keys
@@ -732,7 +733,11 @@ class JobProcessor(object):
 
         logger.info('Jobs execution started')
         try:
+            if not self.minions.ready:
+                raise errors.NotReadyError
+
             logger.debug('Lock acquiring')
+
             with sync_manager.lock(self.JOBS_LOCK):
                 logger.debug('Lock acquired')
                 # TODO: check! # fetch jobs - read_latest!!!
@@ -766,6 +771,8 @@ class JobProcessor(object):
                         executing_count += 1
                     self.jobs_index[job.id] = self.__dump_job(job)
 
+        except errors.NotReadyError as e:
+            logger.warn('Failed to process jobs: minions state is not fetched')
         except Exception as e:
             logger.error('Failed to process existing jobs: {0}\n{1}'.format(
                 e, traceback.format_exc()))

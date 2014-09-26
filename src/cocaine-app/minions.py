@@ -39,6 +39,9 @@ class Minions(object):
         self.history = {}
         self.active_hosts = []
 
+        self.history_ready = False
+        self.ready = False
+
         self.__tq = timed_queue.TimedQueue()
         self.__tq.start()
 
@@ -55,6 +58,8 @@ class Minions(object):
                                if config.get('minions', {}).get('authkey') else
                                None)
         self.minion_port = config.get('minions', {}).get('port', 8081)
+        self.minions_ready_percentage = config.get('minions', {}).get(
+            'minions_ready_percentage', 0.9)
 
         self.__commands_lock = threading.Lock()
         self.__active_hosts_lock = threading.Lock()
@@ -67,6 +72,9 @@ class Minions(object):
     def _fetch_states(self, active_hosts=False):
         logger.info('Fetching minion states task started')
         try:
+            if not self.history_ready:
+                raise errors.NotReadyError
+
             states = {}
 
             if not active_hosts:
@@ -85,19 +93,36 @@ class Minions(object):
             logger.debug('Starting async batch')
             responses = AsyncHTTPBatch(states.keys(),
                 headers=self.minion_headers).get()
+
+            successfull_hosts = 0
             for url, response in responses.iteritems():
                 host = states[url]
 
                 try:
                     data = self._get_response(host, response)
                 except ValueError as e:
+                    logger.error('Minion tasks fetch error')
                     logger.debug(e)
                     continue
                 try:
                     self._process_state(host.addr, data)
                 except errors.MinionApiError:
                     continue
+
+                successfull_hosts += 1
+
+            if not self.ready:
+                if float(successfull_hosts) / len(states) >= self.minions_ready_percentage:
+                    self.ready = True
+                else:
+                    logger.warn('Failed to sync minions state: '
+                        'received responses from less than {0}%% minions'.format(
+                            self.minions_ready_percentage * 100))
+
             logger.info('Finished fetching minion states task')
+        except errors.NotReadyError as e:
+            logger.warn('Failed to sync minions state: '
+                'minions history is not fetched')
         except Exception as e:
             logger.error('Failed to sync minions state: %s\n%s' %
                          (e, traceback.format_exc()))
@@ -230,6 +255,7 @@ class Minions(object):
                 logger.debug('Fetched history entry for command {0}'.format(entry['uid']))
                 self.history[entry['uid']] = entry['progress']
 
+            self.history_ready = True
             logger.info('Finished fetching minion commands history')
         except Exception as e:
             logger.info('Failed to fetch minion history')
