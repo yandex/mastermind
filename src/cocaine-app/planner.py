@@ -208,8 +208,6 @@ class Planner(object):
 
                 src_host = src_group.node_backends[0].node.host.addr
                 if src_host in busy_hosts:
-                    logger.debug('src group {0} is skipped, {1} is in busy hosts'.format(
-                        src_group.group_id, src_host))
                     continue
 
                 dst_group = None
@@ -244,9 +242,11 @@ class Planner(object):
 
                 if new_candidate.state_ms_error < base_ms:
                     logger.debug('good candidate found: {0} group from {1} to {2}, '
-                        'deviation changed from {3} to {4} (swap with group {5})'.format(
+                        'deviation changed from {3} to {4} (weight: {5}, lost space {6}) '
+                        '(swap with group {7})'.format(
                             src_group.group_id, src_dc, dst_dc, base_ms,
-                            new_candidate.state_ms_error, dst_group.group_id))
+                            new_candidate.state_ms_error, new_candidate.delta.weight,
+                            gb(new_candidate.delta.lost_space), dst_group.group_id))
                     _candidates.append(new_candidate)
                 else:
                     logger.debug('bad candidate: {0} group from {1} to {2}, '
@@ -393,21 +393,24 @@ class Delta(object):
     def __init__(self):
         self.data_move_size = 0.0
         self.ms_error_delta = 0.0
+        self.lost_space = 0.0
 
     def __add__(self, other):
         res = Delta()
         res.data_move_size = self.data_move_size + other.data_move_size
         res.ms_error_delta = self.ms_error_delta + other.ms_error_delta
+        res.lost_space = self.lost_space + other.lost_space
 
     def copy(self):
         res = Delta()
         res.data_move_size = self.data_move_size
         res.ms_error_delta = self.ms_error_delta
+        res.lost_space = self.lost_space
         return res
 
     @property
     def weight(self):
-        return -self.ms_error_delta - (self.data_move_size / (50 * 1024 * 1024 * 1024))
+        return -self.ms_error_delta - (self.lost_space / (30 * 1024 * 1024 * 1024))
 
 
 class DcState(object):
@@ -488,7 +491,7 @@ class StorageState(object):
         for dc, dc_state in self.state.iteritems():
             obj.state[dc] = dc_state.copy(obj)
 
-        obj.delta = self.delta.copy()
+        obj.delta.data_move_size = self.delta.data_move_size
 
         return obj
 
@@ -594,6 +597,8 @@ class StorageState(object):
         # updating delta object
         self.delta.data_move_size += self.stats(src_group).used_space
         self.delta.ms_error_delta += self.state_ms_error - old_ms_error
+
+        self.delta.lost_space += self.stats(dst_group).total_space - self.stats(src_group).used_space
 
         self.moved_groups.append((src_group, src_dc, dst_group, dst_dc))
 
