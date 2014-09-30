@@ -771,6 +771,8 @@ class JobProcessor(object):
                         executing_count += 1
                     self.jobs_index[job.id] = self.__dump_job(job)
 
+        except LockFailedError as e:
+            pass
         except errors.NotReadyError as e:
             logger.warn('Failed to process jobs: minions state is not fetched')
         except Exception as e:
@@ -889,6 +891,8 @@ class JobProcessor(object):
     def __load_job(self, data):
         return json.loads(data)
 
+    JOB_MANUAL_TIMEOUT = 20
+
     def create_job(self, request):
         try:
             try:
@@ -914,11 +918,13 @@ class JobProcessor(object):
             job = JobType.new(**params)
             job.create_tasks()
 
-            with sync_manager.lock(self.JOBS_LOCK):
+            with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
                 logger.info('Job {0} created: {1}'.format(job.id, job.dump()))
                 self.jobs_index[job.id] = self.__dump_job(job)
 
             self.jobs[job.id] = job
+        except LockFailedError as e:
+            raise
         except Exception as e:
             logger.error('Failed to create job: {0}\n{1}'.format(e,
                 traceback.format_exc()))
@@ -963,7 +969,7 @@ class JobProcessor(object):
             job = self.jobs[job_id]
 
             logger.debug('Lock acquiring')
-            with sync_manager.lock(self.JOBS_LOCK), job.tasks_lock():
+            with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT), job.tasks_lock():
                 logger.debug('Lock acquired')
 
                 if job.status not in (Job.STATUS_PENDING,
@@ -978,6 +984,8 @@ class JobProcessor(object):
 
                 logger.info('Job {0}: status set to {1}'.format(job.id, job.status))
 
+        except LockFailedError as e:
+            raise
         except Exception as e:
             logger.error('Failed to cancel job {0}: {1}\n{2}'.format(
                 job_id, e, traceback.format_exc()))
@@ -996,7 +1004,7 @@ class JobProcessor(object):
             job = self.jobs[job_id]
 
             logger.debug('Lock acquiring')
-            with sync_manager.lock(self.JOBS_LOCK), job.tasks_lock():
+            with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT), job.tasks_lock():
                 logger.debug('Lock acquired')
 
                 if job.status != Job.STATUS_NOT_APPROVED:
@@ -1008,6 +1016,8 @@ class JobProcessor(object):
                 self.jobs_index[job.id] = self.__dump_job(job)
 
 
+        except LockFailedError as e:
+            raise
         except Exception as e:
             logger.error('Failed to approve job {0}: {1}\n{2}'.format(
                 job_id, e, traceback.format_exc()))
@@ -1025,6 +1035,8 @@ class JobProcessor(object):
 
             job = self.__change_failed_task_status(job_id, task_id, Task.STATUS_QUEUED)
 
+        except LockFailedError as e:
+            raise
         except Exception as e:
             logger.error('Failed to retry job task, job {0}, task {1}: '
                 '{2}\n{3}'.format(job_id, task_id, e, traceback.format_exc()))
@@ -1042,6 +1054,8 @@ class JobProcessor(object):
 
             job = self.__change_failed_task_status(job_id, task_id, Task.STATUS_SKIPPED)
 
+        except LockFailedError as e:
+            raise
         except Exception as e:
             logger.error('Failed to skip job task, job {0}, task {1}: '
                 '{2}\n{3}'.format(job_id, task_id, e, traceback.format_exc()))
@@ -1059,7 +1073,7 @@ class JobProcessor(object):
                 '{2}|{3}'.format(job.id, job.status, Job.STATUS_PENDING, Job.STATUS_BROKEN))
 
         logger.debug('Lock acquiring')
-        with sync_manager.lock(self.JOBS_LOCK), job.tasks_lock():
+        with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT), job.tasks_lock():
             logger.debug('Lock acquired')
 
             task = None

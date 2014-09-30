@@ -16,6 +16,8 @@ from infrastructure import infrastructure
 import jobs
 import keys
 from sync import sync_manager
+from sync.error import LockFailedError
+
 import timed_queue
 
 logger = getLogger('mm.planner')
@@ -300,6 +302,8 @@ class Planner(object):
                 return
 
             self._do_recover_dc()
+        except LockFailedError:
+            pass
         except Exception as e:
             logger.error('{0}: {1}'.format(e, traceback.format_exc()))
         finally:
@@ -410,7 +414,7 @@ class Delta(object):
 
     @property
     def weight(self):
-        return -self.ms_error_delta - (self.lost_space / (30 * 1024 * 1024 * 1024))
+        return -self.ms_error_delta - (self.lost_space / (50 * 1024 * 1024 * 1024))
 
 
 class DcState(object):

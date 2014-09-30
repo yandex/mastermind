@@ -7,6 +7,7 @@ import traceback
 from kazoo.client import KazooClient
 from kazoo.exceptions import (
     SessionExpiredError,
+    LockTimeout,
     NodeExistsError,
     NoNodeError,
     KazooException,
@@ -32,6 +33,7 @@ kazoo_logger.setLevel(logging.INFO)
 class ZkSyncManager(object):
 
     RETRIES = 2
+    LOCK_TIMEOUT = 3
 
     def __init__(self, host='127.0.0.1:2181', lock_path_prefix='/mastermind/locks/'):
         self.client = KazooClient(host, timeout=3)
@@ -50,11 +52,21 @@ class ZkSyncManager(object):
         self.lock_path_prefix = lock_path_prefix
 
     @contextmanager
-    def lock(self, lockid):
+    def lock(self, lockid, timeout=LOCK_TIMEOUT):
         with self.__locks_lock:
             lock = self.locks.setdefault(lockid, Lock(self.client, self.lock_path_prefix + lockid))
-        with lock:
+        try:
+            lock.acquire(timeout=timeout)
             yield
+        except LockTimeout:
+            logger.info('Failed to acquire lock {0} due to timeout '
+                '({1} seconds)'.format(lockid, self.LOCK_TIMEOUT))
+            raise LockFailedError(lockid=lockid)
+        except Exception as e:
+            logger.error('Failed to acquire lock {0}: {1}\n{2}'.format(
+                lockid, e, traceback.format_exc()))
+            raise
+        lock.release()
 
     def persistent_locks_acquire(self, locks, data=''):
         try:
