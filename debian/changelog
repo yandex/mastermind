@@ -1,3 +1,9 @@
+mastermind (2.9.40) lucid; urgency=low
+
+  * Wait timeout for dnet_client minion commands
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 30 Sep 2014 19:57:17 +0400
+
 mastermind (2.9.39) lucid; urgency=low
 
   * Use timeout for zookeeper locks
