@@ -54,7 +54,7 @@ def node_shutdown_command(host, port, family):
 
 def dnet_client_backend_command(command):
     def wrapper(host, port, family, backend_id):
-        cmd = 'dnet_client backend -r {host}:{port}:{family} {command} --backend {backend_id}'
+        cmd = 'dnet_client backend -r {host}:{port}:{family} {command} --backend {backend_id} --wait-timeout=1000'
         return cmd.format(command=command,
             host=host, port=port, family=family, backend_id=backend_id)
     return wrapper
