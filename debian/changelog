@@ -1,3 +1,9 @@
+mastermind (2.9.39) lucid; urgency=low
+
+  * Use timeout for zookeeper locks
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 30 Sep 2014 14:26:28 +0400
+
 mastermind (2.9.38) lucid; urgency=low
 
   * Move jobs planner: take lost space instead of moved data size into consideration
