@@ -180,7 +180,10 @@ class Statistics(object):
                 dc_data['outages'] = by_ns[ns][dc]
 
     def total_stats(self, per_dc_stat):
-        return dict(reduce(self.dict_keys_sum, per_dc_stat.values()))
+        dc_stats = per_dc_stat.values()
+        for dc in dc_stats:
+            del dc['outages']
+        return dict(reduce(self.dict_keys_sum, dc_stats))
 
     def get_couple_stats(self):
         open_couples = self.balancer.get_symmetric_groups(None)
