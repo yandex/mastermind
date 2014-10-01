@@ -152,7 +152,8 @@ class MoveJob(Job):
 
     # used to mark source node that content has been moved away from it
     GROUP_FILE_MARKER_PATH = config.get('restore', {}).get('group_file_marker', None)
-    GROUP_FILE_DIR_MOVE_DST = config.get('restore', {}).get('group_file_dir_move_dst', None)
+    GROUP_FILE_DIR_MOVE_SRC_RENAME = config.get('restore', {}).get('group_file_dir_move_src_rename', None)
+    GROUP_FILE_DIR_MOVE_DST_RENAME = config.get('restore', {}).get('group_file_dir_move_dst_rename', None)
 
     PARAMS = ('group', 'uncoupled_group',
               'src_host', 'src_port', 'src_backend_id', 'src_family', 'src_base_path',
@@ -194,36 +195,53 @@ class MoveJob(Job):
 
         shutdown_cmd = infrastructure.disable_node_backend_cmd([
             self.dst_host, self.dst_port, self.dst_family, self.dst_backend_id])
+
+        group_file = (os.path.join(self.dst_base_path,
+                                   self.GROUP_FILE_PATH)
+                      if self.GROUP_FILE_PATH else
+                      '')
+
+        params = {'node_backend': self.dst_node_backend,
+                  'group': str(self.uncoupled_group)}
+
+        remove_path = ''
+
+        if self.GROUP_FILE_DIR_MOVE_DST_RENAME and group_file:
+            params['move_src'] = os.path.join(os.path.dirname(group_file))
+            remove_path = os.path.join(
+                self.dst_base_path, self.GROUP_FILE_DIR_MOVE_DST_RENAME)
+            params['move_dst'] = remove_path
+
         task = NodeStopTask.new(self,
                                 group=self.uncoupled_group,
                                 uncoupled=True,
                                 host=self.dst_host,
                                 cmd=shutdown_cmd,
-                                params={'node_backend': self.dst_node_backend,
-                                        'group': str(self.group)})
+                                params=params)
         self.tasks.append(task)
 
         shutdown_cmd = infrastructure.disable_node_backend_cmd([
             self.src_host, self.src_port, self.src_family, self.src_backend_id])
 
-        group_file_marker = (os.path.join(self.src_base_path,
-                                          self.GROUP_FILE_MARKER_PATH)
-                             if self.GROUP_FILE_MARKER_PATH else
-                             '')
         group_file = (os.path.join(self.src_base_path,
                                    self.GROUP_FILE_PATH)
                       if self.GROUP_FILE_PATH else
                       '')
+
+        group_file_marker = (os.path.join(self.src_base_path,
+                                          self.GROUP_FILE_MARKER_PATH)
+                             if self.GROUP_FILE_MARKER_PATH else
+                             '')
 
         params = {'node_backend': self.src_node_backend,
                   'group': str(self.group),
                   'group_file_marker': self.marker_format(group_file_marker),
                   'remove_group_file': group_file}
 
-        if self.GROUP_FILE_DIR_MOVE_DST and group_file:
+        if self.GROUP_FILE_DIR_MOVE_SRC_RENAME and group_file:
             params['move_src'] = os.path.join(os.path.dirname(group_file))
             params['move_dst'] = os.path.join(
-                self.src_base_path, self.GROUP_FILE_DIR_MOVE_DST)
+                self.src_base_path, self.GROUP_FILE_DIR_MOVE_SRC_RENAME)
 
         task = NodeStopTask.new(self,
                                 group=self.group,
@@ -240,11 +258,16 @@ class MoveJob(Job):
                       if self.GROUP_FILE_PATH else
                       '')
 
+        params = {'group': str(self.group),
+                  'group_file': group_file}
+
+        if remove_path:
+            params['remove_path'] = remove_path
+
         task = MinionCmdTask.new(self,
                                  host=self.dst_host,
                                  cmd=move_cmd,
-                                 params={'group': str(self.group),
-                                         'group_file': group_file})
+                                 params=params)
         self.tasks.append(task)
 
         reconfigure_cmd = infrastructure.reconfigure_node_cmd(
