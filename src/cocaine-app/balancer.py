@@ -455,7 +455,7 @@ class Balancer(object):
                 if node_backend.status != storage.Status.OK:
                     logger.info('Group {0} cannot be used, node backend {1} status '
                                 'is {2} (not OK)'.format(group.group_id,
-                                     node_backend, node.status))
+                                     node_backend, node_backend.status))
                     suitable = False
                     break
 
