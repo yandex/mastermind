@@ -1,3 +1,9 @@
+mastermind (2.9.43) lucid; urgency=low
+
+  * Minor bugs fixed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 02 Oct 2014 08:59:09 +0400
+
 mastermind (2.9.42) lucid; urgency=low
 
   * Remove path and migrate dst dir for move jobs
