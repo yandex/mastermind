@@ -106,7 +106,7 @@ class ZkSyncManager(object):
             holders = []
             for f in failed_locks:
                 holders.append((f, self.client.get(self.lock_path_prefix + f)))
-            foreign_holders = [(l, h) for l, h in holders if h != data]
+            foreign_holders = [(l, h) for l, h in holders if h[0] != data]
             failed_lock, holder_resp = foreign_holders and foreign_holders[0] or holders[0]
             holder = holder_resp[0]
             logger.warn('Persistent lock {0} is already set by {1}'.format(failed_lock, holder))
