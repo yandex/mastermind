@@ -1,3 +1,9 @@
+mastermind (2.9.44) lucid; urgency=low
+
+  * Fix for zk lock acquirings
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 06 Oct 2014 17:44:54 +0400
+
 mastermind (2.9.43) lucid; urgency=low
 
   * Minor bugs fixed
