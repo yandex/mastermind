@@ -311,10 +311,14 @@ class MoveJob(Job):
         try:
             sync_manager.persistent_locks_acquire(locks, self.id)
         except LockAlreadyAcquiredError as e:
-            logger.error('Job {0}: some of the groups is already '
-                'being processed by job {1}'.format(self.id, e.holder_id))
-            self.add_error(e)
-            raise
+            if e.holder_id != self.id:
+                logger.error('Job {0}: some of the groups is already '
+                    'being processed by job {1}'.format(self.id, e.holder_id))
+                self.add_error(e)
+                raise
+            else:
+                logger.warn('Job {0}: lock for group {1} has already '
+                    'been acquired, skipping'.format(self.id, self.group))
 
     def release_locks(self):
         locks = ['{0}{1}'.format(self.GROUP_LOCK_PREFIX, group)
@@ -370,10 +374,14 @@ class RecoverDcJob(Job):
             sync_manager.persistent_locks_acquire(
                 ['{0}{1}'.format(self.GROUP_LOCK_PREFIX, self.group)], self.id)
         except LockAlreadyAcquiredError as e:
-            logger.error('Job {0}: group {1} is already '
-                'being processed by job {2}'.format(self.id, self.group, e.holder_id))
-            self.add_error(e)
-            raise
+            if e.holder_id != self.id:
+                logger.error('Job {0}: group {1} is already '
+                    'being processed by job {2}'.format(self.id, self.group, e.holder_id))
+                self.add_error(e)
+                raise
+            else:
+                logger.warn('Job {0}: lock for group {1} has already '
+                    'been acquired, skipping'.format(self.id, self.group))
 
     def release_locks(self):
         try:

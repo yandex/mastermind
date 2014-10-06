@@ -94,20 +94,24 @@ class ZkSyncManager(object):
             tr.create(path, data)
 
         failed = False
-        failed_lock = None
+        failed_locks = []
         result = tr.commit()
         for i, res in enumerate(result):
             if isinstance(res, ZookeeperError):
                 failed = True
             if isinstance(res, NodeExistsError):
-                failed_lock = locks[i]
+                failed_locks.append(locks[i])
 
-        if failed_lock:
-            data = self.client.get(self.lock_path_prefix + failed_lock)
-            logger.warn('Persistent lock {0} is already set by {1}'.format(failed_lock, data[0]))
+        if failed_locks:
+            holders = []
+            for f in failed_locks:
+                holders.append(self.client.get(self.lock_path_prefix + f))
+            foreign_holders = [h for h in holders if h != data]
+            holder = foreign_holders and foreign_holders[0] or holders[0]
+            logger.warn('Persistent lock {0} is already set by {1}'.format(failed_lock, holder))
             raise LockAlreadyAcquiredError(
-                'Lock for {0} is already acquired by job {1}'.format(failed_lock, data[0]),
-                lock_id=failed_lock, holder_id=data[0])
+                'Lock for {0} is already acquired by job {1}'.format(failed_lock, holder),
+                lock_id=failed_lock, holder_id=holder)
         elif failed:
             logger.error('Failed to set persistent locks {0}, result: {1}'.format(
                 locks, result))
