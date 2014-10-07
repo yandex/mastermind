@@ -1,3 +1,9 @@
+mastermind (2.9.49) lucid; urgency=low
+
+  * Usage of tag secondary indexes
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 07 Oct 2014 20:01:43 +0400
+
 mastermind (2.9.48) lucid; urgency=low
 
   * Fix for zk lock acquirings
