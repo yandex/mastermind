@@ -75,11 +75,11 @@ class Repositary(object):
 
 class NodeStat(object):
     def __init__(self, raw_stat=None, prev=None):
+        self.ts = None
         if raw_stat:
             self.init(raw_stat, prev)
         else:
             self.load_average = 0.0
-        self.ts = None
 
     def init(self, raw_stat, prev=None):
         self.ts = time.time()
@@ -477,7 +477,7 @@ class Group(object):
     def update_status(self):
         if not self.node_backends:
             self.status = Status.INIT
-            self.status_text = ('Group {0} is in INIT state because there is'
+            self.status_text = ('Group {0} is in INIT state because there is '
                 'no node backends serving this group'.format(self.__str__()))
             return self.status
 
