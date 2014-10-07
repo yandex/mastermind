@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+import datetime
 import json
 import logging
 import os.path
@@ -724,8 +725,13 @@ class JobProcessor(object):
         self.minions = minions
 
         self.jobs = {}
-        self.jobs_index = indexes.SecondaryIndex(keys.MM_JOBS_IDX,
-            keys.MM_JOBS_KEY_TPL, self.meta_session)
+        self.jobs_index = indexes.TagSecondaryIndex(
+            keys.MM_JOBS_IDX,
+            keys.MM_JOBS_IDX_TPL,
+            keys.MM_JOBS_KEY_TPL,
+            self.meta_session,
+            logger=logger,
+            namespace='jobs')
 
         self.__tq = timed_queue.TimedQueue()
         self.__tq.start()
@@ -800,7 +806,7 @@ class JobProcessor(object):
                         continue
                     else:
                         executing_count += 1
-                    self.jobs_index[job.id] = self.__dump_job(job)
+                    self.jobs_index.set(job.id, self.tag(job), self.__dump_job(job))
 
         except LockFailedError as e:
             pass
@@ -815,6 +821,10 @@ class JobProcessor(object):
                 config.get('jobs', {}).get('execute_period', 60),
                 self._execute_jobs)
 
+    def tag(self, job):
+        ts = self.start_ts or self.create_ts
+        return datetime.datetime.fromtimestamp(ts).strftime('%Y-%m')
+
     def __process_job(self, job):
 
         logger.debug('Job {0}, processing started: {1}'.format(job.id, job.dump()))
@@ -822,6 +832,7 @@ class JobProcessor(object):
         if job.status == Job.STATUS_NEW:
             logger.info('Job {0}: setting job start time'.format(job.id))
             job.start_ts = time.time()
+
             try:
                 job.perform_locks()
             except LockError:
@@ -951,7 +962,7 @@ class JobProcessor(object):
 
             with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
                 logger.info('Job {0} created: {1}'.format(job.id, job.dump()))
-                self.jobs_index[job.id] = self.__dump_job(job)
+                self.jobs_index.set(job.id, self.tag(job), self.__dump_job(job))
 
             self.jobs[job.id] = job
         except LockFailedError as e:
@@ -1011,7 +1022,7 @@ class JobProcessor(object):
 
                 job.status = Job.STATUS_CANCELLED
                 job.complete()
-                self.jobs_index[job.id] = self.__dump_job(job)
+                self.jobs_index.set(job.id, self.tag(job), self.__dump_job(job))
 
                 logger.info('Job {0}: status set to {1}'.format(job.id, job.status))
 
@@ -1044,7 +1055,7 @@ class JobProcessor(object):
 
                 job.status = Job.STATUS_NEW
 
-                self.jobs_index[job.id] = self.__dump_job(job)
+                self.jobs_index.set(job.id, self.tag(job), self.__dump_job(job))
 
 
         except LockFailedError as e:
@@ -1122,7 +1133,7 @@ class JobProcessor(object):
 
             task.status = status
             job.status = Job.STATUS_EXECUTING
-            self.jobs_index[job.id] = self.__dump_job(job)
+            self.jobs_index.set(job.id, self.tag(job), self.__dump_job(job))
             logger.info('Job {0}: task {1} status was reset to {2}, '
                 'job status was reset to {3}'.format(
                     job.id, task.id, task.status, job.status))
