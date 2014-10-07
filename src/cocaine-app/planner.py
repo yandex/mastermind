@@ -73,12 +73,19 @@ class Planner(object):
         for job in self.job_processor.jobs.itervalues():
             if job_type != job.type:
                 continue
-            if job.status not in (jobs.Job.STATUS_COMPLETED, jobs.Job.STATUS_CANCELLED):
-                logger.info('Planer found at least one not finished job of type {0} '
-                    '({1}, status {2})'.format(job_type, job.id, job.status))
+            if job.status in (jobs.Job.STATUS_NOT_APPROVED,):
+                logger.info('Planer found at least one not approved job of type {0} '
+                    '({1})'.format(job_type, job.id))
                 return True
         return False
 
+    def __busy_hosts(self):
+        hosts = set()
+        for job in self.job_processor.jobs.itervalues():
+            if job_type != job.type:
+                continue
+            hosts.update([job.src_host, job.dst_host])
+        return hosts
 
     def __apply_plan(self):
 
@@ -152,7 +159,8 @@ class Planner(object):
         if step == 0:
             self.candidates = [[StorageState.current()]]
         if busy_hosts is None:
-            busy_hosts = set()
+            busy_hosts = self.__busy_hosts()
+            logger.debug('Busy hosts from executing jobs: {0}'.format(list(busy_hosts)))
 
         if step >= self.__max_plan_length:
             self.__apply_plan()
