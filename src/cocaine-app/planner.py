@@ -79,7 +79,7 @@ class Planner(object):
                 return True
         return False
 
-    def __busy_hosts(self):
+    def __busy_hosts(self, job_type):
         hosts = set()
         for job in self.job_processor.jobs.itervalues():
             if job_type != job.type:
@@ -159,7 +159,7 @@ class Planner(object):
         if step == 0:
             self.candidates = [[StorageState.current()]]
         if busy_hosts is None:
-            busy_hosts = self.__busy_hosts()
+            busy_hosts = self.__busy_hosts(JobFactory.TYPE_MOVE_JOB)
             logger.debug('Busy hosts from executing jobs: {0}'.format(list(busy_hosts)))
 
         if step >= self.__max_plan_length:
