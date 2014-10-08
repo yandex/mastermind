@@ -1,3 +1,9 @@
+mastermind (2.9.52) lucid; urgency=low
+
+  * Misprint fixed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 08 Oct 2014 18:29:59 +0400
+
 mastermind (2.9.51) lucid; urgency=low
 
   * Fix for job move planning
