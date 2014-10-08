@@ -1,3 +1,9 @@
+mastermind (2.9.55) lucid; urgency=low
+
+  * Fix for flowmastermind statistics
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 08 Oct 2014 20:44:54 +0400
+
 mastermind (2.9.54) lucid; urgency=low
 
   * Additional checking for busy hosts
