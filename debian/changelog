@@ -1,3 +1,9 @@
+mastermind (2.9.50) lucid; urgency=low
+
+  * Jobs tagging optimized
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 08 Oct 2014 17:47:41 +0400
+
 mastermind (2.9.49) lucid; urgency=low
 
   * Usage of tag secondary indexes
