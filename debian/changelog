@@ -1,3 +1,9 @@
+mastermind (2.9.54) lucid; urgency=low
+
+  * Additional checking for busy hosts
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 08 Oct 2014 19:18:04 +0400
+
 mastermind (2.9.53) lucid; urgency=low
 
   * Misprint fixed
