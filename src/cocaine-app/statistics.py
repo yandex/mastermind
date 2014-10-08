@@ -332,6 +332,8 @@ class Statistics(object):
                 continue
             elif status and status != 'UNCOUPLED' and (not group.couple or status != group.couple.status):
                 continue
+            if not group.node_backends:
+                continue
             stat = group.get_stat()
             for node_backend in group.node_backends:
                 group_parent = nodes['host'][node_backend.node.host.hostname]
