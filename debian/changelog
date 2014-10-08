@@ -1,3 +1,9 @@
+mastermind (2.9.51) lucid; urgency=low
+
+  * Fix for job move planning
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 08 Oct 2014 18:08:14 +0400
+
 mastermind (2.9.50) lucid; urgency=low
 
   * Jobs tagging optimized
