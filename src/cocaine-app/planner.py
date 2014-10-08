@@ -84,6 +84,8 @@ class Planner(object):
         for job in self.job_processor.jobs.itervalues():
             if job_type != job.type:
                 continue
+            if job.status in (jobs.Job.STATUS_COMPLETED, jobs.Job.STATUS_CANCELLED):
+                continue
             hosts.update([job.src_host, job.dst_host])
         return hosts
 
