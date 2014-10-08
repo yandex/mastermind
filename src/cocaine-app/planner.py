@@ -484,6 +484,8 @@ class StorageState(object):
         fsids = set()
         for group in storage.groups:
             for nb in group.node_backends:
+                if nb.stat is None:
+                    continue
                 if not nb.stat.fsid in fsids:
                     dc = nb.node.host.dc
                     obj.state[dc].apply_stat(nb.stat)
