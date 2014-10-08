@@ -334,7 +334,11 @@ class Statistics(object):
                 continue
             if not group.node_backends:
                 continue
-            stat = group.get_stat()
+            try:
+                stat = group.get_stat()
+            except TypeError:
+                logger.warn('Group {0}: no node backends stat available'.format(group.group_id))
+                continue
             for node_backend in group.node_backends:
                 group_parent = nodes['host'][node_backend.node.host.hostname]
                 groups = group_parent.setdefault('children', [])
