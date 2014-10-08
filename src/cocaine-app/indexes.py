@@ -42,6 +42,8 @@ class TagSecondaryIndex(object):
             yield data
 
     def _iter_keys(self, keys):
+        if not keys:
+            return
         count = 0
         for resp in self.meta_session.bulk_read(keys).get():
             count += 1
@@ -58,7 +60,10 @@ class TagSecondaryIndex(object):
         for data in self._iter_keys(idxes):
             yield data
 
-    def set(self, key, tag, val):
+    def __setitem__(self, key, val):
         eid = self.meta_session.transform(self.key_tpl % key)
         self.meta_session.write_data(eid, val)
-        self.meta_session.set_indexes(eid, [self.main_idx, self.idx_tpl % tag], [None, None])
+
+    def set_tag(self, key, tag):
+        eid = self.meta_session.transform(self.key_tpl % key)
+        self.meta_session.set_indexes(eid, [self.main_idx, self.idx_tpl % tag], ['', ''])

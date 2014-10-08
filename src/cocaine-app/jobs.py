@@ -741,6 +741,17 @@ class JobProcessor(object):
         self.__tq.add_task_in(self.JOBS_EXECUTE,
             5, self._execute_jobs)
 
+        self.job_tags = self._active_tags()
+
+    def _active_tags(self):
+        tags = []
+        dt = datetime.datetime.now().replace(day=1)
+        for month in range(2):
+            tags.append(self.tag_dt(dt))
+            dt = dt - datetime.timedelta(days=1)
+            dt = dt.replace(day=1)
+        return tags
+
     def _load_job(self, job_rawdata):
         job_data = json.loads(job_rawdata)
         if not job_data['id'] in self.jobs:
@@ -764,7 +775,10 @@ class JobProcessor(object):
 
 
     def _do_update_jobs(self):
-        [self._load_job(job) for job in self.jobs_index]
+        for tag in self.job_tags:
+            logger.debug('updating jobs with tag {0}'.format(tag))
+            for job in self.jobs_index.tagged(tag):
+                self._load_job(job)
 
     def _execute_jobs(self):
 
@@ -806,7 +820,7 @@ class JobProcessor(object):
                         continue
                     else:
                         executing_count += 1
-                    self.jobs_index.set(job.id, self.tag(job), self.__dump_job(job))
+                    self.jobs_index[job.id] = self.__dump_job(job)
 
         except LockFailedError as e:
             pass
@@ -822,8 +836,13 @@ class JobProcessor(object):
                 self._execute_jobs)
 
     def tag(self, job):
-        ts = self.start_ts or self.create_ts
-        return datetime.datetime.fromtimestamp(ts).strftime('%Y-%m')
+        ts = job.create_ts or job.start_ts
+        if not ts:
+            logger.error('Bad job: {0}'.format(job.human_dump()))
+        return self.tag_dt(datetime.datetime.fromtimestamp(ts or time.time()))
+
+    def tag_dt(self, dt):
+        return dt.strftime('%Y-%m')
 
     def __process_job(self, job):
 
@@ -962,7 +981,8 @@ class JobProcessor(object):
 
             with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
                 logger.info('Job {0} created: {1}'.format(job.id, job.dump()))
-                self.jobs_index.set(job.id, self.tag(job), self.__dump_job(job))
+                self.jobs_index[job.id] = self.__dump_job(job)
+                self.jobs_index.set_tag(job.id, self.tag(job))
 
             self.jobs[job.id] = job
         except LockFailedError as e:
@@ -983,9 +1003,16 @@ class JobProcessor(object):
         def job_filter(j):
             if options.get('job_type', None) and j.type != options['job_type']:
                 return False
+            if options.get('tag', None) and self.tag(j) != options['tag']:
+                return False
             return True
 
-        res = [job.human_dump() for job in sorted(self.jobs.itervalues(),
+        jobs = self.jobs.itervalues()
+        if options.get('tag', None) and options['tag'] not in self.job_tags:
+            logger.info('Requested job list not from active tags: {0}'.format(options['tag']))
+            jobs = [self._load_job(job) for job in self.jobs_index.tagged(options['tag'])]
+
+        res = [job.human_dump() for job in sorted(jobs,
                    key=lambda j: (j.create_ts, j.start_ts, j.finish_ts))
                if job_filter(job)]
         return res
@@ -1022,7 +1049,7 @@ class JobProcessor(object):
 
                 job.status = Job.STATUS_CANCELLED
                 job.complete()
-                self.jobs_index.set(job.id, self.tag(job), self.__dump_job(job))
+                self.jobs_index[job.id] = self.__dump_job(job)
 
                 logger.info('Job {0}: status set to {1}'.format(job.id, job.status))
 
@@ -1055,8 +1082,7 @@ class JobProcessor(object):
 
                 job.status = Job.STATUS_NEW
 
-                self.jobs_index.set(job.id, self.tag(job), self.__dump_job(job))
-
+                self.jobs_index[job.id] = self.__dump_job(job)
 
         except LockFailedError as e:
             raise
@@ -1133,7 +1159,7 @@ class JobProcessor(object):
 
             task.status = status
             job.status = Job.STATUS_EXECUTING
-            self.jobs_index.set(job.id, self.tag(job), self.__dump_job(job))
+            self.jobs_index[job.id] = self.__dump_job(job)
             logger.info('Job {0}: task {1} status was reset to {2}, '
                 'job status was reset to {3}'.format(
                     job.id, task.id, task.status, job.status))
