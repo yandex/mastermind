@@ -1,3 +1,10 @@
+mastermind (2.9.57) lucid; urgency=low
+
+  * Separate max executing jobs counters per job type
+  * Json output fix for mastermind util
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 09 Oct 2014 15:06:32 +0400
+
 mastermind (2.9.56) lucid; urgency=low
 
   * Fix for flowmastermind statistics
