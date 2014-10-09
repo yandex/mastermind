@@ -306,6 +306,13 @@ class MoveJob(Job):
                                          backend_id=self.src_backend_id)
         self.tasks.append(task)
 
+        task = HistoryRemoveNodeTask.new(self,
+                                         group=self.uncoupled_group,
+                                         host=self.dst_host,
+                                         port=self.dst_port,
+                                         backend_id=self.dst_backend_id)
+        self.tasks.append(task)
+
     def perform_locks(self):
         locks = ['{0}{1}'.format(self.GROUP_LOCK_PREFIX, group)
                  for group in (self.group, self.uncoupled_group)]
