@@ -717,8 +717,6 @@ class JobProcessor(object):
     JOBS_UPDATE = 'jobs_update'
     JOBS_LOCK = 'jobs'
 
-    MAX_EXECUTING_JOBS = config.get('jobs', {}).get('max_executing_jobs', 3)
-
     def __init__(self, meta_session, minions):
         logger.info('Starting JobProcessor')
         self.meta_session = meta_session
@@ -795,11 +793,17 @@ class JobProcessor(object):
                 self._do_update_jobs()
 
                 new_jobs, executing_jobs = [], []
-                for job in self.jobs.itervalues():
-                    if job.status == Job.STATUS_EXECUTING:
-                        executing_jobs.append(job)
-                    elif job.status == Job.STATUS_NEW:
-                        new_jobs.append(job)
+                type_jobs_count = {}
+                for job in filter(lambda j: j.status == Job.STATUS_EXECUTING, self.jobs.itervalues()):
+                    type_jobs_count.setdefault(job.type, 0)
+                    type_jobs_count[job.type] += 1
+                    executing_jobs.append(job)
+                for job in filter(lambda j: j.status == Job.STATUS_NEW, self.jobs.itervalues()):
+                    jobs_count = type_jobs_count.setdefault(job.type, 0)
+                    if jobs_count >= config.get('jobs', {}).get(job.type, {}).get('max_executing_job', 3):
+                        continue
+                    type_jobs_count[job.type] += 1
+                    new_jobs.append(job)
 
                 new_jobs.sort(key=lambda j: j.create_ts)
                 ready_jobs = executing_jobs + new_jobs
@@ -807,8 +811,6 @@ class JobProcessor(object):
 
                 executing_count = 0
                 for job in ready_jobs:
-                    if executing_count >= self.MAX_EXECUTING_JOBS:
-                        break
                     try:
                         with job.tasks_lock():
                             self.__process_job(job)
