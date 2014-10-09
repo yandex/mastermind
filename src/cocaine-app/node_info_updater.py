@@ -69,9 +69,10 @@ class NodeInfoUpdater(object):
             self.execute_tasks(delayed)
 
             try:
-                max_group = self.__node.meta_session.read_data(
-                    keys.MASTERMIND_MAX_GROUP_KEY).get()[0].data
-            except:
+                max_group = int(self.__node.meta_session.read_data(
+                    keys.MASTERMIND_MAX_GROUP_KEY).get()[0].data)
+            except Exception as e:
+                logger.error('Failed to read max group number: {0}'.format(e))
                 max_group = 0
 
             if not len(storage.groups):
@@ -80,6 +81,7 @@ class NodeInfoUpdater(object):
 
             curr_max_group = max((g.group_id for g in storage.groups))
             if curr_max_group > max_group:
+                logger.info('Updating storage max group to {0}'.format(curr_max_group))
                 self.__node.meta_session.write_data(
                     keys.MASTERMIND_MAX_GROUP_KEY, str(curr_max_group)).get()
 
