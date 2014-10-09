@@ -17,7 +17,7 @@ done
 echo "Deploy New Mastermind:"
 cocaine-tool app upload --manifest $DEPLOY_DIR/cocaine-app/mastermind.manifest --package $DEPLOY_DIR/cocaine-app/mastermind.tar.gz -n $APP_NAME
 cocaine-tool profile upload -n $APP_NAME --profile $DEPLOY_DIR/cocaine-app/mastermind.profile
-cocaine-tool runlist add-app -n default --app $APP_NAME --profile mastermind --force
+cocaine-tool runlist add-app -n default --app $APP_NAME --profile $APP_NAME --force
 
 mkdir /var/log/mastermind
 chown cocaine -R /usr/lib/mastermind
