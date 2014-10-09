@@ -1139,7 +1139,7 @@ def retry(session, method, *params, **kwargs):
 def print_by_dcs(groups_by_dc, as_json):
 
     for dc in groups_by_dc:
-        print groups_by_dc[dc]
+        # print groups_by_dc[dc]
         groups_by_dc[dc] = groups_by_dc[dc].values()
 
     if as_json:
