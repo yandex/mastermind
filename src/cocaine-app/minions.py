@@ -58,8 +58,6 @@ class Minions(object):
                                if config.get('minions', {}).get('authkey') else
                                None)
         self.minion_port = config.get('minions', {}).get('port', 8081)
-        self.minions_ready_percentage = config.get('minions', {}).get(
-            'minions_ready_percentage', 0.9)
 
         self.__commands_lock = threading.Lock()
         self.__active_hosts_lock = threading.Lock()
@@ -112,12 +110,11 @@ class Minions(object):
                 successfull_hosts += 1
 
             if not self.ready:
-                if float(successfull_hosts) / len(states) >= self.minions_ready_percentage:
-                    self.ready = True
-                else:
+                self.ready = len(successfull_hosts) >= len(states)
+                if not self.ready:
                     logger.warn('Failed to sync minions state: '
-                        'received responses from less than {0}%% minions'.format(
-                            self.minions_ready_percentage * 100))
+                        'received responses from {0}/{1} minions'.format(
+                            len(successfull_hosts), len(states)))
 
             logger.info('Finished fetching minion states task')
         except errors.NotReadyError as e:
