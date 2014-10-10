@@ -1,3 +1,9 @@
+mastermind (2.9.60) lucid; urgency=low
+
+  * Removed minions ready percentage, 100% minion response is required
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 10 Oct 2014 13:33:18 +0400
+
 mastermind (2.9.59) lucid; urgency=low
 
   * Profile name fix in mastermind deployment script
