@@ -110,11 +110,11 @@ class Minions(object):
                 successfull_hosts += 1
 
             if not self.ready:
-                self.ready = len(successfull_hosts) >= len(states)
+                self.ready = successfull_hosts >= len(states)
                 if not self.ready:
                     logger.warn('Failed to sync minions state: '
                         'received responses from {0}/{1} minions'.format(
-                            len(successfull_hosts), len(states)))
+                            successfull_hosts, len(states)))
 
             logger.info('Finished fetching minion states task')
         except errors.NotReadyError as e:
