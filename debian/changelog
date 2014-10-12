@@ -1,3 +1,9 @@
+mastermind (2.9.62) lucid; urgency=low
+
+  * Fix for couple repair
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sun, 12 Oct 2014 23:06:15 +0400
+
 mastermind (2.9.61) lucid; urgency=low
 
   * Minions status fetch fixed
