@@ -321,16 +321,8 @@ class Balancer(object):
 
         couple = bad_couples[0]
 
-        # checking namespaces in all couple groups
-        for g in couple:
-            if g.group_id == group_id:
-                continue
-            if g.meta is None:
-                logger.error('Balancer error: group %d (coupled with group %d) has no metadata' % (g.group_id, group_id))
-                return {'Balancer error': 'group %d (coupled with group %d) has no metadata' % (g.group_id, group_id)}
-
-        namespaces = [g.meta['namespace'] for g in couple if g.group_id != group_id]
-        if not all(ns == namespaces[0] for ns in namespaces):
+        namespaces = [g.meta['namespace'] for g in couple if g.meta and g.group_id != group_id]
+        if namespaces and not all(ns == namespaces[0] for ns in namespaces):
             logger.error('Balancer error: namespaces of groups coupled with group %d are not the same: %s' % (group_id, namespaces))
             return {'Balancer error': 'namespaces of groups coupled with group %d are not the same: %s' % (group_id, namespaces)}
 
