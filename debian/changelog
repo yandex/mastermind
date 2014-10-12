@@ -1,3 +1,9 @@
+mastermind (2.9.61) lucid; urgency=low
+
+  * Minions status fetch fixed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sun, 12 Oct 2014 14:48:02 +0400
+
 mastermind (2.9.60) lucid; urgency=low
 
   * Removed minions ready percentage, 100% minion response is required
