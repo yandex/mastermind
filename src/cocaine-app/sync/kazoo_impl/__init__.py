@@ -60,13 +60,14 @@ class ZkSyncManager(object):
             yield
         except LockTimeout:
             logger.info('Failed to acquire lock {0} due to timeout '
-                '({1} seconds)'.format(lockid, self.LOCK_TIMEOUT))
+                '({1} seconds)'.format(lockid, timeout))
             raise LockFailedError(lockid=lockid)
         except Exception as e:
             logger.error('Failed to acquire lock {0}: {1}\n{2}'.format(
                 lockid, e, traceback.format_exc()))
             raise
-        lock.release()
+        finally:
+            lock.release()
 
     def persistent_locks_acquire(self, locks, data=''):
         try:
