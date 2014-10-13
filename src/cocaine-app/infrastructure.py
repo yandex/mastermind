@@ -51,6 +51,9 @@ class Infrastructure(object):
         '-a {attempts} -b {batch} -l {log} -n {processes_num}')
     DNET_RECOVERY_DC_REMOTE_TPL = '-r {host}:{port}:{family}'
 
+    DNET_DEFRAG_CMD = ('dnet_client -r {host}:{port}:{family} '
+        'defrag --backend {backend_id}')
+
     HISTORY_RECORD_AUTOMATIC = 'automatic'
     HISTORY_RECORD_MANUAL = 'manual'
     HISTORY_RECORD_JOB = 'job'
@@ -646,6 +649,27 @@ class Infrastructure(object):
 
         logger.info('Command for dc recovery for group {0} '
             'was requested: {1}'.format(group_id, cmd))
+
+        return cmd
+
+    def defrag_node_backend_cmd(self, request):
+
+        try:
+            host, port, family, backend_id = request[:4]
+            port, family, backend_id = map(int, (port, family, backend_id))
+            node_backend_str = '{0}:{1}/{2}'.format(host, port, backend_id)
+            node_backend = storage.node_backends[node_backend_str]
+        except (ValueError, TypeError, KeyError):
+            raise ValueError('Node backend {0} is not found'.format(node_backend_str))
+
+        cmd = self.DNET_DEFRAG_CMD.format(
+            host=node_backend.node.host.addr,
+            port=node_backend.node.port,
+            family=node_backend.node.family,
+            backend_id=node_backend.backend_id)
+
+        logger.info('Command for node backend {0} defragmentation '
+            'was requested: {1}'.format(node_backend, cmd))
 
         return cmd
 

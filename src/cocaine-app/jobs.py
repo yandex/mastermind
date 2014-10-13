@@ -401,6 +401,75 @@ class RecoverDcJob(Job):
             pass
 
 
+
+class CoupleDefragJob(Job):
+
+    PARAMS = ('couple', 'fragmentation')
+
+    def __init__(self, **kwargs):
+        super(CoupleDefragJob, self).__init__(**kwargs)
+        self.type = JobFactory.TYPE_COUPLE_DEFRAG_JOB
+
+    @classmethod
+    def new(cls, **kwargs):
+        job = super(CoupleDefragJob, cls).new(**kwargs)
+        couple = storage.couples[kwargs['couple']]
+        fragmentation = []
+        for g in couple.groups:
+            fragmentation.append(g.get_stat().fragmentation)
+        fragmentation.sort(reverse=True)
+        job.fragmentation = fragmentation
+        return job
+
+    def node_backend(self, host, port, backend_id):
+        return '{0}:{1}/{2}'.format(host, port, backend_id).encode('utf-8')
+
+    def human_dump(self):
+        data = super(CoupleDefragJob, self).human_dump()
+        data['hostname'] = infrastructure.get_hostname_by_addr(data['host'])
+        return data
+
+    def create_tasks(self):
+        if not self.couple in storage.couples:
+            raise JobBrokenError('Couple {0} is not found'.format(self.couple))
+
+        couple = storage.couples[self.couple]
+
+        for group in couple.groups:
+            for nb in group.node_backends:
+                cmd = infrastructure.defrag_node_backend_cmd([
+                    nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id])
+
+                task = NodeBackendDefragTask.new(self,
+                    host=self.nb.node.host.addr,
+                    cmd=cmd,
+                    params={'node_backend': self.node_backend(
+                        nb.node.host.addr, nb.node.port, nb.backend_id)})
+
+                self.tasks.append(task)
+
+        self.tasks.append(task)
+
+    def perform_locks(self):
+        try:
+            sync_manager.persistent_locks_acquire(
+                ['{0}{1}'.format(self.GROUP_LOCK_PREFIX, self.group)], self.id)
+        except LockAlreadyAcquiredError as e:
+            logger.error('Job {0}: group {1} is already '
+                'being processed by job {2}'.format(self.id, self.group, e.holder_id))
+            self.add_error(e)
+            raise
+
+    def release_locks(self):
+        try:
+            sync_manager.persistent_locks_release(
+                ['{0}{1}'.format(self.GROUP_LOCK_PREFIX, self.group)], self.id)
+        except InconsistentLockError as e:
+            logger.error('Job {0}: lock for group {1} is already acquired by another '
+                'job {2}'.format(self.id, self.group, e.holder_id))
+            pass
+
+
 class JobBrokenError(Exception):
     pass
 
@@ -599,6 +668,42 @@ class RecoverGroupDcTask(MinionCmdTask):
         super(RecoverGroupDcTask, self).execute(minions)
 
 
+class NodeBackendDefragTask(MinionCmdTask):
+
+    PARAMS = MinionCmdTask.PARAMS + ('node_backend',)
+
+    def __init__(self, job):
+        super(NodeBackendDefragTask, self).__init__(job)
+        self.type = TaskFactory.TYPE_NODE_BACKEND_DEFRAG_TASK
+
+    def execute(self, minions):
+        # checking if task still applicable
+        logger.info('Job {0}, task {1}: checking group {2} and node backend {3} '
+            'consistency'.format(self.parent_job.id, self.id, self.group, self.node_backend))
+
+        if not self.group in storage.groups:
+            raise JobBrokenError('Group {0} is not found'.format(self.group))
+        if not self.node_backend in storage.node_backends:
+            raise JobBrokenError('Node backend {0} is not found'.format(self.node_backend))
+
+        group = storage.groups[self.group]
+        node_backend = storage.node_backends[self.node_backend]
+
+        if group.couple is None:
+            raise JobBrokenError('Task {0}: group {1} does not belong '
+                'to any couple'.format(self, self.group))
+
+        if group.couple.status not in storage.GOOD_STATUSES:
+            raise JobBrokenError('Task {0}: group {1} couple status is {2}, '
+                'unable to continue'.format(self, self.group, group.couple.status))
+
+        if node_backend not in group.node_backends:
+            raise JobBrokenError('Task {0}: node backend {1} does not belong to '
+                'group {2}'.format(self, self.node_backend, self.group))
+
+        super(NodeBackendDefragTask, self).execute(minions)
+
+
 class HistoryRemoveNodeTask(Task):
 
     PARAMS = ('group', 'host', 'port', 'backend_id')
@@ -686,6 +791,7 @@ class JobFactory(object):
 
     TYPE_MOVE_JOB = 'move_job'
     TYPE_RECOVER_DC_JOB = 'recover_dc_job'
+    TYPE_COUPLE_DEFRAG_JOB = 'couple_defrag_job'
 
     @classmethod
     def make_job(cls, data):
@@ -703,6 +809,7 @@ class TaskFactory(object):
     TYPE_NODE_STOP_TASK = 'node_stop_task'
     TYPE_RECOVER_DC_GROUP_TASK = 'recover_dc_group_task'
     TYPE_HISTORY_REMOVE_NODE = 'history_remove_node'
+    TYPE_NODE_BACKEND_DEFRAG_TASK = 'node_backend_defrag_task'
 
     @classmethod
     def make_task(cls, data, job):
@@ -715,6 +822,8 @@ class TaskFactory(object):
             return HistoryRemoveNodeTask.from_data(data, job)
         if task_type == cls.TYPE_RECOVER_DC_GROUP_TASK:
             return RecoverGroupDcTask.from_data(data, job)
+        if task_type == cls.TYPE_NODE_BACKEND_DEFRAG_TASK:
+            return NodeBackendDefragTask.from_data(data, job)
         raise ValueError('Unknown task type {0}'.format(task_type))
 
 
