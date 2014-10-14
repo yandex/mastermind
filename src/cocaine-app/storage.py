@@ -121,6 +121,7 @@ class NodeBackendStat(object):
             self.files_removed = 0
 
             self.fsid = None
+            self.defrag_state = None
 
     def init(self, raw_stat, prev=None):
         self.ts = time.time()
@@ -139,6 +140,7 @@ class NodeBackendStat(object):
                                  ((self.files + self.files_removed) or 1))
 
         self.fsid = raw_stat['backend']['vfs']['fsid']
+        self.defrag_state = raw_stat['status']['defrag_state']
 
         if prev:
             dt = self.ts - prev.ts

@@ -22,6 +22,7 @@ from sync.error import (
     LockFailedError,
     LockAlreadyAcquiredError,
     InconsistentLockError,
+    API_ERROR_CODE
 )
 
 
@@ -358,9 +359,8 @@ class RecoverDcJob(Job):
         job.keys = keys
         return job
 
-    @property
-    def node_backend(self):
-        return '{0}:{1}/{2}'.format(self.host, self.port, self.backend_id).encode('utf-8')
+    def node_backend(self, host, port, backend_id):
+        return '{0}:{1}/{2}'.format(host, port, backend_id).encode('utf-8')
 
     def human_dump(self):
         data = super(RecoverDcJob, self).human_dump()
@@ -368,12 +368,44 @@ class RecoverDcJob(Job):
         return data
 
     def create_tasks(self):
+
+        if not self.group in storage.groups:
+            raise JobBrokenError('Group {0} is not found'.format(self.group))
+
+        group = storage.groups[self.group]
+
+        if not group.couple:
+            raise JobBrokenError('Group {0} does not participate in any couple'.format(self.group))
+
+        for group in group.couple.groups:
+            for nb in group.node_backends:
+                cmd = infrastructure.defrag_node_backend_cmd([
+                    nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id])
+
+                node_backend = self.node_backend(
+                    nb.node.host.addr, nb.node.port, nb.backend_id)
+
+                task = NodeBackendDefragTask.new(self,
+                    host=nb.node.host.addr,
+                    cmd=cmd,
+                    node_backend=node_backend,
+                    group=group.group_id,
+                    params={'group': str(group.group_id),
+                            'node_backend': node_backend})
+
+                self.tasks.append(task)
+
+        task = CoupleDefragStateCheckTask.new(self,
+                                              couple=str(group.couple))
+        self.tasks.append(task)
+
         recover_cmd = infrastructure.recover_group_cmd([self.group])
         task = RecoverGroupDcTask.new(self,
                                 group=self.group,
                                 host=self.host,
                                 cmd=recover_cmd,
-                                params={'node_backend': self.node_backend,
+                                params={'node_backend': self.node_backend(
+                                            self.host, self.port, self.backend_id),
                                         'group': str(self.group)})
         self.tasks.append(task)
 
@@ -440,15 +472,18 @@ class CoupleDefragJob(Job):
                 cmd = infrastructure.defrag_node_backend_cmd([
                     nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id])
 
+                node_backend = self.node_backend(
+                    nb.node.host.addr, nb.node.port, nb.backend_id)
+
                 task = NodeBackendDefragTask.new(self,
                     host=self.nb.node.host.addr,
                     cmd=cmd,
-                    params={'node_backend': self.node_backend(
-                        nb.node.host.addr, nb.node.port, nb.backend_id)})
+                    node_backend=node_backend,
+                    group=group.group_id,
+                    params={'group': group.group_id,
+                            'node_backend': node_backend})
 
                 self.tasks.append(task)
-
-        self.tasks.append(task)
 
     def perform_locks(self):
         try:
@@ -670,7 +705,7 @@ class RecoverGroupDcTask(MinionCmdTask):
 
 class NodeBackendDefragTask(MinionCmdTask):
 
-    PARAMS = MinionCmdTask.PARAMS + ('node_backend',)
+    PARAMS = MinionCmdTask.PARAMS + ('node_backend', 'group')
 
     def __init__(self, job):
         super(NodeBackendDefragTask, self).__init__(job)
@@ -787,6 +822,68 @@ class HistoryRemoveNodeTask(Task):
             self.id, self.host, self.port, self.backend_id, self.group)
 
 
+class CoupleDefragStateCheckTask(Task):
+
+    PARAMS = ('couple', 'stats_ts')
+    TASK_TIMEOUT = 60 * 60 * 24  # 1 day
+
+    def __init__(self, job):
+        super(CoupleDefragStateCheckTask, self).__init__(job)
+        self.type = TaskFactory.TYPE_COUPLE_DEFRAG_STATE_CHECK_TASK
+
+    def update_status(self):
+        # infrastructure state is updated by itself via task queue
+        pass
+
+    def execute(self):
+        couple = storage.couples[self.couple]
+
+        if couple.status not in storage.GOOD_STATUSES:
+            raise JobBrokenError('Couple {0} has inappropriate status: {1}'.format(self.couple, couple.status))
+
+        stats = []
+        for group in couple.groups:
+            for nb in group.node_backends:
+                stats.append(nb.stat)
+        self.stats_ts = max([s.ts for s in stats])
+
+    @property
+    def finished(self):
+        return (self.__couple_defraged() or
+                time.time() - self.start_ts > self.TASK_TIMEOUT)
+
+    @property
+    def failed(self):
+        return (time.time() - self.start_ts > self.TASK_TIMEOUT and
+                not self.__couple_defraged())
+
+    def __couple_defraged(self):
+        couple = storage.couples[self.couple]
+        stats = []
+        for group in couple.groups:
+            for nb in group.node_backends:
+                stats.append(nb.stat)
+        cur_stats_ts = min([s.ts for s in stats])
+        if cur_stats_ts <= self.stats_ts:
+            logger.info('Job {0}, task {1}: defrag status not updated since {2}'.format(
+                self.parent_job.id, self.id, self.stats_ts))
+            return False
+
+        if all([s.defrag_state == 0 for s in stats]):
+            logger.debug('Job {0}, task {1}: defrag finished, start_ts {2}, current ts {3}, '
+                'defrag statuses {4}'.format(self.parent_job.id, self.id, self.stats_ts,
+                    cur_stats_ts, [s.defrag_state for s in stats]))
+            return True
+
+        logger.info('Job {0}, task {1}: defrag not finished, defrag statuses {2}'.format(
+            self.parent_job.id, self.id, [s.defrag_state for s in stats]))
+        return False
+
+    def __str__(self):
+        return 'CoupleDefragStateCheckTask[id: {0}]<defrag of couple {1}>'.format(
+            self.id, self.couple)
+
+
 class JobFactory(object):
 
     TYPE_MOVE_JOB = 'move_job'
@@ -810,6 +907,7 @@ class TaskFactory(object):
     TYPE_RECOVER_DC_GROUP_TASK = 'recover_dc_group_task'
     TYPE_HISTORY_REMOVE_NODE = 'history_remove_node'
     TYPE_NODE_BACKEND_DEFRAG_TASK = 'node_backend_defrag_task'
+    TYPE_COUPLE_DEFRAG_STATE_CHECK_TASK = 'couple_defrag_state_check'
 
     @classmethod
     def make_task(cls, data, job):
@@ -824,6 +922,8 @@ class TaskFactory(object):
             return RecoverGroupDcTask.from_data(data, job)
         if task_type == cls.TYPE_NODE_BACKEND_DEFRAG_TASK:
             return NodeBackendDefragTask.from_data(data, job)
+        if task_type == cls.TYPE_COUPLE_DEFRAG_STATE_CHECK_TASK:
+            return CoupleDefragStateCheckTask.from_data(data, job)
         raise ValueError('Unknown task type {0}'.format(task_type))
 
 
@@ -1050,6 +1150,8 @@ class JobProcessor(object):
             task.update_status(self.minions)
         elif isinstance(task, HistoryRemoveNodeTask):
             task.update_status()
+        elif isinstance(task, CoupleDefragStateCheckTask):
+            task.update_status()
         else:
             raise ValueError('Status of task with type "{0}" cannot be '
                 'updated'.format(type(task)))
@@ -1059,6 +1161,8 @@ class JobProcessor(object):
         if isinstance(task, MinionCmdTask):
             task.execute(self.minions)
         elif isinstance(task, HistoryRemoveNodeTask):
+            task.execute()
+        elif isinstance(task, CoupleDefragStateCheckTask):
             task.execute()
         else:
             raise ValueError('Task with type "{0}" cannot be '
@@ -1152,6 +1256,9 @@ class JobProcessor(object):
                 job_id = request[0]
             except IndexError as e:
                 raise ValueError('Job id is required')
+
+            if not job_id in self.jobs:
+                raise ValueError('Job id {0} is not found'.format(job_id))
 
             job = self.jobs[job_id]
 

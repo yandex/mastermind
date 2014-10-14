@@ -51,7 +51,7 @@ class Infrastructure(object):
         '-a {attempts} -b {batch} -l {log} -n {processes_num}')
     DNET_RECOVERY_DC_REMOTE_TPL = '-r {host}:{port}:{family}'
 
-    DNET_DEFRAG_CMD = ('dnet_client -r {host}:{port}:{family} '
+    DNET_DEFRAG_CMD = ('dnet_client backend -r {host}:{port}:{family} '
         'defrag --backend {backend_id}')
 
     HISTORY_RECORD_AUTOMATIC = 'automatic'
