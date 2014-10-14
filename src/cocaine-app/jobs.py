@@ -292,14 +292,6 @@ class MoveJob(Job):
 
         self.tasks.append(task)
 
-        start_cmd = infrastructure.enable_node_backend_cmd([
-            self.dst_host, self.dst_port, self.dst_family, self.dst_backend_id])
-        task = MinionCmdTask.new(self,
-                                 host=self.dst_host,
-                                 cmd=start_cmd,
-                                 params={'node_backend': self.dst_node_backend})
-        self.tasks.append(task)
-
         task = HistoryRemoveNodeTask.new(self,
                                          group=self.group,
                                          host=self.src_host,
@@ -312,6 +304,14 @@ class MoveJob(Job):
                                          host=self.dst_host,
                                          port=self.dst_port,
                                          backend_id=self.dst_backend_id)
+        self.tasks.append(task)
+
+        start_cmd = infrastructure.enable_node_backend_cmd([
+            self.dst_host, self.dst_port, self.dst_family, self.dst_backend_id])
+        task = MinionCmdTask.new(self,
+                                 host=self.dst_host,
+                                 cmd=start_cmd,
+                                 params={'node_backend': self.dst_node_backend})
         self.tasks.append(task)
 
     def perform_locks(self):
