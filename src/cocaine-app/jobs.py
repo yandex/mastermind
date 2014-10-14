@@ -323,7 +323,12 @@ class MoveJob(Job):
             if e.holder_id != self.id:
                 logger.error('Job {0}: some of the groups is already '
                     'being processed by job {1}'.format(self.id, e.holder_id))
-                self.add_error(e)
+
+                last_error = self.error_msg and self.error_msg[-1] or None
+                if last_error and (last_error.get('code') != API_ERROR_CODE.LOCK_ALREADY_ACQUIRED or
+                                   last_error.get('holder_id') != e.holder_id):
+                    self.add_error(e)
+
                 raise
             else:
                 logger.warn('Job {0}: lock for group {1} has already '
@@ -417,7 +422,11 @@ class RecoverDcJob(Job):
             if e.holder_id != self.id:
                 logger.error('Job {0}: group {1} is already '
                     'being processed by job {2}'.format(self.id, self.group, e.holder_id))
-                self.add_error(e)
+                last_error = self.error_msg and self.error_msg[-1] or None
+                if last_error and (last_error.get('code') != API_ERROR_CODE.LOCK_ALREADY_ACQUIRED or
+                                   last_error.get('holder_id') != e.holder_id):
+                    self.add_error(e)
+
                 raise
             else:
                 logger.warn('Job {0}: lock for group {1} has already '
@@ -492,7 +501,12 @@ class CoupleDefragJob(Job):
         except LockAlreadyAcquiredError as e:
             logger.error('Job {0}: group {1} is already '
                 'being processed by job {2}'.format(self.id, self.group, e.holder_id))
-            self.add_error(e)
+
+            last_error = self.error_msg and self.error_msg[-1] or None
+            if last_error and (last_error.get('code') != API_ERROR_CODE.LOCK_ALREADY_ACQUIRED or
+                               last_error.get('holder_id') != e.holder_id):
+                self.add_error(e)
+
             raise
 
     def release_locks(self):
