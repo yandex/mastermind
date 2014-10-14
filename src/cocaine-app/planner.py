@@ -57,7 +57,7 @@ class Planner(object):
             logger.info('Starting move candidates planner')
 
             # prechecking for new or pending tasks
-            if self.__executing_jobs(jobs.JobFactory.TYPE_MOVE_JOB):
+            if self.__executing_jobs(jobs.JobTypes.TYPE_MOVE_JOB):
                 return
 
             self._do_move_candidates()
@@ -103,7 +103,7 @@ class Planner(object):
 
                 self.job_processor._do_update_jobs()
 
-                if self.__executing_jobs(jobs.JobFactory.TYPE_MOVE_JOB):
+                if self.__executing_jobs(jobs.JobTypes.TYPE_MOVE_JOB):
                     raise ValueError('Not finished move jobs are found')
 
                 for i, candidate in enumerate(candidates):
@@ -131,7 +131,7 @@ class Planner(object):
 
                         try:
                             job = self.job_processor.create_job([
-                                jobs.JobFactory.TYPE_MOVE_JOB,
+                                jobs.JobTypes.TYPE_MOVE_JOB,
                                 {'group': src_group.group_id,
                                  'uncoupled_group': dst_group.group_id,
                                  'src_host': src_group.node_backends[0].node.host.addr,
@@ -161,7 +161,7 @@ class Planner(object):
         if step == 0:
             self.candidates = [[StorageState.current()]]
         if busy_hosts is None:
-            busy_hosts = self.__busy_hosts(jobs.JobFactory.TYPE_MOVE_JOB)
+            busy_hosts = self.__busy_hosts(jobs.JobTypes.TYPE_MOVE_JOB)
             logger.debug('Busy hosts from executing jobs: {0}'.format(list(busy_hosts)))
 
         if step >= self.__max_plan_length:
@@ -307,7 +307,7 @@ class Planner(object):
             logger.info('Starting recover dc planner')
 
             # prechecking for new or pending tasks
-            if self.__executing_jobs(jobs.JobFactory.TYPE_RECOVER_DC_JOB):
+            if self.__executing_jobs(jobs.JobTypes.TYPE_RECOVER_DC_JOB):
                 logger.info('Unfinished recover dc jobs found')
                 return
 
@@ -332,7 +332,7 @@ class Planner(object):
 
             self.job_processor._do_update_jobs()
 
-            if self.__executing_jobs(jobs.JobFactory.TYPE_RECOVER_DC_JOB):
+            if self.__executing_jobs(jobs.JobTypes.TYPE_RECOVER_DC_JOB):
                 logger.info('Unfinished recover dc jobs found')
                 return
 

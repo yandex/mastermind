@@ -1,0 +1,4 @@
+
+
+class JobBrokenError(Exception):
+    pass
