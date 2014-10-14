@@ -1,3 +1,12 @@
+mastermind (2.9.64) lucid; urgency=low
+
+  * Move jobs: check src couple status before stopping node backend
+  * Fix for move jobs tasks order
+  * Check for last error to prevent lock acquire errors duplication
+  * Defrag tasks for recover dc jobs added
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 14 Oct 2014 16:22:36 +0400
+
 mastermind (2.9.63) lucid; urgency=low
 
   * Added features to namespace settings with two options: multipart-content-length-threshold and select-couple-to-upload
