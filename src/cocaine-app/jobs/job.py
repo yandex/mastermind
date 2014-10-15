@@ -21,6 +21,7 @@ class Job(object):
     STATUS_CANCELLED = 'cancelled'
 
     GROUP_LOCK_PREFIX = 'group/'
+    COUPLE_LOCK_PREFIX = 'couple/'
 
     COMMON_PARAMS = ('need_approving',)
 
@@ -110,10 +111,30 @@ class Job(object):
             'in derived class')
 
     def perform_locks(self):
-        pass
+        try:
+            sync_manager.persistent_locks_acquire(self._locks, self.id)
+        except LockAlreadyAcquiredError as e:
+            logger.error('Job {0}: group {1} is already '
+                'being processed by job {2}'.format(self.id, self.group, e.holder_id))
+
+            last_error = self.error_msg and self.error_msg[-1] or None
+            if last_error and (last_error.get('code') != API_ERROR_CODE.LOCK_ALREADY_ACQUIRED or
+                               last_error.get('holder_id') != e.holder_id):
+                self.add_error(e)
+
+            raise
 
     def release_locks(self):
-        pass
+        try:
+            sync_manager.persistent_locks_release(self._locks, self.id)
+        except InconsistentLockError as e:
+            logger.error('Job {0}: lock for group {1} is already acquired by another '
+                'job {2}'.format(self.id, self.group, e.holder_id))
+            pass
+
+    @property
+    def _locks(self):
+        raise NotImplemented('Locks are listed in derived classes')
 
     def complete(self):
         ts = time.time()

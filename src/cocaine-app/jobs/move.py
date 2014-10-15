@@ -183,35 +183,15 @@ class MoveJob(Job):
         task = MinionCmdTask.new(self,
                                  host=self.dst_host,
                                  cmd=start_cmd,
-                                 params={'node_backend': self.dst_node_backend})
+                                 params={'node_backend': self.dst_node_backend.encode('utf-8')})
         self.tasks.append(task)
 
-    def perform_locks(self):
-        locks = ['{0}{1}'.format(self.GROUP_LOCK_PREFIX, group)
-                 for group in (self.group, self.uncoupled_group)]
-        try:
-            sync_manager.persistent_locks_acquire(locks, self.id)
-        except LockAlreadyAcquiredError as e:
-            if e.holder_id != self.id:
-                logger.error('Job {0}: some of the groups is already '
-                    'being processed by job {1}'.format(self.id, e.holder_id))
-
-                last_error = self.error_msg and self.error_msg[-1] or None
-                if last_error and (last_error.get('code') != API_ERROR_CODE.LOCK_ALREADY_ACQUIRED or
-                                   last_error.get('holder_id') != e.holder_id):
-                    self.add_error(e)
-
-                raise
-            else:
-                logger.warn('Job {0}: lock for group {1} has already '
-                    'been acquired, skipping'.format(self.id, self.group))
-
-    def release_locks(self):
-        locks = ['{0}{1}'.format(self.GROUP_LOCK_PREFIX, group)
-                 for group in (self.group, self.uncoupled_group)]
-        try:
-            sync_manager.persistent_locks_release(locks, self.id)
-        except InconsistentLockError as e:
-            logger.error('Job {0}: lock for some job groups is already '
-                'acquired by another job {1}'.format(self.id, e.holder_id))
-            pass
+    @property
+    def _locks(self):
+        couple_keys = []
+        couple = self.group in storage.groups and storage.groups[self.group].couple or None
+        if couple:
+            couple_keys.append('{0}{1}'.format(self.COUPLE_LOCK_PREFIX, str(couple)))
+        return (['{0}{1}'.format(self.GROUP_LOCK_PREFIX, group)
+                 for group in (self.group, self.uncoupled_group)] +
+                couple_keys)

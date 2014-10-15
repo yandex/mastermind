@@ -58,30 +58,12 @@ class CoupleDefragJob(Job):
                     node_backend=node_backend,
                     group=group.group_id,
                     params={'group': group.group_id,
-                            'node_backend': node_backend})
+                            'node_backend': node_backend.encode('utf-8')})
 
                 self.tasks.append(task)
 
-    def perform_locks(self):
-        try:
-            sync_manager.persistent_locks_acquire(
-                ['{0}{1}'.format(self.GROUP_LOCK_PREFIX, self.group)], self.id)
-        except LockAlreadyAcquiredError as e:
-            logger.error('Job {0}: group {1} is already '
-                'being processed by job {2}'.format(self.id, self.group, e.holder_id))
-
-            last_error = self.error_msg and self.error_msg[-1] or None
-            if last_error and (last_error.get('code') != API_ERROR_CODE.LOCK_ALREADY_ACQUIRED or
-                               last_error.get('holder_id') != e.holder_id):
-                self.add_error(e)
-
-            raise
-
-    def release_locks(self):
-        try:
-            sync_manager.persistent_locks_release(
-                ['{0}{1}'.format(self.GROUP_LOCK_PREFIX, self.group)], self.id)
-        except InconsistentLockError as e:
-            logger.error('Job {0}: lock for group {1} is already acquired by another '
-                'job {2}'.format(self.id, self.group, e.holder_id))
-            pass
+    @property
+    def _locks(self):
+        group_ids = self.couple.split(':')
+        return (['{0}{1}'.format(self.GROUP_LOCK_PREFIX, g) for g in group_ids] +
+                ['{0}{1}'.format(self.COUPLE_LOCK_PREFIX, self.couple)])

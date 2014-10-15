@@ -77,37 +77,23 @@ class RecoverDcJob(Job):
 
         recover_cmd = infrastructure.recover_group_cmd([self.group])
         task = RecoverGroupDcTask.new(self,
-                                group=self.group,
-                                host=self.host,
-                                cmd=recover_cmd,
-                                params={'node_backend': self.node_backend(
-                                            self.host, self.port, self.backend_id),
-                                        'group': str(self.group)})
+            group=self.group,
+            host=self.host,
+            cmd=recover_cmd,
+            params={'node_backend': self.node_backend(
+                        self.host, self.port, self.backend_id).encode('utf-8'),
+                    'group': str(self.group)})
         self.tasks.append(task)
 
-    def perform_locks(self):
-        try:
-            sync_manager.persistent_locks_acquire(
-                ['{0}{1}'.format(self.GROUP_LOCK_PREFIX, self.group)], self.id)
-        except LockAlreadyAcquiredError as e:
-            if e.holder_id != self.id:
-                logger.error('Job {0}: group {1} is already '
-                    'being processed by job {2}'.format(self.id, self.group, e.holder_id))
-                last_error = self.error_msg and self.error_msg[-1] or None
-                if last_error and (last_error.get('code') != API_ERROR_CODE.LOCK_ALREADY_ACQUIRED or
-                                   last_error.get('holder_id') != e.holder_id):
-                    self.add_error(e)
+    @property
+    def _locks(self):
+        if not self.group in storage.groups:
+            raise JobBrokenError('Group {0} is not found'.format(self.group))
 
-                raise
-            else:
-                logger.warn('Job {0}: lock for group {1} has already '
-                    'been acquired, skipping'.format(self.id, self.group))
+        group = storage.groups[self.group]
 
-    def release_locks(self):
-        try:
-            sync_manager.persistent_locks_release(
-                ['{0}{1}'.format(self.GROUP_LOCK_PREFIX, self.group)], self.id)
-        except InconsistentLockError as e:
-            logger.error('Job {0}: lock for group {1} is already acquired by another '
-                'job {2}'.format(self.id, self.group, e.holder_id))
-            pass
+        if not group.couple:
+            raise JobBrokenError('Group {0} does not participate in any couple'.format(self.group))
+
+        return (['{0}{1}'.format(self.GROUP_LOCK_PREFIX, g.group_id) for g in group.couple.groups] +
+                ['{0}{1}'.format(self.COUPLE_LOCK_PREFIX, str(group.couple))])
