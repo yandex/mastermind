@@ -1,3 +1,9 @@
+mastermind (2.9.66) lucid; urgency=low
+
+  * Misprints
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 15 Oct 2014 19:37:55 +0400
+
 mastermind (2.9.65) lucid; urgency=low
 
   * Jobs locks are performed on job creation
