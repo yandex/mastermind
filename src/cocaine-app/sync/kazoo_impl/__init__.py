@@ -144,6 +144,6 @@ class ZkSyncManager(object):
                         raise InconsistentLockError(lock_id=lockid, holder_id=data[0])
                 self.client.delete(self.lock_path_prefix + lockid)
             except NoNodeError:
-                logger.warn('Persistent lock {0} is already removed')
+                logger.warn('Persistent lock {0} is already removed'.format(lockid))
                 pass
         return True

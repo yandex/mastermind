@@ -42,4 +42,4 @@ class SyncManager(object):
             if lock and lock.locked():
                 return lock.release()
             else:
-                logger.warn('Persistent lock {0} is already removed')
+                logger.warn('Persistent lock {0} is already removed'.format(lockid))
