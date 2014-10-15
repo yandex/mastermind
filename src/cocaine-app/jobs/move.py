@@ -39,11 +39,11 @@ class MoveJob(Job):
 
     @property
     def src_node_backend(self):
-        return '{0}:{1}/{2}'.format(self.src_host, self.src_port, self.src_backend_id).encode('utf-8')
+        return self.node_backend(self.src_host, self.src_port, self.src_backend_id)
 
     @property
     def dst_node_backend(self):
-        return '{0}:{1}/{2}'.format(self.dst_host, self.dst_port, self.dst_backend_id).encode('utf-8')
+        return self.node_backend(self.dst_host, self.dst_port, self.dst_backend_id)
 
     def human_dump(self):
         data = super(MoveJob, self).human_dump()
@@ -75,7 +75,7 @@ class MoveJob(Job):
                       if self.GROUP_FILE_PATH else
                       '')
 
-        params = {'node_backend': self.dst_node_backend,
+        params = {'node_backend': self.dst_node_backend.encode('utf-8'),
                   'group': str(self.uncoupled_group)}
 
         remove_path = ''
@@ -107,7 +107,7 @@ class MoveJob(Job):
                              if self.GROUP_FILE_MARKER_PATH else
                              '')
 
-        params = {'node_backend': self.src_node_backend,
+        params = {'node_backend': self.src_node_backend.encode('utf-8'),
                   'group': str(self.group),
                   'group_file_marker': self.marker_format(group_file_marker),
                   'remove_group_file': group_file}
@@ -150,7 +150,7 @@ class MoveJob(Job):
         task = MinionCmdTask.new(self,
                                  host=self.src_host,
                                  cmd=reconfigure_cmd,
-                                 params={'node_backend': self.src_node_backend})
+                                 params={'node_backend': self.src_node_backend.encode('utf-8')})
 
         self.tasks.append(task)
 
@@ -160,7 +160,7 @@ class MoveJob(Job):
         task = MinionCmdTask.new(self,
                                  host=self.dst_host,
                                  cmd=reconfigure_cmd,
-                                 params={'node_backend': self.dst_node_backend})
+                                 params={'node_backend': self.dst_node_backend.encode('utf-8')})
 
         self.tasks.append(task)
 

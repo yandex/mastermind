@@ -38,14 +38,6 @@ class CoupleDefragJob(Job):
         job.fragmentation = fragmentation
         return job
 
-    def node_backend(self, host, port, backend_id):
-        return '{0}:{1}/{2}'.format(host, port, backend_id).encode('utf-8')
-
-    def human_dump(self):
-        data = super(CoupleDefragJob, self).human_dump()
-        data['hostname'] = infrastructure.get_hostname_by_addr(data['host'])
-        return data
-
     def create_tasks(self):
         if not self.couple in storage.couples:
             raise JobBrokenError('Couple {0} is not found'.format(self.couple))

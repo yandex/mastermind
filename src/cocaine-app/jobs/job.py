@@ -102,6 +102,9 @@ class Job(object):
         data['tasks'] = [task.human_dump() for task in self.tasks]
         return data
 
+    def node_backend(self, host, port, backend_id):
+        return '{0}:{1}/{2}'.format(host, port, backend_id)
+
     def create_tasks(self):
         raise RuntimeError('Job creation should be implemented '
             'in derived class')

@@ -38,9 +38,6 @@ class RecoverDcJob(Job):
         job.keys = keys
         return job
 
-    def node_backend(self, host, port, backend_id):
-        return '{0}:{1}/{2}'.format(host, port, backend_id).encode('utf-8')
-
     def human_dump(self):
         data = super(RecoverDcJob, self).human_dump()
         data['hostname'] = infrastructure.get_hostname_by_addr(data['host'])
@@ -70,7 +67,7 @@ class RecoverDcJob(Job):
                     node_backend=node_backend,
                     group=group.group_id,
                     params={'group': str(group.group_id),
-                            'node_backend': node_backend})
+                            'node_backend': node_backend.encode('utf-8')})
 
                 self.tasks.append(task)
 
