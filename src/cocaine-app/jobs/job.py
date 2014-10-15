@@ -4,6 +4,13 @@ import threading
 import time
 import uuid
 
+from sync import sync_manager
+from sync.error import (
+    LockError,
+    InconsistentLockError,
+    LockAlreadyAcquiredError,
+    API_ERROR_CODE
+)
 from tasks import TaskFactory
 
 
@@ -53,6 +60,12 @@ class Job(object):
         for param in cls.PARAMS:
             setattr(job, param, kwargs.get(param, None))
         job.create_ts = time.time()
+        try:
+            job.perform_locks()
+        except LockError:
+            logger.error('Job {0}: failed to perform required locks'.format(job.id))
+            raise
+
         return job
 
     @classmethod
@@ -114,15 +127,19 @@ class Job(object):
         try:
             sync_manager.persistent_locks_acquire(self._locks, self.id)
         except LockAlreadyAcquiredError as e:
-            logger.error('Job {0}: group {1} is already '
-                'being processed by job {2}'.format(self.id, self.group, e.holder_id))
+            if e.holder_id != self.id:
+                logger.error('Job {0}: group {1} is already '
+                    'being processed by job {2}'.format(self.id, self.group, e.holder_id))
 
-            last_error = self.error_msg and self.error_msg[-1] or None
-            if last_error and (last_error.get('code') != API_ERROR_CODE.LOCK_ALREADY_ACQUIRED or
-                               last_error.get('holder_id') != e.holder_id):
-                self.add_error(e)
+                last_error = self.error_msg and self.error_msg[-1] or None
+                if last_error and (last_error.get('code') != API_ERROR_CODE.LOCK_ALREADY_ACQUIRED or
+                                   last_error.get('holder_id') != e.holder_id):
+                    self.add_error(e)
 
-            raise
+                raise
+            else:
+                logger.warn('Job {0}: lock for group {1} has already '
+                    'been acquired, skipping'.format(self.id, self.group))
 
     def release_locks(self):
         try:

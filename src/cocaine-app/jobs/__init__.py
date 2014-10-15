@@ -173,14 +173,6 @@ class JobProcessor(object):
             logger.info('Job {0}: setting job start time'.format(job.id))
             job.start_ts = time.time()
 
-            try:
-                job.perform_locks()
-            except LockError:
-                logger.error('Job {0}: failed to perform required locks'.format(job.id))
-                raise
-            else:
-                logger.info('Job {0}: status set to {1}'.format(job.id, job.status))
-
         for task in job.tasks:
             if task.status == Task.STATUS_EXECUTING:
 

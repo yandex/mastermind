@@ -6,7 +6,7 @@ from infrastructure import infrastructure
 from job import Job
 from job_types import JobTypes
 from tasks import NodeStopTask, MinionCmdTask, HistoryRemoveNodeTask
-from sync import sync_manager
+import storage
 from sync.error import (
     LockError,
     LockFailedError,

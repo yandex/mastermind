@@ -146,13 +146,17 @@ class Planner(object):
                                  'dst_base_path': dst_group.node_backends[0].base_path,
                                  }])
                             logger.info('Job successfully created: {0}'.format(job['id']))
+                        except jobs.LockFailedError:
+                            logger.error('Failed to create move job for moving '
+                                'group {0} ({1}) to {2} ({3}): {4}'.format(
+                                    src_group.group_id, src_dc,
+                                    dst_group.group_id, dst_dc, e))
                         except Exception as e:
                             logger.error('Failed to create move job for moving '
                                 'group {0} ({1}) to {2} ({3}): {4}\n{5}'.format(
                                     src_group.group_id, src_dc,
                                     dst_group.group_id, dst_dc,
                                     e, traceback.format_exc()))
-                            raise AssertionError('Job creation failed')
 
         except ValueError as e:
             logger.error('Plan cannot be applied: {0}'.format(e))
