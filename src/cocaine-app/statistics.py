@@ -300,16 +300,25 @@ class Statistics(object):
             tree_node = host.parents
             new_child = None
             while True:
+                parts = [tree_node['name']]
+                parent = tree_node
+                while 'parent' in parent:
+                    parent = parent['parent']
+                    parts.append(parent['name'])
+                full_path = '|'.join(reversed(parts))
+                tree_node['full_path'] = full_path
+
                 type_nodes = nodes.setdefault(tree_node['type'], {})
-                cur_node = type_nodes.get(tree_node['name'], {'name': tree_node['name'],
-                                                              'type': tree_node['type']})
+                cur_node = type_nodes.get(tree_node['full_path'], {'name': tree_node['name'],
+                                                                   'full_path': tree_node['full_path'],
+                                                                   'type': tree_node['type']})
 
                 if new_child:
                     cur_node.setdefault('children', []).append(new_child)
                     new_child = None
 
-                if not tree_node['name'] in type_nodes:
-                    type_nodes[tree_node['name']] = cur_node
+                if not tree_node['full_path'] in type_nodes:
+                    type_nodes[tree_node['full_path']] = cur_node
                     new_child = cur_node
 
                 if not 'parent' in tree_node:
@@ -340,7 +349,13 @@ class Statistics(object):
                 logger.warn('Group {0}: no node backends stat available'.format(group.group_id))
                 continue
             for node_backend in group.node_backends:
-                group_parent = nodes['host'][node_backend.node.host.hostname]
+                parent = node_backend.node.host.parents
+                parts = [parent['name']]
+                while 'parent' in parent:
+                    parent = parent['parent']
+                    parts.append(parent['name'])
+                full_path = '|'.join(reversed(parts))
+                group_parent = nodes['host'][full_path]
                 groups = group_parent.setdefault('children', [])
                 groups.append({'type': 'group',
                                'name': str(group),
