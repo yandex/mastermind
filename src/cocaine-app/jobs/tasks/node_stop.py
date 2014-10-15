@@ -35,7 +35,7 @@ class NodeStopTask(MinionCmdTask):
             if group.node_backends[0].status != storage.Status.OK:
                 raise JobBrokenError('Task {0}: node of group {1} has '
                     'status {2}, should be {3}'.format(self.id, self.group,
-                        self.node_backends[0].status, storage.Status.OK))
+                        group.node_backends[0].status, storage.Status.OK))
 
             if self.uncoupled:
                 if group.couple:
