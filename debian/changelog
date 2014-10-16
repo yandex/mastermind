@@ -1,3 +1,9 @@
+mastermind (2.9.67) lucid; urgency=low
+
+   * Couple defragmentation job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 16 Oct 2014 16:24:57 +0400
+
 mastermind (2.9.66) lucid; urgency=low
 
   * Misprints
