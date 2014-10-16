@@ -128,8 +128,8 @@ class Job(object):
             sync_manager.persistent_locks_acquire(self._locks, self.id)
         except LockAlreadyAcquiredError as e:
             if e.holder_id != self.id:
-                logger.error('Job {0}: group {1} is already '
-                    'being processed by job {2}'.format(self.id, self.group, e.holder_id))
+                logger.error('Job {0}: {1} is already '
+                    'being processed by job {2}'.format(self.id, e.lock_id, e.holder_id))
 
                 last_error = self.error_msg and self.error_msg[-1] or None
                 if last_error and (last_error.get('code') != API_ERROR_CODE.LOCK_ALREADY_ACQUIRED or

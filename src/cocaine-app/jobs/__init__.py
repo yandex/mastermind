@@ -268,7 +268,7 @@ class JobProcessor(object):
             except IndexError:
                 raise ValueError('Job type is required')
 
-            if job_type not in (JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_RECOVER_DC_JOB):
+            if job_type not in (JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_RECOVER_DC_JOB, JobTypes.TYPE_COUPLE_DEFRAG_JOB):
                 raise ValueError('Invalid job type: {0}'.format(job_type))
 
             try:
@@ -283,15 +283,23 @@ class JobProcessor(object):
                 JobType = MoveJob
             elif job_type == JobTypes.TYPE_RECOVER_DC_JOB:
                 JobType = RecoverDcJob
+            elif job_type == JobTypes.TYPE_COUPLE_DEFRAG_JOB:
+                JobType = CoupleDefragJob
             job = JobType.new(**params)
-            job.create_tasks()
 
-            with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
-                logger.info('Job {0} created: {1}'.format(job.id, job.dump()))
-                self.jobs_index[job.id] = self.__dump_job(job)
-                self.jobs_index.set_tag(job.id, self.tag(job))
+            try:
+                job.create_tasks()
 
-            self.jobs[job.id] = job
+                with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
+                    logger.info('Job {0} created: {1}'.format(job.id, job.dump()))
+                    self.jobs_index[job.id] = self.__dump_job(job)
+                    self.jobs_index.set_tag(job.id, self.tag(job))
+
+                self.jobs[job.id] = job
+            except Exception:
+                job.release_locks()
+                raise
+
         except LockFailedError as e:
             raise
         except Exception as e:

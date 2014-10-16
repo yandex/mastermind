@@ -912,6 +912,30 @@ def couple_unfreeze(couple, host=None, app=None):
     print res
 
 
+@coupleDispatcher.command(name='defrag')
+@log_action
+def couple_defrag(couple,
+                  host=None, app=None):
+    '''Create job to perform couple's groups defragmentation'''
+    s = service(host, app)
+
+    couple_data = retry(s, 'get_couple_info', couple.split(':')[0])
+    if 'Error' in couple_data:
+        print warn('Couple {0} is not found {1}'.format(couple, couple_data['Error']))
+        return
+
+    if couple_data['couple_status'] not in ('FULL', 'OK'):
+        print warn('Couple {0} has status {1}, expected {2}'.format(
+            couple, couple_data['couple_status'], ['FULL', 'OK']))
+        return
+
+    job_data = s.enqueue('create_job', msgpack.packb(['couple_defrag_job',
+        {'couple': couple}])).get()
+
+    print job_data
+
+
+
 # cmd commands
 cmdDispatcher = Dispatcher(globaloptions=(host_param, app_param))
 

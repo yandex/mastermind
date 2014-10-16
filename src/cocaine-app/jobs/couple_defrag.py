@@ -4,7 +4,7 @@ from error import JobBrokenError
 from infrastructure import infrastructure
 from job import Job
 from job_types import JobTypes
-from tasks import NodeBackendDefragTask
+from tasks import NodeBackendDefragTask, CoupleDefragStateCheckTask
 import storage
 from sync import sync_manager
 from sync.error import (
@@ -30,12 +30,16 @@ class CoupleDefragJob(Job):
     @classmethod
     def new(cls, **kwargs):
         job = super(CoupleDefragJob, cls).new(**kwargs)
-        couple = storage.couples[kwargs['couple']]
-        fragmentation = []
-        for g in couple.groups:
-            fragmentation.append(g.get_stat().fragmentation)
-        fragmentation.sort(reverse=True)
-        job.fragmentation = fragmentation
+        try:
+            couple = storage.couples[kwargs['couple']]
+            fragmentation = []
+            for g in couple.groups:
+                fragmentation.append(g.get_stat().fragmentation)
+            fragmentation.sort(reverse=True)
+            job.fragmentation = fragmentation
+        except Exception:
+            job.release_locks()
+            raise
         return job
 
     def create_tasks(self):
@@ -53,14 +57,17 @@ class CoupleDefragJob(Job):
                     nb.node.host.addr, nb.node.port, nb.backend_id)
 
                 task = NodeBackendDefragTask.new(self,
-                    host=self.nb.node.host.addr,
+                    host=nb.node.host.addr,
                     cmd=cmd,
                     node_backend=node_backend,
                     group=group.group_id,
-                    params={'group': group.group_id,
+                    params={'group': str(group.group_id),
                             'node_backend': node_backend.encode('utf-8')})
 
                 self.tasks.append(task)
+
+        task = CoupleDefragStateCheckTask.new(self, couple=str(couple))
+        self.tasks.append(task)
 
     @property
     def _locks(self):
