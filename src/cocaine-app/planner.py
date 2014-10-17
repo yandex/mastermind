@@ -28,6 +28,7 @@ class Planner(object):
     MOVE_CANDIDATES = 'move_candidates'
     RECOVER_DC_QUEUE_UPDATE = 'recover_dc_queue_update'
     RECOVER_DC = 'recover_dc'
+    COUPLE_DEFRAG = 'couple_defrag'
 
     def __init__(self, meta_session, job_processor):
 
@@ -50,6 +51,8 @@ class Planner(object):
                 10, self._recover_dc_queue_update)
             self.__tq.add_task_in(self.RECOVER_DC,
                 11, self._recover_dc)
+            self.__tq.add_task_in(self.COUPLE_DEFRAG,
+                12, self._couple_defrag)
 
 
     def _move_candidates(self):
@@ -380,7 +383,6 @@ class Planner(object):
     def __construct_recover_dc_queue(self):
         couples_to_recover = []
         for couple in storage.couples:
-            # TODO: GOOD_STATUSES or NOT_BAD_STATUSES?
             if couple.status not in storage.GOOD_STATUSES:
                 continue
             group_alive_keys = {}
@@ -405,6 +407,70 @@ class Planner(object):
         couples_to_recover.sort(key=lambda c: c[2])
 
         return [(c[0].as_tuple(), c[1].group_id,) for c in couples_to_recover]
+
+
+    def _couple_defrag(self):
+        try:
+            logger.info('Starting couple defrag planner')
+
+            self.job_processor._do_update_jobs()
+
+            # prechecking for new or pending tasks
+            if self.__executing_jobs(jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB):
+                logger.info('Unfinished couple defrag jobs found')
+                return
+
+            self._do_couple_defrag()
+        except LockFailedError:
+            pass
+        except Exception as e:
+            logger.error('{0}: {1}'.format(e, traceback.format_exc()))
+        finally:
+            logger.info('Couple defrag planner finished')
+            self.__tq.add_task_in(self.COUPLE_DEFRAG,
+                self.params.get('couple_defrag', 60),
+                self._couple_defrag)
+
+    def _do_couple_defrag(self):
+
+        logger.debug('Lock acquiring')
+        with sync_manager.lock(self.job_processor.JOBS_LOCK):
+            logger.debug('Lock acquired')
+
+            self.job_processor._do_update_jobs()
+
+            if self.__executing_jobs(jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB):
+                logger.info('Unfinished couple defrag jobs found')
+                return
+
+            couples_to_defrag = []
+            for couple in storage.couples:
+                if couple.status not in storage.GOOD_STATUSES:
+                    continue
+                fragmentation = [g.get_stat().fragmentation for g in couple.groups]
+                fragmentation.sort(reverse=True)
+
+                if fragmentation[0] == 0.0:
+                    continue
+
+                logger.info('Couple defrag candidate: {0}, max fragmentation '
+                    'in groups: {1:.2f}%'.format(str(couple), fragmentation[0] * 100))
+
+                couples_to_defrag.append((str(couple), fragmentation[0]))
+
+            couples_to_defrag.sort(key=lambda c: c[1])
+
+            for i in xrange(min(self.params.get('couple_defrag', {}).get('jobs_batch_size', 10),
+                                len(couples_to_defrag))):
+                couple_tuple, fragmentation = couples_to_defrag.pop()
+
+                try:
+                    job = self.job_processor.create_job(['couple_defrag_job', {
+                        'couple': couple_tuple}])
+                    logger.info('Created couple defrag job for couple {0}'.format(couple_tuple))
+                except Exception as e:
+                    logger.error('Failed to create couple defrag job: {0}'.format(e))
+                    continue
 
 
 class Delta(object):
