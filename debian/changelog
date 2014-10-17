@@ -1,3 +1,9 @@
+mastermind (2.9.69) lucid; urgency=low
+
+  * Couple defrag planner uses records removed size to select couples to defrag
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 17 Oct 2014 18:51:02 +0400
+
 mastermind (2.9.68) lucid; urgency=low
 
   * Couple defragmentation planner
