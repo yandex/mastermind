@@ -447,16 +447,14 @@ class Planner(object):
             for couple in storage.couples:
                 if couple.status not in storage.GOOD_STATUSES:
                     continue
-                fragmentation = [g.get_stat().fragmentation for g in couple.groups]
-                fragmentation.sort(reverse=True)
-
-                if fragmentation[0] == 0.0:
+                couple_stat = couple.get_stat()
+                if couple_stat.files_removed_size == 0:
                     continue
 
-                logger.info('Couple defrag candidate: {0}, max fragmentation '
-                    'in groups: {1:.2f}%'.format(str(couple), fragmentation[0] * 100))
+                logger.info('Couple defrag candidate: {0}, max files_removed_size '
+                    'in groups: {1}'.format(str(couple), couple_stat.files_removed_size))
 
-                couples_to_defrag.append((str(couple), fragmentation[0]))
+                couples_to_defrag.append((str(couple), couple_stat.files_removed_size))
 
             couples_to_defrag.sort(key=lambda c: c[1])
 

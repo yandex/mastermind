@@ -136,6 +136,7 @@ class NodeBackendStat(object):
 
         self.files = raw_stat['backend']['summary_stats']['records_total'] - raw_stat['backend']['summary_stats']['records_removed']
         self.files_removed = raw_stat['backend']['summary_stats']['records_removed']
+        self.files_removed_size = raw_stat['backend']['summary_stats']['records_removed_size']
         self.fragmentation = (float(self.files_removed) /
                                  ((self.files + self.files_removed) or 1))
 
@@ -201,6 +202,7 @@ class NodeBackendStat(object):
 
         res.files = self.files + other.files
         res.files_removed = self.files_removed + other.files_removed
+        res.files_removed_size = self.files_removed_size + other.files_removed_size
         res.fragmentation = float(res.files_removed) / (res.files_removed + res.files or 1)
 
         return res
@@ -230,6 +232,7 @@ class NodeBackendStat(object):
         files_stat = max(self, other, key=lambda stat: (stat.files + stat.files_removed, stat.files_removed))
         res.files = files_stat.files
         res.files_removed = files_stat.files_removed
+        res.files_removed_size = max(self.files_removed_size, other.files_removed_size)
 
         # ATTENTION: fragmentation coefficient in this case would not necessary
         # be equal to [removed keys / total keys]
