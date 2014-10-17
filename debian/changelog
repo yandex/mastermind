@@ -1,3 +1,9 @@
+mastermind (2.9.68) lucid; urgency=low
+
+  * Couple defragmentation planner
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 17 Oct 2014 15:17:52 +0400
+
 mastermind (2.9.67) lucid; urgency=low
 
    * Couple defragmentation job
