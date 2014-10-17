@@ -310,6 +310,8 @@ class Planner(object):
         try:
             logger.info('Starting recover dc planner')
 
+            self.job_processor._do_update_jobs()
+
             # prechecking for new or pending tasks
             if self.__executing_jobs(jobs.JobTypes.TYPE_RECOVER_DC_JOB):
                 logger.info('Unfinished recover dc jobs found')
@@ -327,8 +329,6 @@ class Planner(object):
                 self._recover_dc)
 
     def _do_recover_dc(self):
-
-        self.job_processor._do_update_jobs()
 
         logger.debug('Lock acquiring')
         with sync_manager.lock(self.job_processor.JOBS_LOCK):
