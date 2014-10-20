@@ -1,3 +1,9 @@
+mastermind (2.9.70) lucid; urgency=low
+
+  * Minions gzip turned on
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 20 Oct 2014 16:16:41 +0400
+
 mastermind (2.9.69) lucid; urgency=low
 
   * Couple defrag planner uses records removed size to select couples to defrag
