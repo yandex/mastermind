@@ -1,3 +1,10 @@
+mastermind (2.9.71) lucid; urgency=low
+
+  * Redirect namespace options
+  * Json output for group search-by-path handle
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 20 Oct 2014 18:08:18 +0400
+
 mastermind (2.9.70) lucid; urgency=low
 
   * Minions gzip turned on
