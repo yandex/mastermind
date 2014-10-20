@@ -759,13 +759,22 @@ class Balancer(object):
             raise ValueError('min-units should be positive integer')
 
         try:
-            content_length_threshold = settings['content_length_threshold'] = int(settings['content_length_threshold'])
-            if not content_length_threshold > 0:
+            content_length_threshold = settings['redirect']['content-length-threshold'] = int(settings['redirect']['content-length-threshold'])
+            if not content_length_threshold >= -1:
                 raise ValueError
         except KeyError:
             pass
         except ValueError:
-            raise ValueError('content length threshold should be positive integer')
+            raise ValueError('redirect content length threshold should be non-negative integer or -1')
+
+        try:
+            expire_time = settings['redirect']['expire-time'] = int(settings['redirect']['expire-time'])
+            if not expire_time > 0:
+                raise ValueError
+        except KeyError:
+            pass
+        except ValueError:
+            raise ValueError('redirect expire time should be positive integer')
 
         if settings.get('success-copies-num', '') not in ('any', 'quorum', 'all'):
             raise ValueError('success-copies-num allowed values are "any", '
@@ -809,10 +818,11 @@ class Balancer(object):
         settings['groups-count'] = groups_count
 
     ALLOWED_NS_KEYS = set(['success-copies-num', 'groups-count',
-        'static-couple', 'auth-keys', 'signature', 'content_length_threshold',
+        'static-couple', 'auth-keys', 'signature', 'redirect',
         'storage-location', 'min-units', 'features'])
     ALLOWED_NS_SIGN_KEYS = set(['token', 'path_prefix', 'port'])
     ALLOWED_NS_AUTH_KEYS = set(['write', 'read'])
+    ALLOWED_REDIRECT_KEYS = set(['content-length-threshold', 'expire-time'])
 
     def __merge_dict(self, dst, src):
         for k, val in src.iteritems():
@@ -858,6 +868,9 @@ class Balancer(object):
         for k in settings.get('auth-keys', {}).keys():
             if k not in self.ALLOWED_NS_AUTH_KEYS:
                 del settings['auth-keys'][k]
+        for k in settings.get('redirect', {}).keys():
+            if k not in self.ALLOWED_REDIRECT_KEYS:
+                del settings['redirect'][k]
 
         if not namespace in self.__couple_namespaces():
             raise ValueError('Namespace "{0}" does not exist'.format(namespace))

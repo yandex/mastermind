@@ -785,8 +785,10 @@ def ns_setup(namespace,
              min_units=('u', '', 'Minimal number of units available for write operations '
                 'in namespace when namespace is considered alive'),
              couple=('c', '', 'Set static couple for namespace (1:2:10)'),
-             content_length_threshold=('', '', 'Set content length threshold for '
+             redirect_content_length_threshold=('', '', 'Set content length threshold for '
                 'proxy to return direct urls instead of balancer urls'),
+             redirect_expire_time=('', '', 'Time for which redirect url is considered '
+                'valid'),
              multipart_content_length_threshold=('', '', 'Set multipart feature '
                 'content length threshold (multipart upload is enabled for '
                 'requests with content length less than threshold)'),
@@ -840,12 +842,19 @@ def ns_setup(namespace,
         settings['auth-keys'].setdefault('read', '')
         settings['auth-keys'].setdefault('write', '')
 
-    if content_length_threshold:
-        settings['content_length_threshold'] = content_length_threshold
     if storage_location:
         settings['storage-location'] = storage_location
     if min_units:
         settings['min-units'] = min_units
+
+    redirect = {}
+    if redirect_content_length_threshold:
+        redirect['content-length-threshold'] = int(redirect_content_length_threshold)
+    if redirect_expire_time:
+        redirect['expire-time'] = int(redirect_expire_time)
+
+    if redirect:
+        settings['redirect'] = redirect
 
     features = {}
     if multipart_content_length_threshold:
