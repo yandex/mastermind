@@ -326,6 +326,7 @@ def group_recover_dc(group,
 @groupDispatcher.command(name='search-by-path')
 @log_action
 def group_search_by_path(group_host, group_path,
+                         json=('', None, 'Format additional data as json'),
                          host=None, app=None):
     '''Search which group ever lived on a given path on a host'''
     s = service(host, app)
@@ -345,6 +346,10 @@ def group_search_by_path(group_host, group_path,
     if isinstance(res, dict):
         # error
         print res
+        return
+
+    if json:
+        print dumps(res)
         return
 
     print color('{0:^25} | {1:^10} | {2:^50} | {3:^15}'.format(
