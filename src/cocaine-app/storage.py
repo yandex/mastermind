@@ -145,8 +145,11 @@ class NodeBackendStat(object):
         self.fsid = raw_stat['backend']['vfs']['fsid']
         self.defrag_state = raw_stat['status']['defrag_state']
 
-        self.max_blob_base_size = max([blob_stat['base_size']
-            for blob_stat in raw_stat['backend']['base_stats'].values()])
+        if len(raw_stat['backend'].get('base_stats', {})):
+            self.max_blob_base_size = max([blob_stat['base_size']
+                for blob_stat in raw_stat['backend']['base_stats'].values()])
+        else:
+            self.max_blob_base_size = 0
 
         if prev:
             dt = self.ts - prev.ts
