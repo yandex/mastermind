@@ -109,7 +109,8 @@ class Minions(object):
 
                 successfull_hosts += 1
 
-            if not self.ready:
+            if not self.ready and not active_hosts:
+                # toggle ready state only if acitve_hosts == False (all minions are traversed)
                 self.ready = successfull_hosts >= len(states)
                 if not self.ready:
                     logger.warn('Failed to sync minions state: '
