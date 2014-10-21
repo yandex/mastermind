@@ -1,3 +1,9 @@
+mastermind (2.9.75) lucid; urgency=low
+
+  * Fix for minions ready state
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 21 Oct 2014 19:02:16 +0400
+
 mastermind (2.9.74) lucid; urgency=low
 
   * Misprints
