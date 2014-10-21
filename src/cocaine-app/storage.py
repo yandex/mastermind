@@ -123,6 +123,8 @@ class NodeBackendStat(object):
             self.fsid = None
             self.defrag_state = None
 
+            self.max_blob_base_size = 0
+
     def init(self, raw_stat, prev=None):
         self.ts = time.time()
 
@@ -142,6 +144,9 @@ class NodeBackendStat(object):
 
         self.fsid = raw_stat['backend']['vfs']['fsid']
         self.defrag_state = raw_stat['status']['defrag_state']
+
+        self.max_blob_base_size = max([blob_stat['base_size']
+            for blob_stat in raw_stat['backend']['base_stats'].values()])
 
         if prev:
             dt = self.ts - prev.ts
@@ -205,6 +210,8 @@ class NodeBackendStat(object):
         res.files_removed_size = self.files_removed_size + other.files_removed_size
         res.fragmentation = float(res.files_removed) / (res.files_removed + res.files or 1)
 
+        res.max_blob_base_size = max(self.max_blob_base_size, other.max_blob_base_size)
+
         return res
 
     def __mul__(self, other):
@@ -237,6 +244,8 @@ class NodeBackendStat(object):
         # ATTENTION: fragmentation coefficient in this case would not necessary
         # be equal to [removed keys / total keys]
         res.fragmentation = max(self.fragmentation, other.fragmentation)
+
+        res.max_blob_base_size = max(self.max_blob_base_size, other.max_blob_base_size)
 
         return res
 
