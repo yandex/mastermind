@@ -263,7 +263,7 @@ class Infrastructure(object):
                     # also filter out old history nodes
                     ext_storage_nodes = (storage_nodes + tuple(
                         nb for nb in state_nodes
-                            if nb not in state_nodes and len(nb) != 2))
+                            if nb not in storage_nodes and len(nb) != 2))
 
                     logger.debug('Comparing %s and %s' %
                                   (ext_storage_nodes, state_nodes))
