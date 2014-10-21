@@ -331,6 +331,7 @@ class NodeBackend(object):
         self.destroyed = False
         self.read_only = False
         self.disabled = False
+        self.dstat_error_code = 0
         self.status = Status.INIT
         self.status_text = "Node %s is not inititalized yet" % (self.__str__())
 
@@ -351,6 +352,10 @@ class NodeBackend(object):
         if self.destroyed:
             self.status = Status.BAD
             self.status_text = 'Node backend {0} is destroyed'.format(self.__str__())
+
+        elif self.dstat_error_code != 0:
+            self.status = Status.STALLED
+            self.status_text = 'Node backend {0} returned error code {1}'.format(str(self), self.dstat_error_code)
 
         elif not self.stat:
             self.status = Status.INIT
@@ -384,6 +389,7 @@ class NodeBackend(object):
         res['addr'] = str(self)
         res['hostname'] = infrastructure.get_hostname_by_addr(self.node.host.addr)
         res['status'] = self.status
+        res['status_text'] = self.status_text
         res['dc'] = self.node.host.dc
         res['last_stat_update'] = (self.stat and
             datetime.datetime.fromtimestamp(self.stat.ts).strftime('%Y-%m-%d %H:%M:%S') or
