@@ -119,7 +119,7 @@ class JobProcessor(object):
                     executing_jobs.append(job)
                 for job in filter(lambda j: j.status == Job.STATUS_NEW, self.jobs.itervalues()):
                     jobs_count = type_jobs_count.setdefault(job.type, 0)
-                    if jobs_count >= config.get('jobs', {}).get(job.type, {}).get('max_executing_job', 3):
+                    if jobs_count >= config.get('jobs', {}).get(job.type, {}).get('max_executing_jobs', 3):
                         continue
                     type_jobs_count[job.type] += 1
                     new_jobs.append(job)
