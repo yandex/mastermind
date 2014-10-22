@@ -1,3 +1,9 @@
+mastermind (2.9.77) lucid; urgency=low
+
+  * One more zero-weight couple fix
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 22 Oct 2014 15:10:53 +0400
+
 mastermind (2.9.76) lucid; urgency=low
 
   * Ultimate fix for zero-weight couples
