@@ -235,10 +235,11 @@ class Balancer(object):
 
         for namespace, sizes in namespaces:
             try:
-                self._namespaces_weights(all_symm_group_objects, namespace, sizes, result)
-            except ValueError:
-                # temporary proxy fix to prevent bad response caching
-                raise
+                result[namespace] = self._namespaces_weights(
+                    all_symm_group_objects, namespace, sizes, result)
+            except ValueError as e:
+                logger.error(e)
+                continue
 
         if len(result) == 0:
             raise ValueError('Failed to satisfy {0} availability settings'.format(
@@ -261,12 +262,14 @@ class Balancer(object):
                     symm_groups, bla.getConfig(),
                     bla._and(bla.GroupSizeEquals(size),
                              bla.GroupNamespaceEquals(namespace)))
-                ns_weights[size] = \
+                ns_size_weights = \
                     [([g.group_id for g in item[0].groups],) +
                          item[1:] +
                          (int(item[0].get_stat().free_space),)
                      for item in group_weights.items()]
-                found_couples += len([item for item in ns_weights[size] if item[1] > 0])
+                if len(ns_size_weights):
+                    ns_weights[size] = ns_size_weights
+                    found_couples += len([item for item in ns_weights[size] if item[1] > 0])
                 logger.info('Namespace {0}, size {1}: '
                     'cluster info: {2}'.format(namespace, size, info))
             except Exception as e:
@@ -277,15 +280,9 @@ class Balancer(object):
         ns_min_units = self.infrastructure.ns_settings.get(namespace, {}).get(
             'min-units', self.MIN_NS_UNITS)
         if found_couples < ns_min_units:
-
-            # TODO: remove logging, uncomment raise statement
-            logger.warn('Namespace {0} has {1} available couples, '
+            raise ValueError('Namespace {0} has {1} available couples, '
                 '{2} required'.format(namespace, found_couples, ns_min_units))
-
-            # raise ValueError('Namespace {0} has {1} available couples, '
-            #     '{2} required'.format(namespace, found_couples, ns_min_units))
-
-        result[namespace] = ns_weights
+        return ns_weights
 
     @h.handler
     def repair_groups(self, request):
