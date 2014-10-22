@@ -274,7 +274,6 @@ class Balancer(object):
                     'cluster info: {2}'.format(namespace, size, info))
             except Exception as e:
                 logger.error('Namespace {0}, size {1}: error {2}'.format(namespace, size, e))
-                ns_weights[size] = []
                 continue
 
         ns_min_units = self.infrastructure.ns_settings.get(namespace, {}).get(
