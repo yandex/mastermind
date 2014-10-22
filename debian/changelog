@@ -1,3 +1,9 @@
+mastermind (2.9.76) lucid; urgency=low
+
+  * Ultimate fix for zero-weight couples
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 22 Oct 2014 14:07:49 +0400
+
 mastermind (2.9.75) lucid; urgency=low
 
   * Fix for minions ready state
