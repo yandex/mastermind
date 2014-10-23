@@ -794,6 +794,10 @@ def ns_setup(namespace,
                 'requests with content length less than threshold)'),
              select_couple_to_upload=('', '', 'Client is allowed to select a couple '
                 'to write key to (true|false)'),
+             reserved_space_percentage=('', '', 'Percentage of effective space that '
+                'will be reserved for future updates, couple will be closed when '
+                'free effective space percentage is less than or equal to reserved '
+                'space percentage'),
              host=None, app=None):
     '''Namespace setup.
     Updates settings by default with given keys.
@@ -846,6 +850,8 @@ def ns_setup(namespace,
         settings['storage-location'] = storage_location
     if min_units:
         settings['min-units'] = min_units
+    if reserved_space_percentage:
+        settings['reserved-space-percentage'] = reserved_space_percentage
 
     redirect = {}
     if redirect_content_length_threshold:

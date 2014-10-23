@@ -758,7 +758,7 @@ class Couple(object):
 
         return available_metas[0]['namespace']
 
-    RESERVED_SPACE_KEY = 'reserved_space'
+    RESERVED_SPACE_KEY = 'reserved-space-percentage'
 
     def is_full(self):
 
