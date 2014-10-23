@@ -645,7 +645,7 @@ class Infrastructure(object):
             attempts=RECOVERY_DC_CNF.get('attempts', 1),
             batch=RECOVERY_DC_CNF.get('batch', 2000),
             log=RECOVERY_DC_CNF.get('log', 'dnet_recovery.log').format(group_id=group_id),
-            processes_num=len(group.couple.groups))
+            processes_num=len(group.couple.groups) - 1 or 1)
 
         logger.info('Command for dc recovery for group {0} '
             'was requested: {1}'.format(group_id, cmd))
