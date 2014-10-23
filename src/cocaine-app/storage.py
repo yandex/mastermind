@@ -136,7 +136,7 @@ class NodeBackendStat(object):
 
         self.vfs_total_space = raw_stat['backend']['vfs']['blocks'] * raw_stat['backend']['vfs']['bsize']
         self.vfs_free_space = raw_stat['backend']['vfs']['bavail'] * raw_stat['backend']['vfs']['bsize']
-        self.vfs_used_space = self.total_space_vfs - self.free_space_vfs
+        self.vfs_used_space = self.vfs_total_space - self.vfs_free_space
 
         self.files = raw_stat['backend']['summary_stats']['records_total'] - raw_stat['backend']['summary_stats']['records_removed']
         self.files_removed = raw_stat['backend']['summary_stats']['records_removed']
@@ -154,7 +154,7 @@ class NodeBackendStat(object):
             self.free_space = max(0, self.total_space - self.used_space)
         else:
             self.total_space = self.vfs_total_space
-            self.free_space = self.vfs.free_space
+            self.free_space = self.vfs_free_space
             self.used_space = self.vfs_used_space
 
         if len(raw_stat['backend'].get('base_stats', {})):
@@ -409,6 +409,17 @@ class NodeBackend(object):
 
         return self.status
 
+    @property
+    def efficient_space(self):
+
+        if self.stat is None:
+            return 0
+
+        share = float(self.stat.total_space) / self.stat.vfs_total_space
+        free_space_req_share = math.ceil(VFS_RESERVED_SPACE * share)
+
+        return self.stat.total_space - free_space_req_share
+
     def is_full(self, reserved_space=0.0):
 
         if self.stat is None:
@@ -416,12 +427,7 @@ class NodeBackend(object):
 
         assert 0.0 <= reserved_space <= 1.0, 'Reserved space should have non-negative value lte 1.0'
 
-        share = float(self.stat.total_space) / self.stat.vfs_total_space
-        free_space_req_share = math.ceil(VFS_RESERVED_SPACE * share)
-
-        eff_space = self.total_space - free_space_req_share
-
-        if self.used_space >= eff_space * (1.0 - reserved_space):
+        if self.stat.used_space >= self.efficient_space * (1.0 - reserved_space):
             return True
 
     def info(self):
@@ -439,6 +445,7 @@ class NodeBackend(object):
             'unknown')
         if self.stat:
             res['free_space'] = int(self.stat.free_space)
+            res['free_effective_space'] = int(max(self.stat.free_space - (self.stat.total_space - self.efficient_space), 0))
             res['used_space'] = int(self.stat.used_space)
             res['total_files'] = self.stat.files + self.stat.files_removed
             res['fragmentation'] = self.stat.fragmentation
@@ -520,6 +527,10 @@ class Group(object):
             self.couple.update_status()
         else:
             self.update_status()
+
+    @property
+    def efficient_space(self):
+        return sum([nb.efficient_space for nb in self.node_backends])
 
     def update_status(self):
         if not self.node_backends:
@@ -772,13 +783,11 @@ class Couple(object):
 
     @property
     def efficient_space(self):
-        stat = self.get_stat()
-        if not stat:
-            return 0
+
+        groups_efficient_space = min([g.efficient_space for g in self.groups])
 
         reserved_space = infrastructure.ns_settings.get(self.namespace, {}).get(self.RESERVED_SPACE_KEY, 0.0)
-        return math.floor(stat.total_space * (1.0 - reserved_space))
-
+        return math.floor(groups_efficient_space * (1.0 - reserved_space))
 
     def as_tuple(self):
         return tuple(group.group_id for group in self.groups)
