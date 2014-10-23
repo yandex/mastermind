@@ -14,8 +14,6 @@ __config_lock = threading.Lock()
 def setConfig(mastermind_config):
     global __config
     lconfig = {}
-    lconfig["MinimumFreeSpaceInKbToParticipate"] = mastermind_config.get("min_free_space", 256) * 1024
-    lconfig["MinimumFreeSpaceRelativeToParticipate"] = mastermind_config.get("min_free_space_relative", 0.15)
     lconfig["MinimumUnitsWithPositiveWeight"] = mastermind_config.get("min_units", 1)
     lconfig["AdditionalUnitsNumber"] = mastermind_config.get("add_units", 1)
     lconfig["AdditionalUnitsPercentage"] = mastermind_config.get("add_units_relative", 0.10)
@@ -85,7 +83,7 @@ class SymmGroup:
         return self.stat.free_space / 1024
 
     def freeSpaceRelative(self):
-        return self.stat.rel_space
+        return float(self.stat.free_space) / self.stat.total_space
 
     def unitId(self):
         return self.couple
@@ -98,11 +96,11 @@ class SymmGroup:
         return False
 
     def writeEnable(self):
-        return self.status in storage.GOOD_STATUSES
+        return self.status == storage.Status.OK
 
     def isBad(self):
         too_old_age = getConfig().get("dynamic_too_old_age", 120)
-        return self.status not in storage.GOOD_STATUSES or self.stat.ts < (time() - too_old_age)
+        return self.status != storage.Status.OK or self.stat.ts < (time() - too_old_age)
 
     def dataType(self):
         return composeDataType(str(self.couple))

@@ -52,8 +52,7 @@ class Statistics(object):
         if group.couple:
             data['free_space'] += stat.free_space
             data['total_space'] += stat.total_space
-            node_eff_space = max(min(stat.total_space - self.MIN_FREE_SPACE,
-                                     stat.total_space * (1 - self.MIN_FREE_SPACE_REL)), 0)
+            node_eff_space = group.couple.efficient_space
             data['effective_space'] += int(node_eff_space)
             data['effective_free_space'] += max(stat.free_space - (stat.total_space - int(node_eff_space)), 0)
         else:

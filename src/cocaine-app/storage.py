@@ -2,6 +2,7 @@
 import datetime
 import functools
 import logging
+import math
 import os.path
 import time
 import traceback
@@ -17,6 +18,7 @@ logger = logging.getLogger('mm.storage')
 
 
 RPS_FORMULA_VARIANT = config.get('rps_formula', 0)
+VFS_RESERVED_SPACE = config.get('reserved_space', 112742891520)  # default is 105 Gb for one vfs
 
 
 def ts_str(ts):
@@ -110,7 +112,6 @@ class NodeBackendStat(object):
             self.init(raw_stat, prev)
         else:
             self.free_space = 0
-            self.rel_space = 0.0
 
             self.last_read, self.last_write = 0, 0
             self.read_rps, self.write_rps = 0, 0
@@ -123,7 +124,9 @@ class NodeBackendStat(object):
             self.fsid = None
             self.defrag_state = None
 
+            self.blob_size_limit = 0
             self.max_blob_base_size = 0
+            self.blob_size = 0
 
     def init(self, raw_stat, prev=None):
         self.ts = time.time()
@@ -131,10 +134,9 @@ class NodeBackendStat(object):
         self.last_read = raw_stat['backend']['dstat']['read_ios']
         self.last_write = raw_stat['backend']['dstat']['write_ios']
 
-        self.total_space = raw_stat['backend']['vfs']['blocks'] * raw_stat['backend']['vfs']['bsize']
-        self.free_space = raw_stat['backend']['vfs']['bavail'] * raw_stat['backend']['vfs']['bsize']
-        self.used_space = self.total_space - self.free_space
-        self.rel_space = float(raw_stat['backend']['vfs']['bavail']) / raw_stat['backend']['vfs']['blocks']
+        self.vfs_total_space = raw_stat['backend']['vfs']['blocks'] * raw_stat['backend']['vfs']['bsize']
+        self.vfs_free_space = raw_stat['backend']['vfs']['bavail'] * raw_stat['backend']['vfs']['bsize']
+        self.vfs_used_space = self.total_space_vfs - self.free_space_vfs
 
         self.files = raw_stat['backend']['summary_stats']['records_total'] - raw_stat['backend']['summary_stats']['records_removed']
         self.files_removed = raw_stat['backend']['summary_stats']['records_removed']
@@ -145,11 +147,23 @@ class NodeBackendStat(object):
         self.fsid = raw_stat['backend']['vfs']['fsid']
         self.defrag_state = raw_stat['status']['defrag_state']
 
+        self.blob_size_limit = raw_stat['backend']['config'].get('blob_size_limit', 0)
+        if self.blob_size_limit > 0:
+            self.total_space = self.blob_size_limit
+            self.used_space = raw_stat['backend']['summary_stats'].get('base_size', 0)
+            self.free_space = max(0, self.total_space - self.used_space)
+        else:
+            self.total_space = self.vfs_total_space
+            self.free_space = self.vfs.free_space
+            self.used_space = self.vfs_used_space
+
         if len(raw_stat['backend'].get('base_stats', {})):
             self.max_blob_base_size = max([blob_stat['base_size']
                 for blob_stat in raw_stat['backend']['base_stats'].values()])
         else:
             self.max_blob_base_size = 0
+
+        self.blob_size = raw_stat['backend']['config']['blob_size']
 
         if prev:
             dt = self.ts - prev.ts
@@ -200,7 +214,6 @@ class NodeBackendStat(object):
         res.total_space = self.total_space + other.total_space
         res.free_space = self.free_space + other.free_space
         res.used_space = self.used_space + other.used_space
-        res.rel_space = min(self.rel_space, other.rel_space)
 
         res.read_rps = self.read_rps + other.read_rps
         res.write_rps = self.write_rps + other.write_rps
@@ -213,7 +226,9 @@ class NodeBackendStat(object):
         res.files_removed_size = self.files_removed_size + other.files_removed_size
         res.fragmentation = float(res.files_removed) / (res.files_removed + res.files or 1)
 
+        res.blob_size_limit = min(self.blob_size_limit, other.blob_size_limit)
         res.max_blob_base_size = max(self.max_blob_base_size, other.max_blob_base_size)
+        res.blob_size = max(self.blob_size, other.blob_size)
 
         return res
 
@@ -227,8 +242,7 @@ class NodeBackendStat(object):
 
         res.total_space = min(self.total_space, other.total_space)
         res.free_space = min(self.free_space, other.free_space)
-        res.used_space = min(self.used_space, other.used_space)
-        res.rel_space = min(self.rel_space, other.rel_space)
+        res.used_space = max(self.used_space, other.used_space)
 
         res.read_rps = max(self.read_rps, other.read_rps)
         res.write_rps = max(self.write_rps, other.write_rps)
@@ -248,7 +262,9 @@ class NodeBackendStat(object):
         # be equal to [removed keys / total keys]
         res.fragmentation = max(self.fragmentation, other.fragmentation)
 
+        res.blob_size_limit = min(self.blob_size_limit, other.blob_size_limit)
         res.max_blob_base_size = max(self.max_blob_base_size, other.max_blob_base_size)
+        res.blob_size = max(self.blob_size, other.blob_size)
 
         return res
 
@@ -393,6 +409,21 @@ class NodeBackend(object):
 
         return self.status
 
+    def is_full(self, reserved_space=0.0):
+
+        if self.stat is None:
+            return False
+
+        assert 0.0 <= reserved_space <= 1.0, 'Reserved space should have non-negative value lte 1.0'
+
+        share = float(self.stat.total_space) / self.stat.vfs_total_space
+        free_space_req_share = math.ceil(VFS_RESERVED_SPACE * share)
+
+        eff_space = self.total_space - free_space_req_share
+
+        if self.used_space >= eff_space * (1.0 - reserved_space):
+            return True
+
     def info(self):
         res = {}
 
@@ -407,14 +438,7 @@ class NodeBackend(object):
             datetime.datetime.fromtimestamp(self.stat.ts).strftime('%Y-%m-%d %H:%M:%S') or
             'unknown')
         if self.stat:
-            min_free_space = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
-            min_free_space_rel = config['balancer_config'].get('min_free_space_relative', 0.15)
-
             res['free_space'] = int(self.stat.free_space)
-            eff_space = max(min(self.stat.total_space - min_free_space,
-                                self.stat.total_space * (1 - min_free_space_rel)), 0.0)
-
-            res['free_effective_space'] = int(max(self.stat.free_space - (self.stat.total_space - eff_space), 0))
             res['used_space'] = int(self.stat.used_space)
             res['total_files'] = self.stat.files + self.stat.files_removed
             res['fragmentation'] = self.stat.fragmentation
@@ -628,12 +652,8 @@ class Couple(object):
             return self.status
 
         if all([st == Status.COUPLED for st in statuses]):
-            min_free_space = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
-            min_rel_space = config['balancer_config'].get('min_free_space_relative', 0.15)
-
             stats = self.get_stat()
-            if (stats and (stats.free_space < min_free_space or
-                           stats.rel_space < min_rel_space)):
+            if self.is_full():
                 self.status = Status.FULL
             else:
                 self.status = Status.OK
@@ -738,6 +758,28 @@ class Couple(object):
 
         return available_metas[0]['namespace']
 
+    RESERVED_SPACE_KEY = 'reserved_space'
+
+    def is_full(self):
+
+        ns_reserved_space = infrastructure.ns_settings.get(self.namespace, {}).get(self.RESERVED_SPACE_KEY, 0.0)
+
+        for group in self.groups:
+            for nb in group.node_backends:
+                if nb.is_full(ns_reserved_space):
+                    return True
+        return False
+
+    @property
+    def efficient_space(self):
+        stat = self.get_stat()
+        if not stat:
+            return 0
+
+        reserved_space = infrastructure.ns_settings.get(self.namespace, {}).get(self.RESERVED_SPACE_KEY, 0.0)
+        return math.floor(stat.total_space * (1.0 - reserved_space))
+
+
     def as_tuple(self):
         return tuple(group.group_id for group in self.groups)
 
@@ -751,15 +793,8 @@ class Couple(object):
             pass
         stat = self.get_stat()
         if stat:
-            min_free_space = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
-            min_free_space_rel = config['balancer_config'].get('min_free_space_relative', 0.15)
-
             res['free_space'] = int(stat.free_space)
-            node_eff_space = max(min(stat.total_space - min_free_space,
-                                     stat.total_space * (1 - min_free_space_rel)), 0.0)
-
-            res['free_effective_space'] = int(max(stat.free_space - (stat.total_space - node_eff_space), 0))
-
+            res['free_effective_space'] = int(max(stat.free_space - (stat.total_space - self.efficient_space), 0))
             res['used_space'] = int(stat.used_space)
         return res
 

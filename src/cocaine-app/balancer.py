@@ -65,13 +65,6 @@ class Balancer(object):
 
     @h.handler
     def get_closed_groups(self, request):
-        result = []
-        min_free_space = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
-        min_rel_space = config['balancer_config'].get('min_free_space_relative', 0.15)
-
-        logger.debug('configured min_free_space: %s bytes' % min_free_space)
-        logger.debug('configured min_rel_space: %s' % min_rel_space)
-
         result = [couple.as_tuple() for couple in storage.couples
                   if couple.status == storage.Status.FULL]
 
