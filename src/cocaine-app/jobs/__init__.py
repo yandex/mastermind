@@ -276,29 +276,8 @@ class JobProcessor(object):
             except IndexError:
                 params = {}
 
-            # Forcing manual approval of newly created job
-            params['need_approving'] = True
-
-            if job_type == JobTypes.TYPE_MOVE_JOB:
-                JobType = MoveJob
-            elif job_type == JobTypes.TYPE_RECOVER_DC_JOB:
-                JobType = RecoverDcJob
-            elif job_type == JobTypes.TYPE_COUPLE_DEFRAG_JOB:
-                JobType = CoupleDefragJob
-            job = JobType.new(**params)
-
-            try:
-                job.create_tasks()
-
-                with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
-                    logger.info('Job {0} created: {1}'.format(job.id, job.dump()))
-                    self.jobs_index[job.id] = self.__dump_job(job)
-                    self.jobs_index.set_tag(job.id, self.tag(job))
-
-                self.jobs[job.id] = job
-            except Exception:
-                job.release_locks()
-                raise
+            with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
+                job = self._create_job(job_type, params)
 
         except LockFailedError as e:
             raise
@@ -308,6 +287,32 @@ class JobProcessor(object):
             raise
 
         return job.dump()
+
+    def _create_job(self, job_type, params):
+        # Forcing manual approval of newly created job
+        params['need_approving'] = True
+
+        if job_type == JobTypes.TYPE_MOVE_JOB:
+            JobType = MoveJob
+        elif job_type == JobTypes.TYPE_RECOVER_DC_JOB:
+            JobType = RecoverDcJob
+        elif job_type == JobTypes.TYPE_COUPLE_DEFRAG_JOB:
+            JobType = CoupleDefragJob
+        job = JobType.new(**params)
+
+        try:
+            job.create_tasks()
+
+            logger.info('Job {0} created: {1}'.format(job.id, job.dump()))
+            self.jobs_index[job.id] = self.__dump_job(job)
+            self.jobs_index.set_tag(job.id, self.tag(job))
+
+            self.jobs[job.id] = job
+        except Exception:
+            job.release_locks()
+            raise
+
+        return job
 
     def get_job_list(self, request):
         try:

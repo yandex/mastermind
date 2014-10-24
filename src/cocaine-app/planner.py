@@ -133,7 +133,7 @@ class Planner(object):
                             dst_group.group_id, dst_dc))
 
                         try:
-                            job = self.job_processor.create_job([
+                            job = self.job_processor._create_job(
                                 jobs.JobTypes.TYPE_MOVE_JOB,
                                 {'group': src_group.group_id,
                                  'uncoupled_group': dst_group.group_id,
@@ -147,9 +147,9 @@ class Planner(object):
                                  'dst_family': dst_group.node_backends[0].node.family,
                                  'dst_backend_id': dst_group.node_backends[0].backend_id,
                                  'dst_base_path': dst_group.node_backends[0].base_path,
-                                 }])
-                            logger.info('Job successfully created: {0}'.format(job['id']))
-                        except jobs.LockFailedError:
+                                 })
+                            logger.info('Job successfully created: {0}'.format(job.id))
+                        except jobs.LockFailedError as e:
                             logger.error('Failed to create move job for moving '
                                 'group {0} ({1}) to {2} ({3}): {4}'.format(
                                     src_group.group_id, src_dc,
@@ -366,14 +366,15 @@ class Planner(object):
                     node_backend = group.node_backends[0]
 
                     try:
-                        job = self.job_processor.create_job(['recover_dc_job', {
-                            'group': group.group_id,
-                            'host': node_backend.node.host.addr,
-                            'port': node_backend.node.port,
-                            'family': node_backend.node.family,
-                            'backend_id': node_backend.backend_id}])
+                        job = self.job_processor._create_job(
+                            jobs.JobTypes.TYPE_RECOVER_DC_JOB,
+                            {'group': group.group_id,
+                             'host': node_backend.node.host.addr,
+                             'port': node_backend.node.port,
+                             'family': node_backend.node.family,
+                             'backend_id': node_backend.backend_id})
                         logger.info('Created recover dc job for couple {0}, '
-                            'group {1}'.format(couple, group))
+                            'group {1}, job id {2}'.format(couple, group, job.id))
                     except Exception as e:
                         logger.error('Failed to create recover dc job: {0}'.format(e))
                         continue
@@ -481,9 +482,11 @@ class Planner(object):
                 couple_tuple, fragmentation = couples_to_defrag.pop()
 
                 try:
-                    job = self.job_processor.create_job(['couple_defrag_job', {
-                        'couple': couple_tuple}])
-                    logger.info('Created couple defrag job for couple {0}'.format(couple_tuple))
+                    job = self.job_processor._create_job(
+                        jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB,
+                        {'couple': couple_tuple})
+                    logger.info('Created couple defrag job for couple {0}, job id {1}'.format(
+                        couple_tuple, job.id))
                 except Exception as e:
                     logger.error('Failed to create couple defrag job: {0}'.format(e))
                     continue

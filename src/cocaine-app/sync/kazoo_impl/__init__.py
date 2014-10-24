@@ -44,8 +44,8 @@ class ZkSyncManager(object):
         except Exception as e:
             logger.error(e)
             raise
-        self.locks = {}
-        self.__locks_lock = threading.Lock()
+        # self.locks = {}
+        # self.__locks_lock = threading.Lock()
 
         self._retry = KazooRetry(max_tries=self.RETRIES)
 
@@ -53,8 +53,8 @@ class ZkSyncManager(object):
 
     @contextmanager
     def lock(self, lockid, timeout=LOCK_TIMEOUT):
-        with self.__locks_lock:
-            lock = self.locks.setdefault(lockid, Lock(self.client, self.lock_path_prefix + lockid))
+        # with self.__locks_lock:
+        lock = Lock(self.client, self.lock_path_prefix + lockid)
         try:
             lock.acquire(timeout=timeout)
             yield
