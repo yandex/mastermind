@@ -1,3 +1,9 @@
+mastermind (2.9.79) lucid; urgency=low
+
+  * Rearranged locks acquiring
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 24 Oct 2014 16:33:44 +0400
+
 mastermind (2.9.78) lucid; urgency=low
 
   * Do not share locks among different threads, this can cause unwanted sideeffects
