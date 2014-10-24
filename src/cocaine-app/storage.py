@@ -410,7 +410,7 @@ class NodeBackend(object):
         return self.status
 
     @property
-    def efficient_space(self):
+    def effective_space(self):
 
         if self.stat is None:
             return 0
@@ -427,7 +427,7 @@ class NodeBackend(object):
 
         assert 0.0 <= reserved_space <= 1.0, 'Reserved space should have non-negative value lte 1.0'
 
-        if self.stat.used_space >= self.efficient_space * (1.0 - reserved_space):
+        if self.stat.used_space >= self.effective_space * (1.0 - reserved_space):
             return True
 
     def info(self):
@@ -445,7 +445,7 @@ class NodeBackend(object):
             'unknown')
         if self.stat:
             res['free_space'] = int(self.stat.free_space)
-            res['free_effective_space'] = int(max(self.stat.free_space - (self.stat.total_space - self.efficient_space), 0))
+            res['free_effective_space'] = int(max(self.stat.free_space - (self.stat.total_space - self.effective_space), 0))
             res['used_space'] = int(self.stat.used_space)
             res['total_files'] = self.stat.files + self.stat.files_removed
             res['fragmentation'] = self.stat.fragmentation
@@ -529,8 +529,8 @@ class Group(object):
             self.update_status()
 
     @property
-    def efficient_space(self):
-        return sum([nb.efficient_space for nb in self.node_backends])
+    def effective_space(self):
+        return sum([nb.effective_space for nb in self.node_backends])
 
     def update_status(self):
         if not self.node_backends:
@@ -782,12 +782,12 @@ class Couple(object):
         return False
 
     @property
-    def efficient_space(self):
+    def effective_space(self):
 
-        groups_efficient_space = min([g.efficient_space for g in self.groups])
+        groups_effective_space = min([g.effective_space for g in self.groups])
 
         reserved_space = infrastructure.ns_settings.get(self.namespace, {}).get(self.RESERVED_SPACE_KEY, 0.0)
-        return math.floor(groups_efficient_space * (1.0 - reserved_space))
+        return math.floor(groups_effective_space * (1.0 - reserved_space))
 
     def as_tuple(self):
         return tuple(group.group_id for group in self.groups)
@@ -803,7 +803,7 @@ class Couple(object):
         stat = self.get_stat()
         if stat:
             res['free_space'] = int(stat.free_space)
-            res['free_effective_space'] = int(max(stat.free_space - (stat.total_space - self.efficient_space), 0))
+            res['free_effective_space'] = int(max(stat.free_space - (stat.total_space - self.effective_space), 0))
             res['used_space'] = int(stat.used_space)
         return res
 
