@@ -42,9 +42,9 @@ class Infrastructure(object):
 
     TASK_DC_CACHE_SYNC = 'infrastructure_dc_cache_sync'
 
-    RSYNC_CMD = ('rsync -rlHpogDt --progress '
+    RSYNC_CMD = ('rsync -rlHpogDt --progress --timeout=1200 '
                  '"{user}@{src_host}:{src_path}data*" "{dst_path}"')
-    RSYNC_MODULE_CMD = ('rsync -av --progress '
+    RSYNC_MODULE_CMD = ('rsync -av --progress --timeout=1200 '
                         '"rsync://{user}@{src_host}/{module}/{src_path}data*" '
                         '"{dst_path}"')
     DNET_RECOVERY_DC_CMD = ('dnet_recovery dc {remotes} -g {groups} -D {tmp_dir} '
