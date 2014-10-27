@@ -1,3 +1,9 @@
+mastermind (2.9.80) lucid; urgency=low
+
+  * Added alive and removed records counters
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 27 Oct 2014 18:03:18 +0300
+
 mastermind (2.9.79) lucid; urgency=low
 
   * Rearranged locks acquiring
