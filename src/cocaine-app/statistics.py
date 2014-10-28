@@ -14,9 +14,6 @@ class Statistics(object):
     def __init__(self, balancer):
         self.balancer = balancer
 
-    MIN_FREE_SPACE = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
-    MIN_FREE_SPACE_REL = config['balancer_config'].get('min_free_space_relative', 0.15)
-
     @staticmethod
     def dict_keys_sum(st1, st2):
         return dict((k, st1[k] + st2[k]) for k in st1
@@ -52,8 +49,7 @@ class Statistics(object):
         if group.couple:
             data['free_space'] += stat.free_space
             data['total_space'] += stat.total_space
-            node_eff_space = max(min(stat.total_space - self.MIN_FREE_SPACE,
-                                     stat.total_space * (1 - self.MIN_FREE_SPACE_REL)), 0)
+            node_eff_space = group.couple.effective_space
             data['effective_space'] += int(node_eff_space)
             data['effective_free_space'] += max(stat.free_space - (stat.total_space - int(node_eff_space)), 0)
         else:
@@ -205,6 +201,8 @@ class Statistics(object):
         excluding space occupied by replicas, accounts for groups residing
         on the same file systems, etc."""
 
+
+        # TODO: Change min_free_space* usage
         host_fsid_memory_map = {}
 
         res = {
@@ -220,14 +218,11 @@ class Statistics(object):
                     continue
 
                 if not (node_backend.node.host.addr, node_backend.stat.fsid) in host_fsid_memory_map:
-                    eff_space = max(min(node_backend.stat.total_space - self.MIN_FREE_SPACE,
-                                        node_backend.stat.total_space * (1 - self.MIN_FREE_SPACE_REL)), 0.0)
                     host_fsid_memory_map[(node_backend.node.host.addr, node_backend.stat.fsid)] = {
                         'total_space': node_backend.stat.total_space,
                         'free_space': node_backend.stat.free_space,
-                        'effective_space': eff_space,
-                        'effective_free_space': max(node_backend.stat.free_space -
-                            (node_backend.stat.total_space - eff_space), 0.0),
+                        'effective_space': node_backend.effective_space,
+                        'effective_free_space': int(max(node_backend.stat.free_space - (node_backend.stat.total_space - node_backend.effective_space), 0)),
                     }
 
         for couple in storage.couples:
@@ -396,7 +391,7 @@ class Statistics(object):
         if group.couple:
             res = group.couple.info()
             res['status'] = res['couple_status']
-            res['stats'] = self.__stats_to_dict(group.couple.get_stat())
+            res['stats'] = self.__stats_to_dict(group.couple.get_stat(), group.couple.effective_space)
             groups = group.couple.groups
         else:
             groups = [group]
@@ -408,14 +403,14 @@ class Statistics(object):
                 group_stat = group.get_stat()
             except TypeError:
                 group_stat = None
-            g['stats'] = self.__stats_to_dict(group_stat)
+            g['stats'] = self.__stats_to_dict(group_stat, group.effective_space)
             for nb in g['node_backends']:
-                nb['stats'] = self.__stats_to_dict(storage.node_backends[nb['addr']].stat)
+                nb['stats'] = self.__stats_to_dict(storage.node_backends[nb['addr']].stat, nb.effective_space)
             res['groups'].append(g)
 
         return res
 
-    def __stats_to_dict(self, stat):
+    def __stats_to_dict(self, stat, eff_space):
         res = {}
 
         if not stat:
@@ -423,11 +418,9 @@ class Statistics(object):
 
         res['total_space'] = stat.total_space
         res['free_space'] = stat.free_space
-        node_eff_space = max(min(stat.total_space - self.MIN_FREE_SPACE,
-            stat.total_space * (1 - self.MIN_FREE_SPACE_REL)), 0.0)
 
         res['free_effective_space'] = max(stat.free_space -
-            (stat.total_space - node_eff_space), 0.0)
+            (stat.total_space - eff_space), 0.0)
         res['used_space'] = stat.used_space
         res['fragmentation'] = stat.fragmentation
 

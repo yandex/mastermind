@@ -65,13 +65,6 @@ class Balancer(object):
 
     @h.handler
     def get_closed_groups(self, request):
-        result = []
-        min_free_space = config['balancer_config'].get('min_free_space', 256) * 1024 * 1024
-        min_rel_space = config['balancer_config'].get('min_free_space_relative', 0.15)
-
-        logger.debug('configured min_free_space: %s bytes' % min_free_space)
-        logger.debug('configured min_rel_space: %s' % min_rel_space)
-
         result = [couple.as_tuple() for couple in storage.couples
                   if couple.status == storage.Status.FULL]
 
@@ -772,6 +765,15 @@ class Balancer(object):
         except ValueError:
             raise ValueError('redirect expire time should be positive integer')
 
+        try:
+            reserved_space_percentage = settings['reserved-space-percentage'] = float(settings['reserved-space-percentage'])
+            if not 0.0 <= reserved_space_percentage <= 1.0:
+                raise ValueError
+        except KeyError:
+            pass
+        except ValueError:
+            raise ValueError('reserved-space-percentage should be a float in interval [0.0, 1.0]')
+
         if settings.get('success-copies-num', '') not in ('any', 'quorum', 'all'):
             raise ValueError('success-copies-num allowed values are "any", '
                              '"quorum" and "all"')
@@ -815,7 +817,7 @@ class Balancer(object):
 
     ALLOWED_NS_KEYS = set(['success-copies-num', 'groups-count',
         'static-couple', 'auth-keys', 'signature', 'redirect',
-        'storage-location', 'min-units', 'features'])
+        'storage-location', 'min-units', 'features', 'reserved-space-percentage'])
     ALLOWED_NS_SIGN_KEYS = set(['token', 'path_prefix', 'port'])
     ALLOWED_NS_AUTH_KEYS = set(['write', 'read'])
     ALLOWED_REDIRECT_KEYS = set(['content-length-threshold', 'expire-time'])
