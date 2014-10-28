@@ -1,3 +1,9 @@
+mastermind (2.9.81) lucid; urgency=low
+
+  * Reserved space option for namespaces
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 28 Oct 2014 17:28:45 +0300
+
 mastermind (2.9.80) lucid; urgency=low
 
   * Added alive and removed records counters
