@@ -36,6 +36,8 @@ class JobProcessor(object):
     JOBS_UPDATE = 'jobs_update'
     JOBS_LOCK = 'jobs'
 
+    INDEX_BATCH_SIZE = 1000
+
     def __init__(self, meta_session, minions):
         logger.info('Starting JobProcessor')
         self.meta_session = meta_session
@@ -48,6 +50,7 @@ class JobProcessor(object):
             keys.MM_JOBS_KEY_TPL,
             self.meta_session,
             logger=logger,
+            batch_size=self.INDEX_BATCH_SIZE,
             namespace='jobs')
 
         self.__tq = timed_queue.TimedQueue()

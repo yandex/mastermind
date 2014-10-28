@@ -1,3 +1,5 @@
+from Queue import Queue
+
 import elliptics
 
 
@@ -25,13 +27,17 @@ class SecondaryIndex(object):
 
 
 class TagSecondaryIndex(object):
-    def __init__(self, main_idx, idx_tpl, key_tpl, meta_session, logger=None, namespace=None):
+
+    BATCH_SIZE = 500
+
+    def __init__(self, main_idx, idx_tpl, key_tpl, meta_session, logger=None, namespace=None, batch_size=BATCH_SIZE):
         self.main_idx = main_idx
         self.idx_tpl = idx_tpl
         self.key_tpl = key_tpl
         self.meta_session = meta_session.clone()
         if namespace:
             self.meta_session.set_namespace(namespace)
+        self.batch_size = batch_size
         self.logger = logger
 
     def __iter__(self):
@@ -40,18 +46,6 @@ class TagSecondaryIndex(object):
 
         for data in self._iter_keys(idxes):
             yield data
-
-    def _iter_keys(self, keys):
-        if not keys:
-            return
-        count = 0
-        for resp in self.meta_session.bulk_read(keys).get():
-            count += 1
-            yield resp.data
-
-        if self.logger and count != len(keys):
-            self.logger.error('Inconsistent index {0}: index keys {1} keys, '
-                'read keys {2}'.format(self.main_idx))
 
     def tagged(self, tag):
         idxes = [idx.id for idx in
@@ -67,3 +61,33 @@ class TagSecondaryIndex(object):
     def set_tag(self, key, tag):
         eid = self.meta_session.transform(self.key_tpl % key)
         self.meta_session.set_indexes(eid, [self.main_idx, self.idx_tpl % tag], ['', ''])
+
+    def _fetch_response_data(self, req):
+        data = None
+        try:
+            result = req[1]
+            result.wait()
+            data = result.get()[0].data
+        except Exception as e:
+            self.logger.error('Failed to fetch record from tagged index: {0}'.format(req[0]))
+        return data
+
+    def _iter_keys(self, keys):
+        if not keys:
+            return
+
+        q = Queue(self.batch_size)
+        count = 0
+
+        for k in keys:
+            if not q.full():
+                q.put((k, self.meta_session.read_latest(k)))
+            else:
+                data = self._fetch_response_data(q.get())
+                if data:
+                    yield data
+
+        while q.qsize():
+            data = self._fetch_response_data(q.get())
+            if data:
+                yield data
