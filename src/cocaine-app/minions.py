@@ -77,7 +77,7 @@ class Minions(object):
             states = {}
 
             if not active_hosts:
-                hosts = storage.hosts
+                hosts = storage.hosts.keys()
             else:
                 if not self.active_hosts:
                     return
@@ -93,7 +93,8 @@ class Minions(object):
                 states[url] = host
             logger.debug('Starting async batch')
             responses = AsyncHTTPBatch(states.keys(),
-                headers=self.minion_headers).get()
+                headers=self.minion_headers,
+                timeout=config.get('minion', {}).get('commands_fetch_timeout', 15)).get()
 
             successfull_hosts = 0
             for url, response in responses.iteritems():
