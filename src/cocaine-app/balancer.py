@@ -94,7 +94,14 @@ class Balancer(object):
         couples = storage.couples.keys()
 
         if options.get('namespace', None):
-            couples = filter(lambda c: c.namespace == options['namespace'], couples)
+
+            def f(c):
+                try:
+                    return c.namespace == options['namespace']
+                except ValueError:
+                    return False
+
+            couples = filter(f, couples)
 
         if options.get('state', None):
             if options['state'] not in self.STATES:

@@ -114,8 +114,12 @@ class Statistics(object):
                     continue
 
                 if not node_backend.stat.fsid in host_fsid_map[node_backend.node.host]:
-                    self.account_memory(by_dc[dc], group, node_backend.stat)
-                    host_fsid_map[node_backend.node.host].add(node_backend.stat.fsid)
+                    try:
+                        self.account_memory(by_dc[dc], group, node_backend.stat)
+                        host_fsid_map[node_backend.node.host].add(node_backend.stat.fsid)
+                    except ValueError:
+                        # namespace for group couple is broken, do not try to account it
+                        continue
                 if ns and not node_backend.stat.fsid in ns_host_fsid_map[ns][node_backend.node.host]:
                     self.account_memory(by_ns[ns][dc], group, node_backend.stat)
                     ns_host_fsid_map[ns][node_backend.node.host].add(node_backend.stat.fsid)
