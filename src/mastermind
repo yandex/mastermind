@@ -21,6 +21,11 @@ from opster import Dispatcher
 from cocaine.exceptions import ServiceError
 from cocaine.services import Service
 
+try:
+    from cocaine.exceptions import DisconnectionError
+except ImportError:
+    from cocaine.asio.exceptions import DisconnectionError
+
 
 SERVICE_APP_NAME = 'mastermind2.26'
 SERVICE_DEFAULT_HOST = 'localhost'
@@ -50,10 +55,44 @@ def logger_setup():
 logger = logger_setup()
 
 
+class ReconnectableService(object):
+    def __init__(self, app_name, host=None, port=None):
+        self.app_name = app_name
+        self.host = host
+        self.port = port
+        self.connect_service()
+
+    def connect_service(self):
+        self.backend = Service(self.app_name, host=self.host, port=self.port)
+
+    def enqueue(self, method, data):
+        return ReconnectableChain(self, method, data)
+
+
+class ReconnectableChain(object):
+    def __init__(self, service, method, data):
+        self.service = service
+        self.method = method
+        self.data = data
+        self._create_chain()
+
+    def _create_chain(self):
+        self.chain = self.service.backend.enqueue(self.method, self.data)
+
+    def get(self):
+        try:
+            return self.chain.get()
+        except DisconnectionError:
+            sleep(5)
+            self.service.connect_service()
+            self._create_chain()
+            return self.chain.get()
+
+
 def service(host, app):
     parts = host.split(':', 1)
     hostname, port = parts[0], len(parts) == 2 and int(parts[1]) or SERVICE_DEFAULT_PORT
-    return Service(app or SERVICE_APP_NAME, host=hostname, port=port)
+    return ReconnectableService(app or SERVICE_APP_NAME, host=hostname, port=port)
 
 
 def log_action(func):
@@ -1136,7 +1175,8 @@ def restore_group(group, user=('u', os.environ['USER'],
 def watch_progress(session, task_id):
     success = False
     status_errors = 0
-    max_retries = 15
+    error_sleep_time = 3
+    max_retries = 240 / error_sleep_time
 
     while True:
         try:
@@ -1153,7 +1193,7 @@ def watch_progress(session, task_id):
                 print
                 pprint(status)
                 break
-            sleep(3)
+            sleep(error_sleep_time)
             continue
 
         status_errors = 0
