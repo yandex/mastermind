@@ -805,7 +805,10 @@ class Couple(object):
         stat = self.get_stat()
         if stat:
             res['free_space'] = int(stat.free_space)
-            res['free_effective_space'] = int(max(stat.free_space - (stat.total_space - self.effective_space), 0))
+            try:
+                res['free_effective_space'] = int(max(stat.free_space - (stat.total_space - self.effective_space), 0))
+            except ValueError:
+                res['free_effective_space'] = 0
             res['used_space'] = int(stat.used_space)
         return res
 
