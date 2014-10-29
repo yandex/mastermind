@@ -1,6 +1,7 @@
 import datetime
 import json
 import logging
+import random
 import threading
 import time
 import traceback
@@ -83,6 +84,8 @@ class Minions(object):
                 with self.__active_hosts_lock:
                     hosts = self.active_hosts
                     self.active_hosts = []
+
+            random.shuffle(hosts)
 
             for host in hosts:
                 url = self.STATE_URL_TPL.format(host=host.addr,

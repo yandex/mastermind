@@ -12,7 +12,7 @@ logger = logging.getLogger('mm.jobs')
 class MinionCmdTask(Task):
 
     PARAMS = ('group', 'host', 'cmd', 'params', 'minion_cmd_id')
-    TASK_TIMEOUT = 600
+    TASK_TIMEOUT = 6000
 
     def __init__(self, job):
         super(MinionCmdTask, self).__init__(job)
