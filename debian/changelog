@@ -1,3 +1,12 @@
+mastermind (2.9.82) lucid; urgency=low
+
+  * Mastermind util reconnects automatically on DisconnectionError of cocaine Service
+  * Minions status fetching configurable timeout
+  * Workaround for minions state update
+  * Indexes uses batched read latest requests insted of a bulk read
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 29 Oct 2014 17:41:05 +0300
+
 mastermind (2.9.81) lucid; urgency=low
 
   * Reserved space option for namespaces
