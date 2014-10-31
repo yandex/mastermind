@@ -1,3 +1,10 @@
+mastermind (2.9.85) lucid; urgency=low
+
+  * Fixed broken couples status update in case of coupled groups having different namespaces
+  * Configurable node backend stat stale timeout
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 31 Oct 2014 16:15:48 +0300
+
 mastermind (2.9.84) lucid; urgency=low
 
   * Fix for free effective space info handle
