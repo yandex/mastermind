@@ -511,7 +511,6 @@ class Group(object):
     def parse_meta(self, meta):
         if meta is None:
             self.meta = None
-            self.status = Status.BAD
             return
 
         parsed = msgpack.unpackb(meta)
@@ -536,6 +535,11 @@ class Group(object):
         return sum([nb.effective_space for nb in self.node_backends])
 
     def update_status(self):
+        """Updates group's own status.
+        WARNING: This method should not take into consideration any of the
+        groups' state coupled with itself nor any of the couple attributes,
+        properties, state, etc."""
+
         if not self.node_backends:
             self.status = Status.INIT
             self.status_text = ('Group {0} is in INIT state because there is '
@@ -580,13 +584,6 @@ class Group(object):
             self.status = Status.BAD
             self.status_text = ('Group {0} is in Bad state because '
                 'no namespace has been assigned to it'.format(self.__str__()))
-            return self.status
-
-        elif self.meta['namespace'] != self.couple.namespace:
-            self.status = Status.BAD
-            self.status_text = ('Group {0} is in Bad state because its namespace '
-                'doesn\'t correspond to couple namespace ({1})'.format(
-                    self.__str__(), self.couple.namespace))
             return self.status
 
         self.status = Status.COUPLED
