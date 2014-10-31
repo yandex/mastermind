@@ -19,6 +19,7 @@ logger = logging.getLogger('mm.storage')
 
 RPS_FORMULA_VARIANT = config.get('rps_formula', 0)
 VFS_RESERVED_SPACE = config.get('reserved_space', 112742891520)  # default is 105 Gb for one vfs
+NODE_BACKEND_STAT_STALE_TIMEOUT = config.get('node_backend_stat_stale_timeout', 120)
 
 
 def ts_str(ts):
@@ -393,7 +394,7 @@ class NodeBackend(object):
             self.status = Status.STALLED
             self.status_text = 'Node backend {0} has been disabled'.format(str(self))
 
-        elif self.stat.ts < (time.time() - 120):
+        elif self.stat.ts < (time.time() - NODE_BACKEND_STAT_STALE_TIMEOUT):
             self.status = Status.STALLED
             self.status_text = ('Statistics for node backend {0} is too old: '
                 'it was gathered {1} seconds ago'.format(self.__str__(),
