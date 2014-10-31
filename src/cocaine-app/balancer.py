@@ -209,6 +209,9 @@ class Balancer(object):
         except IndexError:
             ns = None
 
+        if ns and not ns in self.infrastructure.ns_settings:
+            raise ValueError('Namespace "{0}" does not exist'.format(ns))
+
         for couple in storage.couples:
 
             try:
@@ -223,9 +226,6 @@ class Balancer(object):
 
             symm_group = bla.SymmGroup(couple)
             all_symm_group_objects.append(symm_group)
-
-        if ns and not ns in namespaces and not ns in self.infrastructure.ns_settings:
-            raise ValueError('Namespace "{0}" does not exist'.format(ns))
 
         result = {}
 
@@ -553,8 +553,9 @@ class Balancer(object):
 
         namespace = request[4]
         logger.info('namespace from request: {0}'.format(namespace))
-        if not self.valid_namespace(namespace):
-            raise ValueError('Namespace "{0}" is invalid'.format(namespace))
+
+        if not namespace in self.infrastructure.ns_settings:
+            raise ValueError('Unknown namespace {0}'.format(namespace))
 
         init_state = request[5].upper()
         if not init_state in self.VALID_COUPLE_INIT_STATES:
@@ -877,8 +878,8 @@ class Balancer(object):
             if k not in self.ALLOWED_REDIRECT_KEYS:
                 del settings['redirect'][k]
 
-        if not namespace in self.__couple_namespaces():
-            raise ValueError('Namespace "{0}" does not exist'.format(namespace))
+        if not self.valid_namespace(namespace):
+            raise ValueError('Namespace "{0}" is invalid'.format(namespace))
 
         try:
             self.validate_ns_settings(namespace, settings)
@@ -896,7 +897,7 @@ class Balancer(object):
         except Exception:
             raise ValueError('Invalid parameters')
 
-        if not namespace in self.__couple_namespaces() or not namespace in self.infrastructure.ns_settings:
+        if not namespace in self.infrastructure.ns_settings:
             raise ValueError('Namespace "{0}" does not exist'.format(namespace))
 
         return self.infrastructure.ns_settings[namespace]
@@ -945,17 +946,7 @@ class Balancer(object):
 
     @h.handler
     def get_namespaces(self, request):
-        return tuple(self.__couple_namespaces().union(
-                        self.infrastructure.ns_settings.keys()))
-
-    def __couple_namespaces(self):
-        namespaces = []
-        for c in storage.couples:
-            try:
-                namespaces.append(c.namespace)
-            except ValueError:
-                pass
-        return set(namespaces)
+        return self.infrastructure.ns_settings.keys()
 
 
 def handlers(b):

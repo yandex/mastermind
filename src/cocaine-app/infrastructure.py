@@ -322,7 +322,8 @@ class Infrastructure(object):
 
     def sync_single_ns_settings(self, namespace):
         logger.debug('fetching namespace {0} settings'.format(namespace))
-        self.__do_sync_ns_settings(self.ns_settings_idx[namespace], time.time())
+        start_ts = time.time()
+        self.__do_sync_ns_settings(self.ns_settings_idx[namespace], start_ts)
 
     def __do_sync_ns_settings(self, data, start_ts):
         settings = msgpack.unpackb(data)
