@@ -1,3 +1,9 @@
+mastermind (2.9.86) lucid; urgency=low
+
+  * Namespace settings using tagged indexes
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sat, 01 Nov 2014 15:28:56 +0300
+
 mastermind (2.9.85) lucid; urgency=low
 
   * Fixed broken couples status update in case of coupled groups having different namespaces
