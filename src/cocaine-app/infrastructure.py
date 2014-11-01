@@ -94,9 +94,12 @@ class Infrastructure(object):
             self._update_state)
 
         self.ns_settings_idx = \
-            indexes.SecondaryIndex(keys.MM_NAMESPACE_SETTINGS_IDX,
-                                   keys.MM_NAMESPACE_SETTINGS_KEY_TPL,
-                                   self.meta_session)
+            indexes.TagSecondaryIndex(keys.MM_NAMESPACE_SETTINGS_IDX,
+                                      None,
+                                      keys.MM_NAMESPACE_SETTINGS_KEY_TPL,
+                                      self.meta_session,
+                                      logger=logger,
+                                      namespace='namespaces')
 
         self.ns_settings = {}
         self._sync_ns_settings()
@@ -342,6 +345,8 @@ class Infrastructure(object):
         start = time.time()
 
         self.ns_settings_idx[namespace] = msgpack.packb(settings)
+        if not namespace in self.ns_settings:
+            self.ns_settings_idx.set_tag(namespace)
 
         logger.debug('namespace "{0}" settings saved to index '
             '({1:.4f}s)'.format(namespace, time.time() - start))

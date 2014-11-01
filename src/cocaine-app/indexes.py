@@ -58,9 +58,16 @@ class TagSecondaryIndex(object):
         eid = self.meta_session.transform(self.key_tpl % key)
         self.meta_session.write_data(eid, val)
 
-    def set_tag(self, key, tag):
+    def __getitem__(self, key):
         eid = self.meta_session.transform(self.key_tpl % key)
-        self.meta_session.set_indexes(eid, [self.main_idx, self.idx_tpl % tag], ['', ''])
+        return self.meta_session.read_latest(eid).get()[0].data
+
+    def set_tag(self, key, tag=None):
+        eid = self.meta_session.transform(self.key_tpl % key)
+        tags = [self.main_idx]
+        if tag:
+            tags.append(self.idx_tpl % tag)
+        self.meta_session.set_indexes(eid, tags, [''] * len(tags))
 
     def _fetch_response_data(self, req):
         data = None
