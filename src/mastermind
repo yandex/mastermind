@@ -952,7 +952,7 @@ def cache_keys_by_group(group, host=None, app=None):
 @coupleDispatcher.command(name='freeze')
 @log_action
 def couple_freeze(couple, host=None, app=None):
-    '''Freeze symmetric group (freeze couples are excluded from balancing)'''
+    '''Freeze symmetric group (frozen couples are excluded from balancing)'''
     s = service(host, app)
     groups = [int(g) for g in couple.split(':')]
 
