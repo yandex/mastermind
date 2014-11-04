@@ -1,3 +1,9 @@
+mastermind (2.9.87) lucid; urgency=low
+
+  * Cluster global lock and update before changing its state (couple build and couple break)
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 04 Nov 2014 20:15:41 +0300
+
 mastermind (2.9.86) lucid; urgency=low
 
   * Namespace settings using tagged indexes
