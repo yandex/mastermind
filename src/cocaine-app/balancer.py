@@ -660,35 +660,41 @@ class Balancer(object):
         logger.info('----------------------------------------')
         logger.info('New break couple request: ' + str(request))
 
-        couple_str = ':'.join(map(str, sorted(request[0], key=lambda x: int(x))))
-        if not couple_str in storage.couples:
-            raise KeyError('Couple %s was not found' % (couple_str))
+        with sync_manager.lock(self.CLUSTER_CHANGES_LOCK, blocking=False):
 
-        couple = storage.couples[couple_str]
-        confirm = request[1]
+            logger.info('Updating cluster info')
+            self.update_cluster_state().get()
+            logger.info('Updating cluster info completed')
 
-        logger.info('groups: %s; confirmation: "%s"' %
-            (couple_str, confirm))
+            couple_str = ':'.join(map(str, sorted(request[0], key=lambda x: int(x))))
+            if not couple_str in storage.couples:
+                raise KeyError('Couple %s was not found' % (couple_str))
 
-        correct_confirms = []
-        correct_confirm = 'Yes, I want to break '
-        if couple.status in storage.NOT_BAD_STATUSES:
-            correct_confirm += 'good'
-        else:
-            correct_confirm += 'bad'
+            couple = storage.couples[couple_str]
+            confirm = request[1]
 
-        correct_confirm += ' couple '
+            logger.info('groups: %s; confirmation: "%s"' %
+                (couple_str, confirm))
 
-        correct_confirms.append(correct_confirm + couple_str)
-        correct_confirms.append(correct_confirm + '[' + couple_str + ']')
+            correct_confirms = []
+            correct_confirm = 'Yes, I want to break '
+            if couple.status in storage.NOT_BAD_STATUSES:
+                correct_confirm += 'good'
+            else:
+                correct_confirm += 'bad'
 
-        if confirm not in correct_confirms:
-            raise Exception('Incorrect confirmation string')
+            correct_confirm += ' couple '
 
-        kill_symm_group(self.node, self.node.meta_session, couple)
-        couple.destroy()
+            correct_confirms.append(correct_confirm + couple_str)
+            correct_confirms.append(correct_confirm + '[' + couple_str + ']')
 
-        return True
+            if confirm not in correct_confirms:
+                raise Exception('Incorrect confirmation string')
+
+            kill_symm_group(self.node, self.node.meta_session, couple)
+            couple.destroy()
+
+            return True
 
     @h.handler
     def get_next_group_number(self, request):
