@@ -192,7 +192,7 @@ def init_job_processor(minions):
 
 init_cache()
 init_infrastructure()
-init_node_info_updater()
+b.niu = init_node_info_updater()
 init_statistics()
 m = init_minions()
 j = init_job_processor(m)

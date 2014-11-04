@@ -38,6 +38,9 @@ class LockFailedError(LockError):
     def code(self):
         return API_ERROR_CODE.LOCK_FAILED
 
+    def __str__(self):
+        return 'Failed to acquire lock {0}'.format(self.lock_id)
+
 
 class LockAlreadyAcquiredError(LockFailedError):
 

@@ -52,16 +52,21 @@ class ZkSyncManager(object):
         self.lock_path_prefix = lock_path_prefix
 
     @contextmanager
-    def lock(self, lockid, timeout=LOCK_TIMEOUT):
+    def lock(self, lockid, blocking=True, timeout=LOCK_TIMEOUT):
         # with self.__locks_lock:
         lock = Lock(self.client, self.lock_path_prefix + lockid)
         try:
-            lock.acquire(timeout=timeout)
+            acquired = lock.acquire(blocking=blocking, timeout=timeout)
+            logger.debug('Lock {0} acquired: {1}'.format(lockid, acquired))
+            if not acquired:
+                raise LockFailedError(lock_id=lockid)
             yield
         except LockTimeout:
             logger.info('Failed to acquire lock {0} due to timeout '
                 '({1} seconds)'.format(lockid, timeout))
-            raise LockFailedError(lockid=lockid)
+            raise LockFailedError(lock_id=lockid)
+        except LockFailedError:
+            raise
         except Exception as e:
             logger.error('Failed to acquire lock {0}: {1}\n{2}'.format(
                 lockid, e, traceback.format_exc()))

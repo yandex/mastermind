@@ -38,25 +38,28 @@ class NodeInfoUpdater(object):
         self.__session.set_timeout(wait_timeout)
         self.__nodeUpdateTimestamps = (time.time(), time.time())
 
+        self.__cluster_update_lock = threading.Lock()
+
         self.loadNodes(delayed=False)
 
     def execute_tasks(self, delayed):
         try:
 
-            self.monitor_stats()
+            with self.__cluster_update_lock:
+                self.monitor_stats()
 
-            if delayed:
-                self.__tq.add_task_in(
-                        GROUPS_META_UPDATE_TASK_ID,
-                        config.get('symm_group_read_gap', 1),
-                        self.update_symm_groups_async)
-                self.__tq.add_task_in(
-                        COUPLES_META_UPDATE_TASK_ID,
-                        config.get('couple_read_gap', 1),
-                        self.update_couples_meta_async)
-            else:
-                self.update_symm_groups_async()
-                self.update_couples_meta_async()
+                if delayed:
+                    self.__tq.add_task_in(
+                            GROUPS_META_UPDATE_TASK_ID,
+                            config.get('symm_group_read_gap', 1),
+                            self.update_symm_groups_async)
+                    self.__tq.add_task_in(
+                            COUPLES_META_UPDATE_TASK_ID,
+                            config.get('couple_read_gap', 1),
+                            self.update_couples_meta_async)
+                else:
+                    self.update_symm_groups_async()
+                    self.update_couples_meta_async()
 
         except Exception as e:
             logger.info('Failed to initialize node updater: %s\n%s' % (str(e), traceback.format_exc()))

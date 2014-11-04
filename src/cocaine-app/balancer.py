@@ -9,6 +9,7 @@ import sys
 import time
 import traceback
 
+from cocaine.futures import chain
 from cocaine.worker import Worker
 import elliptics
 import msgpack
@@ -22,6 +23,8 @@ import infrastructure
 import keys
 import statistics
 import storage
+from sync import sync_manager
+from sync.error import LockFailedError
 
 
 logger = logging.getLogger('mm.balancer')
@@ -34,10 +37,13 @@ class Balancer(object):
     DT_FORMAT = '%Y-%m-%d %H:%M:%S'
     MIN_NS_UNITS = config.get('balancer_config', {}).get('min_units', 1)
 
+    CLUSTER_CHANGES_LOCK = 'cluster'
+
     def __init__(self, n):
         self.node = n
         self.infrastructure = None
         self.statistics = statistics.Statistics(self)
+        self.niu = None
 
     def set_infrastructure(self, infrastructure):
         self.infrastructure = infrastructure
@@ -422,216 +428,232 @@ class Balancer(object):
 
     VALID_COUPLE_INIT_STATES = (storage.Status.COUPLED, storage.Status.FROZEN)
 
+    # @chain.source
+    # def test_func(self):
+    #     res = yield self.niu.long_task()
+
+    @chain.source
+    def update_cluster_state(self):
+        logger.info('Starting concurrent cluster info update')
+        yield chain.concurrent(self.niu.execute_tasks)(delayed=False)
+        logger.info('Concurrent cluster info update completed')
+
     @h.handler
     def couple_groups(self, request):
         logger.info('----------------------------------------')
         logger.info('New couple groups request: ' + str(request))
 
-        suitable_groups = []
-        total_spaces = []
+        with sync_manager.lock(self.CLUSTER_CHANGES_LOCK, blocking=False):
 
-        for group_id in self.get_empty_groups(self.node):
-            group = storage.groups[group_id]
+            logger.info('Updating cluster info')
+            self.update_cluster_state().get()
+            logger.info('Updating cluster info completed')
 
-            if not len(group.node_backends):
-                logger.info('Group {0} cannot be used, it has '
-                    'empty node list'.format(group.group_id))
-                continue
+            suitable_groups = []
+            total_spaces = []
 
-            suitable = True
-            for node_backend in group.node_backends:
-                if node_backend.status != storage.Status.OK:
-                    logger.info('Group {0} cannot be used, node backend {1} status '
-                                'is {2} (not OK)'.format(group.group_id,
-                                     node_backend, node_backend.status))
-                    suitable = False
-                    break
+            for group_id in self.get_empty_groups(self.node):
+                group = storage.groups[group_id]
 
-            if not suitable:
-                continue
+                if not len(group.node_backends):
+                    logger.info('Group {0} cannot be used, it has '
+                        'empty node list'.format(group.group_id))
+                    continue
 
-            suitable_groups.append(group_id)
-            total_spaces.append(group.get_stat().total_space)
-
-        dc_by_group_id = {}
-        ts_by_group_id = {}
-        dc_groups_by_total_space = {}
-
-        # bucketing groups by approximate total space
-        ts_tolerance = config.get('total_space_diff_tolerance', 0.05)
-        cur_ts_key = 0
-        for ts in reversed(sorted(total_spaces)):
-            if abs(cur_ts_key - ts) > cur_ts_key * ts_tolerance:
-                cur_ts_key = ts
-                dc_groups_by_total_space[cur_ts_key] = {}
-
-        total_spaces = list(reversed(sorted(dc_groups_by_total_space.keys())))
-        logger.info('group total space sizes available: {0}'.format(total_spaces))
-
-        dc_groups_by_total_space['any'] = {}
-
-        for group_id in suitable_groups:
-            group = storage.groups[group_id]
-            dc = group.node_backends[0].node.host.dc
-
-            dc_by_group_id[group_id] = dc
-
-            ts = group.get_stat().total_space
-            for ts_key in total_spaces:
-                if ts_key - ts < ts_key * ts_tolerance:
-                    dc_groups_by_total_space[ts_key].setdefault(dc, []).append(group_id)
-                    ts_by_group_id[group_id] = ts_key
-                    dc_groups_by_total_space['any'].setdefault(dc, []).append(group_id)
-                    break
-            else:
-                raise ValueError('Failed to find total space key for group {0}, '
-                    'total space {1}'.format(group_id, ts))
-
-        logger.info('dc by group: %s' % str(dc_by_group_id))
-        logger.info('ts by group: %s' % str(ts_by_group_id))
-        logger.info('dc_groups_by_total_space: %s' % str(dc_groups_by_total_space))
-
-        size = int(request[0])
-        mandatory_groups = [int(g) for g in request[1]]
-        couples_num = int(request[2]) or 1
-        check_space = request[3]
-
-        if mandatory_groups and couples_num > 1:
-            raise Exception('Batch couple building is prohibited when '
-                'mandatory groups are set')
-
-        mandatory_ts = None
-
-        if mandatory_groups and check_space:
-            cgroup_id = mandatory_groups[0]
-            mandatory_ts = ts_by_group_id[cgroup_id]
-            for group_id in mandatory_groups:
-                if not ts_by_group_id[cgroup_id] == ts_by_group_id[group_id]:
-                    raise Exception('Mandatory groups do not have equal '
-                        'total space: group {0} total_space {1}, '
-                        'group {2} total_space {3}'.format(
-                            cgroup_id, storage.groups[cgroup_id].get_stat().total_space,
-                            group_id, storage.groups[group_id].get_stat().total_space))
-
-        # checking mandatory set and filtering unusable dcs
-        for group_id in mandatory_groups:
-            if group_id not in suitable_groups:
-                raise Exception('group %d is not found in suitable groups '
-                    '(is bad or coupled)' % group_id)
-            dc = dc_by_group_id[group_id]
-            ts = ts_by_group_id[group_id]
-
-            if dc not in dc_groups_by_total_space['any']:
-                raise Exception('mandatory groups must be in different dcs')
-            del dc_groups_by_total_space['any'][dc]
-            if dc not in dc_groups_by_total_space[ts]:
-                raise Exception('mandatory groups must be in different dcs')
-            del dc_groups_by_total_space[ts][dc]
-
-        groups_to_couple = copy.copy(mandatory_groups)
-
-        n_groups_to_add = size - len(groups_to_couple)
-        if n_groups_to_add < 0:
-            raise Exception('Too many mandatory groups')
-
-        # filtering unusable total spaces
-        for k in dc_groups_by_total_space.keys():
-            if mandatory_ts and k != mandatory_ts:
-                del dc_groups_by_total_space[k]
-            elif not check_space and k != 'any':
-                del dc_groups_by_total_space[k]
-            elif check_space and k == 'any':
-                del dc_groups_by_total_space[k]
-            elif len(dc_groups_by_total_space[k]) < n_groups_to_add:
-                del dc_groups_by_total_space[k]
-
-        logger.info('dc_groups_by_total_space after filtering unmatching dcs '
-            'and disk sizes: {0}'.format(str(dc_groups_by_total_space)))
-
-        if not len(dc_groups_by_total_space):
-            raise Exception('Not enough dcs')
-
-        namespace = request[4]
-        logger.info('namespace from request: {0}'.format(namespace))
-
-        if not namespace in self.infrastructure.ns_settings:
-            raise ValueError('Unknown namespace {0}'.format(namespace))
-
-        init_state = request[5].upper()
-        if not init_state in self.VALID_COUPLE_INIT_STATES:
-            raise ValueError('Couple "{0}" init state is invalid'.format(init_state))
-
-        created_couples = []
-        bad_couples = []
-        stop = False
-
-        def chunks(l, n):
-            if n == 0:
-                yield []
-            else:
-                for i in xrange(0, len(l), n):
-                    chunk = l[i:i + n]
-                    if len(chunk) < n:
+                suitable = True
+                for node_backend in group.node_backends:
+                    if node_backend.status != storage.Status.OK:
+                        logger.info('Group {0} cannot be used, node backend {1} status '
+                                    'is {2} (not OK)'.format(group.group_id,
+                                         node_backend, node_backend.status))
+                        suitable = False
                         break
-                    yield chunk
 
-        while len(created_couples) < couples_num:
+                if not suitable:
+                    continue
 
-            if stop:
-                break
+                suitable_groups.append(group_id)
+                total_spaces.append(group.get_stat().total_space)
 
-            used_dcs = set()
-            groups_found = False
+            dc_by_group_id = {}
+            ts_by_group_id = {}
+            dc_groups_by_total_space = {}
 
-            ts_dcs = [(ts, set(group_by_dc.keys()))
-                      for ts, group_by_dc in dc_groups_by_total_space.iteritems()]
-            ts_dcs.sort(key=lambda x: len(x[1]))
+            # bucketing groups by approximate total space
+            ts_tolerance = config.get('total_space_diff_tolerance', 0.05)
+            cur_ts_key = 0
+            for ts in reversed(sorted(total_spaces)):
+                if abs(cur_ts_key - ts) > cur_ts_key * ts_tolerance:
+                    cur_ts_key = ts
+                    dc_groups_by_total_space[cur_ts_key] = {}
 
-            for ts, dcs in ts_dcs:
+            total_spaces = list(reversed(sorted(dc_groups_by_total_space.keys())))
+            logger.info('group total space sizes available: {0}'.format(total_spaces))
+
+            dc_groups_by_total_space['any'] = {}
+
+            for group_id in suitable_groups:
+                group = storage.groups[group_id]
+                dc = group.node_backends[0].node.host.dc
+
+                dc_by_group_id[group_id] = dc
+
+                ts = group.get_stat().total_space
+                for ts_key in total_spaces:
+                    if ts_key - ts < ts_key * ts_tolerance:
+                        dc_groups_by_total_space[ts_key].setdefault(dc, []).append(group_id)
+                        ts_by_group_id[group_id] = ts_key
+                        dc_groups_by_total_space['any'].setdefault(dc, []).append(group_id)
+                        break
+                else:
+                    raise ValueError('Failed to find total space key for group {0}, '
+                        'total space {1}'.format(group_id, ts))
+
+            logger.info('dc by group: %s' % str(dc_by_group_id))
+            logger.info('ts by group: %s' % str(ts_by_group_id))
+            logger.info('dc_groups_by_total_space: %s' % str(dc_groups_by_total_space))
+
+            size = int(request[0])
+            mandatory_groups = [int(g) for g in request[1]]
+            couples_num = int(request[2]) or 1
+            check_space = request[3]
+
+            if mandatory_groups and couples_num > 1:
+                raise Exception('Batch couple building is prohibited when '
+                    'mandatory groups are set')
+
+            mandatory_ts = None
+
+            if mandatory_groups and check_space:
+                cgroup_id = mandatory_groups[0]
+                mandatory_ts = ts_by_group_id[cgroup_id]
+                for group_id in mandatory_groups:
+                    if not ts_by_group_id[cgroup_id] == ts_by_group_id[group_id]:
+                        raise Exception('Mandatory groups do not have equal '
+                            'total space: group {0} total_space {1}, '
+                            'group {2} total_space {3}'.format(
+                                cgroup_id, storage.groups[cgroup_id].get_stat().total_space,
+                                group_id, storage.groups[group_id].get_stat().total_space))
+
+            # checking mandatory set and filtering unusable dcs
+            for group_id in mandatory_groups:
+                if group_id not in suitable_groups:
+                    raise Exception('group %d is not found in suitable groups '
+                        '(is bad or coupled)' % group_id)
+                dc = dc_by_group_id[group_id]
+                ts = ts_by_group_id[group_id]
+
+                if dc not in dc_groups_by_total_space['any']:
+                    raise Exception('mandatory groups must be in different dcs')
+                del dc_groups_by_total_space['any'][dc]
+                if dc not in dc_groups_by_total_space[ts]:
+                    raise Exception('mandatory groups must be in different dcs')
+                del dc_groups_by_total_space[ts][dc]
+
+            groups_to_couple = copy.copy(mandatory_groups)
+
+            n_groups_to_add = size - len(groups_to_couple)
+            if n_groups_to_add < 0:
+                raise Exception('Too many mandatory groups')
+
+            # filtering unusable total spaces
+            for k in dc_groups_by_total_space.keys():
+                if mandatory_ts and k != mandatory_ts:
+                    del dc_groups_by_total_space[k]
+                elif not check_space and k != 'any':
+                    del dc_groups_by_total_space[k]
+                elif check_space and k == 'any':
+                    del dc_groups_by_total_space[k]
+                elif len(dc_groups_by_total_space[k]) < n_groups_to_add:
+                    del dc_groups_by_total_space[k]
+
+            logger.info('dc_groups_by_total_space after filtering unmatching dcs '
+                'and disk sizes: {0}'.format(str(dc_groups_by_total_space)))
+
+            if not len(dc_groups_by_total_space):
+                raise Exception('Not enough dcs')
+
+            namespace = request[4]
+            logger.info('namespace from request: {0}'.format(namespace))
+
+            if not namespace in self.infrastructure.ns_settings:
+                raise ValueError('Unknown namespace {0}'.format(namespace))
+
+            init_state = request[5].upper()
+            if not init_state in self.VALID_COUPLE_INIT_STATES:
+                raise ValueError('Couple "{0}" init state is invalid'.format(init_state))
+
+            created_couples = []
+            bad_couples = []
+            stop = False
+
+            def chunks(l, n):
+                if n == 0:
+                    yield []
+                else:
+                    for i in xrange(0, len(l), n):
+                        chunk = l[i:i + n]
+                        if len(chunk) < n:
+                            break
+                        yield chunk
+
+            while len(created_couples) < couples_num:
+
                 if stop:
                     break
-                not_used_dcs = list(dcs - used_dcs)
-                random.shuffle(not_used_dcs)
-                logger.info('Ts: {0}, not used dcs {1}'.format(ts, not_used_dcs))
-                for selected_dcs in chunks(not_used_dcs, n_groups_to_add):
-                    logger.info('Ts: {0}, taken dcs {1}'.format(ts, selected_dcs))
-                    # build couple from selected dcs, mark loop as successful
-                    for dc in selected_dcs:
-                        used_dcs.add(dc)
-                        groups_to_couple.append(dc_groups_by_total_space[ts][dc].pop())
 
-                    couple = storage.couples.add([storage.groups[g] for g in groups_to_couple])
-                    (good, bad) = make_symm_group(self.node, couple, namespace)
+                used_dcs = set()
+                groups_found = False
 
-                    if bad:
-                        bad_couples.append([good, bad])
-                        stop = True
+                ts_dcs = [(ts, set(group_by_dc.keys()))
+                          for ts, group_by_dc in dc_groups_by_total_space.iteritems()]
+                ts_dcs.sort(key=lambda x: len(x[1]))
+
+                for ts, dcs in ts_dcs:
+                    if stop:
                         break
+                    not_used_dcs = list(dcs - used_dcs)
+                    random.shuffle(not_used_dcs)
+                    logger.info('Ts: {0}, not used dcs {1}'.format(ts, not_used_dcs))
+                    for selected_dcs in chunks(not_used_dcs, n_groups_to_add):
+                        logger.info('Ts: {0}, taken dcs {1}'.format(ts, selected_dcs))
+                        # build couple from selected dcs, mark loop as successful
+                        for dc in selected_dcs:
+                            used_dcs.add(dc)
+                            groups_to_couple.append(dc_groups_by_total_space[ts][dc].pop())
 
-                    if init_state == storage.Status.FROZEN:
-                        self.__do_set_meta_freeze(couple, freeze=True)
-                    elif init_state == storage.Status.COUPLED:
-                        self.__do_set_meta_freeze(couple, freeze=False)
+                        couple = storage.couples.add([storage.groups[g] for g in groups_to_couple])
+                        (good, bad) = make_symm_group(self.node, couple, namespace)
 
-                    created_couples.append(couple)
+                        if bad:
+                            bad_couples.append([good, bad])
+                            stop = True
+                            break
 
-                    groups_found = True
+                        if init_state == storage.Status.FROZEN:
+                            self.__do_set_meta_freeze(couple, freeze=True)
+                        elif init_state == storage.Status.COUPLED:
+                            self.__do_set_meta_freeze(couple, freeze=False)
 
-                    if len(created_couples) >= couples_num:
-                        stop = True
-                        break
+                        created_couples.append(couple)
 
-                    groups_to_couple = []
-                    for dc in dc_groups_by_total_space[ts].keys():
-                        if not dc_groups_by_total_space[ts][dc]:
-                            del dc_groups_by_total_space[ts][dc]
-                    if len(dc_groups_by_total_space[ts]) < n_groups_to_add:
-                        del dc_groups_by_total_space[ts]
+                        groups_found = True
 
-            if not groups_found:
-                stop = True
+                        if len(created_couples) >= couples_num:
+                            stop = True
+                            break
 
-        return [c.as_tuple() for c in created_couples], bad_couples
+                        groups_to_couple = []
+                        for dc in dc_groups_by_total_space[ts].keys():
+                            if not dc_groups_by_total_space[ts][dc]:
+                                del dc_groups_by_total_space[ts][dc]
+                        if len(dc_groups_by_total_space[ts]) < n_groups_to_add:
+                            del dc_groups_by_total_space[ts]
+
+                if not groups_found:
+                    stop = True
+
+            return [c.as_tuple() for c in created_couples], bad_couples
 
     @h.handler
     def break_couple(self, request):
