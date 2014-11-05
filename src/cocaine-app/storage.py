@@ -21,6 +21,9 @@ RPS_FORMULA_VARIANT = config.get('rps_formula', 0)
 VFS_RESERVED_SPACE = config.get('reserved_space', 112742891520)  # default is 105 Gb for one vfs
 NODE_BACKEND_STAT_STALE_TIMEOUT = config.get('node_backend_stat_stale_timeout', 120)
 
+FORBIDDEN_DHT_GROUPS = config.get('forbidden_dht_groups', False)
+FORBIDDEN_DC_SHARING_AMONG_GROUPS = config.get('forbidden_dc_sharing_among_groups', False)
+
 
 def ts_str(ts):
     return time.asctime(time.localtime(ts))
@@ -562,6 +565,13 @@ class Group(object):
                 'there is RO node backends'.format(self.__str__()))
             return self.status
 
+        if FORBIDDEN_DHT_GROUPS and len(self.node_backends) > 1:
+            self.status = Status.BAD
+            self.status_text = ('Group {0} is in Bad state because '
+                'is has {0} node backends but only 1 is allowed'.format(
+                    len(self.node_backends)))
+            return self.status
+
         if not all([st == Status.OK for st in statuses]):
             self.status = Status.BAD
             self.status_text = ('Group {0} is in Bad state because '
@@ -661,6 +671,20 @@ class Couple(object):
         if any([meta != group.meta for group in self.groups]):
             self.status = Status.BAD
             return self.status
+
+        if FORBIDDEN_DC_SHARING_AMONG_GROUPS:
+            # checking if any pair of groups has its node backends in same dc
+            groups_dcs = []
+            for group in self.groups:
+                group_dcs = set([nb.node.host.dc for nb in group.node_backends])
+                groups_dcs.append(group_dcs)
+
+            dc_set = groups_dcs[0]
+            for group_dcs in groups_dcs[1:]:
+                if dc_set & group_dcs:
+                    self.status = Status.BAD
+                    return self.status
+                dc_set = dc_set | group_dcs
 
         if all([st == Status.COUPLED for st in statuses]):
             stats = self.get_stat()
