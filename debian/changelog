@@ -1,3 +1,9 @@
+mastermind (2.9.88) lucid; urgency=low
+
+  * Cmd restore: reconfiguring elliptics before starting node backend
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 05 Nov 2014 17:05:35 +0300
+
 mastermind (2.9.87) lucid; urgency=low
 
   * Cluster global lock and update before changing its state (couple build and couple break)
