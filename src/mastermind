@@ -1060,10 +1060,17 @@ def restore_group(group, user=('u', os.environ['USER'],
                   group_file=('f', '', 'Write group id to specified file, '
                      'absolute or relative to destination path '
                      '(will be overwritten if exists)'),
+                  auto_enable=('a', False, 'Perform node backend start automatically '
+                    'when data is restored'),
                   host=None, app=None):
     '''Get command for restoring group from good symmetric group'''
     s = service(host, app)
     group = int(group)
+
+    if auto_enable and not group_file:
+        print warn('--auto-enable flag requires --group-file option to be set '
+            '(for node backend to be properly configured)')
+        return
 
     res = s.enqueue('restore_group_cmd', msgpack.packb([group, user, dest])).get()
     if isinstance(res, dict):
@@ -1132,43 +1139,52 @@ def restore_group(group, user=('u', os.environ['USER'],
         print res
         return
 
-    cmd = retry(s, 'enable_node_backend_cmd', [dst_host, dst_port, 2, backend_id])
-    if isinstance(cmd, dict):
-        print cmd
-        return
-
-    box(cmd, caption='Command')
-
     # check and print warning if group has any other alive nodes
     print 'Checking group nodes'
     res = retry(s, 'get_group_info', group)
-    statuses = [node['status'] for node in res['node_backends']
-                if node['addr'] != '{0}:{1}'.format(dst_host, dst_port)]
+    statuses = [nb['status'] for nb in res['node_backends']
+                if nb['addr'] != '{0}:{1}'.format(dst_host, dst_port)]
     if not all([status in ('STALLED', 'INIT') for status in statuses]):
         print
         print 'Group {0} current node statuses are {1}'.format(group, statuses)
         print warn('Looks like there are some active nodes in group {0}!'.format(group))
 
-    if not confirm('Do you want to start new node? [yes/no]: ', 'yes'):
+
+    cmd_1 = retry(s, 'reconfigure_node_cmd', [dst_host, dst_port, 2])
+    if isinstance(cmd_1, dict):
+        print cmd_1
+        return
+
+    cmd_2 = retry(s, 'enable_node_backend_cmd', [dst_host, dst_port, 2, backend_id])
+    if isinstance(cmd_2, dict):
+        print cmd_2
+        return
+
+    cmds = [cmd_1, cmd_2]
+
+    box('\n'.join(cmds), caption='Commands')
+
+    if not auto_enable and not confirm('Do you want to start restored node backend? [yes/no]: ', 'yes'):
          print warn('I thought so...')
          return
 
     params = {'node': '{0}:{1}'.format(dst_host, dst_port)}
 
-    print
-    res = s.enqueue('execute_cmd', msgpack.packb([dst_host, cmd, params])).get()
-    print res
-    print
+    for cmd in cmds:
+        print
+        res = s.enqueue('execute_cmd', msgpack.packb([dst_host, cmd, params])).get()
+        print res
+        print
 
-    if 'Balancer error' in res:
-        return
+        if 'Balancer error' in res:
+            return
 
-    task_id = res.keys()[0]
+        task_id = res.keys()[0]
 
-    success = watch_progress(s, task_id)
+        success = watch_progress(s, task_id)
 
-    if not success:
-        return
+        if not success:
+            return
 
     print '\nNode was successfully started'
 
