@@ -40,6 +40,8 @@ class Statistics(object):
                 data['closed_couples'] += 1
             elif group.couple.status == storage.Status.FROZEN:
                 data['frozen_couples'] += 1
+            elif group.couple.status == storage.Status.BROKEN:
+                data['broken_couples'] += 1
             else:
                 data['bad_couples'] += 1
         else:
@@ -72,6 +74,7 @@ class Statistics(object):
             'open_couples': 0,
             'frozen_couples': 0,
             'closed_couples': 0,
+            'broken_couples': 0,
             'bad_couples': 0,
             'total_couples': 0,
             'uncoupled_groups': 0,
@@ -137,6 +140,7 @@ class Statistics(object):
             'open_couples': 0,
             'frozen_couples': 0,
             'closed_couples': 0,
+            'broken_couples': 0,
             'bad_couples': 0,
             'total_couples': 0,
         }
@@ -187,7 +191,8 @@ class Statistics(object):
 
     def get_couple_stats(self):
         open_couples = self.balancer.get_symmetric_groups(None)
-        bad_couples = self.balancer.get_bad_groups(None)
+        bad_couples = self.balancer.get_couples_list([{'state': 'bad'}])
+        broken_couples = self.balancer.get_couples_list([{'state': 'broken'}])
         closed_couples = self.balancer.get_closed_groups(None)
         frozen_couples = self.balancer.get_frozen_groups(None)
         uncoupled_groups = self.balancer.get_empty_groups(None)
@@ -196,6 +201,7 @@ class Statistics(object):
                 'frozen_couples': len(frozen_couples),
                 'closed_couples': len(closed_couples),
                 'bad_couples': len(bad_couples),
+                'broken_couples': len(broken_couples),
                 'total_couples': (len(open_couples) + len(closed_couples) +
                                   len(frozen_couples) + len(bad_couples)),
                 'uncoupled_groups': len(uncoupled_groups)}
@@ -409,7 +415,8 @@ class Statistics(object):
                 group_stat = None
             g['stats'] = self.__stats_to_dict(group_stat, group.effective_space)
             for nb in g['node_backends']:
-                nb['stats'] = self.__stats_to_dict(storage.node_backends[nb['addr']].stat, nb.effective_space)
+                nb['stats'] = self.__stats_to_dict(storage.node_backends[nb['addr']].stat,
+                    storage.node_backends[nb['addr']].effective_space)
             res['groups'].append(g)
 
         return res

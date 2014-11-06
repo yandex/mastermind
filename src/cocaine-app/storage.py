@@ -154,9 +154,10 @@ class NodeBackendStat(object):
 
         self.blob_size_limit = raw_stat['backend']['config'].get('blob_size_limit', 0)
         if self.blob_size_limit > 0:
-            self.total_space = self.blob_size_limit
+            # vfs_total_space can be less than blob_size_limit in case of misconfiguration
+            self.total_space = min(self.blob_size_limit, self.vfs_total_space)
             self.used_space = raw_stat['backend']['summary_stats'].get('base_size', 0)
-            self.free_space = max(0, self.total_space - self.used_space)
+            self.free_space = min(max(0, self.total_space - self.used_space), self.vfs_free_space)
         else:
             self.total_space = self.vfs_total_space
             self.free_space = self.vfs_free_space
@@ -423,7 +424,7 @@ class NodeBackend(object):
         share = float(self.stat.total_space) / self.stat.vfs_total_space
         free_space_req_share = math.ceil(VFS_RESERVED_SPACE * share)
 
-        return self.stat.total_space - free_space_req_share
+        return max(0, self.stat.total_space - free_space_req_share)
 
     def is_full(self, reserved_space=0.0):
 
@@ -450,6 +451,7 @@ class NodeBackend(object):
             'unknown')
         if self.stat:
             res['free_space'] = int(self.stat.free_space)
+            res['effective_space'] = self.effective_space
             res['free_effective_space'] = int(max(self.stat.free_space - (self.stat.total_space - self.effective_space), 0))
             res['used_space'] = int(self.stat.used_space)
             res['total_files'] = self.stat.files + self.stat.files_removed
@@ -832,6 +834,7 @@ class Couple(object):
         if stat:
             res['free_space'] = int(stat.free_space)
             try:
+                res['effective_space'] = self.effective_space
                 res['free_effective_space'] = int(max(stat.free_space - (stat.total_space - self.effective_space), 0))
             except ValueError:
                 res['free_effective_space'] = 0
