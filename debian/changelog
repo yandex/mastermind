@@ -1,3 +1,11 @@
+mastermind (2.9.89) lucid; urgency=low
+
+  * Distinct BROKEN status for couples and groups that have forbidden configuration
+  * Config flags for forbidding dht and dc sharing among groups
+  * Dependencies updated
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 06 Nov 2014 18:04:45 +0300
+
 mastermind (2.9.88) lucid; urgency=low
 
   * Cmd restore: reconfiguring elliptics before starting node backend
