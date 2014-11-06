@@ -91,6 +91,7 @@ class Balancer(object):
         'full': [storage.Status.FULL],
         'frozen': [storage.Status.FROZEN],
         'bad': [storage.Status.INIT, storage.Status.BAD],
+        'broken': [storage.Status.BROKEN]
     }
 
     @h.handler

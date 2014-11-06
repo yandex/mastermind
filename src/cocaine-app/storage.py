@@ -35,6 +35,7 @@ class Status(object):
     FULL = 'FULL'
     COUPLED = 'COUPLED'
     BAD = 'BAD'
+    BROKEN = 'BROKEN'
     RO = 'RO'
     STALLED = 'STALLED'
     FROZEN = 'FROZEN'
@@ -566,8 +567,8 @@ class Group(object):
             return self.status
 
         if FORBIDDEN_DHT_GROUPS and len(self.node_backends) > 1:
-            self.status = Status.BAD
-            self.status_text = ('Group {0} is in Bad state because '
+            self.status = Status.BROKEN
+            self.status_text = ('Group {0} is in BROKEN state because '
                 'is has {0} node backends but only 1 is allowed'.format(
                     len(self.node_backends)))
             return self.status
@@ -682,7 +683,7 @@ class Couple(object):
             dc_set = groups_dcs[0]
             for group_dcs in groups_dcs[1:]:
                 if dc_set & group_dcs:
-                    self.status = Status.BAD
+                    self.status = Status.BROKEN
                     return self.status
                 dc_set = dc_set | group_dcs
 
@@ -697,6 +698,9 @@ class Couple(object):
 
         if Status.INIT in statuses:
             self.status = Status.INIT
+
+        elif Status.BROKEN in statuses:
+            self.status = Status.BROKEN
 
         elif Status.BAD in statuses:
             self.status = Status.BAD
