@@ -56,12 +56,11 @@ class JobProcessor(object):
         self.__tq = timed_queue.TimedQueue()
         self.__tq.start()
 
-        self.__tq.add_task_in(self.JOBS_UPDATE,
-            4, self._update_jobs)
+        self.job_tags = self._active_tags()
+
+        self._update_jobs()
         self.__tq.add_task_in(self.JOBS_EXECUTE,
             5, self._execute_jobs)
-
-        self.job_tags = self._active_tags()
 
     def _active_tags(self):
         tags = []
@@ -320,7 +319,7 @@ class JobProcessor(object):
     def get_job_list(self, request):
         try:
             options = request[0]
-        except TypeError:
+        except (TypeError, IndexError):
             options = {}
 
         def job_filter(j):
@@ -340,15 +339,16 @@ class JobProcessor(object):
                if job_filter(job)]
         return res
 
-    # def clear_jobs(self, request):
-    #     try:
-    #         for raw_job in self.jobs_index:
-    #             job = self.__load_job(raw_job)
-    #             del self.jobs_index[job['id'].encode('utf-8')]
-    #     except Exception as e:
-    #         logger.error('Failed to clear all jobs: {0}\n{1}'.format(e,
-    #             traceback.format_exc()))
-    #         raise
+    def get_job_status(self, request):
+        try:
+            job_id = request[0]
+        except (TypeError, IndexError):
+            raise ValueError('Job id is required')
+
+        if not job_id in self.jobs:
+            raise ValueError('Job {0} is not found'.format(job_id))
+
+        return self.jobs[job_id].dump()
 
     def cancel_job(self, request):
         job_id = None

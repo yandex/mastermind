@@ -806,6 +806,25 @@ def couple_list_namespaces(host=None, app=None):
     print res
 
 
+# jobs commands
+jobDispatcher = Dispatcher(globaloptions=(host_param, app_param))
+
+
+@jobDispatcher.command(name='status')
+@log_action
+def job_status(job_id,
+               json=('', None, 'Format data as json'),
+               host=None, app=None):
+    '''Get job status'''
+    s = service(host, app)
+    res = s.enqueue('get_job_status', msgpack.packb([job_id])).get()
+    if json:
+        print dumps(res)
+    else:
+        pprint(res)
+
+
+
 # namespace commands
 nsDispatcher = Dispatcher(globaloptions=(host_param, app_param))
 
@@ -1393,6 +1412,7 @@ d.nest('group', groupDispatcher, 'Perform group action')
 d.nest('couple', coupleDispatcher, 'Perform couple action')
 d.nest('ns', nsDispatcher, 'Perform namespace action')
 d.nest('cache', cacheDispatcher, 'Perform cache action')
+d.nest('job', jobDispatcher, 'Perform jobs action')
 d.nest('cmd', cmdDispatcher, 'Some useful commands')
 
 
