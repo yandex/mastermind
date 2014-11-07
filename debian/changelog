@@ -1,3 +1,9 @@
+mastermind (2.9.90) lucid; urgency=low
+
+  * Job status handle
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 07 Nov 2014 18:36:41 +0300
+
 mastermind (2.9.89) lucid; urgency=low
 
   * Distinct BROKEN status for couples and groups that have forbidden configuration
