@@ -1,4 +1,5 @@
 # encoding: utf-8
+from collections import defaultdict
 import copy
 from datetime import datetime
 import itertools
@@ -243,7 +244,7 @@ class Balancer(object):
         for namespace, sizes in namespaces:
             try:
                 result[namespace] = self._namespaces_weights(
-                    all_symm_group_objects, namespace, sizes, result)
+                    namespace, sizes, symm_groups=all_symm_group_objects)
             except ValueError as e:
                 logger.error(e)
                 continue
@@ -255,13 +256,17 @@ class Balancer(object):
         logger.info(str(result))
         return result
 
-    def _namespaces_weights(self, symm_groups, namespace, sizes, result):
+    def _namespaces_weights(self, namespace, sizes, symm_groups=[]):
 
         found_couples = 0
 
         ns_weights = {}
 
-        for size in sizes:
+        # TODO: remove this crutch when get_group_weights becomes obsolete
+        if isinstance(sizes, set):
+            sizes = dict([(size, symm_groups) for size in sizes])
+
+        for size, symm_groups in sizes.iteritems():
             try:
                 logger.info('Namespace {0}, size {1}: calculating '
                     'cluster info'.format(namespace, size))
@@ -983,6 +988,76 @@ class Balancer(object):
     @h.handler
     def get_namespaces(self, request):
         return self.infrastructure.ns_settings.keys()
+
+    @h.handler
+    def get_namespaces_states(self, request):
+        default = lambda: {
+            'settings': {},
+            'couples': [],
+            'weights': {},
+            'statistics': {},
+        }
+
+        res = defaultdict(default)
+
+        # settings
+        ns_settings = self.infrastructure.ns_settings
+        for ns, settings in ns_settings.items():
+            res[ns]['settings'] = settings
+
+        # couples
+        symm_groups = {}
+        for couple in storage.couples:
+            try:
+                try:
+                    ns = couple.namespace
+                except ValueError:
+                    continue
+                info = couple.info()
+                info['groups'] = [g.info() for g in couple]
+                # couples
+                res[ns]['couples'].append(info)
+
+                symm_groups.setdefault(couple.namespace, {})
+                symm_groups[couple.namespace].setdefault(len(couple), [])
+
+                if couple.status not in storage.GOOD_STATUSES:
+                    continue
+
+                symm_groups[couple.namespace][len(couple)].append(bla.SymmGroup(couple))
+            except Exception as e:
+                logger.error('Failed to include couple {0} in namespace '
+                    'states: {1}'.format(str(couple), e))
+                continue
+
+        # weights
+        for ns, sizes in symm_groups.iteritems():
+            try:
+                res[ns]['weights'] = self._namespaces_weights(ns, sizes)
+            except ValueError as e:
+                logger.error(e)
+                continue
+            except Exception as e:
+                logger.error('Failed to construct namespace {0} weights: {1}'.format(ns, e))
+                continue
+
+        # statistics
+        per_ns_stat = {}
+
+        try:
+            per_dc_stat, per_ns_stat = self.statistics.per_entity_stat()
+        except Exception as e:
+            logger.error('Failed to calculate namespace statistics')
+            pass
+
+        for ns, stats in per_ns_stat.iteritems():
+            try:
+                res[ns]['statistics'] = self.statistics.total_stats(stats)
+            except Exception as e:
+                logger.error('Failed to construct namespace {0} statistics: {1}'.format(ns, e))
+                continue
+
+        return dict(res)
 
 
 def handlers(b):
