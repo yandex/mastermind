@@ -23,6 +23,7 @@ NODE_BACKEND_STAT_STALE_TIMEOUT = config.get('node_backend_stat_stale_timeout', 
 
 FORBIDDEN_DHT_GROUPS = config.get('forbidden_dht_groups', False)
 FORBIDDEN_DC_SHARING_AMONG_GROUPS = config.get('forbidden_dc_sharing_among_groups', False)
+FORBIDDEN_NS_WITHOUT_SETTINGS = config.get('forbidden_ns_without_settings', False)
 
 
 def ts_str(ts):
@@ -696,6 +697,11 @@ class Couple(object):
                     self.status = Status.BROKEN
                     return self.status
                 dc_set = dc_set | group_dcs
+
+        if FORBIDDEN_NS_WITHOUT_SETTINGS:
+            if not infrastructure.ns_settings.get(self.namespace):
+                self.status = Status.BROKEN
+                return self.status
 
         if all([st == Status.COUPLED for st in statuses]):
             stats = self.get_stat()
