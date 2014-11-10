@@ -815,6 +815,13 @@ class Balancer(object):
             raise ValueError('success-copies-num allowed values are "any", '
                              '"quorum" and "all"')
 
+        if 'auth-keys' in settings:
+            auth_keys_settings = settings['auth-keys']
+            if not 'read' in auth_keys_settings:
+                auth_keys_settings['read'] = ''
+            if not 'write' in auth_keys_settings:
+                auth_keys_settings['write'] = ''
+
         if settings.get('static-couple'):
             couple = settings['static-couple']
             groups = [storage.groups[g] for g in couple]
