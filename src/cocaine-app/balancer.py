@@ -772,15 +772,6 @@ class Balancer(object):
             raise ValueError('groups-count should be set')
 
         try:
-            port = settings['signature']['port'] = int(settings['signature']['port'])
-            if not port > 0:
-                raise ValueError
-        except KeyError:
-            pass
-        except ValueError:
-            raise ValueError('port should be positive integer')
-
-        try:
             min_units = settings['min-units'] = int(settings['min-units'])
             if not min_units > 0:
                 raise ValueError
@@ -867,7 +858,7 @@ class Balancer(object):
     ALLOWED_NS_KEYS = set(['success-copies-num', 'groups-count',
         'static-couple', 'auth-keys', 'signature', 'redirect',
         'min-units', 'features', 'reserved-space-percentage'])
-    ALLOWED_NS_SIGN_KEYS = set(['token', 'path_prefix', 'port'])
+    ALLOWED_NS_SIGN_KEYS = set(['token', 'path_prefix'])
     ALLOWED_NS_AUTH_KEYS = set(['write', 'read'])
     ALLOWED_REDIRECT_KEYS = set(['content-length-threshold', 'expire-time'])
 

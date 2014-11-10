@@ -838,7 +838,6 @@ def ns_setup(namespace,
              auth_key_read=('', '', 'Proxy auth-key for reading'),
              sign_token=('', '', 'Signature token'),
              sign_path_prefix=('', '', 'Signature path prefix'),
-             sign_port=('', '', 'Signature scheme port'),
              min_units=('u', '', 'Minimal number of units available for write operations '
                 'in namespace when namespace is considered alive'),
              couple=('c', '', 'Set static couple for namespace (1:2:10)'),
@@ -892,8 +891,6 @@ def ns_setup(namespace,
         settings.setdefault('signature', {})['token'] = sign_token
     if sign_path_prefix:
         settings.setdefault('signature', {})['path_prefix'] = sign_path_prefix
-    if sign_port:
-        settings.setdefault('signature', {})['port'] = sign_port
     if auth_key_read:
         settings.setdefault('auth-keys', {})['read'] = auth_key_read
     if auth_key_write:
