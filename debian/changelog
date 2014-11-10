@@ -1,3 +1,14 @@
+mastermind (2.10.1) lucid; urgency=low
+
+  * Ns setup: removed signature port option
+  * Additional verbose couple status
+  * Config option for forbidding namespaces without settings - couples of such namespaces will be considered BROKEN
+  * get_namespaces_states handle that combines all namespace state as one dict
+  * Ns setup: removed storage-location option
+  * Fix for uniform auth-keys format
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 10 Nov 2014 19:08:16 +0300
+
 mastermind (2.9.90) lucid; urgency=low
 
   * Job status handle
