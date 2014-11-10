@@ -664,6 +664,7 @@ class Couple(object):
                 raise Exception('Group %s is already in couple' % (repr(group)))
 
             group.couple = self
+        self.status_text = 'Couple {0} is not inititalized yet'.format(str(self))
 
     def get_stat(self):
         try:
@@ -677,11 +678,13 @@ class Couple(object):
 
         if self.meta and self.meta.get('frozen', False):
             self.status = Status.FROZEN
+            self.status_test = 'Couple {0} is frozen'.format(str(self))
             return self.status
 
         meta = self.groups[0].meta
         if any([meta != group.meta for group in self.groups]):
             self.status = Status.BAD
+            self.status_text = 'Couple {0} groups has unequal meta data'.format(str(self))
             return self.status
 
         if FORBIDDEN_DC_SHARING_AMONG_GROUPS:
@@ -695,37 +698,52 @@ class Couple(object):
             for group_dcs in groups_dcs[1:]:
                 if dc_set & group_dcs:
                     self.status = Status.BROKEN
+                    self.status_text = 'Couple {0} has nodes sharing the same DC'.format(str(self))
                     return self.status
                 dc_set = dc_set | group_dcs
 
         if FORBIDDEN_NS_WITHOUT_SETTINGS:
-            if not infrastructure.ns_settings.get(self.namespace):
-                self.status = Status.BROKEN
-                return self.status
+            try:
+                ns = self.namespace
+            except ValueError:
+                pass
+            else:
+                if not infrastructure.ns_settings.get(self.namespace):
+                    self.status = Status.BROKEN
+                    self.status_text = ('Couple {0} is assigned to a '
+                        'namespace {1}, which is not set up'.format(str(self), ns))
+                    return self.status
 
         if all([st == Status.COUPLED for st in statuses]):
             stats = self.get_stat()
             if self.is_full():
                 self.status = Status.FULL
+                self.status_text = 'Couple {0} is full'.format(str(self))
             else:
                 self.status = Status.OK
+                self.status_text = 'Couple {0} is OK'.format(str(self))
 
             return self.status
 
         if Status.INIT in statuses:
             self.status = Status.INIT
+            self.status_text = 'Couple {0} has uninitialized groups'.format(str(self))
 
         elif Status.BROKEN in statuses:
             self.status = Status.BROKEN
+            self.status_text = 'Couple {0} has broken groups'.format(str(self))
 
         elif Status.BAD in statuses:
             self.status = Status.BAD
+            self.status_text = 'Couple {0} has bad groups'.format(str(self))
 
         elif Status.RO in statuses:
             self.status = Status.RO
+            self.status_text = 'Couple {0} has read-only groups'.format(str(self))
 
         else:
             self.status = Status.BAD
+            self.status_text = 'Couple {0} is bad for some reason'.format(str(self))
 
         return self.status
 
@@ -739,7 +757,6 @@ class Couple(object):
                 return False
 
         if set(groups) != set((g.group_id for g in self.groups)):
-            self.status = Status.BAD
             return False
 
         return True
@@ -838,6 +855,7 @@ class Couple(object):
 
     def info(self):
         res = {'couple_status': self.status,
+               'couple_status_text': self.status_text,
                'id': str(self),
                'tuple': self.as_tuple()}
         try:
