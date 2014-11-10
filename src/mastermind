@@ -839,7 +839,6 @@ def ns_setup(namespace,
              sign_token=('', '', 'Signature token'),
              sign_path_prefix=('', '', 'Signature path prefix'),
              sign_port=('', '', 'Signature scheme port'),
-             storage_location=('', False, 'Storage location path'),
              min_units=('u', '', 'Minimal number of units available for write operations '
                 'in namespace when namespace is considered alive'),
              couple=('c', '', 'Set static couple for namespace (1:2:10)'),
@@ -904,8 +903,6 @@ def ns_setup(namespace,
         settings['auth-keys'].setdefault('read', '')
         settings['auth-keys'].setdefault('write', '')
 
-    if storage_location:
-        settings['storage-location'] = True
     if min_units:
         settings['min-units'] = min_units
     if reserved_space_percentage:

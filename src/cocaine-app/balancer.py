@@ -861,7 +861,7 @@ class Balancer(object):
 
     ALLOWED_NS_KEYS = set(['success-copies-num', 'groups-count',
         'static-couple', 'auth-keys', 'signature', 'redirect',
-        'storage-location', 'min-units', 'features', 'reserved-space-percentage'])
+        'min-units', 'features', 'reserved-space-percentage'])
     ALLOWED_NS_SIGN_KEYS = set(['token', 'path_prefix', 'port'])
     ALLOWED_NS_AUTH_KEYS = set(['write', 'read'])
     ALLOWED_REDIRECT_KEYS = set(['content-length-threshold', 'expire-time'])
