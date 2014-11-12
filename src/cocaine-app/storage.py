@@ -572,8 +572,8 @@ class Group(object):
         if FORBIDDEN_DHT_GROUPS and len(self.node_backends) > 1:
             self.status = Status.BROKEN
             self.status_text = ('Group {0} is in BROKEN state because '
-                'is has {0} node backends but only 1 is allowed'.format(
-                    len(self.node_backends)))
+                'is has {1} node backends but only 1 is allowed'.format(
+                    self.group_id, len(self.node_backends)))
             return self.status
 
         if not all([st == Status.OK for st in statuses]):
