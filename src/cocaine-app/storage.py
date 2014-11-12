@@ -369,6 +369,8 @@ class NodeBackend(object):
         self.status = Status.INIT
         self.status_text = "Node %s is not inititalized yet" % (self.__str__())
 
+        self.stalled = False
+
         self.base_path = None
 
     def disable(self):
@@ -399,7 +401,7 @@ class NodeBackend(object):
             self.status = Status.STALLED
             self.status_text = 'Node backend {0} has been disabled'.format(str(self))
 
-        elif self.stat.ts < (time.time() - NODE_BACKEND_STAT_STALE_TIMEOUT):
+        elif self.stalled:
             self.status = Status.STALLED
             self.status_text = ('Statistics for node backend {0} is too old: '
                 'it was gathered {1} seconds ago'.format(self.__str__(),
@@ -414,6 +416,12 @@ class NodeBackend(object):
             self.status_text = 'Node {0} is OK'.format(self.__str__())
 
         return self.status
+
+    def update_statistics_status(self):
+        if not self.stat:
+            return
+
+        self.stalled = self.stat.ts < (time.time() - NODE_BACKEND_STAT_STALE_TIMEOUT)
 
     @property
     def effective_space(self):

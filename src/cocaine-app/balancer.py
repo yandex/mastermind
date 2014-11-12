@@ -441,7 +441,7 @@ class Balancer(object):
     @chain.source
     def update_cluster_state(self):
         logger.info('Starting concurrent cluster info update')
-        yield chain.concurrent(self.niu.execute_tasks)(delayed=False)
+        yield chain.concurrent(self.niu.execute_tasks)()
         logger.info('Concurrent cluster info update completed')
 
     @h.handler
