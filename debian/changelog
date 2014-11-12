@@ -1,3 +1,9 @@
+mastermind (2.9.92) lucid; urgency=low
+
+  * Temporary removed additional node stale checking in balancer itself
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 13 Nov 2014 00:28:04 +0300
+
 mastermind (2.9.91) lucid; urgency=low
 
   * Statistics stale status is checked only when statistics is updated
