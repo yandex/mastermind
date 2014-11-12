@@ -1,3 +1,13 @@
+mastermind (2.9.91) lucid; urgency=low
+
+  * Statistics stale status is checked only when statistics is updated
+  * get_namespaces_states handle that combines all namespace state as one dict
+  * Ns setup: removed storage-location option
+  * Fix for uniform auth-keys format
+  * Ns setup: storage-location is a boolean flag now
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 12 Nov 2014 20:04:23 +0300
+
 mastermind (2.9.90) lucid; urgency=low
 
   * Job status handle
