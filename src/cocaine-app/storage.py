@@ -582,6 +582,12 @@ class Group(object):
                 'some node statuses are not OK'.format(self.__str__()))
             return self.status
 
+        if not self.group_id in self.meta['couple']:
+            self.status = Status.BROKEN
+            self.status_text = ('Group {0} is in BROKEN state because '
+                'its group id is missing from coupling info'.format(self.group_id))
+            return self.status
+
         if (not self.couple) and self.meta['couple']:
             self.status = Status.BAD
             self.status_text = ('Group {0} is in Bad state because '

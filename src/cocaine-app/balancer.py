@@ -466,6 +466,11 @@ class Balancer(object):
                         'empty node list'.format(group.group_id))
                     continue
 
+                if group.status != storage.Status.INIT:
+                    logger.info('Group {0} cannot be used, status is {1}, '
+                        'should be {2}'.format(group.group_id, group.status, storage.Status.INIT))
+                    continue
+
                 suitable = True
                 for node_backend in group.node_backends:
                     if node_backend.status != storage.Status.OK:
