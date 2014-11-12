@@ -89,9 +89,6 @@ class Statistics(object):
         dc_couple_map = defaultdict(set)
         ns_dc_couple_map = defaultdict(lambda: defaultdict(set))
 
-        host_fsid_map = defaultdict(set)
-        ns_host_fsid_map = defaultdict(lambda: defaultdict(set))
-
         for group in sorted(storage.groups, key=lambda g: not bool(g.couple)):
             for node_backend in group.node_backends:
 
@@ -116,16 +113,14 @@ class Statistics(object):
                     logger.debug('No stats available for node %s' % str(node_backend))
                     continue
 
-                if not node_backend.stat.fsid in host_fsid_map[node_backend.node.host]:
-                    try:
-                        self.account_memory(by_dc[dc], group, node_backend.stat)
-                        host_fsid_map[node_backend.node.host].add(node_backend.stat.fsid)
-                    except ValueError:
-                        # namespace for group couple is broken, do not try to account it
-                        continue
-                if ns and not node_backend.stat.fsid in ns_host_fsid_map[ns][node_backend.node.host]:
+                try:
+                    self.account_memory(by_dc[dc], group, node_backend.stat)
+                except ValueError:
+                    # namespace for group couple is broken, do not try to account it
+                    continue
+
+                if ns:
                     self.account_memory(by_ns[ns][dc], group, node_backend.stat)
-                    ns_host_fsid_map[ns][node_backend.node.host].add(node_backend.stat.fsid)
 
                 self.account_keys(by_dc[dc], node_backend)
                 if ns:
@@ -258,6 +253,8 @@ class Statistics(object):
                 couple_top_stats_copy = copy.copy(couple_top_stats)
                 for node_backend in group.node_backends:
                     # decrease filesystems space counters
+                    if node_backend.stat is None:
+                        continue
                     self.redeem_space(host_fsid_memory_map[(node_backend.node.host.addr, node_backend.stat.fsid)],
                                       couple_top_stats_copy)
 
