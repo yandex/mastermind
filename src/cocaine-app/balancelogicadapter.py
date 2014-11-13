@@ -60,7 +60,10 @@ class SymmGroup:
     def __init__(self, couple):
         self.couple = couple
         self.stat = self.couple.get_stat()
-        self.status = self.couple.status
+
+    @property
+    def status(self):
+        return self.couple.status
 
     def __str__(self):
         return '<SymmGroup object: couple=%s, stat=%s>' % (repr(self.couple), repr(self.stat))
