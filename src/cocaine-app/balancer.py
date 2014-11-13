@@ -1029,7 +1029,10 @@ class Balancer(object):
         # weights
         for ns, sizes in symm_groups.iteritems():
             try:
-                res[ns]['weights'] = self._namespaces_weights(ns, sizes)
+                # TODO: convert size inside of _namespaces_weights function
+                # when get_groups_weights handle is gone
+                res[ns]['weights'] = dict((str(k), v)
+                    for k, v in self._namespaces_weights(ns, sizes).iteritems())
             except ValueError as e:
                 logger.error(e)
                 continue
