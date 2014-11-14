@@ -823,6 +823,14 @@ class Balancer(object):
             if not 'write' in auth_keys_settings:
                 auth_keys_settings['write'] = ''
 
+        keys = (settings.get('redirect', {}).get('expire-time'),
+                settings.get('signature', {}).get('token'),
+                settings.get('signature', {}).get('path_prefix'))
+
+        if not all(keys) and any(keys):
+            raise ValueError('Signature token, signature path prefix '
+                'and redirect expire time should be set simultaneously')
+
         if settings.get('static-couple'):
             couple = settings['static-couple']
             groups = [storage.groups[g] for g in couple]
