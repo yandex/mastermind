@@ -1,9 +1,10 @@
 from collections import defaultdict
+import copy
 import logging
 
 import storage
 from config import config
-import copy
+from infrastructure import infrastructure
 
 
 logger = logging.getLogger('mm.statistics')
@@ -276,9 +277,6 @@ class Statistics(object):
 
 
     def get_groups_tree(self, request):
-        nodes = {}
-        root = {}
-        hosts = []
 
         try:
             options = request[0]
@@ -287,47 +285,7 @@ class Statistics(object):
 
         namespace, status = options.get('namespace', None), options.get('couple_status', None)
 
-        if namespace:
-            for couple in storage.couples:
-                try:
-                    if couple.namespace == namespace:
-                        hosts.extend([nb.node.host for g in couple for nb in g.node_backends])
-                except ValueError:
-                    continue
-            hosts = list(set(hosts))
-        else:
-            hosts = storage.hosts.keys()
-
-        for host in hosts:
-            tree_node = host.parents
-            new_child = None
-            while True:
-                parts = [tree_node['name']]
-                parent = tree_node
-                while 'parent' in parent:
-                    parent = parent['parent']
-                    parts.append(parent['name'])
-                full_path = '|'.join(reversed(parts))
-                tree_node['full_path'] = full_path
-
-                type_nodes = nodes.setdefault(tree_node['type'], {})
-                cur_node = type_nodes.get(tree_node['full_path'], {'name': tree_node['name'],
-                                                                   'full_path': tree_node['full_path'],
-                                                                   'type': tree_node['type']})
-
-                if new_child:
-                    cur_node.setdefault('children', []).append(new_child)
-                    new_child = None
-
-                if not tree_node['full_path'] in type_nodes:
-                    type_nodes[tree_node['full_path']] = cur_node
-                    new_child = cur_node
-
-                if not 'parent' in tree_node:
-                    if not root:
-                        root = nodes[tree_node['type']]
-                    break
-                tree_node = tree_node['parent']
+        root, nodes = infrastructure.cluster_tree(namespace)
 
         for group in storage.groups.keys():
             if not group.node_backends:
