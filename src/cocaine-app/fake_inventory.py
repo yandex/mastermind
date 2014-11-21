@@ -33,6 +33,32 @@ def get_host_tree(host):
         'type': 'host',
     }
 
+DC_NODE_TYPE = 'host'
+BALANCER_NODE_TYPES = [DC_NODE_TYPE]
+
+def get_balancer_node_types():
+    '''
+    A list of node types that are used by balancer to create fault-tolerant
+    namespaces. When creating new couple for a namespace balancer takes into
+    account the current distribution of open couples and tries to use
+    cluster nodes that are least used by the namespace.
+
+    All node types used should be presented in a host tree for of a host
+    (inventory get_host_tree function).
+
+    Example: ['dc', 'host']
+    '''
+    return BALANCER_NODE_TYPES
+
+def get_dc_node_type():
+    '''
+    Returns dc node type.
+    Mastermind should know the dc node type identificator to prevent
+    dc sharing among couples if corresponding setting is on.
+
+    Example: 'dc'
+    '''
+    return DC_NODE_TYPE
 
 def node_start_command(host, port, family):
     '''

@@ -4,6 +4,7 @@ import copy
 from datetime import datetime
 import itertools
 import logging
+import operator
 import random
 import re
 import sys
@@ -21,6 +22,7 @@ from config import config
 import helpers as h
 
 import infrastructure
+import inventory
 import keys
 import statistics
 import storage
@@ -339,9 +341,8 @@ class Balancer(object):
             logger.error('Balancer error: cannot identify a namespace to use for group %d' % (group_id,))
             return {'Balancer error': 'cannot identify a namespace to use for group %d' % (group_id,)}
 
-        (good, bad) = make_symm_group(self.node, couple, namespace_to_use)
-        if bad:
-            raise Exception(bad[1])
+        make_symm_group(self.node, couple, namespace_to_use)
+        couple.update_status()
 
         return {'message': 'Successfully repaired couple', 'couple': str(couple)}
 
@@ -634,7 +635,10 @@ class Balancer(object):
                             groups_to_couple.append(dc_groups_by_total_space[ts][dc].pop())
 
                         couple = storage.couples.add([storage.groups[g] for g in groups_to_couple])
-                        (good, bad) = make_symm_group(self.node, couple, namespace)
+                        try:
+                            make_symm_group(self.node, couple, namespace)
+                        except Exception as e:
+                            bad = [g.group_id for g in couple.groups]
 
                         if bad:
                             bad_couples.append([good, bad])
@@ -665,6 +669,443 @@ class Balancer(object):
                     stop = True
 
             return [c.as_tuple() for c in created_couples], bad_couples
+
+    NODE_TYPES = ['root'] + inventory.get_balancer_node_types() + ['hdd']
+    DC_NODE_TYPE = inventory.get_dc_node_type()
+
+    def __build_cluster_state(self):
+        tree, nodes = self.infrastructure.cluster_tree()
+
+        def move_allowed_children(node, dest):
+            for child in node.get('children', []):
+                if child['type'] not in self.NODE_TYPES:
+                    move_allowed_children(child, dest)
+                else:
+                    dest['children'].append(child)
+
+        def flatten_tree(root):
+            for child in root.get('children', [])[:]:
+                if child['type'] not in self.NODE_TYPES:
+                    move_allowed_children(child, root)
+                    root['children'].remove(child)
+                else:
+                    flatten_tree(child)
+
+        flatten_tree(tree)
+
+        for k in nodes.keys():
+            if not k in self.NODE_TYPES:
+                del nodes[k]
+
+        nodes['hdd'] = {}
+
+        for nb in storage.node_backends:
+
+            full_path = nb.node.host.full_path
+
+            if not full_path in nodes['host']:
+                logger.warn('Host {0} is node found in cluster tree'.format(full_path))
+                continue
+            if nb.stat is None:
+                continue
+
+            fsid = str(nb.stat.fsid)
+            fsid_full_path = full_path + '|' + fsid
+            if not fsid_full_path in nodes['hdd']:
+                hdd_node = {
+                    'type': 'hdd',
+                    'name': fsid,
+                    'full_path': fsid_full_path,
+                }
+                nodes['hdd'][fsid_full_path] = hdd_node
+                nodes['host'][full_path].setdefault('children', []).append(hdd_node)
+
+        return tree, nodes
+
+    def __update_groups_list(self, root):
+        if not 'children' in root:
+            return root['groups']
+        root['groups'] = reduce(operator.or_,
+            (self.__update_groups_list(child) for child in root.get('children', [])),
+            set())
+        return root['groups']
+
+    def __account_ns_groups(self, nodes, groups):
+        for group in groups:
+            for nb in group.node_backends:
+                hdd_path = nb.node.host.full_path + '|' + str(nb.stat.fsid)
+                nodes['hdd'][hdd_path]['groups'].add(group.group_id)
+
+    def __account_ns_couples(self, tree, nodes, namespace):
+
+        for hdd in nodes['hdd'].itervalues():
+            hdd['groups'] = set()
+
+        for couple in storage.couples:
+            try:
+                ns = couple.namespace
+            except ValueError:
+                continue
+
+            if namespace != ns:
+                continue
+
+            if couple.status != storage.Status.OK:
+                continue
+
+            self.__account_ns_groups(nodes, couple.groups)
+
+        self.__update_groups_list(tree)
+
+
+    def __weight_combination(self, ns_current_type_state, comb):
+        comb_groups_count = copy.copy(ns_current_type_state['nodes'])
+        for selected_units in comb:
+            for unit in selected_units:
+                comb_groups_count[unit] += 1
+        return sum((c - ns_current_type_state['avg']) ** 2
+                   for c in comb_groups_count.values())
+
+    def weight_couple_groups(self, ns_current_state, units, group_ids):
+        weight = []
+        for node_type in self.NODE_TYPES[1:]:
+            node_groups = {}
+            comb = []
+            for group_id in group_ids:
+                ng_keys = tuple(gu[node_type] for gu in units[group_id])
+                comb.append(ng_keys)
+
+            weight.append(self.weight_combination(
+                ns_current_state[node_type],
+                comb))
+
+        return weight
+
+    def __ns_current_state(self, nodes):
+        ns_current_state = {}
+        for node_type in self.NODE_TYPES[1:]:
+            ns_current_state[node_type] = {'nodes': {},
+                                           'avg': 0}
+            for child in nodes[node_type].itervalues():
+                ns_current_state[node_type]['nodes'][child['full_path']] = len(child['groups'])
+            ns_current_state[node_type]['avg'] = (
+                float(sum(ns_current_state[node_type]['nodes'].values())) /
+                len(nodes[node_type]))
+        return ns_current_state
+
+    def choose_groups(self, ns_current_state, units, count, group_ids, levels, mandatory_groups):
+        levels = levels[1:]
+        node_type = levels[0]
+        logger.info('Selecting {0} groups on level {1} among groups {2}'.format(
+            count, node_type, group_ids))
+
+        if count == 0:
+            return []
+
+        if len(group_ids) < count:
+            logger.warn('Not enough groups for choosing on level {0}: '
+                '{1} uncoupled, {2} needed'.format(node_type, len(group_ids), count))
+            return []
+
+        groups_by_level_units = {}
+        for group_id in group_ids:
+            level_units = tuple(gp[node_type] for gp in units[group_id])
+            groups_by_level_units.setdefault(level_units, []).append(group_id)
+
+        logger.info('Level {0} current state: avg {1}, nodes {2}'.format(node_type,
+            ns_current_state[node_type]['avg'], ns_current_state[node_type]['nodes']))
+        choice_list = []
+        for choice, groups in groups_by_level_units.iteritems():
+            choice_list.extend([choice] * min(count, len(groups)))
+
+        logger.info('Nodes type: {0}, choice list: {1}'.format(node_type, choice_list))
+
+        weights = {}
+        mandatory_groups_units = []
+        for group_id in mandatory_groups:
+            level_units = [gp[node_type] for gp in units[group_id]]
+            mandatory_groups_units.extend(level_units)
+
+        for comb in set(itertools.combinations(choice_list, count)):
+            if config.get('forbidden_dc_sharing_among_groups', False) and node_type == self.DC_NODE_TYPE:
+                comb_units = list(reduce(operator.add, comb))
+                if (len(comb_units + mandatory_groups_units) !=
+                    len(set(comb_units) | set(mandatory_groups_units))):
+                        continue
+            weights[comb] = self.__weight_combination(ns_current_state[node_type], comb)
+
+        if not weights:
+            logger.warn('Not enough groups for choosing on level {0}: '
+                'could not find groups satisfying restrictions'.format(node_type))
+            return []
+
+        logger.info('Combination weights: {0}'.format(weights))
+        sorted_weights = sorted(weights.items(), key=lambda x: x[1])
+
+        logger.info('Least weight combination: {0}'.format(sorted_weights[0]))
+
+        node_counts = {}
+        for node in sorted_weights[0][0]:
+            node_counts.setdefault(node, 0)
+            node_counts[node] += 1
+
+        logger.info('Level {0}: selected units: {1}'.format(node_type, node_counts))
+
+        if len(levels) == 1:
+            groups = reduce(
+                operator.add,
+                (groups_by_level_units[level_units][:count]
+                     for level_units, count in node_counts.iteritems()),
+                [])
+        else:
+            groups = reduce(
+                operator.add,
+                (self.choose_groups(ns_current_state, units, count,
+                                    groups_by_level_units[level_units],
+                                    levels, mandatory_groups)
+                     for level_units, count in node_counts.iteritems()),
+                [])
+
+        if len(groups) < count:
+            logger.warn('Not enough groups for choosing on level {0}: '
+                'could not find groups satisfying restrictions, '
+                'got {1} groups, expected {2}'.format(
+                    node_type, len(groups), count))
+            return []
+
+        return groups
+
+    def groups_units(self, group_ids):
+        units = {}
+
+        for group_id in group_ids:
+            if group_id in units:
+                continue
+            group = storage.groups[group_id]
+            for nb in group.node_backends:
+                nb_units = {'root': 'root'}
+                units.setdefault(group_id, [])
+
+                parent = nb.node.host.parents
+                while parent:
+                    if parent['type'] in self.NODE_TYPES:
+                        nb_units[parent['type']] = parent['full_path']
+                    parent = parent.get('parent')
+
+                nb_units['hdd'] = (nb_units['host'] + '|' +
+                    str(nb.stat.fsid))
+
+                units[group_id].append(nb_units)
+
+        return units
+
+    def choose_groups_to_couple(self, ns_current_state, units, count, groups_by_total_space, mandatory_groups):
+
+        candidates = []
+        for ts, group_ids in groups_by_total_space.iteritems():
+            if not all([mg in group_ids for mg in mandatory_groups]):
+                logger.debug('Could not find mandatory groups {0} in a list '
+                    'of groups with ts {1}'.format(mandatory_groups, ts))
+                continue
+
+            free_group_ids = [g for g in group_ids if g not in mandatory_groups]
+
+            candidate = self.choose_groups(
+                ns_current_state, units, count - len(mandatory_groups),
+                free_group_ids, self.NODE_TYPES, mandatory_groups)
+            candidate += mandatory_groups
+            if candidate:
+                candidates.append(candidate)
+
+        if len(candidates) > 1:
+            weights = [(self.weight_couple_groups(ns_current_state, units, c), c) for c in candidates]
+            weights.sort()
+            logger.info('Choosing candidate with least weight: {0}'.format(weights))
+            candidate = weights[0][1]
+        elif len(candidates):
+            candidate = candidates[0]
+        else:
+            return None
+
+        return candidate
+
+    @h.handler
+    def build_couples(self, request):
+        logger.info('----------------------------------------')
+        logger.info('New build couple request: ' + str(request))
+
+        size = int(request[0])
+        couples = int(request[1])
+
+        try:
+            options = request[2]
+            options['mandatory_groups'] = [[int(g) for g in mg]
+                for mg in options.get('mandatory_groups', [])]
+        except IndexError:
+            options = {}
+
+        options.setdefault('namespace', storage.Group.DEFAULT_NAMESPACE)
+        options.setdefault('match_group_space', True)
+        options.setdefault('init_state', 'COUPLED')
+        options.setdefault('dry_run', False)
+        options.setdefault('mandatory_groups', [])
+
+        options['init_state'] = options['init_state'].upper()
+        if not options['init_state'] in self.VALID_COUPLE_INIT_STATES:
+            raise ValueError('Couple "{0}" init state is invalid'.format(options['init_state']))
+
+        ns = options['namespace']
+        logger.info('namespace from request: {0}'.format(ns))
+
+        if not ns in self.infrastructure.ns_settings:
+            raise ValueError('Unknown namespace {0}'.format(ns))
+
+        with sync_manager.lock(self.CLUSTER_CHANGES_LOCK, blocking=False):
+
+            logger.info('Updating cluster info')
+            self.update_cluster_state().get()
+            logger.info('Updating cluster info completed')
+
+            suitable_groups = []
+            total_spaces = []
+
+            for group_id in self.get_empty_groups(self.node):
+                group = storage.groups[group_id]
+
+                if not len(group.node_backends):
+                    logger.info('Group {0} cannot be used, it has '
+                        'empty node list'.format(group.group_id))
+                    continue
+
+                if group.status != storage.Status.INIT:
+                    logger.info('Group {0} cannot be used, status is {1}, '
+                        'should be {2}'.format(group.group_id, group.status, storage.Status.INIT))
+                    continue
+
+                suitable = True
+                for node_backend in group.node_backends:
+                    if node_backend.status != storage.Status.OK:
+                        logger.info('Group {0} cannot be used, node backend {1} status '
+                                    'is {2} (not OK)'.format(group.group_id,
+                                         node_backend, node_backend.status))
+                        suitable = False
+                        break
+
+                if not suitable:
+                    continue
+
+                suitable_groups.append(group_id)
+                total_spaces.append(group.get_stat().total_space)
+
+            groups_by_total_space = {}
+
+            if options['match_group_space']:
+                # bucketing groups by approximate total space
+                ts_tolerance = config.get('total_space_diff_tolerance', 0.05)
+                cur_ts_key = 0
+                for ts in reversed(sorted(total_spaces)):
+                    if abs(cur_ts_key - ts) > cur_ts_key * ts_tolerance:
+                        cur_ts_key = ts
+                        groups_by_total_space[cur_ts_key] = []
+
+                total_spaces = list(reversed(sorted(groups_by_total_space.keys())))
+                logger.info('group total space sizes available: {0}'.format(total_spaces))
+
+                for group_id in suitable_groups:
+                    group = storage.groups[group_id]
+                    ts = group.get_stat().total_space
+                    for ts_key in total_spaces:
+                        if ts_key - ts < ts_key * ts_tolerance:
+                            groups_by_total_space[ts_key].append(group_id)
+                            break
+                    else:
+                        raise ValueError('Failed to find total space key for group {0}, '
+                            'total space {1}'.format(group_id, ts))
+            else:
+                groups_by_total_space['any'] = [group_id for group_id in suitable_groups]
+
+            logger.info('groups by total space: {0}'.format(groups_by_total_space))
+
+            created_couples = []
+
+            error = None
+
+            try:
+
+                tree, nodes = self.__build_cluster_state()
+                self.__account_ns_couples(tree, nodes, ns)
+
+                units = self.groups_units(
+                    [group_id for group_ids in groups_by_total_space.itervalues()
+                              for group_id in group_ids])
+
+                for _, mandatory_groups in itertools.izip_longest(
+                        xrange(couples), options['mandatory_groups'][:couples]):
+
+                    mandatory_groups = mandatory_groups or []
+
+                    if len(mandatory_groups) > size:
+                        raise ValueError("Mandatory groups list's {0} length "
+                            "is greater than couple size {1}".format(mandatory_groups, size))
+
+                    for m_group in mandatory_groups:
+                        if m_group not in units:
+                            raise ValueError('Mandatory group {0} is not found '
+                                'in cluster'.format(m_group))
+
+                    if mandatory_groups:
+                        self.__account_ns_groups(nodes, [storage.groups[g] for g in mandatory_groups])
+                        self.__update_groups_list(tree)
+
+                    ns_current_state = self.__ns_current_state(nodes)
+                    groups_to_couple = self.choose_groups_to_couple(
+                        ns_current_state, units, size, groups_by_total_space, mandatory_groups)
+                    if not groups_to_couple:
+                        logger.warn('Not enough uncoupled groups to couple')
+                        break
+                    logger.info('Chosen groups to couple: {0}'.format(groups_to_couple))
+
+                    couple = storage.couples.add([storage.groups[g]
+                                                  for g in groups_to_couple])
+                    if not options['dry_run']:
+                        try:
+                            make_symm_group(self.node, couple, options['namespace'])
+                        except Exception as e:
+                            error = e
+                            couple.destroy()
+                            break
+
+                    if options['init_state'] == storage.Status.FROZEN:
+                        self.__do_set_meta_freeze(couple, freeze=True)
+                    elif options['init_state'] == storage.Status.COUPLED:
+                        self.__do_set_meta_freeze(couple, freeze=False)
+
+                    for ts, group_ids in groups_by_total_space.iteritems():
+                        if couple.groups[0].group_id in group_ids:
+                            for group in couple.groups:
+                                group_ids.remove(group.group_id)
+                            break
+
+                    self.__account_ns_groups(nodes, couple.groups)
+                    self.__update_groups_list(tree)
+
+                    created_couples.append(couple)
+            except Exception as e:
+                logger.error('Failed to build couples: {0}\n{1}'.format(
+                    e, traceback.format_exc()))
+                error = e
+                if options['dry_run']:
+                    for couple in created_couples:
+                        couple.destroy()
+                raise
+
+            res = [c.as_tuple() for c in created_couples]
+
+            if options['dry_run']:
+                for couple in created_couples:
+                    couple.destroy()
+
+            return (res, str(error) if error else None)
 
     @h.handler
     def break_couple(self, request):
@@ -1095,25 +1536,51 @@ def kill_symm_group(n, meta_session, couple):
 
 
 def make_symm_group(n, couple, namespace):
-    logger.info('writing couple info: ' + str(couple))
-    logger.info('groups in couple %s are being assigned namespace "%s"' % (couple, namespace))
+    logger.info('Writing meta key for couple {0}, assigning namespace'.format(couple, namespace))
 
     s = elliptics.Session(n)
     wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or config.get('wait_timeout', 5)
     s.set_timeout(config.get('wait_timeout', 5))
-    good = []
-    bad = ()
-    for group in couple:
+
+    s.add_groups([g.group_id for g in couple.groups])
+    packed = msgpack.packb(couple.compose_group_meta(namespace))
+    try:
+        result = s.write_data(keys.SYMMETRIC_GROUPS_KEY, packed).get()
+    except Exception as e:
+        logger.error('Failed to write meta key for couple {0}: {1}\n{2}'.format(
+                     couple, str(e), traceback.format_exc()))
+        raise
+
+    successful_groups = [lre.group_id for lre in result]
+    failed_groups = tuple(set(couple.as_tuple()) - set(successful_groups))
+
+    def rollback_meta_key():
+        s.add_groups(successful_groups)
         try:
-            packed = msgpack.packb(couple.compose_group_meta(namespace))
-            logger.info('packed couple for group %d: "%s"' % (group.group_id, str(packed).encode('hex')))
-            s.add_groups([group.group_id])
-            s.write_data(keys.SYMMETRIC_GROUPS_KEY, packed).get()
-            group.parse_meta(packed)
-            good.append(group.group_id)
+            s.remove(keys.SYMMETRIC_GROUPS_KEY).get()
         except Exception as e:
-            logger.error('Failed to write symm group info, group %d: %s\n%s'
-                         % (group.group_id, str(e), traceback.format_exc()))
-            bad = (group.group_id, str(e))
-            break
-    return (good, bad)
+            logger.error('Failed to remove meta key from groups {0}: {1}\n{2}'.format(
+                successful_groups, e, traceback.format_exc()))
+            pass
+        else:
+            logger.error('Successfully removed meta keys from groups {0}'.format(successful_groups))
+
+    if failed_groups:
+        # Cleaning successful writes
+        logger.error('Failed to write meta key to groups {0}, removing meta key '
+            'from groups {1}'.format(failed_groups, successful_groups))
+        s.add_groups(successful_groups)
+        rollback_meta_key()
+        raise ValueError('Failed to write meta key to groups {0}'.format(failed_groups))
+    else:
+        try:
+            for group in couple:
+                group.parse_meta(packed)
+        except Exception as e:
+            logging.error('Failed to parse meta key for groups {0}, '
+                'meta keys removed'.format(successful_groups))
+            rollback_meta_key()
+            raise ValueError('Failed to parse meta key for groups {0}'.format(
+                successful_groups))
+
+    return

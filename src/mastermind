@@ -699,13 +699,16 @@ ALLOWED_COUPLE_STATES = ('frozen', 'coupled')
 
 @coupleDispatcher.command(name='build')
 @log_action
-def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:2)'),
-                 couples=('c', 0, 'Number of couples to create. Mastermind will try '
+def couple_build(size, groups=('i', [], 'Use these groups in couple (example: -i 1:2). '
+                    'This option can be used multiple times, each successive groups '
+                    'will be included in a separate couple'),
+                 couples=('c', 1, 'Number of couples to create. Mastermind will try '
                     'to build couples using groups from different sets of dcs '
                     'to prevent all couples falling out when a dc gets disconnected'),
                  ignore_space=('s', False, 'Ignore checking of groups total space '
                     'matching'),
                  namespace=('n', '', 'Set custom namespace for couple'),
+                 dry_run=('d', False, 'Dry-run mode'),
                  state=('', '', 'Set couple initial state (coupled|frozen)'), host=None, app=None):
     '''Make a couple of groups. The default behaviour is to use
     groups with approximately equal total space size.
@@ -715,12 +718,8 @@ def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:
     s = service(host, app)
     size = int(size)
 
-    if groups and couples:
-        print warn('Options --groups and --couples are mutually exclusive')
-        return
-
     if groups:
-        groups = [int(g) for g in groups.split(':')]
+        groups = [g.split(':') for g in groups]
     else:
         groups = []
 
@@ -732,23 +731,27 @@ def couple_build(size, groups=('i', '', 'Use these groups in couple (example: 1:
         print warn('Initial couple state is required (--state): coupled | frozen')
         return
 
-    params = [size, groups, couples, not ignore_space, namespace, state]
+    params = [size, couples, {'namespace': namespace,
+                              'match_group_space': not ignore_space,
+                              'init_state': state,
+                              'dry_run': dry_run,
+                              'mandatory_groups': groups}]
 
-    res = s.enqueue("couple_groups", msgpack.packb(tuple(params))).get()
+    res, error = s.enqueue('build_couples', msgpack.packb(params)).get()
 
     if not isinstance(res,  tuple):
         print res
         return
 
-    good_couples, bad_couples = res
+    good_couples = res
 
     if couples > 1:
         print highlight('Successfully created {0} out of {1} couples:'.format(len(good_couples), couples))
     for c in good_couples:
         print c
 
-    if bad_couples:
-        print warn('Failed couples: {0}'.format(bad_couples))
+    if error:
+        print warn("Exception occured: {0}".format(error))
     elif len(good_couples) < couples:
         print warn('Not enough valid dcs and/or groups of appropriate '
             'total space for remaining couples creation')

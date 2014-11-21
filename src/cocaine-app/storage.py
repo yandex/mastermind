@@ -302,6 +302,15 @@ class Host(object):
         return infrastructure.get_host_tree(
             infrastructure.get_hostname_by_addr(self.addr))
 
+    @property
+    def full_path(self):
+        parent = self.parents
+        parts = [parent['name']]
+        while 'parent' in parent:
+            parent = parent['parent']
+            parts.append(parent['name'])
+        return '|'.join(reversed(parts))
+
     def index(self):
         return self.__str__()
 

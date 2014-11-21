@@ -285,7 +285,7 @@ class Statistics(object):
 
         namespace, status = options.get('namespace', None), options.get('couple_status', None)
 
-        root, nodes = infrastructure.cluster_tree(namespace)
+        tree, nodes = infrastructure.cluster_tree(namespace)
 
         for group in storage.groups.keys():
             if not group.node_backends:
@@ -329,8 +329,6 @@ class Statistics(object):
                                'fragmentation': stat.fragmentation,
                                'status': group.couple and group.couple.status or None})
 
-        tree = {'type': 'root', 'name': 'root',
-                'children': root.values()}
         self.__clean_tree(tree)
 
         return tree

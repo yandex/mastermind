@@ -16,3 +16,5 @@ node_start_command = inv.node_start_command
 enable_node_backend_cmd = inv.enable_node_backend_cmd
 disable_node_backend_command = inv.disable_node_backend_command
 node_reconfigure = inv.node_reconfigure
+get_balancer_node_types = inv.get_balancer_node_types
+get_dc_node_type = inv.get_dc_node_type

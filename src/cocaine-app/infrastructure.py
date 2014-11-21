@@ -781,7 +781,9 @@ class Infrastructure(object):
                     break
                 tree_node = tree_node['parent']
 
-        return root, nodes
+        tree = {'type': 'root', 'name': 'root',
+                'children': root.values()}
+        return tree, nodes
 
 
 class CacheItem(object):
