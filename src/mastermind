@@ -737,13 +737,13 @@ def couple_build(size, groups=('i', [], 'Use these groups in couple (example: -i
                               'dry_run': dry_run,
                               'mandatory_groups': groups}]
 
-    res, error = s.enqueue('build_couples', msgpack.packb(params)).get()
+    res = s.enqueue('build_couples', msgpack.packb(params)).get()
 
     if not isinstance(res,  tuple):
         print res
         return
 
-    good_couples = res
+    good_couples, error = res
 
     if couples > 1:
         print highlight('Successfully created {0} out of {1} couples:'.format(len(good_couples), couples))
