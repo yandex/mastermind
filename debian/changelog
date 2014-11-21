@@ -1,3 +1,9 @@
+mastermind (2.11.3) lucid; urgency=low
+
+  * Fix for couple build mastermind utils
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 21 Nov 2014 19:09:02 +0300
+
 mastermind (2.11.2) lucid; urgency=low
 
   * Fix for default locking sync manager
