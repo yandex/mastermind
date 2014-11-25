@@ -82,14 +82,11 @@ class Repositary(object):
 
 
 class NodeStat(object):
-    def __init__(self, raw_stat=None, prev=None):
+    def __init__(self):
         self.ts = None
-        if raw_stat:
-            self.init(raw_stat, prev)
-        else:
-            self.load_average = 0.0
+        self.load_average = 0.0
 
-    def init(self, raw_stat, prev=None):
+    def update(self, raw_stat):
         self.ts = time.time()
         self.load_average = float(raw_stat['procfs']['vm']['la'][0]) / 100
 
@@ -110,35 +107,52 @@ class NodeStat(object):
 
 
 class NodeBackendStat(object):
-    def __init__(self, node_stat, raw_stat=None, prev=None):
+    def __init__(self, node_stat):
         self.node_stat = node_stat
         self.ts = None
 
-        if raw_stat:
-            self.init(raw_stat, prev)
-        else:
-            self.free_space = 0
+        self.free_space, self.total_space, self.used_space = 0, 0, 0
+        self.vfs_free_space, self.vfs_total_space, self.vfs_used_space = 0, 0, 0
 
-            self.last_read, self.last_write = 0, 0
-            self.read_rps, self.write_rps = 0, 0
-            self.max_read_rps, self.max_write_rps = 0, 0
+        self.last_read, self.last_write = 0, 0
+        self.read_rps, self.write_rps = 0, 0
 
-            self.fragmentation = 0.0
-            self.files = 0
-            self.files_removed = 0
+        # Tupical SATA HDD performance is 100 IOPS
+        # It will be used as first estimation for maximum node performance
+        self.max_read_rps, self.max_write_rps = 100, 100
 
-            self.fsid = None
-            self.defrag_state = None
+        self.fragmentation = 0.0
+        self.files = 0
+        self.files_removed, self.files_removed_size = 0, 0
 
-            self.blob_size_limit = 0
-            self.max_blob_base_size = 0
-            self.blob_size = 0
+        self.fsid = None
+        self.defrag_state = None
 
-    def init(self, raw_stat, prev=None):
-        self.ts = time.time()
+        self.blob_size_limit = 0
+        self.max_blob_base_size = 0
+        self.blob_size = 0
 
-        self.last_read = raw_stat['backend']['dstat']['read_ios']
-        self.last_write = raw_stat['backend']['dstat']['write_ios']
+    def update(self, raw_stat):
+
+        now = time.time()
+
+        if self.ts:
+            dt = now - self.ts
+
+            last_read = raw_stat['backend']['dstat']['read_ios']
+            last_write = raw_stat['backend']['dstat']['write_ios']
+
+            self.read_rps = (last_read - self.last_read) / dt
+            self.write_rps = (last_write - self.last_write) / dt
+
+            # Disk usage should be used here instead of load average
+            self.max_read_rps = self.max_rps(self.read_rps, self.node_stat.load_average)
+            self.max_write_rps = self.max_rps(self.write_rps, self.node_stat.load_average)
+
+            self.last_read = last_read
+            self.last_write = last_write
+
+        self.ts = now
 
         self.vfs_total_space = raw_stat['backend']['vfs']['blocks'] * raw_stat['backend']['vfs']['bsize']
         self.vfs_free_space = raw_stat['backend']['vfs']['bavail'] * raw_stat['backend']['vfs']['bsize']
@@ -171,25 +185,6 @@ class NodeBackendStat(object):
             self.max_blob_base_size = 0
 
         self.blob_size = raw_stat['backend']['config']['blob_size']
-
-        if prev:
-            dt = self.ts - prev.ts
-
-            self.read_rps = (self.last_read - prev.last_read) / dt
-            self.write_rps = (self.last_write - prev.last_write) / dt
-
-            # Disk usage should be used here instead of load average
-            self.max_read_rps = self.max_rps(self.read_rps, self.node_stat.load_average)
-            self.max_write_rps = self.max_rps(self.write_rps, self.node_stat.load_average)
-
-        else:
-            self.read_rps = 0
-            self.write_rps = 0
-
-            # Tupical SATA HDD performance is 100 IOPS
-            # It will be used as first estimation for maximum node performance
-            self.max_read_rps = 100
-            self.max_write_rps = 100
 
     def max_rps(self, rps, load_avg, variant=RPS_FORMULA_VARIANT):
 
@@ -344,7 +339,9 @@ class Node(object):
         self.stat = None
 
     def update_statistics(self, new_stat):
-        self.stat = NodeStat(new_stat, self.stat)
+        if self.stat is None:
+            self.stat = NodeStat()
+        self.stat.update(new_stat)
 
     def __repr__(self):
         return '<Node object: host={host}, port={port}>'.format(
@@ -390,7 +387,9 @@ class NodeBackend(object):
         self.disabled = False
 
     def update_statistics(self, new_stat):
-        self.stat = NodeBackendStat(self.node.stat, new_stat, self.stat)
+        if self.stat is None:
+            self.stat = NodeBackendStat(self.node.stat)
+        self.stat.update(new_stat)
         self.base_path = os.path.dirname(new_stat['backend']['config'].get('data') or
                                          new_stat['backend']['config'].get('file')) + '/'
 
