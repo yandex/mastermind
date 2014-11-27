@@ -1,4 +1,4 @@
 {
     "pool-limit": 10,
-    "startup-timeout": 60
+    "startup-timeout": 120
 }
