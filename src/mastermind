@@ -136,11 +136,11 @@ def ts_to_dt(ts):
 # group commands
 groupDispatcher = Dispatcher(globaloptions=(host_param, app_param))
 
+def to_gb(bytes):
+    return bytes / (1024.0 * 1024.0 * 1024.0)
 
 def convert_stats(d):
-    def to_gb(bytes):
-        return bytes / (1024.0 * 1024.0 * 1024.0)
-    for k in ('free_space', 'free_effective_space', 'used_space'):
+    for k in ('free_space', 'free_effective_space', 'used_space', 'total_space'):
         if k in d:
             d[k] = '{0:.3f} Gb'.format(to_gb(d[k]))
 
@@ -328,6 +328,118 @@ def group_move(group, uncoupled_group,
          'dst_backend_id': dst_backend['backend_id'],
          'dst_base_path': dst_backend['path'],
          }])).get()
+
+    print job_data
+
+
+@groupDispatcher.command(name='restore')
+@log_action
+def group_restore(group, uncoupled_group=('u', '', 'Use uncoupled group as '
+                  'a restoration point instead of previous group location'),
+                  host=None, app=None):
+    '''Create job to restore group's node backend from a coupled group.
+       By default data is being restored to the previous location
+       of group's node backend. If uncoupled group is set, it's node backend
+       will be used instead.
+       Applicable only for single node backend groups'''
+    s = service(host, app)
+
+    group = int(group)
+    group_data = retry(s, 'get_group_info', group)
+    if len(group_data['node_backends']) > 1:
+        print warn('Group {0} has {1} node backends, should have at most one'.format(
+            group, len(group_data['node_backends'])))
+        return
+
+    if group_data['status'] not in ('BAD', 'INIT'):
+        print warn('Group {0} has {1} status, should have BAD or INIT'.format(
+            group, group_data['status']))
+        return
+
+    if group_data['node_backends']:
+        if group_data['node_backends'][0]['status'] not in ('STALLED', 'INIT'):
+            nb = group_data['node_backends'][0]
+            print warn('Group {0} has node backend {1} in status {2}, '
+                'should have STALLED or INIT status'.format(
+                    group, '{0}/{1}'.format(nb['node'], nb['backend_id']), nb['status']))
+            return
+
+    couple_data = retry(s, 'get_couple_info', group)
+    if not 'id' in couple_data:
+        print warn('Group {0} does not participate in any couple'.format(group))
+        return
+
+    couple_dcs = set()
+    total_spaces = []
+    for g in couple_data['groups']:
+        if g['id'] == group:
+            continue
+        total_space = 0
+        for nb in g['node_backends']:
+            couple_dcs.add(nb['dc'])
+            total_space += nb['total_space']
+        total_spaces.append(total_space)
+
+    group_total_space = max(total_spaces)
+
+    candidates = [g for g in couple_data['groups'] if g['id'] != group]
+    candidates = filter(lambda g: len(g['node_backends']) == 1, candidates)
+
+    if not candidates:
+        print warn('No coupled groups with one node backend found, '
+                   'multiple nodes group restoration is not supported')
+        return
+
+    candidates.sort(key=lambda g: g['node_backends'][0]['records_alive'], reverse=True)
+    src_group_data = candidates[0]
+    src_group = src_group_data['id']
+    src_backend = src_group_data['node_backends'][0]
+
+    if src_backend['status'] != 'OK':
+        print warn('Source group {0} node backend status is {1}, should be OK'.format(
+            src_group, src_backend['status']))
+        return
+
+    if uncoupled_group:
+        uncoupled_group = int(uncoupled_group)
+        unc_group_data = retry(s, 'get_group_info', uncoupled_group)
+
+        if len(unc_group_data['node_backends']) != 1:
+            print warn('Group {0} has {1} node backends, should have one'.format(
+                uncoupled_group, len(unc_group_data['node_backends'])))
+            return
+
+        unc_group_total_space = unc_group_data['node_backends'][0]['total_space']
+
+        if (group_total_space < unc_group_total_space * 0.95 or
+            unc_group_total_space < group_total_space * 0.95):
+
+            print warn('Uncoupled group {0} is not suitable for replacement '
+                '(total space is {1:.3f} Gb, should be approximately {2:.3f} Gb)'.format(
+                    uncoupled_group, to_gb(unc_group_total_space), to_gb(group_total_space)))
+            return
+
+        if unc_group_data['node_backends'][0]['status'] != 'OK':
+            nb = unc_group_data['node_backends'][0]
+            print warn('Group {0} has node backend {1} in status {2}, '
+                'should have OK status'.format(
+                    uncoupled_group, '{0}/{1}'.format(nb['node'], nb['backend_id']), nb['status']))
+            return
+
+        if unc_group_data['node_backends'][0]['dc'] in couple_dcs:
+            print warn('Group {0} cannot be moved to uncoupled group {1}, '
+                 'couple {2} already has groups in dc {3}'.format(
+                    group, uncoupled_group, couple_data['id'],
+                    unc_group_data['node_backends'][0]['dc']))
+            return
+
+    job_params = {'group': group,
+                  'src_group': src_group}
+    if uncoupled_group:
+        job_params['uncoupled_group'] = uncoupled_group
+
+    job_data = s.enqueue('create_job', msgpack.packb(['restore_group_job',
+        job_params])).get()
 
     print job_data
 
@@ -1010,11 +1122,6 @@ def couple_defrag(couple,
     print job_data
 
 
-
-# cmd commands
-cmdDispatcher = Dispatcher(globaloptions=(host_param, app_param))
-
-
 DEFAULT = '\033[0m'
 DEFAULT_BOLD = '\033[1m'
 RED = '\033[1;31m'
@@ -1067,142 +1174,6 @@ def confirm(prompt, answer, prefix=''):
 def cmd_dest(cmd):
     return cmd.split(' ')[-1]
 
-
-@cmdDispatcher.command(name='restore')
-@log_action
-def restore_group(group, user=('u', os.environ['USER'],
-                               'rsync command user for source path'),
-                  dest=('d', '', 'Destination path on current host'),
-                  group_file=('f', '', 'Write group id to specified file, '
-                     'absolute or relative to destination path '
-                     '(will be overwritten if exists)'),
-                  auto_enable=('a', False, 'Perform node backend start automatically '
-                    'when data is restored'),
-                  host=None, app=None):
-    '''Get command for restoring group from good symmetric group'''
-    s = service(host, app)
-    group = int(group)
-
-    if auto_enable and not group_file:
-        print warn('--auto-enable flag requires --group-file option to be set '
-            '(for node backend to be properly configured)')
-        return
-
-    res = s.enqueue('restore_group_cmd', msgpack.packb([group, user, dest])).get()
-    if isinstance(res, dict):
-        print res
-        return
-
-    dst_host, dst_port, backend_id, cmd, messages = res
-    for msg in messages:
-        print '{prefix} {msg}'.format(prefix=warn('WARNING:'), msg=msg)
-
-    if not cmd:
-        return
-
-    box(cmd, caption='Command')
-
-    if not confirm('Do you want the glorious mastermind '
-                   'to execute this command for you? [yes/no]: ', 'yes'):
-        print 'Like a pussy...'
-        return
-
-    if danger(cmd):
-
-        test_msg = 'God please forgive me'
-
-        if not confirm('I will execute it for you, though, '
-                       'if you type "%s": ' % test_msg, test_msg,
-                       prefix='Hmm... The command seems pretty strange to me.'):
-             print 'I thought so...'
-             return
-
-        print 'Well if you say so...\n'
-
-    params = {'group': str(group)}
-    if group_file:
-        try:
-            dest_dir = dest or cmd_dest(cmd)
-            dest_dir = dest_dir.strip('"')
-            group_file_path = os.path.join(dest_dir, group_file)
-            print 'Group id %s will be written to ' \
-                  'group file %s' % (group, group_file_path)
-            params['group_file'] = group_file_path
-        except Exception as e:
-            print warn('Failed to write to group file: %s' % e)
-            return
-    else:
-        print warn("\nDon't forget to MANUALLY set group id "
-                   "of the restored group to %s!" % group)
-
-    print
-    res = s.enqueue('execute_cmd', msgpack.packb([dst_host, cmd, params])).get()
-    print res
-    print
-
-    if 'Balancer error' in res:
-        print res
-        return
-
-    task_id = res.keys()[0]
-
-    success = watch_progress(s, task_id)
-
-    if not success:
-        return
-
-    if 'Balancer error' in res:
-        print res
-        return
-
-    # check and print warning if group has any other alive nodes
-    print 'Checking group nodes'
-    res = retry(s, 'get_group_info', group)
-    statuses = [nb['status'] for nb in res['node_backends']
-                if nb['addr'] != '{0}:{1}'.format(dst_host, dst_port)]
-    if not all([status in ('STALLED', 'INIT') for status in statuses]):
-        print
-        print 'Group {0} current node statuses are {1}'.format(group, statuses)
-        print warn('Looks like there are some active nodes in group {0}!'.format(group))
-
-
-    cmd_1 = retry(s, 'reconfigure_node_cmd', [dst_host, dst_port, 2])
-    if isinstance(cmd_1, dict):
-        print cmd_1
-        return
-
-    cmd_2 = retry(s, 'enable_node_backend_cmd', [dst_host, dst_port, 2, backend_id])
-    if isinstance(cmd_2, dict):
-        print cmd_2
-        return
-
-    cmds = [cmd_1, cmd_2]
-
-    box('\n'.join(cmds), caption='Commands')
-
-    if not auto_enable and not confirm('Do you want to start restored node backend? [yes/no]: ', 'yes'):
-         print warn('I thought so...')
-         return
-
-    params = {'node': '{0}:{1}'.format(dst_host, dst_port)}
-
-    for cmd in cmds:
-        print
-        res = s.enqueue('execute_cmd', msgpack.packb([dst_host, cmd, params])).get()
-        print res
-        print
-
-        if 'Balancer error' in res:
-            return
-
-        task_id = res.keys()[0]
-
-        success = watch_progress(s, task_id)
-
-        if not success:
-            return
-
-    print '\nNode was successfully started'
 
 def watch_progress(session, task_id):
     success = False
@@ -1410,7 +1381,6 @@ d.nest('couple', coupleDispatcher, 'Perform couple action')
 d.nest('ns', nsDispatcher, 'Perform namespace action')
 d.nest('cache', cacheDispatcher, 'Perform cache action')
 d.nest('job', jobDispatcher, 'Perform jobs action')
-d.nest('cmd', cmdDispatcher, 'Some useful commands')
 
 
 def command_helper(argv):

@@ -392,7 +392,7 @@ class Balancer(object):
             host, port, backend_id = self.NODE_BACKEND_RE.match(node_backend_str).groups()
             port, backend_id = int(port), int(backend_id)
             logger.info('host, port, backend_id: {0}'.format((host, port, backend_id)))
-        except (IndexError, ValueError):
+        except (IndexError, ValueError, AttributeError):
             raise ValueError('Node backend should be of form <host>:<port>:<backend_id>')
 
         if node_backend and node_backend in group.node_backends:

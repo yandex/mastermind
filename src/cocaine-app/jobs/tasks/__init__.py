@@ -7,6 +7,7 @@ from history_remove_node import HistoryRemoveNodeTask
 from recover_group_dc import RecoverGroupDcTask
 from node_backend_defrag import NodeBackendDefragTask
 from couple_defrag_state_check import CoupleDefragStateCheckTask
+from rsync_backend import RsyncBackendTask
 
 
 class TaskFactory(object):
@@ -26,4 +27,6 @@ class TaskFactory(object):
             return NodeBackendDefragTask.from_data(data, job)
         if task_type == TaskTypes.TYPE_COUPLE_DEFRAG_STATE_CHECK_TASK:
             return CoupleDefragStateCheckTask.from_data(data, job)
+        if task_type == TaskTypes.TYPE_RSYNC_BACKEND_TASK:
+            return RsyncBackendTask.from_data(data, job)
         raise ValueError('Unknown task type {0}'.format(task_type))

@@ -13,6 +13,7 @@ from couple_defrag import CoupleDefragJob
 from move import MoveJob
 from recover_dc import RecoverDcJob
 from job_factory import JobFactory
+from restore_group import RestoreGroupJob
 import indexes
 import keys
 from tasks import Task, MinionCmdTask
@@ -270,7 +271,8 @@ class JobProcessor(object):
             except IndexError:
                 raise ValueError('Job type is required')
 
-            if job_type not in (JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_RECOVER_DC_JOB, JobTypes.TYPE_COUPLE_DEFRAG_JOB):
+            if job_type not in (JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_RECOVER_DC_JOB,
+                JobTypes.TYPE_COUPLE_DEFRAG_JOB, JobTypes.TYPE_RESTORE_GROUP_JOB):
                 raise ValueError('Invalid job type: {0}'.format(job_type))
 
             try:
@@ -300,6 +302,8 @@ class JobProcessor(object):
             JobType = RecoverDcJob
         elif job_type == JobTypes.TYPE_COUPLE_DEFRAG_JOB:
             JobType = CoupleDefragJob
+        elif job_type == JobTypes.TYPE_RESTORE_GROUP_JOB:
+            JobType = RestoreGroupJob
         job = JobType.new(**params)
 
         try:

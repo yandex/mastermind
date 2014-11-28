@@ -1,3 +1,9 @@
+mastermind (2.11.4) lucid; urgency=low
+
+  * Temporary increased mastermind startup time to 120 sec
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 27 Nov 2014 16:25:53 +0300
+
 mastermind (2.11.3) lucid; urgency=low
 
   * Fix for couple build mastermind utils
