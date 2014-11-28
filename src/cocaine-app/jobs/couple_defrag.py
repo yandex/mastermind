@@ -6,14 +6,6 @@ from job import Job
 from job_types import JobTypes
 from tasks import NodeBackendDefragTask, CoupleDefragStateCheckTask
 import storage
-from sync import sync_manager
-from sync.error import (
-    LockError,
-    LockFailedError,
-    LockAlreadyAcquiredError,
-    InconsistentLockError,
-    API_ERROR_CODE
-)
 
 
 logger = logging.getLogger('mm.jobs')

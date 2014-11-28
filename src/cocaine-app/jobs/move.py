@@ -138,6 +138,7 @@ class MoveJob(Job):
         if remove_path:
             params['remove_path'] = remove_path
 
+        # TODO: think about changing MinionCmdTask to RsyncBackendTask
         task = MinionCmdTask.new(self,
                                  host=self.dst_host,
                                  cmd=move_cmd,

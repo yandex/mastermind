@@ -472,6 +472,7 @@ class NodeBackend(object):
             res['effective_space'] = self.effective_space
             res['free_effective_space'] = int(max(self.stat.free_space - (self.stat.total_space - self.effective_space), 0))
             res['used_space'] = int(self.stat.used_space)
+            res['total_space'] = int(self.stat.total_space)
             res['total_files'] = self.stat.files + self.stat.files_removed
             res['records_alive'] = self.stat.files
             res['records_removed'] = self.stat.files_removed

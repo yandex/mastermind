@@ -3,6 +3,7 @@ class JobTypes(object):
     TYPE_MOVE_JOB = 'move_job'
     TYPE_RECOVER_DC_JOB = 'recover_dc_job'
     TYPE_COUPLE_DEFRAG_JOB = 'couple_defrag_job'
+    TYPE_RESTORE_GROUP_JOB = 'restore_group_job'
 
 class TaskTypes(object):
     TYPE_MINION_CMD = 'minion_cmd'
@@ -11,3 +12,4 @@ class TaskTypes(object):
     TYPE_HISTORY_REMOVE_NODE = 'history_remove_node'
     TYPE_NODE_BACKEND_DEFRAG_TASK = 'node_backend_defrag_task'
     TYPE_COUPLE_DEFRAG_STATE_CHECK_TASK = 'couple_defrag_state_check'
+    TYPE_RSYNC_BACKEND_TASK = 'rsync_backend_task'
