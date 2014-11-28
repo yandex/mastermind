@@ -445,230 +445,157 @@ class Balancer(object):
         yield chain.concurrent(self.niu.execute_tasks)()
         logger.info('Concurrent cluster info update completed')
 
-    @h.handler
-    def couple_groups(self, request):
-        logger.info('----------------------------------------')
-        logger.info('New couple groups request: ' + str(request))
+    @chain.source
+    def __groups_by_total_space(self, match_group_space=False):
+        yield chain.concurrent(
+            self.__do_groups_by_total_space)(match_group_space)
 
-        with sync_manager.lock(self.CLUSTER_CHANGES_LOCK, blocking=False):
+    def __do_groups_by_total_space(self, match_group_space):
+        suitable_groups = []
+        total_spaces = []
 
-            logger.info('Updating cluster info')
-            self.update_cluster_state().get()
-            logger.info('Updating cluster info completed')
+        for group_id in self.get_empty_groups(self.node):
+            group = storage.groups[group_id]
 
-            suitable_groups = []
-            total_spaces = []
+            if not len(group.node_backends):
+                logger.info('Group {0} cannot be used, it has '
+                    'empty node list'.format(group.group_id))
+                continue
 
-            for group_id in self.get_empty_groups(self.node):
-                group = storage.groups[group_id]
+            if group.status != storage.Status.INIT:
+                logger.info('Group {0} cannot be used, status is {1}, '
+                    'should be {2}'.format(group.group_id, group.status, storage.Status.INIT))
+                continue
 
-                if not len(group.node_backends):
-                    logger.info('Group {0} cannot be used, it has '
-                        'empty node list'.format(group.group_id))
-                    continue
+            suitable = True
+            for node_backend in group.node_backends:
+                if node_backend.status != storage.Status.OK:
+                    logger.info('Group {0} cannot be used, node backend {1} status '
+                                'is {2} (not OK)'.format(group.group_id,
+                                     node_backend, node_backend.status))
+                    suitable = False
+                    break
 
-                if group.status != storage.Status.INIT:
-                    logger.info('Group {0} cannot be used, status is {1}, '
-                        'should be {2}'.format(group.group_id, group.status, storage.Status.INIT))
-                    continue
+            if not suitable:
+                continue
 
-                suitable = True
-                for node_backend in group.node_backends:
-                    if node_backend.status != storage.Status.OK:
-                        logger.info('Group {0} cannot be used, node backend {1} status '
-                                    'is {2} (not OK)'.format(group.group_id,
-                                         node_backend, node_backend.status))
-                        suitable = False
-                        break
+            suitable_groups.append(group_id)
+            total_spaces.append(group.get_stat().total_space)
 
-                if not suitable:
-                    continue
+        groups_by_total_space = {}
 
-                suitable_groups.append(group_id)
-                total_spaces.append(group.get_stat().total_space)
-
-            dc_by_group_id = {}
-            ts_by_group_id = {}
-            dc_groups_by_total_space = {}
-
+        if match_group_space:
             # bucketing groups by approximate total space
             ts_tolerance = config.get('total_space_diff_tolerance', 0.05)
             cur_ts_key = 0
             for ts in reversed(sorted(total_spaces)):
                 if abs(cur_ts_key - ts) > cur_ts_key * ts_tolerance:
                     cur_ts_key = ts
-                    dc_groups_by_total_space[cur_ts_key] = {}
+                    groups_by_total_space[cur_ts_key] = []
 
-            total_spaces = list(reversed(sorted(dc_groups_by_total_space.keys())))
+            total_spaces = list(reversed(sorted(groups_by_total_space.keys())))
             logger.info('group total space sizes available: {0}'.format(total_spaces))
-
-            dc_groups_by_total_space['any'] = {}
 
             for group_id in suitable_groups:
                 group = storage.groups[group_id]
-                dc = group.node_backends[0].node.host.dc
-
-                dc_by_group_id[group_id] = dc
-
                 ts = group.get_stat().total_space
                 for ts_key in total_spaces:
                     if ts_key - ts < ts_key * ts_tolerance:
-                        dc_groups_by_total_space[ts_key].setdefault(dc, []).append(group_id)
-                        ts_by_group_id[group_id] = ts_key
-                        dc_groups_by_total_space['any'].setdefault(dc, []).append(group_id)
+                        groups_by_total_space[ts_key].append(group_id)
                         break
                 else:
                     raise ValueError('Failed to find total space key for group {0}, '
                         'total space {1}'.format(group_id, ts))
+        else:
+            groups_by_total_space['any'] = [group_id for group_id in suitable_groups]
 
-            logger.info('dc by group: %s' % str(dc_by_group_id))
-            logger.info('ts by group: %s' % str(ts_by_group_id))
-            logger.info('dc_groups_by_total_space: %s' % str(dc_groups_by_total_space))
+        return groups_by_total_space
 
-            size = int(request[0])
-            mandatory_groups = [int(g) for g in request[1]]
-            couples_num = int(request[2]) or 1
-            check_space = request[3]
+    @chain.source
+    def __couple_groups(self, size, couples, options, ns, groups_by_total_space):
+        yield chain.concurrent(
+            self.__do_couple_groups)(size, couples, options, ns, groups_by_total_space)
 
-            if mandatory_groups and couples_num > 1:
-                raise Exception('Batch couple building is prohibited when '
-                    'mandatory groups are set')
+    def __do_couple_groups(self, size, couples, options, ns, groups_by_total_space):
 
-            mandatory_ts = None
+        created_couples = []
+        error = None
 
-            if mandatory_groups and check_space:
-                cgroup_id = mandatory_groups[0]
-                mandatory_ts = ts_by_group_id[cgroup_id]
-                for group_id in mandatory_groups:
-                    if not ts_by_group_id[cgroup_id] == ts_by_group_id[group_id]:
-                        raise Exception('Mandatory groups do not have equal '
-                            'total space: group {0} total_space {1}, '
-                            'group {2} total_space {3}'.format(
-                                cgroup_id, storage.groups[cgroup_id].get_stat().total_space,
-                                group_id, storage.groups[group_id].get_stat().total_space))
+        try:
+            tree, nodes = self.__build_cluster_state()
+            self.__account_ns_couples(tree, nodes, ns)
 
-            # checking mandatory set and filtering unusable dcs
-            for group_id in mandatory_groups:
-                if group_id not in suitable_groups:
-                    raise Exception('group %d is not found in suitable groups '
-                        '(is bad or coupled)' % group_id)
-                dc = dc_by_group_id[group_id]
-                ts = ts_by_group_id[group_id]
+            units = self.groups_units(
+                [group_id for group_ids in groups_by_total_space.itervalues()
+                          for group_id in group_ids])
 
-                if dc not in dc_groups_by_total_space['any']:
-                    raise Exception('mandatory groups must be in different dcs')
-                del dc_groups_by_total_space['any'][dc]
-                if dc not in dc_groups_by_total_space[ts]:
-                    raise Exception('mandatory groups must be in different dcs')
-                del dc_groups_by_total_space[ts][dc]
+            for _, mandatory_groups in itertools.izip_longest(
+                    xrange(couples), options['mandatory_groups'][:couples]):
 
-            groups_to_couple = copy.copy(mandatory_groups)
+                mandatory_groups = mandatory_groups or []
 
-            n_groups_to_add = size - len(groups_to_couple)
-            if n_groups_to_add < 0:
-                raise Exception('Too many mandatory groups')
+                if len(mandatory_groups) > size:
+                    raise ValueError("Mandatory groups list's {0} length "
+                        "is greater than couple size {1}".format(mandatory_groups, size))
 
-            # filtering unusable total spaces
-            for k in dc_groups_by_total_space.keys():
-                if mandatory_ts and k != mandatory_ts:
-                    del dc_groups_by_total_space[k]
-                elif not check_space and k != 'any':
-                    del dc_groups_by_total_space[k]
-                elif check_space and k == 'any':
-                    del dc_groups_by_total_space[k]
-                elif len(dc_groups_by_total_space[k]) < n_groups_to_add:
-                    del dc_groups_by_total_space[k]
+                for m_group in mandatory_groups:
+                    if m_group not in units:
+                        raise ValueError('Mandatory group {0} is not found '
+                            'in cluster'.format(m_group))
 
-            logger.info('dc_groups_by_total_space after filtering unmatching dcs '
-                'and disk sizes: {0}'.format(str(dc_groups_by_total_space)))
+                if mandatory_groups:
+                    self.__account_ns_groups(nodes, [storage.groups[g] for g in mandatory_groups])
+                    self.__update_groups_list(tree)
 
-            if not len(dc_groups_by_total_space):
-                raise Exception('Not enough dcs')
-
-            namespace = request[4]
-            logger.info('namespace from request: {0}'.format(namespace))
-
-            if not namespace in self.infrastructure.ns_settings:
-                raise ValueError('Unknown namespace {0}'.format(namespace))
-
-            init_state = request[5].upper()
-            if not init_state in self.VALID_COUPLE_INIT_STATES:
-                raise ValueError('Couple "{0}" init state is invalid'.format(init_state))
-
-            created_couples = []
-            bad_couples = []
-            stop = False
-
-            def chunks(l, n):
-                if n == 0:
-                    yield []
-                else:
-                    for i in xrange(0, len(l), n):
-                        chunk = l[i:i + n]
-                        if len(chunk) < n:
-                            break
-                        yield chunk
-
-            while len(created_couples) < couples_num:
-
-                if stop:
+                ns_current_state = self.__ns_current_state(nodes)
+                groups_to_couple = self.choose_groups_to_couple(
+                    ns_current_state, units, size, groups_by_total_space, mandatory_groups)
+                if not groups_to_couple:
+                    logger.warn('Not enough uncoupled groups to couple')
                     break
+                logger.info('Chosen groups to couple: {0}'.format(groups_to_couple))
 
-                used_dcs = set()
-                groups_found = False
-
-                ts_dcs = [(ts, set(group_by_dc.keys()))
-                          for ts, group_by_dc in dc_groups_by_total_space.iteritems()]
-                ts_dcs.sort(key=lambda x: len(x[1]))
-
-                for ts, dcs in ts_dcs:
-                    if stop:
+                couple = storage.couples.add([storage.groups[g]
+                                              for g in groups_to_couple])
+                if not options['dry_run']:
+                    try:
+                        make_symm_group(self.node, couple, options['namespace'])
+                    except Exception as e:
+                        error = e
+                        couple.destroy()
                         break
-                    not_used_dcs = list(dcs - used_dcs)
-                    random.shuffle(not_used_dcs)
-                    logger.info('Ts: {0}, not used dcs {1}'.format(ts, not_used_dcs))
-                    for selected_dcs in chunks(not_used_dcs, n_groups_to_add):
-                        logger.info('Ts: {0}, taken dcs {1}'.format(ts, selected_dcs))
-                        # build couple from selected dcs, mark loop as successful
-                        for dc in selected_dcs:
-                            used_dcs.add(dc)
-                            groups_to_couple.append(dc_groups_by_total_space[ts][dc].pop())
 
-                        couple = storage.couples.add([storage.groups[g] for g in groups_to_couple])
-                        try:
-                            make_symm_group(self.node, couple, namespace)
-                        except Exception as e:
-                            bad = [g.group_id for g in couple.groups]
+                if options['init_state'] == storage.Status.FROZEN:
+                    self.__do_set_meta_freeze(couple, freeze=True)
+                elif options['init_state'] == storage.Status.COUPLED:
+                    self.__do_set_meta_freeze(couple, freeze=False)
 
-                        if bad:
-                            bad_couples.append([good, bad])
-                            stop = True
-                            break
+                for ts, group_ids in groups_by_total_space.iteritems():
+                    if couple.groups[0].group_id in group_ids:
+                        for group in couple.groups:
+                            group_ids.remove(group.group_id)
+                        break
 
-                        if init_state == storage.Status.FROZEN:
-                            self.__do_set_meta_freeze(couple, freeze=True)
-                        elif init_state == storage.Status.COUPLED:
-                            self.__do_set_meta_freeze(couple, freeze=False)
+                self.__account_ns_groups(nodes, couple.groups)
+                self.__update_groups_list(tree)
 
-                        created_couples.append(couple)
+                created_couples.append(couple)
+        except Exception as e:
+            logger.error('Failed to build couples: {0}\n{1}'.format(
+                e, traceback.format_exc()))
+            error = e
+            if options['dry_run']:
+                for couple in created_couples:
+                    couple.destroy()
+            raise
 
-                        groups_found = True
+        res = [c.as_tuple() for c in created_couples]
 
-                        if len(created_couples) >= couples_num:
-                            stop = True
-                            break
+        if options['dry_run']:
+            for couple in created_couples:
+                couple.destroy()
 
-                        groups_to_couple = []
-                        for dc in dc_groups_by_total_space[ts].keys():
-                            if not dc_groups_by_total_space[ts][dc]:
-                                del dc_groups_by_total_space[ts][dc]
-                        if len(dc_groups_by_total_space[ts]) < n_groups_to_add:
-                            del dc_groups_by_total_space[ts]
-
-                if not groups_found:
-                    stop = True
-
-            return [c.as_tuple() for c in created_couples], bad_couples
+        return res, error
 
     NODE_TYPES = ['root'] + inventory.get_balancer_node_types() + ['hdd']
     DC_NODE_TYPE = inventory.get_dc_node_type()
@@ -826,7 +753,11 @@ class Balancer(object):
             level_units = [gp[node_type] for gp in units[group_id]]
             mandatory_groups_units.extend(level_units)
 
-        for comb in set(itertools.combinations(choice_list, count)):
+        comb_set = set()
+        for c in itertools.combinations(choice_list, count):
+            comb_set.add(c)
+
+        for comb in comb_set:
             if config.get('forbidden_dc_sharing_among_groups', False) and node_type == self.DC_NODE_TYPE:
                 comb_units = list(reduce(operator.add, comb))
                 if (len(comb_units + mandatory_groups_units) !=
@@ -966,146 +897,14 @@ class Balancer(object):
             self.update_cluster_state().get()
             logger.info('Updating cluster info completed')
 
-            suitable_groups = []
-            total_spaces = []
-
-            for group_id in self.get_empty_groups(self.node):
-                group = storage.groups[group_id]
-
-                if not len(group.node_backends):
-                    logger.info('Group {0} cannot be used, it has '
-                        'empty node list'.format(group.group_id))
-                    continue
-
-                if group.status != storage.Status.INIT:
-                    logger.info('Group {0} cannot be used, status is {1}, '
-                        'should be {2}'.format(group.group_id, group.status, storage.Status.INIT))
-                    continue
-
-                suitable = True
-                for node_backend in group.node_backends:
-                    if node_backend.status != storage.Status.OK:
-                        logger.info('Group {0} cannot be used, node backend {1} status '
-                                    'is {2} (not OK)'.format(group.group_id,
-                                         node_backend, node_backend.status))
-                        suitable = False
-                        break
-
-                if not suitable:
-                    continue
-
-                suitable_groups.append(group_id)
-                total_spaces.append(group.get_stat().total_space)
-
-            groups_by_total_space = {}
-
-            if options['match_group_space']:
-                # bucketing groups by approximate total space
-                ts_tolerance = config.get('total_space_diff_tolerance', 0.05)
-                cur_ts_key = 0
-                for ts in reversed(sorted(total_spaces)):
-                    if abs(cur_ts_key - ts) > cur_ts_key * ts_tolerance:
-                        cur_ts_key = ts
-                        groups_by_total_space[cur_ts_key] = []
-
-                total_spaces = list(reversed(sorted(groups_by_total_space.keys())))
-                logger.info('group total space sizes available: {0}'.format(total_spaces))
-
-                for group_id in suitable_groups:
-                    group = storage.groups[group_id]
-                    ts = group.get_stat().total_space
-                    for ts_key in total_spaces:
-                        if ts_key - ts < ts_key * ts_tolerance:
-                            groups_by_total_space[ts_key].append(group_id)
-                            break
-                    else:
-                        raise ValueError('Failed to find total space key for group {0}, '
-                            'total space {1}'.format(group_id, ts))
-            else:
-                groups_by_total_space['any'] = [group_id for group_id in suitable_groups]
+            groups_by_total_space = self.__groups_by_total_space(
+                options['match_group_space']).get()
 
             logger.info('groups by total space: {0}'.format(groups_by_total_space))
 
-            created_couples = []
+            res, error = self.__couple_groups(size, couples, options, ns, groups_by_total_space).get()
 
-            error = None
-
-            try:
-
-                tree, nodes = self.__build_cluster_state()
-                self.__account_ns_couples(tree, nodes, ns)
-
-                units = self.groups_units(
-                    [group_id for group_ids in groups_by_total_space.itervalues()
-                              for group_id in group_ids])
-
-                for _, mandatory_groups in itertools.izip_longest(
-                        xrange(couples), options['mandatory_groups'][:couples]):
-
-                    mandatory_groups = mandatory_groups or []
-
-                    if len(mandatory_groups) > size:
-                        raise ValueError("Mandatory groups list's {0} length "
-                            "is greater than couple size {1}".format(mandatory_groups, size))
-
-                    for m_group in mandatory_groups:
-                        if m_group not in units:
-                            raise ValueError('Mandatory group {0} is not found '
-                                'in cluster'.format(m_group))
-
-                    if mandatory_groups:
-                        self.__account_ns_groups(nodes, [storage.groups[g] for g in mandatory_groups])
-                        self.__update_groups_list(tree)
-
-                    ns_current_state = self.__ns_current_state(nodes)
-                    groups_to_couple = self.choose_groups_to_couple(
-                        ns_current_state, units, size, groups_by_total_space, mandatory_groups)
-                    if not groups_to_couple:
-                        logger.warn('Not enough uncoupled groups to couple')
-                        break
-                    logger.info('Chosen groups to couple: {0}'.format(groups_to_couple))
-
-                    couple = storage.couples.add([storage.groups[g]
-                                                  for g in groups_to_couple])
-                    if not options['dry_run']:
-                        try:
-                            make_symm_group(self.node, couple, options['namespace'])
-                        except Exception as e:
-                            error = e
-                            couple.destroy()
-                            break
-
-                    if options['init_state'] == storage.Status.FROZEN:
-                        self.__do_set_meta_freeze(couple, freeze=True)
-                    elif options['init_state'] == storage.Status.COUPLED:
-                        self.__do_set_meta_freeze(couple, freeze=False)
-
-                    for ts, group_ids in groups_by_total_space.iteritems():
-                        if couple.groups[0].group_id in group_ids:
-                            for group in couple.groups:
-                                group_ids.remove(group.group_id)
-                            break
-
-                    self.__account_ns_groups(nodes, couple.groups)
-                    self.__update_groups_list(tree)
-
-                    created_couples.append(couple)
-            except Exception as e:
-                logger.error('Failed to build couples: {0}\n{1}'.format(
-                    e, traceback.format_exc()))
-                error = e
-                if options['dry_run']:
-                    for couple in created_couples:
-                        couple.destroy()
-                raise
-
-            res = [c.as_tuple() for c in created_couples]
-
-            if options['dry_run']:
-                for couple in created_couples:
-                    couple.destroy()
-
-            return (res, str(error) if error else None)
+        return (res, str(error) if error else None)
 
     @h.handler
     def break_couple(self, request):
