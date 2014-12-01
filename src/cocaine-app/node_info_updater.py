@@ -42,7 +42,6 @@ class NodeInfoUpdater(object):
 
         self.node_statistics_update()
         self.update_symm_groups()
-        self.update_couples_meta()
 
     def execute_tasks(self):
         try:
@@ -50,7 +49,6 @@ class NodeInfoUpdater(object):
             with self.__cluster_update_lock:
                 self.monitor_stats()
                 self.update_symm_groups_async()
-                self.update_couples_meta_async()
 
         except Exception as e:
             logger.info('Failed to execute cluster update tasks: {0}\n{1}'.format(e, traceback.format_exc()))
@@ -105,21 +103,6 @@ class NodeInfoUpdater(object):
             # TODO: change period
             reload_period = config.get('nodes_reload_period', 60)
             self.__tq.add_task_in(GROUPS_META_UPDATE_TASK_ID, reload_period, self.update_symm_groups)
-
-    def update_couples_meta(self):
-        try:
-            with self.__cluster_update_lock:
-                start_ts = time.time()
-                logger.info('Cluster updating: updating couple meta info started')
-                self.update_couples_meta_async()
-        except Exception as e:
-            logger.info('Failed to update groups: {0}\n{1}'.format(
-                e, traceback.format_exc()))
-        finally:
-            logger.info('Cluster updating: updating couple meta info finished, time: {0:.3f}'.format(time.time() - start_ts))
-            # TODO: change period
-            reload_period = config.get('nodes_reload_period', 60)
-            self.__tq.add_task_in(COUPLES_META_UPDATE_TASK_ID, reload_period, self.update_couples_meta)
 
     def force_nodes_update(self, request):
         logger.info('Forcing nodes update')
@@ -314,46 +297,15 @@ class NodeInfoUpdater(object):
                             group_id, e, traceback.format_exc()))
                     group.parse_meta(None)
                 finally:
-                    group.update_status_recursive()
+                    try:
+                        group.update_status_recursive()
+                    except Exception as e:
+                        logger.error('Failed to update group {0} status: '
+                            '{1}\n{2}'.format(group, e, traceback.format_exc()))
+                        pass
 
         except Exception as e:
             logger.error('Critical error during symmetric group '
-                                 'update, {0}: {1}'.format(str(e),
-                                     traceback.format_exc()))
-
-    def update_couples_meta_async(self):
-        try:
-            couples = storage.couples.keys()
-
-            requests = []
-            for couple in couples:
-                session = self.__node.meta_session.clone()
-                key = keys.MASTERMIND_COUPLE_META_KEY % str(couple)
-                logger.debug('Request to read {0} for couple {1}'.format(
-                     key, couple))
-                requests.append((session.read_latest(key), couple))
-
-            def couple_parse_meta(response, elapsed_time, couple):
-                logger.debug('Cluster updating: couple {0} meta key read time: {1}.{2}'.format(
-                    str(couple), elapsed_time.tsec, elapsed_time.tnsec))
-                couple.parse_meta(response.data)
-
-            for result, couple in requests:
-                try:
-                    self._process_elliptics_async_result(result,
-                        couple_parse_meta, couple)
-                except elliptics.NotFoundError:
-                    # no couple meta data, no need to worry
-                    couple.parse_meta(None)
-                except Exception as e:
-                    logger.error('Failed to request couple meta key for '
-                        'couple {0}: {1}\n{2}'.format(couple, e, traceback.format_exc()))
-                    couple.parse_meta(None)
-                finally:
-                    couple.update_status()
-
-        except Exception as e:
-            logger.error('Critical error during couples metadata '
                                  'update, {0}: {1}'.format(str(e),
                                      traceback.format_exc()))
 

@@ -341,7 +341,9 @@ class Balancer(object):
             logger.error('Balancer error: cannot identify a namespace to use for group %d' % (group_id,))
             return {'Balancer error': 'cannot identify a namespace to use for group %d' % (group_id,)}
 
-        make_symm_group(self.node, couple, namespace_to_use)
+        frozen = any([g.meta.get('frozen') for g in couple if g.meta and g.group_id != group_id])
+
+        make_symm_group(self.node, couple, namespace_to_use, frozen)
         couple.update_status()
 
         return {'message': 'Successfully repaired couple', 'couple': str(couple)}
@@ -434,10 +436,6 @@ class Balancer(object):
         return res
 
     VALID_COUPLE_INIT_STATES = (storage.Status.COUPLED, storage.Status.FROZEN)
-
-    # @chain.source
-    # def test_func(self):
-    #     res = yield self.niu.long_task()
 
     @chain.source
     def update_cluster_state(self):
@@ -559,16 +557,13 @@ class Balancer(object):
                                               for g in groups_to_couple])
                 if not options['dry_run']:
                     try:
-                        make_symm_group(self.node, couple, options['namespace'])
+                        make_symm_group(self.node, couple, options['namespace'],
+                            options['init_state'] == storage.Status.FROZEN)
                     except Exception as e:
                         error = e
                         couple.destroy()
                         break
-
-                if options['init_state'] == storage.Status.FROZEN:
-                    self.__do_set_meta_freeze(couple, freeze=True)
-                elif options['init_state'] == storage.Status.COUPLED:
-                    self.__do_set_meta_freeze(couple, freeze=False)
+                    couple.update_status()
 
                 for ts, group_ids in groups_by_total_space.iteritems():
                     if couple.groups[0].group_id in group_ids:
@@ -877,7 +872,7 @@ class Balancer(object):
 
         options.setdefault('namespace', storage.Group.DEFAULT_NAMESPACE)
         options.setdefault('match_group_space', True)
-        options.setdefault('init_state', 'COUPLED')
+        options.setdefault('init_state', storage.Status.COUPLED)
         options.setdefault('dry_run', False)
         options.setdefault('mandatory_groups', [])
 
@@ -977,26 +972,6 @@ class Balancer(object):
         except KeyError:
             raise ValueError('Couple %s not found' % couple_str)
         return couple
-
-    def __sync_couple_meta(self, couple):
-
-        key = keys.MASTERMIND_COUPLE_META_KEY % str(couple)
-
-        try:
-            meta = self.node.meta_session.read_latest(key).get()[0].data
-        except elliptics.NotFoundError:
-            meta = None
-        couple.parse_meta(meta)
-
-    def __update_couple_meta(self, couple):
-
-        key = keys.MASTERMIND_COUPLE_META_KEY % str(couple)
-
-        packed = msgpack.packb(couple.meta)
-        logger.info('packed meta for couple %s: "%s"' % (couple, str(packed).encode('hex')))
-        self.node.meta_session.write_data(key, packed).get()
-
-        couple.update_status()
 
     ALPHANUM = 'a-zA-Z0-9'
     EXTRA = '\-_'
@@ -1203,10 +1178,11 @@ class Balancer(object):
         logger.info('freezing couple %s' % str(request))
         couple = self.__get_couple(request)
 
-        self.__sync_couple_meta(couple)
         if couple.frozen:
-            raise ValueError('Couple %s is already frozen' % couple)
+            raise ValueError('Couple {0} is already frozen'.format(couple))
+
         self.__do_set_meta_freeze(couple, freeze=True)
+        couple.update_status()
 
         return True
 
@@ -1215,19 +1191,42 @@ class Balancer(object):
         logger.info('unfreezing couple %s' % str(request))
         couple = self.__get_couple(request)
 
-        self.__sync_couple_meta(couple)
         if not couple.frozen:
-            raise ValueError('Couple %s is not frozen' % couple)
+            raise ValueError('Couple {0} is not frozen'.format(couple))
+
         self.__do_set_meta_freeze(couple, freeze=False)
+        couple.update_status()
 
         return True
 
     def __do_set_meta_freeze(self, couple, freeze):
-        if freeze:
-            couple.freeze()
-        else:
-            couple.unfreeze()
-        self.__update_couple_meta(couple)
+
+        group_meta = couple.compose_group_meta(couple.namespace, frozen=freeze)
+
+        packed = msgpack.packb(group_meta)
+        logger.info('packed meta for couple {0}: "{1}"'.format(
+            couple, str(packed).encode('hex')))
+
+        s = elliptics.Session(self.node)
+        wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or config.get('wait_timeout', 5)
+        s.set_timeout(wait_timeout)
+        s.add_groups([group.group_id for group in couple])
+
+        _, failed_groups = write_retry(s, keys.SYMMETRIC_GROUPS_KEY, packed)
+
+        if failed_groups:
+            s = 'Failed to write meta key for couple {0} to groups {1}'.format(
+                    couple, list(failed_groups))
+            logger.error(s)
+            raise RuntimeError(s)
+
+        try:
+            for group in couple:
+                group.parse_meta(packed)
+        except Exception as e:
+            logging.error('Failed to parse meta key for groups {0}: {1}'.format(
+                [g.group_id for g in couple.groups], e))
+            raise
 
     @h.handler
     def get_namespaces(self, request):
@@ -1317,6 +1316,71 @@ def handlers(b):
     return handlers
 
 
+def session_op_retry(op, acc_codes):
+
+    def wrapped_retry(session, *args, **kwargs):
+        s = session.clone()
+
+        groups = set(s.groups)
+        dest_groups = set(s.groups)
+
+        s.set_checker(elliptics.checkers.no_check)
+        s.set_exceptions_policy(elliptics.exceptions_policy.no_exceptions)
+        s.set_filter(elliptics.filters.all_with_ack)
+
+        retries = kwargs.pop('retries', 3)
+
+        for i in xrange(retries):
+            s.set_groups(dest_groups)
+            res = getattr(s, op)(*args).get()
+            success_groups = set(
+                [r.group_id for r in res if r.error.code in acc_codes])
+            dest_groups -= success_groups
+            if not dest_groups:
+                break
+
+        return groups - dest_groups, dest_groups
+
+    return wrapped_retry
+
+
+write_retry = session_op_retry('write_data', (0,))
+remove_retry = session_op_retry('remove', (0, -2))
+
+
+def consistent_write(session, key, data, retries=3):
+    s = session.clone()
+
+    key_esc = key.replace('\0', '\\0')
+
+    groups = set(s.groups)
+
+    logger.debug('Performing consistent write of key {0} to groups {1}'.format(
+        key_esc, list(groups)))
+
+    suc_groups, failed_groups = write_retry(s, key, data, retries=retries)
+
+    if failed_groups:
+        # failed to write key to all destination groups
+
+        logger.info('Failed to write key consistently, '
+            'removing key {0} from groups {1}'.format(
+                key_esc, list(suc_groups)))
+
+        s.set_groups(suc_groups)
+        _, left_groups = remove_retry(s, key, retries=retries)
+
+        if left_groups:
+            logger.error('Failed to remove key {0} from groups {1}'.format(
+                key_esc, list(left_groups)))
+        else:
+            logger.info('Successfully removed key {0} from groups {1}'.format(
+                key_esc, list(suc_groups)))
+
+        raise RuntimeError('Failed to write key {0} to groups {1}'.format(
+            key_esc, list(failed_groups)))
+
+
 def kill_symm_group(n, meta_session, couple):
     groups = [group.group_id for group in couple]
     logger.info('Killing symm groups: %s' % str(groups))
@@ -1324,17 +1388,17 @@ def kill_symm_group(n, meta_session, couple):
     wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or config.get('wait_timeout', 5)
     s.set_timeout(wait_timeout)
     s.add_groups(groups)
-    try:
-        s.remove(keys.SYMMETRIC_GROUPS_KEY).get()
-    except elliptics.NotFoundError:
-        pass
-    try:
-        meta_session.remove(keys.MASTERMIND_COUPLE_META_KEY % str(couple)).get()
-    except elliptics.NotFoundError:
-        pass
+
+    _, failed_groups = remove_retry(s, keys.SYMMETRIC_GROUPS_KEY)
+
+    if failed_groups:
+        s = 'Failed to remove couple {0} meta key for from groups {1}'.format(
+                couple, list(failed_groups))
+        logger.error(s)
+        raise RuntimeError(s)
 
 
-def make_symm_group(n, couple, namespace):
+def make_symm_group(n, couple, namespace, frozen):
     logger.info('Writing meta key for couple {0}, assigning namespace'.format(couple, namespace))
 
     s = elliptics.Session(n)
@@ -1342,44 +1406,20 @@ def make_symm_group(n, couple, namespace):
     s.set_timeout(config.get('wait_timeout', 5))
 
     s.add_groups([g.group_id for g in couple.groups])
-    packed = msgpack.packb(couple.compose_group_meta(namespace))
+    packed = msgpack.packb(couple.compose_group_meta(namespace, frozen))
     try:
-        result = s.write_data(keys.SYMMETRIC_GROUPS_KEY, packed).get()
+        consistent_write(s, keys.SYMMETRIC_GROUPS_KEY, packed)
     except Exception as e:
         logger.error('Failed to write meta key for couple {0}: {1}\n{2}'.format(
                      couple, str(e), traceback.format_exc()))
         raise
 
-    successful_groups = [lre.group_id for lre in result]
-    failed_groups = tuple(set(couple.as_tuple()) - set(successful_groups))
-
-    def rollback_meta_key():
-        s.add_groups(successful_groups)
-        try:
-            s.remove(keys.SYMMETRIC_GROUPS_KEY).get()
-        except Exception as e:
-            logger.error('Failed to remove meta key from groups {0}: {1}\n{2}'.format(
-                successful_groups, e, traceback.format_exc()))
-            pass
-        else:
-            logger.error('Successfully removed meta keys from groups {0}'.format(successful_groups))
-
-    if failed_groups:
-        # Cleaning successful writes
-        logger.error('Failed to write meta key to groups {0}, removing meta key '
-            'from groups {1}'.format(failed_groups, successful_groups))
-        s.add_groups(successful_groups)
-        rollback_meta_key()
-        raise ValueError('Failed to write meta key to groups {0}'.format(failed_groups))
-    else:
-        try:
-            for group in couple:
-                group.parse_meta(packed)
-        except Exception as e:
-            logging.error('Failed to parse meta key for groups {0}, '
-                'meta keys removed'.format(successful_groups))
-            rollback_meta_key()
-            raise ValueError('Failed to parse meta key for groups {0}'.format(
-                successful_groups))
+    try:
+        for group in couple:
+            group.parse_meta(packed)
+    except Exception as e:
+        logging.error('Failed to parse meta key for groups {0}: {1}'.format(
+            [g.group_id for g in couple.groups], e))
+        raise
 
     return

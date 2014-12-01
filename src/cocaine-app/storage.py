@@ -539,7 +539,7 @@ class Group(object):
 
         parsed = msgpack.unpackb(meta)
         if isinstance(parsed, tuple):
-            self.meta = {'version': 1, 'couple': parsed, 'namespace': self.DEFAULT_NAMESPACE}
+            self.meta = {'version': 1, 'couple': parsed, 'namespace': self.DEFAULT_NAMESPACE, 'frozen': False}
         elif isinstance(parsed, dict) and parsed['version'] == 2:
             self.meta = parsed
         else:
@@ -691,15 +691,15 @@ class Couple(object):
     def update_status(self):
         statuses = [group.update_status() for group in self.groups]
 
-        if self.meta and self.meta.get('frozen', False):
-            self.status = Status.FROZEN
-            self.status_test = 'Couple {0} is frozen'.format(str(self))
-            return self.status
-
         meta = self.groups[0].meta
         if any([meta != group.meta for group in self.groups]):
             self.status = Status.BAD
             self.status_text = 'Couple {0} groups has unequal meta data'.format(str(self))
+            return self.status
+
+        if any([group.meta.get('frozen') for group in self.groups]):
+            self.status = Status.FROZEN
+            self.status_text = 'Couple {0} is frozen'.format(str(self))
             return self.status
 
         if FORBIDDEN_DC_SHARING_AMONG_GROUPS:
@@ -776,30 +776,9 @@ class Couple(object):
 
         return True
 
-    def parse_meta(self, meta):
-        if meta is None:
-            self.meta = None
-            return
-
-        meta = msgpack.unpackb(meta)
-        if meta['version'] == 1:
-            self.meta = meta
-        else:
-            raise ValueError('Unable to parse couple meta')
-
-    def freeze(self):
-        if not self.meta:
-            self.meta = self.compose_meta()
-        self.meta['frozen'] = True
-
-    def unfreeze(self):
-        if not self.meta:
-            self.meta = self.compose_meta()
-        self.meta['frozen'] = False
-
     @property
     def frozen(self):
-        return self.meta and self.meta['frozen']
+        return any([group.meta.get('frozen') for group in self.groups])
 
     @property
     def closed(self):
@@ -809,22 +788,18 @@ class Couple(object):
         for group in self.groups:
             group.couple = None
             group.meta = None
+            group.update_status()
 
         couples.remove(self)
         self.groups = []
         self.status = Status.INIT
 
-    def compose_meta(self, frozen=False):
-        meta = {'version': 1}
-        if frozen:
-            meta['frozen'] = True
-        return meta
-
-    def compose_group_meta(self, namespace):
+    def compose_group_meta(self, namespace, frozen):
         return {
             'version': 2,
             'couple': self.as_tuple(),
             'namespace': namespace,
+            'frozen': bool(frozen),
         }
 
     @property
