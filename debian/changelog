@@ -1,3 +1,9 @@
+mastermind (2.13.1) lucid; urgency=low
+
+  * Moved 'frozen' setting from couple meta key to group meta key
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 01 Dec 2014 19:49:32 +0300
+
 mastermind (2.12.2) lucid; urgency=low
 
   * Fix for couple build handler timeout
