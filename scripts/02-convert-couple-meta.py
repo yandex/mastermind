@@ -210,14 +210,17 @@ def clean_old_couple_meta_key(meta_session, couple):
 
     try:
         meta_session.remove(key).get()
+    except elliptics.NotFoundError:
+        pass
     except Exception as e:
         print 'Failed to clean couple {0} key: {1}'.format(couple, e)
         pass
 
 if __name__ == '__main__':
 
-    if len(sys.argv) < 3 or sys.argv[1] not in ('convert', 'remove'):
-        print "Usage: {0} convert|remove".format(sys.argv[0])
+    if len(sys.argv) < 3 or sys.argv[1] not in ('convert', 'clean'):
+        print "Usage: {0} convert|clean".format(sys.argv[0])
+        sys.exit(1)
 
     if sys.argv[1] == 'convert':
 
@@ -227,10 +230,10 @@ if __name__ == '__main__':
 
         print
 
-    elif sys.argv[1] == 'remove':
+    elif sys.argv[1] == 'clean':
 
         for couples in find_couples(s):
             for couple in couples:
                 clean_old_couple_meta_key(meta_session, couple)
 
-        print
+        print "Done"
