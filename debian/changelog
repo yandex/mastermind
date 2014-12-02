@@ -1,3 +1,10 @@
+mastermind (2.13.2) lucid; urgency=low
+
+  * Updating namespace settings when building couples
+  * Convert couple meta script updated
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 02 Dec 2014 16:14:20 +0300
+
 mastermind (2.13.1) lucid; urgency=low
 
   * Moved 'frozen' setting from couple meta key to group meta key
