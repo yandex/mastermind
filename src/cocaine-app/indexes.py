@@ -42,32 +42,32 @@ class TagSecondaryIndex(object):
 
     def __iter__(self):
         idxes = [idx.id for idx in
-            self.meta_session.find_all_indexes([self.main_idx]).get()]
+            self.meta_session.clone().find_all_indexes([self.main_idx]).get()]
 
         for data in self._iter_keys(idxes):
             yield data
 
     def tagged(self, tag):
         idxes = [idx.id for idx in
-            self.meta_session.find_all_indexes([self.main_idx, self.idx_tpl % tag])]
+            self.meta_session.clone().find_all_indexes([self.main_idx, self.idx_tpl % tag])]
 
         for data in self._iter_keys(idxes):
             yield data
 
     def __setitem__(self, key, val):
         eid = self.meta_session.transform(self.key_tpl % key)
-        self.meta_session.write_data(eid, val)
+        self.meta_session.clone().write_data(eid, val)
 
     def __getitem__(self, key):
         eid = self.meta_session.transform(self.key_tpl % key)
-        return self.meta_session.read_latest(eid).get()[0].data
+        return self.meta_session.clone().read_latest(eid).get()[0].data
 
     def set_tag(self, key, tag=None):
         eid = self.meta_session.transform(self.key_tpl % key)
         tags = [self.main_idx]
         if tag:
             tags.append(self.idx_tpl % tag)
-        self.meta_session.set_indexes(eid, tags, [''] * len(tags))
+        self.meta_session.clone().set_indexes(eid, tags, [''] * len(tags))
 
     def _fetch_response_data(self, req):
         data = None
@@ -86,9 +86,11 @@ class TagSecondaryIndex(object):
         q = Queue(self.batch_size)
         count = 0
 
+        s = self.meta_session.clone()
+
         for k in keys:
             if not q.full():
-                q.put((k, self.meta_session.read_latest(k)))
+                q.put((k, s.read_latest(k)))
             else:
                 data = self._fetch_response_data(q.get())
                 if data:

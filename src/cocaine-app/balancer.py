@@ -438,9 +438,13 @@ class Balancer(object):
     VALID_COUPLE_INIT_STATES = (storage.Status.COUPLED, storage.Status.FROZEN)
 
     @chain.source
-    def update_cluster_state(self):
+    def update_cluster_state(self, namespace=None):
         logger.info('Starting concurrent cluster info update')
         yield chain.concurrent(self.niu.execute_tasks)()
+        if namespace:
+            yield chain.concurrent(
+                infrastructure.infrastructure.sync_single_ns_settings
+            )(namespace)
         logger.info('Concurrent cluster info update completed')
 
     @chain.source
@@ -889,7 +893,7 @@ class Balancer(object):
         with sync_manager.lock(self.CLUSTER_CHANGES_LOCK, blocking=False):
 
             logger.info('Updating cluster info')
-            self.update_cluster_state().get()
+            self.update_cluster_state(namespace=options['namespace']).get()
             logger.info('Updating cluster info completed')
 
             groups_by_total_space = self.__groups_by_total_space(
@@ -906,15 +910,15 @@ class Balancer(object):
         logger.info('----------------------------------------')
         logger.info('New break couple request: ' + str(request))
 
+        couple_str = ':'.join(map(str, sorted(request[0], key=lambda x: int(x))))
+        if not couple_str in storage.couples:
+            raise KeyError('Couple %s was not found' % (couple_str))
+
         with sync_manager.lock(self.CLUSTER_CHANGES_LOCK, blocking=False):
 
             logger.info('Updating cluster info')
             self.update_cluster_state().get()
             logger.info('Updating cluster info completed')
-
-            couple_str = ':'.join(map(str, sorted(request[0], key=lambda x: int(x))))
-            if not couple_str in storage.couples:
-                raise KeyError('Couple %s was not found' % (couple_str))
 
             couple = storage.couples[couple_str]
             confirm = request[1]
