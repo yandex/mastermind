@@ -139,6 +139,14 @@ class NodeInfoUpdater(object):
 
         for nb in storage.node_backends:
             nb.update_statistics_status()
+            nb.update_status()
+
+        for fs in storage.fs:
+            fs.update_status()
+
+        for group in storage.groups:
+            logger.info('Updating status for group {0}'.format(group.group_id))
+            group.update_status()
 
     @staticmethod
     def update_statistics(m_stat, elapsed_time):
@@ -152,12 +160,13 @@ class NodeInfoUpdater(object):
         stat = m_stat.statistics
 
         try:
+            host_addr = m_stat.address.host
             if not node_addr in storage.nodes:
                 if not m_stat.address.host in storage.hosts:
                     logger.debug('Adding host {0}'.format(m_stat.address.host))
                     host = storage.hosts.add(m_stat.address.host)
                 else:
-                    host = storage.hosts[m_stat.address.host]
+                    host = storage.hosts[host_addr]
 
                 node = storage.nodes.add(host, m_stat.address.port, m_stat.address.family)
             else:
@@ -198,6 +207,20 @@ class NodeInfoUpdater(object):
                     logger.info('Disabling node backend %s' % (str(node_backend)))
                     node_backend.disable()
                 else:
+
+                    fsid = b_stat['backend']['vfs']['fsid']
+                    fsid_key = '{addr}:{fsid}'.format(addr=host_addr, fsid=fsid)
+
+                    if fsid_key not in storage.fs:
+                        logger.debug('Adding fs {0}'.format(fsid_key))
+                        fs = storage.fs.add(host, fsid)
+                    else:
+                        fs = storage.fs[fsid_key]
+
+                    if not node_backend in fs.node_backends:
+                        fs.add_node_backend(node_backend)
+                    fs.update_statistics(b_stat['backend']['vfs'])
+
                     node_backend.enable()
                     node_backend.dstat_error_code = b_stat.get('backend', {}).get('dstat', {}).get('error', 0)
                     if node_backend.dstat_error_code != 0:
@@ -220,9 +243,6 @@ class NodeInfoUpdater(object):
                         logger.debug('Adding node backend %d -> %s' %
                                       (gid, node_backend))
                         group.add_node_backend(node_backend)
-
-                logger.info('Updating status for group %d' % gid)
-                group.update_status()
 
         except Exception as e:
             logger.error('Unable to process statictics for node {0}: '
