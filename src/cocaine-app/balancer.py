@@ -20,7 +20,6 @@ import balancelogicadapter as bla
 import balancelogic
 from config import config
 import helpers as h
-
 import infrastructure
 import inventory
 import keys
@@ -456,7 +455,7 @@ class Balancer(object):
         suitable_groups = []
         total_spaces = []
 
-        for group_id in self.get_empty_groups(self.node):
+        for group_id in self.get_empty_groups(None):
             group = storage.groups[group_id]
 
             if not len(group.node_backends):
@@ -543,7 +542,7 @@ class Balancer(object):
                 for m_group in mandatory_groups:
                     if m_group not in units:
                         raise ValueError('Mandatory group {0} is not found '
-                            'in cluster'.format(m_group))
+                            'in cluster or is not uncoupled'.format(m_group))
 
                 if mandatory_groups:
                     self.__account_ns_groups(nodes, [storage.groups[g] for g in mandatory_groups])
@@ -1427,3 +1426,26 @@ def make_symm_group(n, couple, namespace, frozen):
         raise
 
     return
+
+
+def get_good_uncoupled_groups(max_node_backends=None):
+    suitable_groups = []
+    for group in storage.groups:
+        if group.couple is not None:
+            continue
+
+        if not len(group.node_backends):
+            continue
+
+        if group.status != storage.Status.INIT:
+            continue
+
+        if any(nb.status != storage.Status.OK for nb in group.node_backends):
+            continue
+
+        if max_node_backends and len(group.node_backends) > max_node_backends:
+            continue
+
+        suitable_groups.append(group)
+
+    return suitable_groups

@@ -361,11 +361,85 @@ class Node(object):
             return self.host.addr == other.host.addr and self.port == other.port
 
 
+class FsStat(object):
+    def __init__(self):
+        self.ts = None
+        self.total_space = 0
+
+    def update(self, raw_stat):
+        self.ts = time.time()
+        self.total_space = raw_stat['blocks'] * raw_stat['bsize']
+
+
+class Fs(object):
+    def __init__(self, host, fsid):
+        self.host = host
+        self.fsid = fsid
+        self.status = Status.OK
+
+        self.node_backends = {}
+
+        self.stat = None
+
+    def add_node_backend(self, nb):
+        if nb.fs:
+            nb.fs.remove_node_backend(nb)
+        self.node_backends[nb] = nb
+        nb.fs = self
+
+    def remove_node_backend(self, nb):
+        del self.node_backends[nb]
+
+    def update_statistics(self, new_stat):
+        if self.stat is None:
+            self.stat = FsStat()
+        self.stat.update(new_stat)
+
+    def update_status(self):
+        nbs = self.node_backends.keys()
+        prev_status = self.status
+
+        total_space = 0
+        for nb in nbs:
+            if nb.status not in (Status.OK, Status.BROKEN):
+                continue
+            total_space += nb.stat.total_space
+
+        if total_space > self.stat.total_space:
+            self.status = Status.BROKEN
+        else:
+            self.status = Status.OK
+
+        if self.status != prev_status:
+            logger.info('Changing status of fs {0}, affecting node backends {1}'.format(
+                self.fsid, [str(nb) for nb in nbs]))
+            for nb in nbs:
+                nb.update_status()
+
+    def __repr__(self):
+        return '<Fs object: host={host}, fsid={fsid}>'.format(
+            host=str(self.host), fsid=self.fsid)
+
+    def __str__(self):
+        return '{host}:{fsid}'.format(host=self.host.addr, fsid=self.fsid)
+
+    def __hash__(self):
+        return hash(self.__str__())
+
+    def __eq__(self, other):
+        if isinstance(other, (str, unicode)):
+            return self.__str__() == other
+
+        if isinstance(other, Fs):
+            return self.host.addr == other.host.addr and self.fsid == other.fsid
+
+
 class NodeBackend(object):
     def __init__(self, node, backend_id):
 
         self.node = node
         self.backend_id = backend_id
+        self.fs = None
 
         self.stat = None
 
@@ -419,6 +493,11 @@ class NodeBackend(object):
         elif self.read_only:
             self.status = Status.RO
             self.status_text = 'Node {0} is in Read-Only state'.format(self.__str__())
+
+        elif self.fs.status == Status.BROKEN:
+            self.status = Status.BROKEN
+            self.status_text = ("Node backends' space limit is not properly "
+                "configured on fs {0}".format(self.fs.fsid))
 
         else:
             self.status = Status.OK
@@ -571,7 +650,8 @@ class Group(object):
             return self.status
 
         # node statuses should be updated before group status is set
-        statuses = tuple(nb.update_status() for nb in self.node_backends)
+        # statuses = tuple(nb.update_status() for nb in self.node_backends)
+        statuses = tuple(nb.status for nb in self.node_backends)
 
         logger.info('In group {0} meta = {1}'.format(self.group_id, str(self.meta)))
         if (not self.meta) or (not 'couple' in self.meta) or (not self.meta['couple']):
@@ -591,6 +671,12 @@ class Group(object):
             self.status_text = ('Group {0} is in BROKEN state because '
                 'is has {1} node backends but only 1 is allowed'.format(
                     self.group_id, len(self.node_backends)))
+            return self.status
+
+        if Status.BROKEN in statuses:
+            self.status = Status.BROKEN
+            self.status_text = ('Group {0} has BROKEN status because '
+                'some node statuses are BROKEN'.format(self.__str__()))
             return self.status
 
         if not all([st == Status.OK for st in statuses]):
@@ -643,6 +729,13 @@ class Group(object):
             res['namespace'] = self.meta['namespace']
 
         return res
+
+    @property
+    def coupled_groups(self):
+        if not self.couple:
+            return []
+
+        return [g for g in self.couple if g is not self]
 
     def __hash__(self):
         return hash(self.group_id)
@@ -894,6 +987,7 @@ groups = Repositary(Group)
 nodes = Repositary(Node)
 node_backends = Repositary(NodeBackend)
 couples = Repositary(Couple)
+fs = Repositary(Fs)
 
 
 '''

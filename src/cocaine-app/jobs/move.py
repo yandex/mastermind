@@ -145,6 +145,23 @@ class MoveJob(Job):
                                  params=params)
         self.tasks.append(task)
 
+        additional_files = config.get('restore', {}).get('move_additional_files', [])
+        for src_file_tpl, dst_file_path in additional_files:
+            rsync_cmd = infrastructure.move_group_cmd(
+                src_host=self.src_host,
+                src_path=self.src_base_path,
+                dst_path=os.path.join(self.dst_base_path, dst_file_path),
+                file_tpl=src_file_tpl)
+
+            params = {'group': str(self.group)}
+
+            task = MinionCmdTask.new(self,
+                                     host=self.dst_host,
+                                     group=self.group,
+                                     cmd=rsync_cmd,
+                                     params=params)
+            self.tasks.append(task)
+
         reconfigure_cmd = infrastructure.reconfigure_node_cmd(
             [self.src_host, self.src_port, self.src_family])
 

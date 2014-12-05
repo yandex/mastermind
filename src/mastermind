@@ -334,7 +334,7 @@ def group_move(group, uncoupled_group,
 
 @groupDispatcher.command(name='restore')
 @log_action
-def group_restore(group, uncoupled_group=('u', '', 'Use uncoupled group as '
+def group_restore(group, uncoupled_group=('u', False, 'Use uncoupled group as '
                   'a restoration point instead of previous group location'),
                   host=None, app=None):
     '''Create job to restore group's node backend from a coupled group.
@@ -345,101 +345,9 @@ def group_restore(group, uncoupled_group=('u', '', 'Use uncoupled group as '
     s = service(host, app)
 
     group = int(group)
-    group_data = retry(s, 'get_group_info', group)
-    if len(group_data['node_backends']) > 1:
-        print warn('Group {0} has {1} node backends, should have at most one'.format(
-            group, len(group_data['node_backends'])))
-        return
 
-    if group_data['status'] not in ('BAD', 'INIT'):
-        print warn('Group {0} has {1} status, should have BAD or INIT'.format(
-            group, group_data['status']))
-        return
-
-    if group_data['node_backends']:
-        if group_data['node_backends'][0]['status'] not in ('STALLED', 'INIT'):
-            nb = group_data['node_backends'][0]
-            print warn('Group {0} has node backend {1} in status {2}, '
-                'should have STALLED or INIT status'.format(
-                    group, '{0}/{1}'.format(nb['node'], nb['backend_id']), nb['status']))
-            return
-
-    couple_data = retry(s, 'get_couple_info', group)
-    if not 'id' in couple_data:
-        print warn('Group {0} does not participate in any couple'.format(group))
-        return
-
-    couple_dcs = set()
-    total_spaces = []
-    for g in couple_data['groups']:
-        if g['id'] == group:
-            continue
-        total_space = 0
-        for nb in g['node_backends']:
-            couple_dcs.add(nb['dc'])
-            total_space += nb['total_space']
-        total_spaces.append(total_space)
-
-    group_total_space = max(total_spaces)
-
-    candidates = [g for g in couple_data['groups'] if g['id'] != group]
-    candidates = filter(lambda g: len(g['node_backends']) == 1, candidates)
-
-    if not candidates:
-        print warn('No coupled groups with one node backend found, '
-                   'multiple nodes group restoration is not supported')
-        return
-
-    candidates.sort(key=lambda g: g['node_backends'][0]['records_alive'], reverse=True)
-    src_group_data = candidates[0]
-    src_group = src_group_data['id']
-    src_backend = src_group_data['node_backends'][0]
-
-    if src_backend['status'] != 'OK':
-        print warn('Source group {0} node backend status is {1}, should be OK'.format(
-            src_group, src_backend['status']))
-        return
-
-    if uncoupled_group:
-        uncoupled_group = int(uncoupled_group)
-        unc_group_data = retry(s, 'get_group_info', uncoupled_group)
-
-        if len(unc_group_data['node_backends']) != 1:
-            print warn('Group {0} has {1} node backends, should have one'.format(
-                uncoupled_group, len(unc_group_data['node_backends'])))
-            return
-
-        unc_group_total_space = unc_group_data['node_backends'][0]['total_space']
-
-        if (group_total_space < unc_group_total_space * 0.95 or
-            unc_group_total_space < group_total_space * 0.95):
-
-            print warn('Uncoupled group {0} is not suitable for replacement '
-                '(total space is {1:.3f} Gb, should be approximately {2:.3f} Gb)'.format(
-                    uncoupled_group, to_gb(unc_group_total_space), to_gb(group_total_space)))
-            return
-
-        if unc_group_data['node_backends'][0]['status'] != 'OK':
-            nb = unc_group_data['node_backends'][0]
-            print warn('Group {0} has node backend {1} in status {2}, '
-                'should have OK status'.format(
-                    uncoupled_group, '{0}/{1}'.format(nb['node'], nb['backend_id']), nb['status']))
-            return
-
-        if unc_group_data['node_backends'][0]['dc'] in couple_dcs:
-            print warn('Group {0} cannot be moved to uncoupled group {1}, '
-                 'couple {2} already has groups in dc {3}'.format(
-                    group, uncoupled_group, couple_data['id'],
-                    unc_group_data['node_backends'][0]['dc']))
-            return
-
-    job_params = {'group': group,
-                  'src_group': src_group}
-    if uncoupled_group:
-        job_params['uncoupled_group'] = uncoupled_group
-
-    job_data = s.enqueue('create_job', msgpack.packb(['restore_group_job',
-        job_params])).get()
+    job_data = s.enqueue('restore_group', msgpack.packb([
+        group, uncoupled_group])).get()
 
     print job_data
 

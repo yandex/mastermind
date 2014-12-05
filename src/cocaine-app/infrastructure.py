@@ -45,7 +45,7 @@ class Infrastructure(object):
     RSYNC_CMD = ('rsync -rlHpogDt --progress --timeout=1200 '
                  '"{user}@{src_host}:{src_path}data*" "{dst_path}"')
     RSYNC_MODULE_CMD = ('rsync -av --progress --timeout=1200 '
-                        '"rsync://{user}@{src_host}/{module}/{src_path}data*" '
+                        '"rsync://{user}@{src_host}/{module}/{src_path}{file_tpl}" '
                         '"{dst_path}"')
     DNET_RECOVERY_DC_CMD = ('dnet_recovery dc {remotes} -g {groups} -D {tmp_dir} '
         '-a {attempts} -b {batch} -l {log} -n {processes_num}')
@@ -189,7 +189,7 @@ class Infrastructure(object):
                                 if not (nb.node.host.addr, nb.node.port, nb.backend_id, nb.base_path) in nodes_set:
                                     logger.info('Removing {0} from group {1} due to manual group detaching'.format(nb, group.group_id))
                                     group.remove_node_backend(nb)
-                        group.update_status_recursive()
+                            group.update_status_recursive()
 
                 self.state[state_group['id']] = state_group
                 group_ids.add(state_group['id'])
@@ -396,7 +396,9 @@ class Infrastructure(object):
             self._update_group(group.group_id, state_nodes, None, record_type=record_type or self.HISTORY_RECORD_MANUAL)
 
 
-    def move_group_cmd(self, src_host, src_port=None, dst_port=None, src_path=None, dst_path=None, user=None):
+    def move_group_cmd(self, src_host, src_port=None, dst_port=None,
+                       src_path=None, dst_path=None, user=None,
+                       file_tpl='data*'):
         cmd_src_path = self.node_path(path=src_path, port=src_port)
         if RSYNC_MODULE:
             cmd = self.RSYNC_MODULE_CMD.format(
@@ -404,13 +406,15 @@ class Infrastructure(object):
                 module=RSYNC_MODULE,
                 src_host=src_host,
                 src_path=cmd_src_path.replace(BASE_STORAGE_PATH, ''),
-                dst_path=self.node_path(path=dst_path, port=dst_port))
+                dst_path=self.node_path(path=dst_path, port=dst_port),
+                file_tpl=file_tpl)
         else:
             cmd = self.RSYNC_CMD.format(
                 user=user,
                 src_host=src_host,
                 src_path=cmd_src_path,
-                dst_path=self.node_path(path=dst_path, port=dst_port))
+                dst_path=self.node_path(path=dst_path, port=dst_port),
+                file_tpl=file_tpl)
         return cmd
 
     @staticmethod
