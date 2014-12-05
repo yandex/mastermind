@@ -10,9 +10,11 @@ import traceback
 import elliptics
 import msgpack
 
+from balancer import get_good_uncoupled_groups
 from coll import SortedCollection
 from config import config
 from infrastructure import infrastructure
+import inventory
 import jobs
 import keys
 from sync import sync_manager
@@ -490,6 +492,170 @@ class Planner(object):
                 except Exception as e:
                     logger.error('Failed to create couple defrag job: {0}'.format(e))
                     continue
+
+
+    def restore_group(self, request):
+        logger.info('----------------------------------------')
+        logger.info('New restore group request: ' + str(request))
+
+        if len(request) < 1:
+            raise ValueError('Group id is required')
+
+        try:
+            group_id = int(request[0])
+            if not group_id in storage.groups:
+                raise ValueError
+        except (TypeError, ValueError):
+            raise ValueError('Group {0} is not found'.format(request[0]))
+
+        try:
+            use_uncoupled_group = bool(request[1])
+        except (TypeError, ValueError, IndexError):
+            use_uncoupled_group = False
+
+        group = storage.groups[group_id]
+        if len(group.node_backends) > 1:
+            raise ValueError('Group {0} has {1} node backends, should have at most one'.format(
+                group.group_id, len(group.node_backends)))
+
+        if group.status not in (storage.Status.BAD, storage.Status.INIT):
+            raise ValueError('Group {0} has {1} status, should have BAD or INIT'.format(
+                group.group_id, group.status))
+
+        if (group.node_backends and group.node_backends[0].status not in (
+                storage.Status.STALLED, storage.Status.INIT)):
+            raise ValueError('Group {0} has node backend {1} in status {2}, '
+                'should have STALLED or INIT status'.format(
+                    group.group_id, str(group.node_backends[0]), group.node_backends[0].status))
+
+        candidates = []
+        for g in group.coupled_groups:
+            if len(g.node_backends) > 1:
+                continue
+            if not all(nb.status == storage.Status.OK for nb in g.node_backends):
+                continue
+            candidates.append(g)
+
+        if not candidates:
+            raise ValueError('Group {0} cannot be restored, no suitable coupled '
+                'groups are found'.format(group.group_id))
+
+        candidates.sort(key=lambda g: g.get_stat().files, reverse=True)
+        src_group = candidates[0]
+
+        job_params = {'group': group.group_id,
+                      'src_group': src_group.group_id}
+
+        if use_uncoupled_group:
+            uncoupled_groups = self.find_uncoupled_groups(group)
+            job_params['uncoupled_group'] = uncoupled_groups[0].group_id
+            job_params['merged_groups'] = [g.group_id for g in uncoupled_groups[1:]]
+
+        job = self.job_processor._create_job(
+            jobs.JobTypes.TYPE_RESTORE_GROUP_JOB,
+            job_params)
+
+        return job.dump()
+
+    def find_uncoupled_groups(self, group):
+        nodes_set = infrastructure.get_group_history(group.group_id)['nodes'][-1]['set']
+        if len(nodes_set) != 1:
+            raise ValueError('Group {0} does not have 1 backend according '
+                'to history'.format(group.group_id))
+
+        host_addr = nodes_set[0][0]
+        old_host_tree = infrastructure.get_host_tree(infrastructure.get_hostname_by_addr(host_addr))
+
+        couple = group.couple
+        required_ts = max([g.get_stat().total_space for g in group.coupled_groups])
+
+        forbidden_dcs = set()
+        if config.get('forbidden_dc_sharing_among_groups', False):
+            forbidden_dcs = set([nb.node.host.dc for g in group.coupled_groups
+                                                 for nb in g.node_backends])
+
+        uncoupled_groups = get_good_uncoupled_groups(max_node_backends=1)
+
+        groups_by_fs = {}
+
+        for group in uncoupled_groups:
+            fs = group.node_backends[0].fs
+            groups_by_fs.setdefault(fs, []).append(group)
+
+        candidates = []
+        groups_by_dc = {}
+
+        for fs, groups in groups_by_fs.iteritems():
+            fs_candidates = []
+            gs = sorted(groups, key=lambda g: g.group_id)
+
+            candidate = []
+            ts = 0
+            for g in gs:
+                candidate.append(g)
+                ts += g.get_stat().total_space
+                if ts >= required_ts:
+                    fs_candidates.append((candidate, ts))
+                    candidate = []
+                    ts = 0
+
+            host_addr = groups[0].node_backends[0].node.host.addr
+            dc = infrastructure.get_dc_by_host(
+                infrastructure.get_hostname_by_addr(host_addr))
+            groups_by_dc.setdefault(dc, []).extend(groups)
+
+            fs_candidates = sorted(fs_candidates, key=lambda c: (len(c[0]), c[1]))
+            if fs_candidates:
+                candidates.append(fs_candidates[0])
+
+        logger.info('Uncoupled groups by dcs: {0}'.format(
+            [(dc, len(groups)) for dc, groups in groups_by_dc.iteritems()]))
+
+        dc_node_type = inventory.get_dc_node_type()
+        weights = {}
+
+        for candidate, ts in candidates:
+            host_addr = candidate[0].node_backends[0].node.host.addr
+            host_tree = infrastructure.get_host_tree(
+                infrastructure.get_hostname_by_addr(host_addr))
+
+            diff = 0
+            dc = None
+            dc_change = False
+            forbidden_dc = False
+            old_node = old_host_tree
+            node = host_tree
+            while old_node:
+                if old_node['name'] != node['name']:
+                    diff += 1
+                if node['type'] == dc_node_type:
+                    dc = node['name']
+                    dc_change = old_node['name'] != node['name']
+                    if node['name'] in forbidden_dcs:
+                        forbidden_dc = True
+                        break
+                old_node = old_node.get('parent', None)
+                node = node.get('parent', None)
+
+            if forbidden_dc:
+                continue
+
+            logger.info('dc_node_type {0}, host_tree {1}, dc {2}'.format(
+                dc_node_type, host_tree, dc))
+
+            weights[tuple(candidate)] = (dc_change, diff, -len(groups_by_dc[dc]), ts)
+
+        sorted_weights = sorted(weights.items(), key=lambda wi: wi[1])
+        if not sorted_weights:
+            raise RuntimeError('No suitable uncoupled groups found')
+
+        top_candidate = sorted_weights[0][0]
+
+        logger.info('Top candidate: {0}'.format(
+            [g.group_id for g in top_candidate]))
+
+        return top_candidate
+
 
 
 class Delta(object):

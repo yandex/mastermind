@@ -730,6 +730,13 @@ class Group(object):
 
         return res
 
+    @property
+    def coupled_groups(self):
+        if not self.couple:
+            return []
+
+        return [g for g in self.couple if g is not self]
+
     def __hash__(self):
         return hash(self.group_id)
 
