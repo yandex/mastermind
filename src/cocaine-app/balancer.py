@@ -542,7 +542,7 @@ class Balancer(object):
                 for m_group in mandatory_groups:
                     if m_group not in units:
                         raise ValueError('Mandatory group {0} is not found '
-                            'in cluster'.format(m_group))
+                            'in cluster or is not uncoupled'.format(m_group))
 
                 if mandatory_groups:
                     self.__account_ns_groups(nodes, [storage.groups[g] for g in mandatory_groups])
