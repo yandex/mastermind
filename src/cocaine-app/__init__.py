@@ -6,6 +6,7 @@ import sys
 from time import sleep
 import traceback
 import types
+import uuid
 
 from cocaine.worker import Worker
 
@@ -105,15 +106,24 @@ b = balancer.Balancer(n)
 def register_handle(h):
     @wraps(h)
     def wrapper(request, response):
+        req_uid = uuid.uuid4().hex
         try:
             data = yield request.read()
             data = msgpack.unpackb(data)
-            logger.info("Running handler for event %s, data=%s" % (h.__name__, str(data)))
+            logger.info(":{req_uid}: Running handler for event {0}, "
+                "data={1}".format(h.__name__, str(data), req_uid=req_uid))
             #msgpack.pack(h(data), response)
             response.write(h(data))
         except Exception as e:
-            logger.error("Balancer error: %s" % traceback.format_exc().replace('\n', '    '))
+            logger.error(":{req_uid}: handler for event {0}, "
+                "data={1}: Balancer error: {2}".format(
+                    h.__name__, str(data),
+                    traceback.format_exc().replace('\n', '    '),
+                    req_uid=req_uid))
             response.write({"Balancer error": str(e)})
+        finally:
+            logger.info(':{req_uid}: Finished handler for event {0}, '
+                'data={1}'.format(h.__name__, str(data), req_uid=req_uid))
         response.close()
 
     W.on(h.__name__, wrapper)
