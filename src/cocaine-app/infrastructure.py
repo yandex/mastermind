@@ -1,6 +1,7 @@
 import keys
 import logging
 import os.path
+import re
 import socket
 import threading
 import time
@@ -579,6 +580,12 @@ class Infrastructure(object):
 
         entries = []
 
+        if not path.startswith('^'):
+            path = '^' + path
+        if not path.endswith('$'):
+            path = path + '$'
+        path = path.replace('*', '.*')
+
         def convert(node_set):
             nb_list = []
             for node in node_set['set']:
@@ -593,12 +600,17 @@ class Infrastructure(object):
             for node_set in group_history['nodes']:
                 ts = node_set['timestamp']
                 for node in node_set['set']:
+
                     if len(node) == 2:
                         # old version history
-                        if port_to_path(node[1]) == path and node[0] == host:
-                            entries.append((ts, group_id, node_set))
-                            break
-                    elif node[3] == path and node[0] == host:
+                        node_path = port_to_path(node[1])
+                    else:
+                        node_path = node[3]
+
+                    if not node_path:
+                        continue
+
+                    if re.match(path, node_path) is not None and node[0] == host:
                         entries.append((ts, group_id, node_set))
                         break
 
