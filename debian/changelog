@@ -1,3 +1,9 @@
+mastermind (2.14.3) lucid; urgency=low
+
+  * Checking busy uncoupled groups before selecting uncouple group for group restoring
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 08 Dec 2014 19:46:01 +0300
+
 mastermind (2.14.2) lucid; urgency=low
 
   * Optional parameter for search-by-path for search only within the last history record
