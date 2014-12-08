@@ -495,3 +495,24 @@ class JobProcessor(object):
                     job.id, task.id, task.status, job.status))
 
         return job
+
+    def get_uncoupled_groups_in_service(self):
+        uncoupled_groups = []
+
+        try:
+            self._do_update_jobs()
+        except Exception as e:
+            logger.error('Failed to update jobs: {0}\n{1}'.format(
+                e, traceback.format_exc()))
+
+        for job in self.jobs.values():
+            if job.status in (Job.STATUS_COMPLETED, Job.STATUS_CANCELLED):
+                continue
+            if job.type not in (JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_RESTORE_GROUP_JOB):
+                continue
+            if job.uncoupled_group:
+                uncoupled_groups.append(job.uncoupled_group)
+            if job.type == JobTypes.TYPE_RESTORE_GROUP_JOB and job.merged_groups:
+                uncoupled_groups.extend(merged_groups)
+
+        return uncoupled_groups
