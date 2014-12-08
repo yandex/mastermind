@@ -1,3 +1,9 @@
+mastermind (2.14.2) lucid; urgency=low
+
+  * Optional parameter for search-by-path for search only within the last history record
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 08 Dec 2014 18:03:20 +0300
+
 mastermind (2.14.1) lucid; urgency=low
 
   * Support for search-by-path * syntax
