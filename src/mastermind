@@ -386,6 +386,7 @@ def group_recover_dc(group,
 @log_action
 def group_search_by_path(group_host, group_path,
                          json=('', None, 'Format additional data as json'),
+                         last=('l', False, 'Search only within last history record'),
                          host=None, app=None):
     '''Search which group ever lived on a given path on a host'''
     s = service(host, app)
@@ -400,7 +401,8 @@ def group_search_by_path(group_host, group_path,
 
     res = s.enqueue('search_history_by_path', msgpack.packb([
         {'host': ip,
-         'path': group_path}])).get()
+         'path': group_path,
+         'last': last}])).get()
 
     if isinstance(res, dict):
         # error

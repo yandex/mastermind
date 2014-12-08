@@ -1215,7 +1215,7 @@ class Balancer(object):
         s.set_timeout(wait_timeout)
         s.add_groups([group.group_id for group in couple])
 
-        _, failed_groups = write_retry(s, keys.SYMMETRIC_GROUPS_KEY, packed)
+        _, failed_groups = h.write_retry(s, keys.SYMMETRIC_GROUPS_KEY, packed)
 
         if failed_groups:
             s = 'Failed to write meta key for couple {0} to groups {1}'.format(
@@ -1319,38 +1319,6 @@ def handlers(b):
     return handlers
 
 
-def session_op_retry(op, acc_codes):
-
-    def wrapped_retry(session, *args, **kwargs):
-        s = session.clone()
-
-        groups = set(s.groups)
-        dest_groups = set(s.groups)
-
-        s.set_checker(elliptics.checkers.no_check)
-        s.set_exceptions_policy(elliptics.exceptions_policy.no_exceptions)
-        s.set_filter(elliptics.filters.all_with_ack)
-
-        retries = kwargs.pop('retries', 3)
-
-        for i in xrange(retries):
-            s.set_groups(dest_groups)
-            res = getattr(s, op)(*args).get()
-            success_groups = set(
-                [r.group_id for r in res if r.error.code in acc_codes])
-            dest_groups -= success_groups
-            if not dest_groups:
-                break
-
-        return groups - dest_groups, dest_groups
-
-    return wrapped_retry
-
-
-write_retry = session_op_retry('write_data', (0,))
-remove_retry = session_op_retry('remove', (0, -2))
-
-
 def consistent_write(session, key, data, retries=3):
     s = session.clone()
 
@@ -1361,7 +1329,7 @@ def consistent_write(session, key, data, retries=3):
     logger.debug('Performing consistent write of key {0} to groups {1}'.format(
         key_esc, list(groups)))
 
-    suc_groups, failed_groups = write_retry(s, key, data, retries=retries)
+    suc_groups, failed_groups = h.write_retry(s, key, data, retries=retries)
 
     if failed_groups:
         # failed to write key to all destination groups
@@ -1371,7 +1339,7 @@ def consistent_write(session, key, data, retries=3):
                 key_esc, list(suc_groups)))
 
         s.set_groups(suc_groups)
-        _, left_groups = remove_retry(s, key, retries=retries)
+        _, left_groups = h.remove_retry(s, key, retries=retries)
 
         if left_groups:
             logger.error('Failed to remove key {0} from groups {1}'.format(
@@ -1392,7 +1360,7 @@ def kill_symm_group(n, meta_session, couple):
     s.set_timeout(wait_timeout)
     s.add_groups(groups)
 
-    _, failed_groups = remove_retry(s, keys.SYMMETRIC_GROUPS_KEY)
+    _, failed_groups = h.remove_retry(s, keys.SYMMETRIC_GROUPS_KEY)
 
     if failed_groups:
         s = 'Failed to remove couple {0} meta key for from groups {1}'.format(

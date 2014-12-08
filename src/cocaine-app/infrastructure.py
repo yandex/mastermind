@@ -596,8 +596,12 @@ class Infrastructure(object):
                     nb_list.append(node)
             return nb_list
 
+        start_idx = 0
+        if params.get('last', False):
+            start_idx = -1
+
         for group_id, group_history in self.state.iteritems():
-            for node_set in group_history['nodes']:
+            for node_set in group_history['nodes'][start_idx:]:
                 ts = node_set['timestamp']
                 for node in node_set['set']:
 
