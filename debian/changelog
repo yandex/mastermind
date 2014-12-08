@@ -1,3 +1,9 @@
+mastermind (2.14.1) lucid; urgency=low
+
+  * Support for search-by-path * syntax
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 08 Dec 2014 16:56:51 +0300
+
 mastermind (2.13.3) lucid; urgency=low
 
   * Restore group job can now select appropriate uncouple group and merge several into one if necessary
