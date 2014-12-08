@@ -576,9 +576,13 @@ class Planner(object):
 
         uncoupled_groups = get_good_uncoupled_groups(max_node_backends=1)
 
+        busy_group_ids = set(self.job_processor.get_uncoupled_groups_in_service())
+
         groups_by_fs = {}
 
         for group in uncoupled_groups:
+            if group.group_id in busy_group_ids:
+                continue
             fs = group.node_backends[0].fs
             groups_by_fs.setdefault(fs, []).append(group)
 
