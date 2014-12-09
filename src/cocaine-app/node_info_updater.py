@@ -161,13 +161,13 @@ class NodeInfoUpdater(object):
 
         try:
             host_addr = m_stat.address.host
-            if not node_addr in storage.nodes:
-                if not m_stat.address.host in storage.hosts:
-                    logger.debug('Adding host {0}'.format(m_stat.address.host))
-                    host = storage.hosts.add(m_stat.address.host)
-                else:
-                    host = storage.hosts[host_addr]
+            if not host_addr in storage.hosts:
+                logger.debug('Adding host {0}'.format(host_addr))
+                host = storage.hosts.add(host_addr)
+            else:
+                host = storage.hosts[host_addr]
 
+            if not node_addr in storage.nodes:
                 node = storage.nodes.add(host, m_stat.address.port, m_stat.address.family)
             else:
                 node = storage.nodes[node_addr]
@@ -207,6 +207,11 @@ class NodeInfoUpdater(object):
                     logger.info('Disabling node backend %s' % (str(node_backend)))
                     node_backend.disable()
                 else:
+
+                    if not 'vfs' in b_stat['backend']:
+                        logger.error('Failed to parse statistics for node backend {0}, '
+                            'vfs key not found: {1}'.format(node_backend, b_stat['backend']))
+                        continue
 
                     fsid = b_stat['backend']['vfs']['fsid']
                     fsid_key = '{addr}:{fsid}'.format(addr=host_addr, fsid=fsid)
