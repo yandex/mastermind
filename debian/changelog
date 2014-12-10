@@ -1,3 +1,10 @@
+mastermind (2.13.5) lucid; urgency=low
+
+  * Recover job: do not perform defrag tasks before actual recovery starts
+  * Added -M and -L options to recover dc task
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 10 Dec 2014 14:56:25 +0300
+
 mastermind (2.13.4) lucid; urgency=low
 
   * Fix for statistics updating
