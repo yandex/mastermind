@@ -53,28 +53,6 @@ class RecoverDcJob(Job):
         if not group.couple:
             raise JobBrokenError('Group {0} does not participate in any couple'.format(self.group))
 
-        for group in group.couple.groups:
-            for nb in group.node_backends:
-                cmd = infrastructure.defrag_node_backend_cmd([
-                    nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id])
-
-                node_backend = self.node_backend(
-                    nb.node.host.addr, nb.node.port, nb.backend_id)
-
-                task = NodeBackendDefragTask.new(self,
-                    host=nb.node.host.addr,
-                    cmd=cmd,
-                    node_backend=node_backend,
-                    group=group.group_id,
-                    params={'group': str(group.group_id),
-                            'node_backend': node_backend.encode('utf-8')})
-
-                self.tasks.append(task)
-
-        task = CoupleDefragStateCheckTask.new(self,
-                                              couple=str(group.couple))
-        self.tasks.append(task)
-
         recover_cmd = infrastructure.recover_group_cmd([self.group])
         task = RecoverGroupDcTask.new(self,
             group=self.group,
