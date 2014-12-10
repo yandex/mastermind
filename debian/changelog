@@ -1,3 +1,16 @@
+mastermind (2.13.5) lucid; urgency=low
+
+  * Recover job: do not perform defrag tasks before actual recovery starts
+  * Added -M and -L options to recover dc task
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 10 Dec 2014 14:56:25 +0300
+
+mastermind (2.13.4) lucid; urgency=low
+
+  * Fix for statistics updating
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 09 Dec 2014 17:06:09 +0300
+
 mastermind (2.13.3) lucid; urgency=low
 
   * Restore group job can now select appropriate uncouple group and merge several into one if necessary

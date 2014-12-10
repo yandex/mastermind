@@ -49,7 +49,7 @@ class Infrastructure(object):
                         '"rsync://{user}@{src_host}/{module}/{src_path}{file_tpl}" '
                         '"{dst_path}"')
     DNET_RECOVERY_DC_CMD = ('dnet_recovery dc {remotes} -g {groups} -D {tmp_dir} '
-        '-a {attempts} -b {batch} -l {log} -n {processes_num}')
+        '-a {attempts} -b {batch} -l {log} -L {log_level} -n {processes_num} -M')
     DNET_RECOVERY_DC_REMOTE_TPL = '-r {host}:{port}:{family}'
 
     DNET_DEFRAG_CMD = ('dnet_client backend -r {host}:{port}:{family} '
@@ -541,6 +541,7 @@ class Infrastructure(object):
             attempts=RECOVERY_DC_CNF.get('attempts', 1),
             batch=RECOVERY_DC_CNF.get('batch', 2000),
             log=RECOVERY_DC_CNF.get('log', 'dnet_recovery.log').format(group_id=group_id),
+            log_level=RECOVERY_DC_CNF.get('log_level', 1),
             processes_num=len(group.couple.groups) - 1 or 1)
 
         logger.info('Command for dc recovery for group {0} '
