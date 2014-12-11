@@ -218,7 +218,7 @@ def clean_old_couple_meta_key(meta_session, couple):
 
 if __name__ == '__main__':
 
-    if len(sys.argv) < 3 or sys.argv[1] not in ('convert', 'clean'):
+    if len(sys.argv) < 2 or sys.argv[1] not in ('convert', 'clean'):
         print "Usage: {0} convert|clean".format(sys.argv[0])
         sys.exit(1)
 

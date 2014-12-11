@@ -116,8 +116,8 @@ def register_handle(h):
             response.write(h(data))
         except Exception as e:
             logger.error(":{req_uid}: handler for event {0}, "
-                "data={1}: Balancer error: {2}".format(
-                    h.__name__, str(data),
+                "data={1}: Balancer error: {2}\n{3}".format(
+                    h.__name__, str(data), e,
                     traceback.format_exc().replace('\n', '    '),
                     req_uid=req_uid))
             response.write({"Balancer error": str(e)})
