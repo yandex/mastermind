@@ -958,12 +958,32 @@ def ns_setup(namespace,
 
 @nsDispatcher.command(name='settings')
 @log_action
-def ns_settings(namespace, host=None, app=None):
+def ns_settings(namespace,
+                service_key=('s', False, 'Include namespace service information'),
+                deleted=('d', False, 'Show namespace settings even if namespace '
+                    'has been deleted'),
+                host=None, app=None):
     '''Get namespace settings'''
     s = service(host, app)
 
-    res = s.enqueue('get_namespace_settings', msgpack.packb([namespace])).get()
+    options = {'deleted': deleted}
+    res = s.enqueue('get_namespace_settings', msgpack.packb([
+        namespace, options])).get()
+    if not service_key:
+        res.pop('__service', None)
+
     print res
+
+
+@nsDispatcher.command(name='delete')
+@log_action
+def ns_delete(namespace, host=None, app=None):
+    '''Delete namespace'''
+    s = service(host, app)
+
+    res = s.enqueue('namespace_delete', msgpack.packb([namespace])).get()
+    print res
+
 
 # cache commands
 cacheDispatcher = Dispatcher(globaloptions=(host_param, app_param))
