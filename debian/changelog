@@ -1,3 +1,9 @@
+mastermind (2.14.6) lucid; urgency=low
+
+  * Cluster lock and couple data updating before deleting namespace
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 11 Dec 2014 18:29:02 +0300
+
 mastermind (2.14.5) lucid; urgency=low
 
   * Namespace settings service flags and options implemented
