@@ -886,8 +886,7 @@ class Balancer(object):
         ns = options['namespace']
         logger.info('namespace from request: {0}'.format(ns))
 
-        if not ns in self.infrastructure.ns_settings:
-            raise ValueError('Unknown namespace {0}'.format(ns))
+        self.check_namespace(ns)
 
         with sync_manager.lock(self.CLUSTER_CHANGES_LOCK, blocking=False):
 
@@ -1124,6 +1123,11 @@ class Balancer(object):
         logger.info('Namespace {0}, old settings found: {1}, '
             'updating with {2}'.format(namespace, cur_settings, settings))
 
+        if cur_settings.get('__service', {}).get('is_deleted'):
+            logger.info('Namespace {0} is deleted, will not merge old settings '
+                'with new ones'.format(namespace))
+            cur_settings = {}
+
         self.__merge_dict(cur_settings, settings)
         settings = cur_settings
 
@@ -1154,14 +1158,62 @@ class Balancer(object):
 
         return True
 
+    def check_namespace(self, namespace):
+        if not namespace in self.infrastructure.ns_settings:
+            raise ValueError('Namespace "{0}" does not exist'.format(namespace))
+        else:
+            if self.infrastructure.ns_settings[namespace]['__service'].get('is_deleted'):
+                raise ValueError('Namespace "{0}" is deleted'.format(namespace))
+
+    @h.handler
+    def namespace_delete(self, request):
+        try:
+            namespace = request[0]
+        except Exception:
+            raise ValueError('Namespace is required')
+
+        self.check_namespace(namespace)
+
+        for couple in storage.couples:
+            try:
+                ns = couple.namespace
+            except ValueError:
+                continue
+            if ns == namespace:
+                raise ValueError('Namespace {0} has couples ({1})'.format(namespace, couple))
+
+        try:
+            self.infrastructure.sync_single_ns_settings(namespace)
+            settings = self.infrastructure.ns_settings[namespace]
+
+            settings.setdefault('__service', {})
+            settings['__service']['is_deleted'] = True
+
+            self.infrastructure.set_ns_settings(namespace, settings)
+        except Exception as e:
+            logger.error('Failed to delete namespace {0}: '
+                '{1}\n{2}'.format(namespace, str(e), traceback.format_exc()))
+            raise
+
+        return True
+
     def get_namespace_settings(self, request):
         try:
             namespace = request[0]
         except Exception:
             raise ValueError('Invalid parameters')
 
-        if not namespace in self.infrastructure.ns_settings:
-            raise ValueError('Namespace "{0}" does not exist'.format(namespace))
+        try:
+            options = request[1]
+        except IndexError:
+            options = {}
+
+        try:
+            self.check_namespace(namespace)
+        except ValueError:
+            if (namespace not in self.infrastructure.ns_settings or
+                not options.get('deleted')):
+                    raise
 
         return self.infrastructure.ns_settings[namespace]
 
