@@ -1,3 +1,9 @@
+mastermind (2.14.4) lucid; urgency=low
+
+  * Read-only backends support and new move job workflow with making source group read-only instead of disabling
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 11 Dec 2014 15:08:43 +0300
+
 mastermind (2.14.3) lucid; urgency=low
 
   * Checking busy uncoupled groups before selecting uncouple group for group restoring
