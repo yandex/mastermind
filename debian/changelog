@@ -1,3 +1,9 @@
+mastermind (2.14.7) lucid; urgency=low
+
+  * Misprint fixed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 11 Dec 2014 18:33:41 +0300
+
 mastermind (2.14.6) lucid; urgency=low
 
   * Cluster lock and couple data updating before deleting namespace
