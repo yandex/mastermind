@@ -1172,28 +1172,33 @@ class Balancer(object):
         except Exception:
             raise ValueError('Namespace is required')
 
-        self.check_namespace(namespace)
+        with sync_manager.lock(self.CLUSTER_CHANGES_LOCK, blocking=False):
 
-        for couple in storage.couples:
+            logger.info('Updating cluster info')
+            self.update_cluster_state(namespace=namespace).get()
+            logger.info('Updating cluster info completed')
+
+            self.check_namespace(namespace)
+
+            for couple in storage.couples:
+                try:
+                    ns = couple.namespace
+                except ValueError:
+                    continue
+                if ns == namespace:
+                    raise ValueError('Namespace {0} has couples ({1})'.format(namespace, couple))
+
             try:
-                ns = couple.namespace
-            except ValueError:
-                continue
-            if ns == namespace:
-                raise ValueError('Namespace {0} has couples ({1})'.format(namespace, couple))
+                settings = self.infrastructure.ns_settings[namespace]
 
-        try:
-            self.infrastructure.sync_single_ns_settings(namespace)
-            settings = self.infrastructure.ns_settings[namespace]
+                settings.setdefault('__service', {})
+                settings['__service']['is_deleted'] = True
 
-            settings.setdefault('__service', {})
-            settings['__service']['is_deleted'] = True
-
-            self.infrastructure.set_ns_settings(namespace, settings)
-        except Exception as e:
-            logger.error('Failed to delete namespace {0}: '
-                '{1}\n{2}'.format(namespace, str(e), traceback.format_exc()))
-            raise
+                self.infrastructure.set_ns_settings(namespace, settings)
+            except Exception as e:
+                logger.error('Failed to delete namespace {0}: '
+                    '{1}\n{2}'.format(namespace, str(e), traceback.format_exc()))
+                raise
 
         return True
 
