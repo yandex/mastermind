@@ -1,9 +1,12 @@
 from contextlib import contextmanager
 import logging
+import msgpack
 import threading
 import time
 import uuid
 
+import helpers as h
+import keys
 from sync import sync_manager
 from sync.error import (
     LockError,
@@ -51,7 +54,7 @@ class Job(object):
             yield
 
     @classmethod
-    def new(cls, **kwargs):
+    def new(cls, session, **kwargs):
         cparams = {}
         for cparam in cls.COMMON_PARAMS:
             if cparam in kwargs:
@@ -64,6 +67,13 @@ class Job(object):
             job.perform_locks()
         except LockError:
             logger.error('Job {0}: failed to perform required locks'.format(job.id))
+            raise
+
+        try:
+            job.mark_groups(session)
+        except RuntimeError:
+            logger.error('Job {0}: failed to mark required groups'.format(job.id))
+            job.release_locks()
             raise
 
         return job
@@ -141,6 +151,51 @@ class Job(object):
                 logger.warn('Job {0}: lock for group {1} has already '
                     'been acquired, skipping'.format(self.id, self.group))
 
+
+    def mark_groups(self, session):
+        try:
+            for group_id, updated_meta in self._group_marks():
+                s = session.clone()
+                s.set_groups([group_id])
+                packed = msgpack.packb(updated_meta)
+                _, failed_group = h.write_retry(
+                    s, keys.SYMMETRIC_GROUPS_KEY, packed)
+                if failed_group:
+                    raise RuntimeError('Failed to mark group {1}'.format(
+                        group_id))
+        except Exception as e:
+            logger.error('Job {0}: {1}'.format(self.id, e))
+            raise
+
+    def _group_marks(self):
+        """
+        Optional method for subclasses to mark groups.
+        Returns iterable of (group, updated_meta)
+        """
+        return []
+
+    def unmark_groups(self, session):
+        try:
+            for group, updated_meta in self._group_unmarks():
+                s = session.clone()
+                s.set_groups([group])
+                packed = msgpack.packb(updated_meta)
+                _, failed_group = h.write_retry(
+                    s, keys.SYMMETRIC_GROUPS_KEY, packed)
+                if failed_group:
+                    raise RuntimeError('Failed to unmark group {1}'.format(
+                        self.id, group))
+        except Exception as e:
+            logger.error('Job {0}: {1}'.format(self.id, e))
+            raise
+
+    def _group_unmarks(self):
+        """
+        Optional method for subclasses to mark groups.
+        Returns iterable of (group, updated_meta)
+        """
+        return []
+
     def release_locks(self):
         try:
             sync_manager.persistent_locks_release(self._locks, self.id)
@@ -153,7 +208,8 @@ class Job(object):
     def _locks(self):
         raise NotImplemented('Locks are listed in derived classes')
 
-    def complete(self):
+    def complete(self, session):
+        self.unmark_groups(session)
         ts = time.time()
         if not self.start_ts:
             self.start_ts = ts

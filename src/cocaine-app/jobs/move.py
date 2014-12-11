@@ -1,3 +1,4 @@
+import copy
 import logging
 import os.path
 
@@ -94,35 +95,18 @@ class MoveJob(Job):
                                 params=params)
         self.tasks.append(task)
 
-        shutdown_cmd = infrastructure.disable_node_backend_cmd([
-            self.src_host, self.src_port, self.src_family, self.src_backend_id])
 
-        group_file = (os.path.join(self.src_base_path,
-                                   self.GROUP_FILE_PATH)
-                      if self.GROUP_FILE_PATH else
-                      '')
 
-        group_file_marker = (os.path.join(self.src_base_path,
-                                          self.GROUP_FILE_MARKER_PATH)
-                             if self.GROUP_FILE_MARKER_PATH else
-                             '')
+        make_readonly_cmd = infrastructure.make_readonly_node_backend_cmd(
+            [self.src_host, self.src_port, self.src_family, self.src_backend_id])
 
-        params = {'node_backend': self.src_node_backend.encode('utf-8'),
-                  'group': str(self.group),
-                  'group_file_marker': self.marker_format(group_file_marker),
-                  'remove_group_file': group_file}
+        task = MinionCmdTask.new(self,
+                                 host=self.src_host,
+                                 cmd=make_readonly_cmd,
+                                 params={'node_backend': self.src_node_backend.encode('utf-8')})
 
-        if self.GROUP_FILE_DIR_MOVE_SRC_RENAME and group_file:
-            params['move_src'] = os.path.join(os.path.dirname(group_file))
-            params['move_dst'] = os.path.join(
-                self.src_base_path, self.GROUP_FILE_DIR_MOVE_SRC_RENAME)
-
-        task = NodeStopTask.new(self,
-                                group=self.group,
-                                host=self.src_host,
-                                cmd=shutdown_cmd,
-                                params=params)
         self.tasks.append(task)
+
 
         move_cmd = infrastructure.move_group_cmd(
             src_host=self.src_host,
@@ -161,6 +145,38 @@ class MoveJob(Job):
                                      cmd=rsync_cmd,
                                      params=params)
             self.tasks.append(task)
+
+
+        shutdown_cmd = infrastructure.disable_node_backend_cmd([
+            self.src_host, self.src_port, self.src_family, self.src_backend_id])
+
+        group_file = (os.path.join(self.src_base_path,
+                                   self.GROUP_FILE_PATH)
+                      if self.GROUP_FILE_PATH else
+                      '')
+
+        group_file_marker = (os.path.join(self.src_base_path,
+                                          self.GROUP_FILE_MARKER_PATH)
+                             if self.GROUP_FILE_MARKER_PATH else
+                             '')
+
+        params = {'node_backend': self.src_node_backend.encode('utf-8'),
+                  'group': str(self.group),
+                  'group_file_marker': self.marker_format(group_file_marker),
+                  'remove_group_file': group_file}
+
+        if self.GROUP_FILE_DIR_MOVE_SRC_RENAME and group_file:
+            params['move_src'] = os.path.join(os.path.dirname(group_file))
+            params['move_dst'] = os.path.join(
+                self.src_base_path, self.GROUP_FILE_DIR_MOVE_SRC_RENAME)
+
+        task = NodeStopTask.new(self,
+                                group=self.group,
+                                host=self.src_host,
+                                cmd=shutdown_cmd,
+                                params=params)
+        self.tasks.append(task)
+
 
         reconfigure_cmd = infrastructure.reconfigure_node_cmd(
             [self.src_host, self.src_port, self.src_family])
@@ -213,3 +229,22 @@ class MoveJob(Job):
         return (['{0}{1}'.format(self.GROUP_LOCK_PREFIX, group)
                  for group in (self.group, self.uncoupled_group)] +
                 couple_keys)
+
+    def _group_marks(self):
+        group = storage.groups[self.group]
+        updated_meta = copy.deepcopy(group.meta)
+        updated_meta['service'] = {
+            'status': storage.Status.MIGRATING,
+            'job_id': self.id
+        }
+
+        yield group.group_id, updated_meta
+
+    def _group_unmarks(self):
+        if not self.group in storage.groups:
+          raise RuntimeError('Group {0} is not found'.format(self.group))
+        group = storage.groups[self.group]
+        updated_meta = copy.deepcopy(group.meta)
+        updated_meta.pop('service', None)
+
+        yield group.group_id, updated_meta

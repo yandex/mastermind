@@ -32,24 +32,22 @@ class NodeStopTask(MinionCmdTask):
                     'one node backend: {2}, expected host {3}'.format(self.id, self.group,
                         [str(nb) for nb in group.node_backends], self.host))
 
-            if group.node_backends[0].status != storage.Status.OK:
+            if group.node_backends[0].status not in (storage.Status.OK, storage.Status.RO):
                 raise JobBrokenError('Task {0}: node of group {1} has '
-                    'status {2}, should be {3}'.format(self.id, self.group,
-                        group.node_backends[0].status, storage.Status.OK))
+                    'status {2}, should be OK or RO'.format(self.id, self.group,
+                        group.node_backends[0].status))
 
             if self.uncoupled:
                 if group.couple:
                     raise JobBrokenError('Task {0}: group {1} happens to be '
                         'already coupled'.format(self.id, self.group))
-                if group.node_backends[0].stat.files + group.node_backends[0].stat.files_removed > 0:
-                    raise JobBrokenError('Task {0}: group {1} has non-zero '
-                        'number of keys (including removed)'.format(self.id, self.group))
             else:
                 if not group.couple:
                     raise JobBrokenError('Task {0}: group {1} is not '
                         'coupled'.format(self.id, self.group))
                 if group.couple.status not in storage.GOOD_STATUSES:
-                    raise JobBrokenError('Task {0}: group {1} couple {2} '
-                        'status is {3}'.format(self.id, self.group, str(group.couple), group.couple.status))
+                    if group.status != storage.Status.MIGRATING:
+                        raise JobBrokenError('Task {0}: group {1} couple {2} '
+                            'status is {3}'.format(self.id, self.group, str(group.couple), group.couple.status))
 
         super(NodeStopTask, self).execute(minions)

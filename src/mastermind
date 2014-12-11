@@ -259,6 +259,8 @@ def group_force_update(host=None, app=None):
 @groupDispatcher.command(name='move')
 @log_action
 def group_move(group, uncoupled_group,
+               no_dc_check=('d', False, 'Disables checking if destination dc '
+                   'already has groups coupled with <group>'),
                host=None, app=None):
     '''Create job to move group's node backend to uncoupled group's node backend.
        Uncoupled group will be replaced, source group node backend will be disabled.
@@ -307,7 +309,7 @@ def group_move(group, uncoupled_group,
             for nb in g['node_backends']:
                 couple_dcs.add(nb['dc'])
 
-        if uncoupled_group_data['node_backends'][0]['dc'] in couple_dcs:
+        if not no_dc_check and uncoupled_group_data['node_backends'][0]['dc'] in couple_dcs:
             print warn('Group {0} cannot be moved to uncoupled group {1}, '
                  'couple {2} already has groups in dc {3}'.format(
                     group, uncoupled_group, couple_data['id'],

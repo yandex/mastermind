@@ -41,6 +41,8 @@ class Status(object):
     STALLED = 'STALLED'
     FROZEN = 'FROZEN'
 
+    MIGRATING = 'MIGRATING'
+
 
 GOOD_STATUSES = set([Status.OK, Status.FULL])
 NOT_BAD_STATUSES = set([Status.OK, Status.FULL, Status.FROZEN])
@@ -460,6 +462,12 @@ class NodeBackend(object):
     def enable(self):
         self.disabled = False
 
+    def make_read_only(self):
+        self.read_only = True
+
+    def make_writable(self):
+        self.read_only = False
+
     def update_statistics(self, new_stat):
         if self.stat is None:
             self.stat = NodeBackendStat(self.node.stat)
@@ -490,18 +498,18 @@ class NodeBackend(object):
                 'it was gathered {1} seconds ago'.format(self.__str__(),
                     int(time.time() - self.stat.ts)))
 
-        elif self.read_only:
-            self.status = Status.RO
-            self.status_text = 'Node {0} is in Read-Only state'.format(self.__str__())
-
         elif self.fs.status == Status.BROKEN:
             self.status = Status.BROKEN
             self.status_text = ("Node backends' space limit is not properly "
                 "configured on fs {0}".format(self.fs.fsid))
 
+        elif self.read_only:
+            self.status = Status.RO
+            self.status_text = 'Node backend {0} is in read-only state'.format(str(self))
+
         else:
             self.status = Status.OK
-            self.status_text = 'Node {0} is OK'.format(self.__str__())
+            self.status_text = 'Node {0} is OK'.format(str(self))
 
         return self.status
 
@@ -624,6 +632,21 @@ class Group(object):
         else:
             raise Exception('Unable to parse meta')
 
+    def equal_meta(self, other):
+        if type(self.meta) != type(other.meta):
+            return False
+        if self.meta is None:
+            return True
+
+        negligeable_keys = ['service']
+        for key in set(self.meta.keys() + other.meta.keys()):
+            if key in negligeable_keys:
+                continue
+            if self.meta.get(key) != other.meta.get(key):
+                return False
+
+        return True
+
     def get_stat(self):
         return reduce(lambda res, x: res + x, [nb.stat for nb in self.node_backends if nb.stat])
 
@@ -660,12 +683,6 @@ class Group(object):
                 'no coupling info'.format(self.__str__()))
             return self.status
 
-        if Status.RO in statuses:
-            self.status = Status.RO
-            self.status_text = ('Group {0} is in Read-Only state because '
-                'there is RO node backends'.format(self.__str__()))
-            return self.status
-
         if FORBIDDEN_DHT_GROUPS and len(self.node_backends) > 1:
             self.status = Status.BROKEN
             self.status_text = ('Group {0} is in BROKEN state because '
@@ -679,6 +696,37 @@ class Group(object):
                 'some node statuses are BROKEN'.format(self.__str__()))
             return self.status
 
+        if (not self.couple) and self.meta['couple']:
+            self.status = Status.BAD
+            self.status_text = ('Group {0} is in Bad state because '
+                'couple did not created'.format(self.__str__()))
+            return self.status
+
+        if not self.couple.check_groups(self.meta['couple']):
+            self.status = Status.BAD
+            self.status_text = ('Group {0} is in Bad state because '
+                'couple check fails'.format(self.__str__()))
+            return self.status
+
+        if not self.meta['namespace']:
+            self.status = Status.BAD
+            self.status_text = ('Group {0} is in Bad state because '
+                'no namespace has been assigned to it'.format(self.__str__()))
+            return self.status
+
+        if Status.RO in statuses:
+            self.status = Status.RO
+            self.status_text = ('Group {0} is in Read-Only state because '
+                'there is RO node backends'.format(self.__str__()))
+
+            service_status = self.meta.get('service', {}).get('status')
+            if service_status == Status.MIGRATING:
+                self.status = Status.MIGRATING
+                self.status_text = ('Group {0} is migrating, job id is {1}'.format(
+                    self, self.meta['service']['job_id']))
+
+            return self.status
+
         if not all([st == Status.OK for st in statuses]):
             self.status = Status.BAD
             self.status_text = ('Group {0} is in Bad state because '
@@ -689,24 +737,6 @@ class Group(object):
             self.status = Status.BROKEN
             self.status_text = ('Group {0} is in BROKEN state because '
                 'its group id is missing from coupling info'.format(self.group_id))
-            return self.status
-
-        if (not self.couple) and self.meta['couple']:
-            self.status = Status.BAD
-            self.status_text = ('Group {0} is in Bad state because '
-                'couple did not created'.format(self.__str__()))
-            return self.status
-
-        elif not self.couple.check_groups(self.meta['couple']):
-            self.status = Status.BAD
-            self.status_text = ('Group {0} is in Bad state because '
-                'couple check fails'.format(self.__str__()))
-            return self.status
-
-        elif not self.meta['namespace']:
-            self.status = Status.BAD
-            self.status_text = ('Group {0} is in Bad state because '
-                'no namespace has been assigned to it'.format(self.__str__()))
             return self.status
 
         self.status = Status.COUPLED
@@ -785,7 +815,7 @@ class Couple(object):
         statuses = [group.update_status() for group in self.groups]
 
         meta = self.groups[0].meta
-        if any([meta != group.meta for group in self.groups]):
+        if any([not self.groups[0].equal_meta(group) for group in self.groups[1:]]):
             self.status = Status.BAD
             self.status_text = 'Couple {0} groups has unequal meta data'.format(str(self))
             return self.status
@@ -845,8 +875,8 @@ class Couple(object):
             self.status = Status.BAD
             self.status_text = 'Couple {0} has bad groups'.format(str(self))
 
-        elif Status.RO in statuses:
-            self.status = Status.RO
+        elif Status.RO in statuses or Status.MIGRATING in statuses:
+            self.status = Status.BAD
             self.status_text = 'Couple {0} has read-only groups'.format(str(self))
 
         else:

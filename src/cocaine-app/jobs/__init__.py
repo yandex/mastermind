@@ -4,6 +4,8 @@ import logging
 import time
 import traceback
 
+import elliptics
+
 from config import config
 import errors
 from error import JobBrokenError
@@ -39,9 +41,12 @@ class JobProcessor(object):
 
     INDEX_BATCH_SIZE = 1000
 
-    def __init__(self, meta_session, minions):
+    def __init__(self, node, minions):
         logger.info('Starting JobProcessor')
-        self.meta_session = meta_session
+        self.session = elliptics.Session(node)
+        wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or config.get('wait_timeout', 5)
+        self.session.set_timeout(wait_timeout)
+        self.meta_session = node.meta_session
         self.minions = minions
 
         self.jobs = {}
@@ -240,8 +245,12 @@ class JobProcessor(object):
         if all([task.status in (Task.STATUS_COMPLETED, Task.STATUS_SKIPPED)
                 for task in job.tasks]):
             logger.info('Job {0}, tasks processing is finished'.format(job.id))
-            job.status = Job.STATUS_COMPLETED
-            job.complete()
+            try:
+                job.complete(self.session)
+            except RuntimeError as e:
+                logger.error('Job {0}, failed to complete job: {1}'.format(job.id, e))
+            else:
+                job.status = Job.STATUS_COMPLETED
 
     def __update_task_status(self, task):
         if isinstance(task, MinionCmdTask):
@@ -304,7 +313,7 @@ class JobProcessor(object):
             JobType = CoupleDefragJob
         elif job_type == JobTypes.TYPE_RESTORE_GROUP_JOB:
             JobType = RestoreGroupJob
-        job = JobType.new(**params)
+        job = JobType.new(self.session, **params)
 
         try:
             job.create_tasks()
@@ -378,7 +387,7 @@ class JobProcessor(object):
                             Job.STATUS_PENDING, Job.STATUS_NOT_APPROVED))
 
                 job.status = Job.STATUS_CANCELLED
-                job.complete()
+                job.complete(self.session)
                 self.jobs_index[job.id] = self.__dump_job(job)
 
                 logger.info('Job {0}: status set to {1}'.format(job.id, job.status))
