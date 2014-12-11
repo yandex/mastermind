@@ -244,6 +244,11 @@ class NodeInfoUpdater(object):
                             logger.warn('Bad stat for node backend {0} ({1}): {2}'.format(node_backend, e, b_stat))
                             pass
 
+                    if b_stat['status']['read_only']:
+                        node_backend.make_read_only()
+                    else:
+                        node_backend.make_writable()
+
                     if not node_backend in group.node_backends:
                         logger.debug('Adding node backend %d -> %s' %
                                       (gid, node_backend))

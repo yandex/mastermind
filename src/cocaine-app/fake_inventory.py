@@ -33,8 +33,10 @@ def get_host_tree(host):
         'type': 'host',
     }
 
+
 DC_NODE_TYPE = 'host'
 BALANCER_NODE_TYPES = [DC_NODE_TYPE]
+
 
 def get_balancer_node_types():
     '''
@@ -50,6 +52,7 @@ def get_balancer_node_types():
     '''
     return BALANCER_NODE_TYPES
 
+
 def get_dc_node_type():
     '''
     Returns dc node type.
@@ -59,6 +62,7 @@ def get_dc_node_type():
     Example: 'dc'
     '''
     return DC_NODE_TYPE
+
 
 def node_start_command(host, port, family):
     '''
@@ -76,18 +80,6 @@ def node_shutdown_command(host, port, family):
     '''
     cmd = 'dnet_ioclient -r {host}:{port}:{family} -U 1'
     return cmd.format(host=host, port=port, family=family)
-
-
-def dnet_client_backend_command(command):
-    def wrapper(host, port, family, backend_id):
-        cmd = 'dnet_client backend -r {host}:{port}:{family} {command} --backend {backend_id} --wait-timeout=1000'
-        return cmd.format(command=command,
-            host=host, port=port, family=family, backend_id=backend_id)
-    return wrapper
-
-
-enable_node_backend_cmd = dnet_client_backend_command('enable')
-disable_node_backend_command = dnet_client_backend_command('disable')
 
 
 def node_reconfigure(host, port, family):

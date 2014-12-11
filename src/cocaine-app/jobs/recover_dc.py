@@ -28,8 +28,8 @@ class RecoverDcJob(Job):
         self.type = JobTypes.TYPE_RECOVER_DC_JOB
 
     @classmethod
-    def new(cls, **kwargs):
-        job = super(RecoverDcJob, cls).new(**kwargs)
+    def new(cls, *args, **kwargs):
+        job = super(RecoverDcJob, cls).new(*args, **kwargs)
         group = storage.groups[kwargs['group']]
         keys = []
         for g in group.couple.groups:

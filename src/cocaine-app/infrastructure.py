@@ -35,6 +35,14 @@ logger.info('Rsync module using: %s' % RSYNC_MODULE)
 logger.info('Rsync user: %s' % RSYNC_USER)
 
 
+def dnet_client_backend_command(command):
+    def wrapper(host, port, family, backend_id):
+        cmd = 'dnet_client backend -r {host}:{port}:{family} {command} --backend {backend_id} --wait-timeout=1000'
+        return cmd.format(command=command,
+            host=host, port=port, family=family, backend_id=backend_id)
+    return wrapper
+
+
 class Infrastructure(object):
 
     TASK_SYNC = 'infrastructure_sync'
@@ -457,13 +465,19 @@ class Infrastructure(object):
 
         return cmd
 
+    _enable_node_backend_cmd = staticmethod(dnet_client_backend_command('enable'))
+    _disable_node_backend_cmd = staticmethod(dnet_client_backend_command('disable'))
+    _make_readonly_node_backend_cmd = staticmethod(dnet_client_backend_command('make_readonly'))
+    _make_writable_node_backend_cmd = staticmethod(dnet_client_backend_command('make_writable'))
+
+
     def enable_node_backend_cmd(self, request):
 
         host, port, family, backend_id = request[:4]
 
         nb_addr = '{0}:{1}/{2}'.format(host, port, backend_id)
 
-        cmd = inventory.enable_node_backend_cmd(host, port, family, backend_id)
+        cmd = self._enable_node_backend_cmd(host, port, family, backend_id)
 
         if cmd is None:
             raise RuntimeError('Node backend start command is not provided '
@@ -485,9 +499,45 @@ class Infrastructure(object):
 
         nb = storage.node_backends[nb_addr]
 
-        cmd = inventory.disable_node_backend_command(
+        cmd = self._disable_node_backend_cmd(
             nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id)
         logger.info('Command for shutting down elliptics node backend {0} '
+            'was requested: {1}'.format(nb_addr, cmd))
+
+        return cmd
+
+    def make_readonly_node_backend_cmd(self, request):
+
+        host, port, family, backend_id = request[:4]
+
+        nb_addr = '{0}:{1}/{2}'.format(host, port, backend_id).encode('utf-8')
+
+        if not nb_addr in storage.node_backends:
+            raise ValueError("Node backend {0} doesn't exist".format(nb_addr))
+
+        nb = storage.node_backends[nb_addr]
+
+        cmd = self._make_readonly_node_backend_cmd(
+            nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id)
+        logger.info('Command for making elliptics node backend {0} read-only '
+            'was requested: {1}'.format(nb_addr, cmd))
+
+        return cmd
+
+    def make_writable_node_backend_cmd(self, request):
+
+        host, port, family, backend_id = request[:4]
+
+        nb_addr = '{0}:{1}/{2}'.format(host, port, backend_id).encode('utf-8')
+
+        if not nb_addr in storage.node_backends:
+            raise ValueError("Node backend {0} doesn't exist".format(nb_addr))
+
+        nb = storage.node_backends[nb_addr]
+
+        cmd = self._make_writable_node_backend_cmd(
+            nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id)
+        logger.info('Command for making elliptics node backend {0} writable '
             'was requested: {1}'.format(nb_addr, cmd))
 
         return cmd

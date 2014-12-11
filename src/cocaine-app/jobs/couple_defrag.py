@@ -20,8 +20,8 @@ class CoupleDefragJob(Job):
         self.type = JobTypes.TYPE_COUPLE_DEFRAG_JOB
 
     @classmethod
-    def new(cls, **kwargs):
-        job = super(CoupleDefragJob, cls).new(**kwargs)
+    def new(cls, *args, **kwargs):
+        job = super(CoupleDefragJob, cls).new(*args, **kwargs)
         try:
             couple = storage.couples[kwargs['couple']]
             fragmentation = []

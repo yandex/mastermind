@@ -189,7 +189,7 @@ def init_planner(job_processor):
 
 
 def init_job_processor(minions):
-    j = jobs.JobProcessor(n.meta_session, minions)
+    j = jobs.JobProcessor(n, minions)
     register_handle(j.create_job)
     register_handle(j.cancel_job)
     register_handle(j.approve_job)
