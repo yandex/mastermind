@@ -3,6 +3,7 @@ import logging
 import os.path
 
 from config import config
+from error import JobBrokenError
 from infrastructure import infrastructure
 from job import Job
 from job_types import JobTypes
@@ -58,7 +59,7 @@ class MoveJob(Job):
                     continue
                 dcs = set(nb.node.host.dc for nb in g.node_backends)
                 if ug_dc in dcs:
-                    raise BrokenError('Cannot move group {0} to uncoupled group '
+                    raise JobBrokenError('Cannot move group {0} to uncoupled group '
                         '{1}, because group {2} is already in dc {3}'.format(
                             self.group, self.uncoupled_group, g.group_id, ug_dc))
 
