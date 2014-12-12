@@ -881,6 +881,9 @@ def ns_setup(namespace,
                 'will be reserved for future updates, couple will be closed when '
                 'free effective space percentage is less than or equal to reserved '
                 'space percentage'),
+             json_input=('j', False, 'Namespace settings will be imported without '
+                'validation from --input-source source (default /dev/stdin)'),
+             input_source=('i', '/dev/stdin', 'Input file for namespace settings'),
              host=None, app=None):
     '''Namespace setup.
     Updates settings by default with given keys.
@@ -888,71 +891,77 @@ def ns_setup(namespace,
     s = service(host, app)
 
     settings = {}
+    options = {}
 
-    try:
-        groups_count = int(groups_count)
-    except ValueError:
-        groups_count = 0
-
-    if not success_copies and overwrite:
-        print warn('--success-copies is required parameter')
-        return
-
-    if success_copies:
-        settings['success-copies-num'] = success_copies
-
-    if couple:
-        couple = [int(g) for g in couple.split(':')]
+    if json_input:
+        settings = open(input_source, 'rb').read()
+        options['json'] = True
+        options['skip_validation'] = True
     else:
-        couple = None
+        try:
+            groups_count = int(groups_count)
+        except ValueError:
+            groups_count = 0
 
-    if (not couple and not groups_count) and overwrite:
-        print warn('either --groups-count or --couple is required')
-        return
+        if not success_copies and overwrite:
+            print warn('--success-copies is required parameter')
+            return
 
-    if couple:
-        settings['static-couple'] = couple
-    elif groups_count:
-        settings['groups-count'] = groups_count
-    if sign_token:
-        settings.setdefault('signature', {})['token'] = sign_token
-    if sign_path_prefix:
-        settings.setdefault('signature', {})['path_prefix'] = sign_path_prefix
-    if auth_key_read:
-        settings.setdefault('auth-keys', {})['read'] = auth_key_read
-    if auth_key_write:
-        settings.setdefault('auth-keys', {})['write'] = auth_key_write
-    if overwrite and (auth_key_read or auth_key_write):
-        # set empty read or write key if not specified
-        settings['auth-keys'].setdefault('read', '')
-        settings['auth-keys'].setdefault('write', '')
+        if success_copies:
+            settings['success-copies-num'] = success_copies
 
-    if min_units:
-        settings['min-units'] = min_units
-    if reserved_space_percentage:
-        settings['reserved-space-percentage'] = reserved_space_percentage
+        if couple:
+            couple = [int(g) for g in couple.split(':')]
+        else:
+            couple = None
 
-    redirect = {}
-    if redirect_content_length_threshold:
-        redirect['content-length-threshold'] = int(redirect_content_length_threshold)
-    if redirect_expire_time:
-        redirect['expire-time'] = int(redirect_expire_time)
+        if (not couple and not groups_count) and overwrite:
+            print warn('either --groups-count or --couple is required')
+            return
 
-    if redirect:
-        settings['redirect'] = redirect
+        if couple:
+            settings['static-couple'] = couple
+        elif groups_count:
+            settings['groups-count'] = groups_count
+        if sign_token:
+            settings.setdefault('signature', {})['token'] = sign_token
+        if sign_path_prefix:
+            settings.setdefault('signature', {})['path_prefix'] = sign_path_prefix
+        if auth_key_read:
+            settings.setdefault('auth-keys', {})['read'] = auth_key_read
+        if auth_key_write:
+            settings.setdefault('auth-keys', {})['write'] = auth_key_write
+        if overwrite and (auth_key_read or auth_key_write):
+            # set empty read or write key if not specified
+            settings['auth-keys'].setdefault('read', '')
+            settings['auth-keys'].setdefault('write', '')
 
-    features = {}
-    if multipart_content_length_threshold:
-        features['multipart'] = {
-            'content-length-threshold': int(multipart_content_length_threshold)
-        }
-    if select_couple_to_upload == 'true':
-        features['select-couple-to-upload'] = True
+        if min_units:
+            settings['min-units'] = min_units
+        if reserved_space_percentage:
+            settings['reserved-space-percentage'] = reserved_space_percentage
 
-    if features:
-        settings['features'] = features
+        redirect = {}
+        if redirect_content_length_threshold:
+            redirect['content-length-threshold'] = int(redirect_content_length_threshold)
+        if redirect_expire_time:
+            redirect['expire-time'] = int(redirect_expire_time)
 
-    res = s.enqueue('namespace_setup', msgpack.packb([namespace, overwrite, settings])).get()
+        if redirect:
+            settings['redirect'] = redirect
+
+        features = {}
+        if multipart_content_length_threshold:
+            features['multipart'] = {
+                'content-length-threshold': int(multipart_content_length_threshold)
+            }
+        if select_couple_to_upload == 'true':
+            features['select-couple-to-upload'] = True
+
+        if features:
+            settings['features'] = features
+
+    res = s.enqueue('namespace_setup', msgpack.packb([namespace, overwrite, settings, options])).get()
     print res
 
 

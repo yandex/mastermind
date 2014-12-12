@@ -3,6 +3,7 @@ from collections import defaultdict
 import copy
 from datetime import datetime
 import itertools
+import json
 import logging
 import operator
 import random
@@ -1108,6 +1109,11 @@ class Balancer(object):
         except Exception:
             raise ValueError('Invalid parameters')
 
+        try:
+            options = request[3]
+        except IndexError:
+            options = {}
+
         cur_settings = {}
         if not overwrite:
             try:
@@ -1120,39 +1126,50 @@ class Balancer(object):
                     '{1}\n{2}'.format(namespace, str(e), traceback.format_exc()))
                 raise
 
-        logger.info('Namespace {0}, old settings found: {1}, '
-            'updating with {2}'.format(namespace, cur_settings, settings))
-
         if cur_settings.get('__service', {}).get('is_deleted'):
             logger.info('Namespace {0} is deleted, will not merge old settings '
                 'with new ones'.format(namespace))
             cur_settings = {}
 
-        self.__merge_dict(cur_settings, settings)
-        settings = cur_settings
+        if options.get('json'):
+            try:
+                settings = json.loads(settings)
+                logger.info('Namespace {0}: input settings {1}'.format(namespace, settings))
+            except Exception as e:
+                logger.error('Namespace {0}, invalid json settings: {1}'.format(namespace, e))
+                raise ValueError('Invalid json settings')
 
-        # filtering settings
-        for k in settings.keys():
-            if k not in self.ALLOWED_NS_KEYS:
-                del settings[k]
-        for k in settings.get('signature', {}).keys():
-            if k not in self.ALLOWED_NS_SIGN_KEYS:
-                del settings['signature'][k]
-        for k in settings.get('auth-keys', {}).keys():
-            if k not in self.ALLOWED_NS_AUTH_KEYS:
-                del settings['auth-keys'][k]
-        for k in settings.get('redirect', {}).keys():
-            if k not in self.ALLOWED_REDIRECT_KEYS:
-                del settings['redirect'][k]
+        logger.info('Namespace {0}, old settings found: {1}, '
+            'updating with {2}'.format(namespace, cur_settings, settings))
+
+        self.__merge_dict(cur_settings, settings)
 
         if not self.valid_namespace(namespace):
             raise ValueError('Namespace "{0}" is invalid'.format(namespace))
 
-        try:
-            self.validate_ns_settings(namespace, settings)
-        except Exception as e:
-            logger.error(e)
-            raise
+        settings = cur_settings
+
+        if not options.get('skip_validation'):
+
+            # filtering settings
+            for k in settings.keys():
+                if k not in self.ALLOWED_NS_KEYS:
+                    del settings[k]
+            for k in settings.get('signature', {}).keys():
+                if k not in self.ALLOWED_NS_SIGN_KEYS:
+                    del settings['signature'][k]
+            for k in settings.get('auth-keys', {}).keys():
+                if k not in self.ALLOWED_NS_AUTH_KEYS:
+                    del settings['auth-keys'][k]
+            for k in settings.get('redirect', {}).keys():
+                if k not in self.ALLOWED_REDIRECT_KEYS:
+                    del settings['redirect'][k]
+
+            try:
+                self.validate_ns_settings(namespace, settings)
+            except Exception as e:
+                logger.error(e)
+                raise
 
         self.infrastructure.set_ns_settings(namespace, settings)
 

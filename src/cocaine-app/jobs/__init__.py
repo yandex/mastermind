@@ -180,6 +180,21 @@ class JobProcessor(object):
         if job.status == Job.STATUS_NEW:
             logger.info('Job {0}: setting job start time'.format(job.id))
             job.start_ts = time.time()
+            try:
+                job.on_start()
+            except JobBrokenError as e:
+                logger.error('Job {0}: cannot start job: {1}'.format(
+                        job.id, e))
+                job.status = Job.STATUS_BROKEN
+                job.add_error_msg(str(e))
+                job.finish_ts = time.time()
+                return
+            except Exception as e:
+                logger.error('Job {0}: failed to start job: {1}\n{2}'.format(
+                    job.id, e, traceback.format_exc()))
+                job.status = Job.STATUS_PENDING
+                job.finish_ts = time.time()
+                return
 
         for task in job.tasks:
             if task.status == Task.STATUS_EXECUTING:
