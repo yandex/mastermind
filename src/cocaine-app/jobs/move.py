@@ -46,6 +46,22 @@ class MoveJob(Job):
     def dst_node_backend(self):
         return self.node_backend(self.dst_host, self.dst_port, self.dst_backend_id)
 
+    def on_start(self):
+        group = storage.groups[self.group]
+
+        if storage.FORBIDDEN_DC_SHARING_AMONG_GROUPS:
+            uncoupled_group = storage.groups[self.uncoupled_group]
+            ug_dc = uncoupled_group.node_backends[0].node.host.dc
+
+            for g in group.couple:
+                if g.group_id == group.group_id:
+                    continue
+                dcs = set(nb.node.host.dc for nb in g.node_backends)
+                if ug_dc in dcs:
+                    raise BrokenError('Cannot move group {0} to uncoupled group '
+                        '{1}, because group {2} is already in dc {3}'.format(
+                            self.group, self.uncoupled_group, g.group_id, ug_dc))
+
     def human_dump(self):
         data = super(MoveJob, self).human_dump()
         data['src_hostname'] = infrastructure.get_hostname_by_addr(data['src_host'])

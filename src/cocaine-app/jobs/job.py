@@ -223,3 +223,11 @@ class Job(object):
 
     def add_error_msg(self, msg):
         self.error_msg.append({'ts': time.time(), 'msg': msg})
+
+
+    def on_start(self):
+        """
+        Performs checkings before starting the job.
+        Should through JobBrokenError if job should not be started.
+        """
+        pass
