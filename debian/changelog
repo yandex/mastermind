@@ -1,3 +1,9 @@
+mastermind (2.14.9) lucid; urgency=low
+
+  * Checking move jobs for dc sharing prevention before starting
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 12 Dec 2014 19:09:16 +0300
+
 mastermind (2.14.8) lucid; urgency=low
 
   * Misprint fixed
