@@ -161,7 +161,7 @@ class Job(object):
                 _, failed_group = h.write_retry(
                     s, keys.SYMMETRIC_GROUPS_KEY, packed)
                 if failed_group:
-                    raise RuntimeError('Failed to mark group {1}'.format(
+                    raise RuntimeError('Failed to mark group {0}'.format(
                         group_id))
         except Exception as e:
             logger.error('Job {0}: {1}'.format(self.id, e))
