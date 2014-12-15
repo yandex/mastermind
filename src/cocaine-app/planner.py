@@ -74,16 +74,20 @@ class Planner(object):
                 self.params.get('generate_plan_period', 1800),
                 self._move_candidates)
 
-    def __executing_jobs(self, job_type, add_statuses=None):
+    def __executing_jobs(self, job_type, add_statuses=None, limit=1):
         statuses = [jobs.Job.STATUS_NOT_APPROVED]
         if add_statuses:
             statuses.extend(add_statuses)
+        found_jobs = 0
         for job in self.job_processor.jobs.itervalues():
             if job_type != job.type:
                 continue
             if job.status in statuses:
-                logger.info('Planer found at least one not approved job of type {0} '
-                    '({1})'.format(job_type, job.id))
+                found_jobs += 1
+            if found_jobs >= limit:
+                logger.info('Planer found at least {0} jobs of statuses {1} '
+                    'and type {2} ({3})'.format(
+                        found_jobs, statuses, job_type, job.id))
                 return True
         return False
 
@@ -320,10 +324,14 @@ class Planner(object):
 
             self.job_processor._do_update_jobs()
 
+            max_recover_jobs = config.get('jobs', {}).get('recover_dc_job',
+                {}).get('max_executing_jobs', 3)
             # prechecking for new or pending tasks
             if self.__executing_jobs(jobs.JobTypes.TYPE_RECOVER_DC_JOB,
-                add_statuses=[jobs.Job.STATUS_NEW, jobs.Job.STATUS_EXECUTING]):
-                    logger.info('Unfinished recover dc jobs found')
+                add_statuses=[jobs.Job.STATUS_NEW, jobs.Job.STATUS_EXECUTING],
+                limit=max_recover_jobs):
+                    logger.info('Found more than {0} unfinished recover '
+                        'dc jobs'.format(max_recover_jobs))
                     return
 
             self._do_recover_dc()
@@ -345,9 +353,14 @@ class Planner(object):
 
             self.job_processor._do_update_jobs()
 
+            max_recover_jobs = config.get('jobs', {}).get('recover_dc_job',
+                {}).get('max_executing_jobs', 3)
+
             if self.__executing_jobs(jobs.JobTypes.TYPE_RECOVER_DC_JOB,
-                add_statuses=[jobs.Job.STATUS_NEW, jobs.Job.STATUS_EXECUTING]):
-                    logger.info('Unfinished recover dc jobs found')
+                add_statuses=[jobs.Job.STATUS_NEW, jobs.Job.STATUS_EXECUTING],
+                limit=max_recover_jobs):
+                    logger.info('Found more than {0} unfinished recover '
+                        'dc jobs'.format(max_recover_jobs))
                     return
 
             with self._recover_dc_queue_lock:
