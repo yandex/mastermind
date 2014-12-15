@@ -114,7 +114,7 @@ class JobProcessor(object):
 
             logger.debug('Lock acquiring')
 
-            with sync_manager.lock(self.JOBS_LOCK):
+            with sync_manager.lock(self.JOBS_LOCK, blocking=False):
                 logger.debug('Lock acquired')
                 # TODO: check! # fetch jobs - read_latest!!!
                 self._do_update_jobs()
@@ -427,7 +427,7 @@ class JobProcessor(object):
             job = self.jobs[job_id]
 
             logger.debug('Lock acquiring')
-            with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT), job.tasks_lock():
+            with job.tasks_lock():
                 logger.debug('Lock acquired')
 
                 if job.status != Job.STATUS_NOT_APPROVED:
