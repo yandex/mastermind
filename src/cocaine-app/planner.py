@@ -74,11 +74,14 @@ class Planner(object):
                 self.params.get('generate_plan_period', 1800),
                 self._move_candidates)
 
-    def __executing_jobs(self, job_type):
+    def __executing_jobs(self, job_type, add_statuses=None):
+        statuses = [jobs.Job.STATUS_NOT_APPROVED]
+        if add_statuses:
+            statuses.extend(add_statuses)
         for job in self.job_processor.jobs.itervalues():
             if job_type != job.type:
                 continue
-            if job.status in (jobs.Job.STATUS_NOT_APPROVED,):
+            if job.status in statuses:
                 logger.info('Planer found at least one not approved job of type {0} '
                     '({1})'.format(job_type, job.id))
                 return True
@@ -318,9 +321,10 @@ class Planner(object):
             self.job_processor._do_update_jobs()
 
             # prechecking for new or pending tasks
-            if self.__executing_jobs(jobs.JobTypes.TYPE_RECOVER_DC_JOB):
-                logger.info('Unfinished recover dc jobs found')
-                return
+            if self.__executing_jobs(jobs.JobTypes.TYPE_RECOVER_DC_JOB,
+                add_statuses=[jobs.Job.STATUS_NEW, jobs.Job.STATUS_EXECUTING]):
+                    logger.info('Unfinished recover dc jobs found')
+                    return
 
             self._do_recover_dc()
         except LockFailedError:
@@ -341,9 +345,10 @@ class Planner(object):
 
             self.job_processor._do_update_jobs()
 
-            if self.__executing_jobs(jobs.JobTypes.TYPE_RECOVER_DC_JOB):
-                logger.info('Unfinished recover dc jobs found')
-                return
+            if self.__executing_jobs(jobs.JobTypes.TYPE_RECOVER_DC_JOB,
+                add_statuses=[jobs.Job.STATUS_NEW, jobs.Job.STATUS_EXECUTING]):
+                    logger.info('Unfinished recover dc jobs found')
+                    return
 
             with self._recover_dc_queue_lock:
                 self._do_sync_recover_dc_queue()
