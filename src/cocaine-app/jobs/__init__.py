@@ -318,7 +318,7 @@ class JobProcessor(object):
 
     def _create_job(self, job_type, params):
         # Forcing manual approval of newly created job
-        params['need_approving'] = True
+        params.setdefault('need_approving', True)
 
         if job_type == JobTypes.TYPE_MOVE_JOB:
             JobType = MoveJob
