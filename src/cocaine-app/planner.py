@@ -374,7 +374,8 @@ class Planner(object):
                              'host': node_backend.node.host.addr,
                              'port': node_backend.node.port,
                              'family': node_backend.node.family,
-                             'backend_id': node_backend.backend_id})
+                             'backend_id': node_backend.backend_id,
+                             'need_approving': False})
                         logger.info('Created recover dc job for couple {0}, '
                             'group {1}, job id {2}'.format(couple, group, job.id))
                     except Exception as e:
