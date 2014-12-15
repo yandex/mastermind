@@ -1,3 +1,9 @@
+mastermind (2.14.12) lucid; urgency=low
+
+  * Do not take global jobs lock on jobs' approving
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 15 Dec 2014 18:45:43 +0300
+
 mastermind (2.14.11) lucid; urgency=low
 
   * Minor misprint
