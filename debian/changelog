@@ -1,3 +1,9 @@
+mastermind (2.14.14) lucid; urgency=low
+
+  * Recover dc: limited job creation
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 15 Dec 2014 19:44:06 +0300
+
 mastermind (2.14.13) lucid; urgency=low
 
   * No approving for recovery jobs
