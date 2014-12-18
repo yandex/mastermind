@@ -355,6 +355,8 @@ class JobProcessor(object):
                 return False
             if options.get('tag', None) and self.tag(j) != options['tag']:
                 return False
+            if options.get('statuses', None) and j.status not in options['statuses']:
+                return False
             return True
 
         jobs = self.jobs.itervalues()
@@ -362,10 +364,18 @@ class JobProcessor(object):
             logger.info('Requested job list not from active tags: {0}'.format(options['tag']))
             jobs = [self._load_job(job) for job in self.jobs_index.tagged(options['tag'])]
 
-        res = [job.human_dump() for job in sorted(jobs,
-                   key=lambda j: (j.create_ts, j.start_ts, j.finish_ts))
-               if job_filter(job)]
-        return res
+        jobs = sorted(filter(job_filter, jobs), key=lambda j: (j.create_ts, j.start_ts, j.finish_ts))
+        total_jobs = len(jobs)
+
+        if options.get('limit'):
+            limit = int(options['limit'])
+            offset = int(options.get('offset', 0))
+
+            jobs = jobs[offset:offset + limit]
+
+        res = [job.human_dump() for job in jobs]
+        return {'jobs': res,
+                'total': total_jobs}
 
     def get_job_status(self, request):
         try:
@@ -377,6 +387,21 @@ class JobProcessor(object):
             raise ValueError('Job {0} is not found'.format(job_id))
 
         return self.jobs[job_id].dump()
+
+    def get_jobs_status(self, request):
+        try:
+            job_ids = request[0]
+        except (TypeError, IndexError):
+            raise ValueError('Job ids are required')
+
+        statuses = []
+        for job_id in job_ids:
+            if not job_id in self.jobs:
+                logger.error('Job {0} is not found'.format(job_id))
+                continue
+            statuses.append(self.jobs[job_id].human_dump())
+
+        return statuses
 
     def cancel_job(self, request):
         job_id = None

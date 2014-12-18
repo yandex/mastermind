@@ -195,6 +195,7 @@ def init_job_processor(minions):
     register_handle(j.approve_job)
     register_handle(j.get_job_list)
     register_handle(j.get_job_status)
+    register_handle(j.get_jobs_status)
     register_handle(j.retry_failed_job_task)
     register_handle(j.skip_failed_job_task)
     return j
