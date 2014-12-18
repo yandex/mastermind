@@ -51,6 +51,9 @@ class TagSecondaryIndex(object):
         idxes = [idx.id for idx in
             self.meta_session.clone().find_all_indexes([self.main_idx, self.idx_tpl % tag])]
 
+        self.logger.info('Received {0} records from tagged index {1}'.format(
+            len(idxes), self.idx_tpl % tag))
+
         for data in self._iter_keys(idxes):
             yield data
 
