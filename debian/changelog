@@ -1,3 +1,9 @@
+mastermind (2.14.16) lucid; urgency=low
+
+  * Job handler for getting jobs by job ids
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 18 Dec 2014 15:22:30 +0300
+
 mastermind (2.14.15) lucid; urgency=low
 
   * Use max executing recover dc jobs limit in planner
