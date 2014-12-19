@@ -1,3 +1,9 @@
+mastermind (2.15.1) lucid; urgency=low
+
+  * Added optional flag for considering namespace broken when its' groups has unequal total space
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 19 Dec 2014 14:31:33 +0300
+
 mastermind (2.14.17) lucid; urgency=low
 
   * Logging for tagged records
