@@ -24,6 +24,7 @@ NODE_BACKEND_STAT_STALE_TIMEOUT = config.get('node_backend_stat_stale_timeout', 
 FORBIDDEN_DHT_GROUPS = config.get('forbidden_dht_groups', False)
 FORBIDDEN_DC_SHARING_AMONG_GROUPS = config.get('forbidden_dc_sharing_among_groups', False)
 FORBIDDEN_NS_WITHOUT_SETTINGS = config.get('forbidden_ns_without_settings', False)
+FORBIDDEN_UNMATCHED_GROUP_TOTAL_SPACE = config.get('forbidden_unmatched_group_total_space', False)
 
 
 def ts_str(ts):
@@ -851,6 +852,15 @@ class Couple(object):
                     self.status_text = ('Couple {0} is assigned to a '
                         'namespace {1}, which is not set up'.format(str(self), ns))
                     return self.status
+
+        if FORBIDDEN_UNMATCHED_GROUP_TOTAL_SPACE:
+            group_stats = [g.get_stat() for g in self.groups]
+            total_spaces = [gs.total_space for gs in group_stats if gs]
+            if any([ts != total_spaces[0] for ts in total_spaces]):
+                self.status = Status.BROKEN
+                self.status_text = ('Couple {0} has unequal total space in groups'.format(
+                    str(self)))
+                return self.status
 
         if all([st == Status.COUPLED for st in statuses]):
             stats = self.get_stat()
