@@ -417,14 +417,14 @@ class JobProcessor(object):
             job = self.jobs[job_id]
 
             logger.debug('Lock acquiring')
-            with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT), job.tasks_lock():
+            with job.tasks_lock():
                 logger.debug('Lock acquired')
 
                 if job.status not in (Job.STATUS_PENDING,
                     Job.STATUS_NOT_APPROVED, Job.STATUS_BROKEN):
                     raise ValueError('Job {0}: status is "{1}", should have been '
-                        '"{2}|{3}"'.format(job.id, job.status,
-                            Job.STATUS_PENDING, Job.STATUS_NOT_APPROVED))
+                        '"{2}|{3}|{4}"'.format(job.id, job.status,
+                            Job.STATUS_PENDING, Job.STATUS_NOT_APPROVED, Job.STATUS_BROKEN))
 
                 job.status = Job.STATUS_CANCELLED
                 job.complete(self.session)
@@ -432,8 +432,6 @@ class JobProcessor(object):
 
                 logger.info('Job {0}: status set to {1}'.format(job.id, job.status))
 
-        except LockFailedError as e:
-            raise
         except Exception as e:
             logger.error('Failed to cancel job {0}: {1}\n{2}'.format(
                 job_id, e, traceback.format_exc()))
@@ -463,8 +461,6 @@ class JobProcessor(object):
 
                 self.jobs_index[job.id] = self.__dump_job(job)
 
-        except LockFailedError as e:
-            raise
         except Exception as e:
             logger.error('Failed to approve job {0}: {1}\n{2}'.format(
                 job_id, e, traceback.format_exc()))
