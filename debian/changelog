@@ -1,3 +1,10 @@
+mastermind (2.15.2) lucid; urgency=low
+
+  * Recover dc planner refactored a little bit
+  * Do not take jobs global lock on job cancelling
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 22 Dec 2014 17:47:55 +0300
+
 mastermind (2.15.1) lucid; urgency=low
 
   * Added optional flag for considering namespace broken when its' groups has unequal total space
