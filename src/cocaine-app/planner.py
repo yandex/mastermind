@@ -396,6 +396,7 @@ class Planner(object):
                              'need_approving': False})
                         logger.info('Created recover dc job for couple {0}, '
                             'job id {1}'.format(couple, job.id))
+                        created_jobs += 1
                     except Exception as e:
                         logger.error('Failed to create recover dc job: {0}'.format(e))
                         continue
