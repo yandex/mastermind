@@ -677,7 +677,7 @@ def _recovery_applicable_couple(couple):
 
     alive_keys = _couple_keys(couple)
 
-    if alive_keys[-1] - alive_keys[0] > 0:
+    if alive_keys[-1] - alive_keys[0] <= 0:
         # number of keys in all groups is equal
         return False
 
