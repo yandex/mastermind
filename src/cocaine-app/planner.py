@@ -407,15 +407,15 @@ class Planner(object):
         couples_to_recover = []
         for couple in storage.couples:
 
-            if not __recovery_applicable_couple(couple):
+            if not _recovery_applicable_couple(couple):
                 continue
 
-            alive_keys = __couple_keys(couple)
+            alive_keys = _couple_keys(couple)
 
             logger.info('Adding couple {0} to recover dc queue, number of keys '
                 'in groups: {1}'.format(str(couple), alive_keys))
 
-            couples_to_recover.append((couple, keys_diff))
+            couples_to_recover.append((couple, alive_keys[-1] - alive_keys[0]))
 
         couples_to_recover.sort(key=lambda c: c[1])
 
@@ -671,11 +671,11 @@ class Planner(object):
         return top_candidate
 
 
-def __recovery_applicable_couple(couple):
+def _recovery_applicable_couple(couple):
     if couple.status not in storage.GOOD_STATUSES:
         return False
 
-    alive_keys = __couple_keys(couple)
+    alive_keys = _couple_keys(couple)
 
     if alive_keys[-1] - alive_keys[0] > 0:
         # number of keys in all groups is equal
@@ -683,7 +683,7 @@ def __recovery_applicable_couple(couple):
 
     return True
 
-def __couple_keys(couple):
+def _couple_keys(couple):
 
     group_alive_keys = {}
     for group in couple:

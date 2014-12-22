@@ -32,22 +32,31 @@ class RecoverDcJob(Job):
     @classmethod
     def new(cls, *args, **kwargs):
         job = super(RecoverDcJob, cls).new(*args, **kwargs)
-        couple = storage.groups[kwargs['couple']]
-        keys = []
-        for g in couple.groups:
-            keys.append(g.get_stat().files)
-        keys.sort(reverse=True)
-        job.keys = keys
+        try:
+            couple = storage.couples[kwargs['couple']]
+            keys = []
+            for g in couple.groups:
+                keys.append(g.get_stat().files)
+            keys.sort(reverse=True)
+            job.keys = keys
 
-        min_keys_group = job.__min_keys_group(couple)
-        nb = min_keys_group.node_backends[0]
-        job.group = min_keys_group.group_id
-        job.host = nb.node.host.addr
-        job.port = nb.node.port
-        job.backend_id = nb.backend_id
-        job.family = nb.node.family
-
+            min_keys_group = job.__min_keys_group(couple)
+            nb = min_keys_group.node_backends[0]
+            job.group = min_keys_group.group_id
+            job.host = nb.node.host.addr
+            job.port = nb.node.port
+            job.backend_id = nb.backend_id
+            job.family = nb.node.family
+        except Exception:
+            job.release_locks()
+            raise
         return job
+
+    def human_dump(self):
+        data = super(RecoverDcJob, self).human_dump()
+        data['hostname'] = infrastructure.get_hostname_by_addr(data['host'])
+        return data
+
 
     def __min_keys_group(self, couple):
         return sorted(couple.groups, key=lambda g: g.get_stat().files)[0]
