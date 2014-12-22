@@ -21,7 +21,9 @@ logger = logging.getLogger('mm.jobs')
 
 class RecoverDcJob(Job):
 
-    PARAMS = ('group', 'host', 'port', 'family', 'backend_id', 'keys')
+    PARAMS = ('group', 'couple',
+              'keys', 'host', 'port', 'family', 'backend_id' # read-only parameters
+             )
 
     def __init__(self, **kwargs):
         super(RecoverDcJob, self).__init__(**kwargs)
@@ -30,28 +32,32 @@ class RecoverDcJob(Job):
     @classmethod
     def new(cls, *args, **kwargs):
         job = super(RecoverDcJob, cls).new(*args, **kwargs)
-        group = storage.groups[kwargs['group']]
+        couple = storage.groups[kwargs['couple']]
         keys = []
-        for g in group.couple.groups:
+        for g in couple.groups:
             keys.append(g.get_stat().files)
         keys.sort(reverse=True)
         job.keys = keys
+
+        min_keys_group = job.__min_keys_group(couple)
+        nb = min_keys_group.node_backends[0]
+        job.group = min_keys_group.group_id
+        job.host = nb.node.host.addr
+        job.port = nb.node.port
+        job.backend_id = nb.backend_id
+        job.family = nb.node.family
+
         return job
 
-    def human_dump(self):
-        data = super(RecoverDcJob, self).human_dump()
-        data['hostname'] = infrastructure.get_hostname_by_addr(data['host'])
-        return data
+    def __min_keys_group(self, couple):
+        return sorted(couple.groups, key=lambda g: g.get_stat().files)[0]
 
     def create_tasks(self):
 
-        if not self.group in storage.groups:
-            raise JobBrokenError('Group {0} is not found'.format(self.group))
+        if not self.couple in storage.couples:
+            raise JobBrokenError('Couple {0} is not found'.format(self.couple))
 
-        group = storage.groups[self.group]
-
-        if not group.couple:
-            raise JobBrokenError('Group {0} does not participate in any couple'.format(self.group))
+        couple = storage.couples[self.couple]
 
         recover_cmd = infrastructure.recover_group_cmd([self.group])
         task = RecoverGroupDcTask.new(self,
@@ -65,13 +71,13 @@ class RecoverDcJob(Job):
 
     @property
     def _locks(self):
-        if not self.group in storage.groups:
-            raise JobBrokenError('Group {0} is not found'.format(self.group))
+        if self.couple is None:
+            # fallback to old recover dc job format
+            group = storage.groups[self.group]
+            couple = group.couple
+            self.couple = str(couple)
 
-        group = storage.groups[self.group]
+        couple = storage.couples[self.couple]
 
-        if not group.couple:
-            raise JobBrokenError('Group {0} does not participate in any couple'.format(self.group))
-
-        return (['{0}{1}'.format(self.GROUP_LOCK_PREFIX, g.group_id) for g in group.couple.groups] +
-                ['{0}{1}'.format(self.COUPLE_LOCK_PREFIX, str(group.couple))])
+        return (['{0}{1}'.format(self.GROUP_LOCK_PREFIX, g.group_id) for g in couple.groups] +
+                ['{0}{1}'.format(self.COUPLE_LOCK_PREFIX, str(couple))])

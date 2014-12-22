@@ -62,7 +62,7 @@ class Planner(object):
             logger.info('Starting move candidates planner')
 
             # prechecking for new or pending tasks
-            if self.__executing_jobs(jobs.JobTypes.TYPE_MOVE_JOB):
+            if self.__executing_jobs_count(jobs.JobTypes.TYPE_MOVE_JOB):
                 return
 
             self._do_move_candidates()
@@ -74,7 +74,7 @@ class Planner(object):
                 self.params.get('generate_plan_period', 1800),
                 self._move_candidates)
 
-    def __executing_jobs(self, job_type, add_statuses=None, limit=1):
+    def __executing_jobs_count(self, job_type, add_statuses=None, limit=1):
         statuses = [jobs.Job.STATUS_NOT_APPROVED]
         if add_statuses:
             statuses.extend(add_statuses)
@@ -84,12 +84,12 @@ class Planner(object):
                 continue
             if job.status in statuses:
                 found_jobs += 1
-            if found_jobs >= limit:
+            if limit and found_jobs >= limit:
                 logger.info('Planer found at least {0} jobs of statuses {1} '
                     'and type {2} ({3})'.format(
                         found_jobs, statuses, job_type, job.id))
-                return True
-        return False
+                break
+        return found_jobs
 
     def __busy_hosts(self, job_type):
         hosts = set()
@@ -115,7 +115,7 @@ class Planner(object):
 
                 self.job_processor._do_update_jobs()
 
-                if self.__executing_jobs(jobs.JobTypes.TYPE_MOVE_JOB):
+                if self.__executing_jobs_count(jobs.JobTypes.TYPE_MOVE_JOB):
                     raise ValueError('Not finished move jobs are found')
 
                 for i, candidate in enumerate(candidates):
@@ -311,6 +311,8 @@ class Planner(object):
         try:
             self.recover_dc_queue = list(msgpack.unpackb(self.meta_session.read_data(
                     keys.MM_PLANNER_RECOVER_DC_QUEUE).get()[0].data))
+            if self.recover_dc_queue and isinstance(self.recover_dc_queue[0], tuple):
+                self.recover_dc_queue = []
         except elliptics.NotFoundError:
             self.recover_dc_queue = []
 
@@ -327,7 +329,7 @@ class Planner(object):
             max_recover_jobs = config.get('jobs', {}).get('recover_dc_job',
                 {}).get('max_executing_jobs', 3)
             # prechecking for new or pending tasks
-            if self.__executing_jobs(jobs.JobTypes.TYPE_RECOVER_DC_JOB,
+            if self.__executing_jobs_count(jobs.JobTypes.TYPE_RECOVER_DC_JOB,
                 add_statuses=[jobs.Job.STATUS_NEW, jobs.Job.STATUS_EXECUTING],
                 limit=max_recover_jobs):
                     logger.info('Found more than {0} unfinished recover '
@@ -356,12 +358,14 @@ class Planner(object):
             max_recover_jobs = config.get('jobs', {}).get('recover_dc_job',
                 {}).get('max_executing_jobs', 3)
 
-            if self.__executing_jobs(jobs.JobTypes.TYPE_RECOVER_DC_JOB,
+            jobs_count = self.__executing_jobs_count(jobs.JobTypes.TYPE_RECOVER_DC_JOB,
                 add_statuses=[jobs.Job.STATUS_NEW, jobs.Job.STATUS_EXECUTING],
-                limit=max_recover_jobs):
-                    logger.info('Found more than {0} unfinished recover '
-                        'dc jobs'.format(max_recover_jobs))
-                    return
+                limit=None)
+            slots = max_recover_jobs - jobs_count
+            if slots <= 0:
+                logger.info('Found {0} unfinished recover dc jobs'.format(
+                    jobs_count))
+                return
 
             with self._recover_dc_queue_lock:
                 self._do_sync_recover_dc_queue()
@@ -371,64 +375,51 @@ class Planner(object):
                     logger.info('Recover dc queue is empty, setting it up')
                     self.recover_dc_queue = self.__construct_recover_dc_queue()
 
-                for i in xrange(min(self.params.get('recover_dc', {}).get('jobs_batch_size', 10),
-                                    len(self.recover_dc_queue))):
-                    couple_tuple, group_id = self.recover_dc_queue.pop()
+                created_jobs = 0
+                max_jobs = min(max_recover_jobs, slots, len(self.recover_dc_queue))
 
-                    couple_str = ':'.join((str(gid) for gid in sorted(couple_tuple)))
+                while created_jobs < max_jobs:
+                    try:
+                        couple_str = self.recover_dc_queue.pop()
+                    except IndexError:
+                        break
+
                     if not couple_str in storage.couples:
                         logger.warn('Couple {0} is not found in storage'.format(couple_str))
                         continue
                     couple = storage.couples[couple_str]
-                    group = storage.groups[group_id]
-
-                    # check if backend exists
-                    node_backend = group.node_backends[0]
 
                     try:
                         job = self.job_processor._create_job(
                             jobs.JobTypes.TYPE_RECOVER_DC_JOB,
-                            {'group': group.group_id,
-                             'host': node_backend.node.host.addr,
-                             'port': node_backend.node.port,
-                             'family': node_backend.node.family,
-                             'backend_id': node_backend.backend_id,
+                            {'couple': couple_str,
                              'need_approving': False})
                         logger.info('Created recover dc job for couple {0}, '
-                            'group {1}, job id {2}'.format(couple, group, job.id))
+                            'job id {1}'.format(couple, job.id))
                     except Exception as e:
                         logger.error('Failed to create recover dc job: {0}'.format(e))
                         continue
 
                 self._do_update_recover_dc_queue()
 
+
     def __construct_recover_dc_queue(self):
         couples_to_recover = []
         for couple in storage.couples:
-            if couple.status not in storage.GOOD_STATUSES:
+
+            if not __recovery_applicable_couple(couple):
                 continue
-            group_alive_keys = {}
-            for group in couple:
-                for nb in group.node_backends:
-                    group_alive_keys.setdefault(group, 0)
-                    group_alive_keys[group] += nb.stat.files
-            alive_keys = group_alive_keys.values()
-            if all([k == alive_keys[0] for k in alive_keys]):
-                # number of keys in all groups is equal
-                continue
-            min_group = min(group_alive_keys.keys(), key=lambda k: group_alive_keys[k])
-            max_group = max(group_alive_keys.keys(), key=lambda k: group_alive_keys[k])
-            keys_diff = group_alive_keys[max_group] - group_alive_keys[min_group]
+
+            alive_keys = __couple_keys(couple)
 
             logger.info('Adding couple {0} to recover dc queue, number of keys '
-                'in groups: {1}, recover will be launched on group {2}'.format(
-                    min_group.couple.as_tuple(), alive_keys, min_group.group_id))
+                'in groups: {1}'.format(str(couple), alive_keys))
 
-            couples_to_recover.append((couple, min_group, keys_diff))
+            couples_to_recover.append((couple, keys_diff))
 
-        couples_to_recover.sort(key=lambda c: c[2])
+        couples_to_recover.sort(key=lambda c: c[1])
 
-        return [(c[0].as_tuple(), c[1].group_id,) for c in couples_to_recover]
+        return [str(c[0]) for c in couples_to_recover]
 
 
     def _couple_defrag(self):
@@ -438,7 +429,7 @@ class Planner(object):
             self.job_processor._do_update_jobs()
 
             # prechecking for new or pending tasks
-            if self.__executing_jobs(jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB):
+            if self.__executing_jobs_count(jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB):
                 logger.info('Unfinished couple defrag jobs found')
                 return
 
@@ -461,7 +452,7 @@ class Planner(object):
 
             self.job_processor._do_update_jobs()
 
-            if self.__executing_jobs(jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB):
+            if self.__executing_jobs_count(jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB):
                 logger.info('Unfinished couple defrag jobs found')
                 return
 
@@ -678,6 +669,29 @@ class Planner(object):
             [g.group_id for g in top_candidate]))
 
         return top_candidate
+
+
+def __recovery_applicable_couple(couple):
+    if couple.status not in storage.GOOD_STATUSES:
+        return False
+
+    alive_keys = __couple_keys(couple)
+
+    if alive_keys[-1] - alive_keys[0] > 0:
+        # number of keys in all groups is equal
+        return False
+
+    return True
+
+def __couple_keys(couple):
+
+    group_alive_keys = {}
+    for group in couple:
+        for nb in group.node_backends:
+            group_alive_keys.setdefault(group, 0)
+            group_alive_keys[group] += nb.stat.files
+    alive_keys = sorted(group_alive_keys.values())
+    return alive_keys
 
 
 
