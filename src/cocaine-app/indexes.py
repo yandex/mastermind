@@ -54,12 +54,17 @@ class TagSecondaryIndex(object):
         self.logger.info('Received {0} records from tagged index {1}'.format(
             len(idxes), self.idx_tpl % tag))
 
+        processed = 0
         for data in self._iter_keys(idxes):
+            processed += 1
             yield data
+
+        self.logger.info('Processed {0} records from tagged index {1}'.format(
+            processed, self.idx_tpl % tag))
 
     def __setitem__(self, key, val):
         eid = self.meta_session.transform(self.key_tpl % key)
-        self.meta_session.clone().write_data(eid, val)
+        self.meta_session.clone().write_data(eid, val).get()
 
     def __getitem__(self, key):
         eid = self.meta_session.transform(self.key_tpl % key)
@@ -79,7 +84,7 @@ class TagSecondaryIndex(object):
             result.wait()
             data = result.get()[0].data
         except Exception as e:
-            self.logger.error('Failed to fetch record from tagged index: {0}'.format(req[0]))
+            self.logger.error('Failed to fetch record from tagged index: {0} ({1})'.format(req[0], e))
         return data
 
     def _iter_keys(self, keys):
@@ -87,8 +92,6 @@ class TagSecondaryIndex(object):
             return
 
         q = Queue(self.batch_size)
-        count = 0
-
         s = self.meta_session.clone()
 
         for k in keys:
@@ -96,6 +99,7 @@ class TagSecondaryIndex(object):
                 q.put((k, s.read_latest(k)))
             else:
                 data = self._fetch_response_data(q.get())
+                q.put((k, s.read_latest(k)))
                 if data:
                     yield data
 
