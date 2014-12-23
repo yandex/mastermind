@@ -1,3 +1,9 @@
+mastermind (2.15.6) lucid; urgency=low
+
+  * Fix for indexes batch reader
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 23 Dec 2014 14:28:14 +0300
+
 mastermind (2.15.5) lucid; urgency=low
 
   * Misprint fixed
