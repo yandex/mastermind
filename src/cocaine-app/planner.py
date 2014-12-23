@@ -331,7 +331,7 @@ class Planner(object):
             # prechecking for new or pending tasks
             if self.__executing_jobs_count(jobs.JobTypes.TYPE_RECOVER_DC_JOB,
                 add_statuses=[jobs.Job.STATUS_NEW, jobs.Job.STATUS_EXECUTING],
-                limit=max_recover_jobs):
+                limit=max_recover_jobs) >= max_recover_jobs:
                     logger.info('Found more than {0} unfinished recover '
                         'dc jobs'.format(max_recover_jobs))
                     return
@@ -377,6 +377,8 @@ class Planner(object):
 
                 created_jobs = 0
                 max_jobs = min(max_recover_jobs, slots, len(self.recover_dc_queue))
+                logger.info('Trying to create {0} jobs (min of {1})'.format(max_jobs,
+                    (max_recover_jobs, slots, len(self.recover_dc_queue))))
 
                 while created_jobs < max_jobs:
                     try:
@@ -388,6 +390,9 @@ class Planner(object):
                         logger.warn('Couple {0} is not found in storage'.format(couple_str))
                         continue
                     couple = storage.couples[couple_str]
+
+                    if not _recovery_applicable_couple(couple):
+                        continue
 
                     try:
                         job = self.job_processor._create_job(
