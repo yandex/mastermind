@@ -3,7 +3,7 @@
 from functools import wraps, partial
 import logging
 import sys
-from time import sleep
+from time import sleep, time
 import traceback
 import types
 import uuid
@@ -106,6 +106,7 @@ b = balancer.Balancer(n)
 def register_handle(h):
     @wraps(h)
     def wrapper(request, response):
+        start_ts = time()
         req_uid = uuid.uuid4().hex
         try:
             data = yield request.read()
@@ -123,7 +124,7 @@ def register_handle(h):
             response.write({"Balancer error": str(e)})
         finally:
             logger.info(':{req_uid}: Finished handler for event {0}, '
-                'data={1}'.format(h.__name__, str(data), req_uid=req_uid))
+                'time: {1:.3f}'.format(h.__name__, time() - start_ts, req_uid=req_uid))
         response.close()
 
     W.on(h.__name__, wrapper)
