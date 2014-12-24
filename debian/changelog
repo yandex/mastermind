@@ -1,3 +1,9 @@
+mastermind (2.15.8) lucid; urgency=low
+
+  * Added handler execution time to logs
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 24 Dec 2014 15:48:54 +0300
+
 mastermind (2.15.7) lucid; urgency=low
 
   * Fix for recovery jobs queue fill
