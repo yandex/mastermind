@@ -520,6 +520,11 @@ class Planner(object):
         except (TypeError, ValueError, IndexError):
             use_uncoupled_group = False
 
+        try:
+            force = bool(request[2])
+        except IndexError:
+            force = False
+
         group = storage.groups[group_id]
         if len(group.node_backends) > 1:
             raise ValueError('Group {0} has {1} node backends, should have at most one'.format(

@@ -32,6 +32,7 @@ class Minions(object):
     MAKE_IOLOOP = 'make_ioloop'
     STATE_URL_TPL = 'http://{host}:{port}/rsync/list/?finish_ts_gte={finish_ts_gte}'
     START_URL_TPL = 'http://{host}:{port}/rsync/start/'
+    TERMINATE_URL_TPL = 'http://{host}:{port}/command/terminate/'
 
     def __init__(self, node):
         self.meta_session = node.meta_session.clone()
@@ -164,7 +165,7 @@ class Minions(object):
 
                 logger.debug('Adding new task {0}'.format(self.CMD_ENTRY_FETCH % uid))
                 self.__tq.add_task_in(self.CMD_ENTRY_FETCH % uid,
-                    1, self._cmd_entry_update, state)
+                    1, self._history_entry_update, state)
 
         for uid, state in response_data.iteritems():
             if state['progress'] < 1.0:
@@ -259,7 +260,33 @@ class Minions(object):
         data = self._process_state(host, self._get_response(host, response))
         return data
 
-    def _cmd_entry_update(self, state):
+    @h.concurrent_handler
+    def terminate_cmd(self, request):
+        try:
+            host, uid = request[0:2]
+        except ValueError:
+            raise ValueError('Invalid parameters')
+
+        if not host in storage.hosts:
+            logger.debug('Host was not found: {0}, {1}'.format(host, type(host)))
+            raise ValueError('Host {0} is not present in cluster'.format(host))
+
+        url = self.TERMINATE_URL_TPL.format(host=host, port=self.minion_port)
+        data = {'cmd_uid': uid}
+
+        try:
+            response = HTTPClient().fetch(url, method='POST',
+                                               headers=self.minion_headers,
+                                               body=urllib.urlencode(data),
+                                               request_timeout=5.0,
+                                               use_gzip=True)
+        except HTTPError as e:
+            response = e
+
+        data = self._process_state(host, self._get_response(host, response))
+        return data
+
+    def _history_entry_update(self, state):
         try:
             uid = state['uid']
             logger.debug('Started updating minion history entry '

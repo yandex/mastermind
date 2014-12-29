@@ -338,6 +338,8 @@ def group_move(group, uncoupled_group,
 @log_action
 def group_restore(group, uncoupled_group=('u', False, 'Use uncoupled group as '
                   'a restoration point instead of previous group location'),
+                  force=('f', False, 'Cancel all pending jobs of low priority '
+                      '(e.g. recover-dc and defragmenation)'),
                   host=None, app=None):
     '''Create job to restore group's node backend from a coupled group.
        By default data is being restored to the previous location
@@ -349,7 +351,7 @@ def group_restore(group, uncoupled_group=('u', False, 'Use uncoupled group as '
     group = int(group)
 
     job_data = s.enqueue('restore_group', msgpack.packb([
-        group, uncoupled_group])).get()
+        group, uncoupled_group, force])).get()
 
     print job_data
 
@@ -365,11 +367,6 @@ def group_recover_dc(group,
     group = int(group)
 
     couple_data = retry(s, 'get_couple_info', group)
-    for group_data in couple_data['groups']:
-        if not len(group_data['node_backends']):
-            print warn('Group {0} has no available node backends, should have '
-                'at least one'.format(group_data['id']))
-            return
 
     job_data = s.enqueue('create_job', msgpack.packb(['recover_dc_job',
         {'couple': couple_data['id']}])).get()

@@ -111,14 +111,16 @@ class ZkSyncManager(object):
         if failed_locks:
             holders = []
             for f in failed_locks:
+                # TODO: fetch all holders with 1 transaction request
                 holders.append((f, self.client.get(self.lock_path_prefix + f)))
             foreign_holders = [(l, h) for l, h in holders if h[0] != data]
             failed_lock, holder_resp = foreign_holders and foreign_holders[0] or holders[0]
             holder = holder_resp[0]
+            holders_ids = list(set([h[0] for _, h in holders]))
             logger.warn('Persistent lock {0} is already set by {1}'.format(failed_lock, holder))
             raise LockAlreadyAcquiredError(
                 'Lock for {0} is already acquired by job {1}'.format(failed_lock, holder),
-                lock_id=failed_lock, holder_id=holder)
+                lock_id=failed_lock, holder_id=holder, holders_ids=holders_ids)
         elif failed:
             logger.error('Failed to set persistent locks {0}, result: {1}'.format(
                 locks, result))
