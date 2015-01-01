@@ -277,9 +277,6 @@ class Infrastructure(object):
                         nb for nb in state_nodes
                             if nb not in storage_nodes and len(nb) != 2))
 
-                    logger.debug('Comparing %s and %s' %
-                                  (ext_storage_nodes, state_nodes))
-
                     if set(ext_storage_nodes) != state_nodes_set:
                         logger.info('Group %d info does not match,'
                                      'last state: %s, current state: %s' %

@@ -255,7 +255,8 @@ class Minions(object):
             now = datetime.datetime.now()
 
             for entry in self._history_entries(now):
-                logger.debug('Fetched history entry for command {0}'.format(entry['uid']))
+                if not entry['uid'] in self.history:
+                    logger.debug('Fetched history entry for command {0}'.format(entry['uid']))
                 self.history[entry['uid']] = entry['progress']
 
             self.history_ready = True
