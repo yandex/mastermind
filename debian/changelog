@@ -1,3 +1,10 @@
+mastermind (2.15.9) lucid; urgency=low
+
+  * Startup timeout temporarily increased
+  * Excessive logging removed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 02 Jan 2015 02:44:08 +0300
+
 mastermind (2.15.8) lucid; urgency=low
 
   * Added handler execution time to logs
