@@ -1,3 +1,9 @@
+mastermind (2.15.11) lucid; urgency=low
+
+  * Start task threads after cocaine worker has been initialized
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 09 Jan 2015 19:18:53 +0300
+
 mastermind (2.15.10) lucid; urgency=low
 
   * Infrastructure procedures logging improved
