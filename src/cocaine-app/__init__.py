@@ -144,6 +144,7 @@ def init_infrastructure():
     register_handle(infstruct.defrag_node_backend_cmd)
     register_handle(infstruct.search_history_by_path)
     b.set_infrastructure(infstruct)
+    return infstruct
 
 
 def init_node_info_updater():
@@ -187,6 +188,7 @@ def init_minions():
 def init_planner(job_processor):
     planner = Planner(n.meta_session, job_processor)
     register_handle(planner.restore_group)
+    return planner
 
 
 def init_job_processor(minions):
@@ -202,18 +204,28 @@ def init_job_processor(minions):
     return j
 
 
-init_cache()
-init_infrastructure()
+co = init_cache()
+io = init_infrastructure()
 b.niu = init_node_info_updater()
 init_statistics()
 m = init_minions()
 j = init_job_processor(m)
-init_planner(j)
+po = init_planner(j)
 
 
 for handler in balancer.handlers(b):
     logger.info("registering bounded function %s" % handler)
     register_handle(handler)
+
+logger.info('activating timed queues')
+try:
+    tq_to_activate = [co, io, b.niu, m, j, po]
+    for tqo in tq_to_activate:
+        tqo._start_tq()
+except Exception as e:
+    logger.error('failed to activate timed queue: {0}'.format(e))
+    raise
+logger.info('finished activating timed queues')
 
 logger.info("Starting worker")
 W.run()

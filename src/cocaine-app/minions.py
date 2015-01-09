@@ -44,7 +44,6 @@ class Minions(object):
         self.ready = False
 
         self.__tq = timed_queue.TimedQueue()
-        self.__tq.start()
 
         self.__tq.add_task_in(self.MAKE_IOLOOP, 0,
             self._make_tq_thread_ioloop)
@@ -62,6 +61,9 @@ class Minions(object):
 
         self.__commands_lock = threading.Lock()
         self.__active_hosts_lock = threading.Lock()
+
+    def _start_tq(self):
+        self.__tq.start()
 
     def _make_tq_thread_ioloop(self):
         logger.debug('Minion states, creating thread ioloop')

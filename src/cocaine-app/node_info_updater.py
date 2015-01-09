@@ -32,7 +32,6 @@ class NodeInfoUpdater(object):
         logger.info("Created NodeInfoUpdater")
         self.__node = node
         self.__tq = timed_queue.TimedQueue()
-        self.__tq.start()
         self.__session = elliptics.Session(self.__node)
         wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or config.get('wait_timeout', 5)
         self.__session.set_timeout(wait_timeout)
@@ -53,6 +52,9 @@ class NodeInfoUpdater(object):
         except Exception as e:
             logger.info('Failed to execute cluster update tasks: {0}\n{1}'.format(e, traceback.format_exc()))
             raise
+
+    def _start_tq(self):
+        self.__tq.start()
 
     def node_statistics_update(self):
         try:

@@ -44,7 +44,6 @@ class Planner(object):
         self.job_processor = job_processor
         self.__max_plan_length = self.params.get('max_plan_length', 5)
         self.__tq = timed_queue.TimedQueue()
-        self.__tq.start()
 
         if (self.params.get('enabled', False)):
             self.__tq.add_task_in(self.MOVE_CANDIDATES,
@@ -56,6 +55,8 @@ class Planner(object):
             self.__tq.add_task_in(self.COUPLE_DEFRAG,
                 12, self._couple_defrag)
 
+    def _start_tq(self):
+        self.__tq.start()
 
     def _move_candidates(self):
         try:

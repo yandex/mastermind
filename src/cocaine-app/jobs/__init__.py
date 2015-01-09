@@ -60,13 +60,15 @@ class JobProcessor(object):
             namespace='jobs')
 
         self.__tq = timed_queue.TimedQueue()
-        self.__tq.start()
 
         self.job_tags = self._active_tags()
 
         self._update_jobs()
         self.__tq.add_task_in(self.JOBS_EXECUTE,
             5, self._execute_jobs)
+
+    def _start_tq(self):
+        self.__tq.start()
 
     def _active_tags(self):
         tags = []

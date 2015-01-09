@@ -78,7 +78,6 @@ class Infrastructure(object):
         self.state = {}
         self.__state_lock = threading.Lock()
         self.__tq = timed_queue.TimedQueue()
-        self.__tq.start()
 
     def init(self, node):
         self.node = node
@@ -112,6 +111,9 @@ class Infrastructure(object):
 
         self.ns_settings = {}
         self._sync_ns_settings()
+
+    def _start_tq(self):
+        self.__tq.start()
 
     def get_group_history(self, group_id):
         couples_history = []

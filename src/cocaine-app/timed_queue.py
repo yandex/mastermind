@@ -51,6 +51,7 @@ class TimedQueue:
         return shutting_down
 
     def loop(self):
+        time.sleep(3)
         while not self._is_shutting_down():
             task = None
             with self.__heap_lock:

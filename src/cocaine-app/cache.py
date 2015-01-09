@@ -40,6 +40,7 @@ class CacheManager(object):
         self.enabled = False
 
         self.__session = None
+        self.__tq = None
         self.__index_prefix = ''
         self.__namespaces = {}
 
@@ -56,12 +57,15 @@ class CacheManager(object):
         self.__index_prefix = index_prefix
 
         self.__tq = timed_queue.TimedQueue()
-        self.__tq.start()
 
         self.__tq.add_task_in('cache_status_update', 10, self.cache_status_update)
         self.__tq.add_task_in('cache_list_update', 15, self.update_cache_list)
 
         self.enabled = True
+
+    def _start_tq(self):
+        if self.__tq:
+            self.__tq.start()
 
     def __loads(self, item):
         try:
