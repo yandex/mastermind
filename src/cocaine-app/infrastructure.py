@@ -153,13 +153,15 @@ class Infrastructure(object):
         return False
 
     def _sync_state(self):
+        start_ts = time.time()
         try:
             logger.info('Syncing infrastructure state')
             self.__do_sync_state()
-            logger.info('Finished syncing infrastructure state')
+            logger.info('Finished syncing infrastructure state, time: {0:.3f}'.format(
+                time.time() - start_ts))
         except Exception as e:
-            logger.error('Failed to sync infrastructure state: %s\n%s' %
-                          (e, traceback.format_exc()))
+            logger.error('Failed to sync infrastructure state, time: {0:.3f}, {1}\n{2}'.format(
+                         time.time() - start_ts, e, traceback.format_exc()))
         finally:
             self.__tq.add_task_in(self.TASK_SYNC,
                 config.get('infrastructure_sync_period', 60),
@@ -180,8 +182,8 @@ class Infrastructure(object):
                 data = idx.indexes[0].data
 
                 state_group = self._unserialize(data)
-                logger.debug('Fetched infrastructure item: %s' %
-                              (state_group,))
+                # logger.debug('Fetched infrastructure item: %s' %
+                #               (state_group,))
 
                 if (self.state.get(state_group['id']) and
                     state_group['id'] in storage.groups):
@@ -231,12 +233,14 @@ class Infrastructure(object):
 
     def _update_state(self):
         groups_to_update = []
+        start_ts = time.time()
         try:
             logger.info('Updating infrastructure state')
 
             logger.info('Fetching fresh infrastructure state')
             self.__do_sync_state()
-            logger.info('Done fetching fresh infrastructure state')
+            logger.info('Done fetching fresh infrastructure state, time: {0:.3f}'.format(
+                time.time() - start_ts))
 
             for g in storage.groups.keys():
 
@@ -306,10 +310,11 @@ class Infrastructure(object):
                             pass
 
 
-            logger.info('Finished updating infrastructure state')
+            logger.info('Finished updating infrastructure state, time: {0:.3f}'.format(
+                time.time() - start_ts))
         except Exception as e:
-            logger.error('Failed to update infrastructure state: %s\n%s' %
-                          (e, traceback.format_exc()))
+            logger.error('Failed to update infrastructure state, time: {0:.3f}, {1}\n{2}'.format(
+                            time.time() - start_ts, e, traceback.format_exc()))
         finally:
             self.__tq.add_task_in(self.TASK_UPDATE,
                 config.get('infrastructure_update_period', 300),
@@ -337,7 +342,7 @@ class Infrastructure(object):
     def __do_sync_ns_settings(self, data, start_ts):
         settings = msgpack.unpackb(data)
         logger.debug('fetched namespace settings for "{0}" '
-            '({1:.4f}s)'.format(settings['namespace'], time.time() - start_ts))
+            '({1:.3f}s)'.format(settings['namespace'], time.time() - start_ts))
         ns = settings['namespace']
         del settings['namespace']
         self.ns_settings[ns] = settings
@@ -758,23 +763,26 @@ class CacheItem(object):
                              'derived class')
 
     def _sync_cache(self):
+        start_ts = time.time()
         try:
             logger.info(self.logprefix + 'syncing')
             for data in self.idx:
                 data = msgpack.unpackb(data)
 
-                logger.debug(self.logprefix + 'Fetched item: %s' %
-                              (data,))
+                # logger.debug(self.logprefix + 'Fetched item: %s' %
+                #               (data,))
 
                 try:
                     self.cache[data['key']] = data
                 except KeyError:
                     pass
 
-            logger.info(self.logprefix + 'Finished syncing')
+            logger.info('{0}finished syncing, time: {1:.3f}'.format(
+                self.logprefix, time.time() - start_ts))
         except Exception as e:
-            logger.error(self.logprefix + 'Failed to sync: %s\n%s' %
-                          (e, traceback.format_exc()))
+            logger.error('{0}failed to sync, time: {1:.3f}, {2}\n{3}'.format(
+                            self.logprefix, time.time() - start_ts,
+                            e, traceback.format_exc()))
         finally:
             self.__tq.add_task_in(self.taskname,
                 self.sync_period, self._sync_cache)
