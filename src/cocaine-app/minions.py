@@ -254,12 +254,15 @@ class Minions(object):
     def _fetch_history(self):
         try:
             logger.info('Fetching minion commands history')
-            now = datetime.datetime.now()
-
-            for entry in self._history_entries(now):
-                if not entry['uid'] in self.history:
-                    logger.debug('Fetched history entry for command {0}'.format(entry['uid']))
-                self.history[entry['uid']] = entry['progress']
+            dt = datetime.datetime.now()
+            for month in range(2):
+                dt = dt.replace(day=1)
+                logger.info('Fetching minions command history for date {0}'.format(dt))
+                for entry in self._history_entries(dt):
+                    if not entry['uid'] in self.history:
+                        logger.debug('Fetched history entry for command {0}'.format(entry['uid']))
+                    self.history[entry['uid']] = entry['progress']
+                dt = dt - datetime.timedelta(days=1)
 
             self.history_ready = True
             logger.info('Finished fetching minion commands history')
@@ -288,25 +291,23 @@ class Minions(object):
             try:
                 eid = self.meta_session.transform(keys.MINION_HISTORY_ENTRY_KEY % uid.encode('utf-8'))
                 # set to read_latest when it raises NotFoundError on non-existent keys
-                r = self.meta_session.read_data(eid).get()[0]
+                r = self.meta_session.list_indexes(eid).get()[0]
                 history_state = self._unserialize(r.data)
                 self.history[uid] = history_state['progress']
                 # updating if process is finished
                 if int(self.history[uid]) != int(state['progress']):
                     update_history_entry = True
-            except elliptics.NotFoundError:
+            except (elliptics.NotFoundError, IndexError):
                 logger.debug('History state is not found')
                 update_history_entry = True
 
             if update_history_entry:
-                logger.info('Updating minion history entry for command {0}'.format(uid))
                 start = datetime.datetime.fromtimestamp(state['start_ts'])
                 key = keys.MINION_HISTORY_KEY % start.strftime('%Y-%m')
-                self.meta_session.update_indexes(eid, [key], [self._serialize(state)])
+                logger.info('Updating minion history entry for command {0} ({1})'.format(uid, key))
+                self.meta_session.update_indexes(eid, [key], [self._serialize(state)]).get()
                 self.history[uid] = state['progress']
-            else:
-                logger.debug('Update for minion history entry '
-                             'of command {0} is not required'.format(uid))
+
         except Exception as e:
             logger.error('Failed to update minion history entry for '
                          'uid {0}: {1}\n{2}'.format(uid, str(e), traceback.format_exc()))
