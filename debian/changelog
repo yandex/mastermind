@@ -1,3 +1,10 @@
+mastermind (2.15.12) lucid; urgency=low
+
+  * Job processing can be started as soon as minions states has been fetched from all hosts with executing minion tasks according to job processor data
+  * Fix for invalid checking of minions history records
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 12 Jan 2015 20:07:54 +0300
+
 mastermind (2.15.11) lucid; urgency=low
 
   * Start task threads after cocaine worker has been initialized
