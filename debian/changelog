@@ -1,3 +1,9 @@
+mastermind (2.15.13) lucid; urgency=low
+
+  * Decreased cocaine pool-limit to 3
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 12 Jan 2015 20:34:19 +0300
+
 mastermind (2.15.11) lucid; urgency=low
 
   * Start task threads after cocaine worker has been initialized
