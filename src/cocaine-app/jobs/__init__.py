@@ -107,11 +107,26 @@ class JobProcessor(object):
             for job in self.jobs_index.tagged(tag):
                 self._load_job(job)
 
+    def _get_processing_jobs_hosts(self):
+        hosts = []
+        for job in filter(lambda j: j.status == Job.STATUS_EXECUTING, self.jobs.itervalues()):
+            for task in job.tasks:
+                if task.status == task.STATUS_EXECUTING and isinstance(task, MinionCmdTask):
+                    if not task.host:
+                        continue
+                    hosts.append(task.host)
+        return hosts
+
     def _execute_jobs(self):
 
         logger.info('Jobs execution started')
         try:
             if not self.minions.ready:
+                if self.minions.pending_hosts is None:
+                    # set minion hosts which state should be fetched
+                    # before job processor can start to execute jobs
+                    self.minions.pending_hosts = set(self._get_processing_jobs_hosts())
+                    logger.info('Minions pending hosts: {0}'.format(self.minions.pending_hosts))
                 raise errors.NotReadyError
 
             logger.debug('Lock acquiring')

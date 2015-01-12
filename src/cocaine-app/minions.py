@@ -40,6 +40,8 @@ class Minions(object):
         self.history = {}
         self.active_hosts = []
 
+        self.pending_hosts = None
+
         self.history_ready = False
         self.ready = False
 
@@ -98,7 +100,7 @@ class Minions(object):
                 headers=self.minion_headers,
                 timeout=config.get('minion', {}).get('commands_fetch_timeout', 15)).get()
 
-            successfull_hosts = 0
+            successful_hosts = set()
             for url, response in responses.iteritems():
                 host = states[url]
 
@@ -113,15 +115,20 @@ class Minions(object):
                 except errors.MinionApiError:
                     continue
 
-                successfull_hosts += 1
+                successful_hosts.add(host.addr)
 
-            if not self.ready and not active_hosts:
+            if not self.ready and not active_hosts and self.pending_hosts is not None:
                 # toggle ready state only if acitve_hosts == False (all minions are traversed)
-                self.ready = successfull_hosts >= len(states)
+                self.ready = set(self.pending_hosts).issubset(successful_hosts)
                 if not self.ready:
                     logger.warn('Failed to sync minions state: '
                         'received responses from {0}/{1} minions'.format(
-                            successfull_hosts, len(states)))
+                            len(successful_hosts), len(states)))
+                else:
+                    self.pending_hosts = None
+                    logger.info('Minion states was successfully synced: '
+                        'received responses from {0}/{1} minions'.format(
+                            len(successful_hosts), len(states)))
 
             logger.info('Finished fetching minion states task')
         except errors.NotReadyError as e:
