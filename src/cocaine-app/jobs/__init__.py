@@ -73,7 +73,7 @@ class JobProcessor(object):
     def _active_tags(self):
         tags = []
         dt = datetime.datetime.now().replace(day=1)
-        for month in range(2):
+        for month in range(1):
             tags.append(self.tag_dt(dt))
             dt = dt - datetime.timedelta(days=1)
             dt = dt.replace(day=1)
