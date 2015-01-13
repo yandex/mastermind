@@ -1,3 +1,9 @@
+mastermind (2.15.14) lucid; urgency=low
+
+  * Minor logging cleaning
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 13 Jan 2015 12:53:16 +0300
+
 mastermind (2.15.13) lucid; urgency=low
 
   * Decreased cocaine pool-limit to 3
