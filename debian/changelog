@@ -1,3 +1,9 @@
+mastermind (2.15.15) lucid; urgency=low
+
+  * Temporary decreased jobs prefetch time span
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 13 Jan 2015 14:55:54 +0300
+
 mastermind (2.15.14) lucid; urgency=low
 
   * Minor logging cleaning
