@@ -294,9 +294,6 @@ class Infrastructure(object):
                                         or {'couple': tuple()})
                     state_couple = cur_couple_state['couple']
 
-                    logger.debug('Comparing %s and %s' %
-                                  (storage_couple, state_couple))
-
                     if storage_couple and set(state_couple) != set(storage_couple):
                         logger.info('Group %d couple does not match,'
                                      'last state: %s, current state: %s' %
