@@ -4,6 +4,7 @@ import logging
 import time
 import traceback
 
+from cocaine.futures import chain
 import elliptics
 
 from config import config
@@ -321,8 +322,7 @@ class JobProcessor(object):
             except IndexError:
                 params = {}
 
-            with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
-                job = self._create_job(job_type, params)
+            job = self.async_create_job(job_type, params).get()
 
         except LockFailedError as e:
             raise
@@ -333,7 +333,18 @@ class JobProcessor(object):
 
         return job.dump()
 
-    def _create_job(self, job_type, params):
+    @chain.source
+    def async_create_job(self, *args, **kwargs):
+        yield chain.concurrent(self._create_job)(*args, **kwargs)
+
+    def _create_job(self, *args, **kwargs):
+        if kwargs.pop('manual', None):
+            with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
+                return self._do_create_job(*args, **kwargs)
+        else:
+            return self._do_create_job(*args, **kwargs)
+
+    def _do_create_job(self, job_type, params):
         # Forcing manual approval of newly created job
         params.setdefault('need_approving', True)
 
