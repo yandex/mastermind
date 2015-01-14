@@ -364,22 +364,15 @@ def group_recover_dc(group,
 
     group = int(group)
 
-    group_data = retry(s, 'get_group_info', group)
-    if not len(group_data['node_backends']):
-        print warn('Group {0} has no available node backends, should have '
-            'at least one'.format(group))
-        return
-    src_backend = group_data['node_backends'][0]
-    src_host, src_port, src_family = src_backend['node'].split(':')
-    (src_port, src_family) = map(int, (src_port, src_family))
+    couple_data = retry(s, 'get_couple_info', group)
+    for group_data in couple_data['groups']:
+        if not len(group_data['node_backends']):
+            print warn('Group {0} has no available node backends, should have '
+                'at least one'.format(group_data['id']))
+            return
 
     job_data = s.enqueue('create_job', msgpack.packb(['recover_dc_job',
-        {'group': group,
-         'host': src_host,
-         'port': src_port,
-         'family': src_family,
-         'backend_id': src_backend['backend_id'],
-         }])).get()
+        {'couple': couple_data['id']}])).get()
 
     print job_data
 
@@ -1058,7 +1051,7 @@ def couple_defrag(couple,
         return
 
     job_data = s.enqueue('create_job', msgpack.packb(['couple_defrag_job',
-        {'couple': couple}])).get()
+        {'couple': couple_data['id']}])).get()
 
     print job_data
 
