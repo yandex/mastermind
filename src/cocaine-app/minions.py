@@ -7,6 +7,7 @@ import time
 import traceback
 import urllib
 
+from cocaine.futures import chain
 import elliptics
 import msgpack
 from tornado.httpclient import AsyncHTTPClient, HTTPClient, HTTPError
@@ -26,32 +27,26 @@ class Minions(object):
 
     STATE_FETCH = 'state_fetch'
     STATE_FETCH_ACTIVE = 'state_fetch_active'
-    HISTORY_FETCH = 'history_fetch'
-    HISTORY_ENTRY_FETCH = 'history_entry_%s_fetch'
+    CMD_ENTRY_FETCH = 'cmd_entry_%s_fetch'
 
     MAKE_IOLOOP = 'make_ioloop'
-    STATE_URL_TPL = 'http://{host}:{port}/rsync/list/'
+    STATE_URL_TPL = 'http://{host}:{port}/rsync/list/?finish_ts_gte={finish_ts_gte}'
     START_URL_TPL = 'http://{host}:{port}/rsync/start/'
 
     def __init__(self, node):
         self.meta_session = node.meta_session.clone()
 
         self.commands = {}
-        self.history = {}
+        self.cmd_progress = {}
         self.active_hosts = []
 
         self.pending_hosts = None
-
-        self.history_ready = False
         self.ready = False
 
         self.__tq = timed_queue.TimedQueue()
 
         self.__tq.add_task_in(self.MAKE_IOLOOP, 0,
             self._make_tq_thread_ioloop)
-
-        self.__tq.add_task_in(self.HISTORY_FETCH,
-            5, self._fetch_history)
 
         self.__tq.add_task_in(self.STATE_FETCH,
             5, self._fetch_states)
@@ -75,9 +70,6 @@ class Minions(object):
     def _fetch_states(self, active_hosts=False):
         logger.info('Fetching minion states task started')
         try:
-            if not self.history_ready:
-                raise errors.NotReadyError
-
             states = {}
 
             if not active_hosts:
@@ -91,9 +83,12 @@ class Minions(object):
 
             random.shuffle(hosts)
 
+            # fetch tasks finished in last 24 hours or not finished at all
+            min_finish_ts = int(time.time()) - 24 * 60 * 60
             for host in hosts:
                 url = self.STATE_URL_TPL.format(host=host.addr,
-                                                port=self.minion_port)
+                                                port=self.minion_port,
+                                                finish_ts_gte=min_finish_ts)
                 states[url] = host
             logger.debug('Starting async batch')
             responses = AsyncHTTPBatch(states.keys(),
@@ -144,9 +139,11 @@ class Minions(object):
 
     def _process_state(self, addr, response):
 
-        response_data = self._get_wrapped_response(json.loads(response), addr)
+        response_data = self._unwrap_response(json.loads(response), addr)
 
         hostname = storage.hosts[addr].hostname
+        logger.debug('Received {0} minion task states '
+            'from host {1} ({2})'.format(len(response_data), hostname, addr))
         for uid, state in response_data.iteritems():
             state['uid'] = uid
             state['host'] = addr
@@ -163,12 +160,12 @@ class Minions(object):
             self.commands.update(response_data)
 
         for uid, state in response_data.iteritems():
-            if (self.history.get(uid) is None or
-                int(self.history[uid]) != int(state['progress'])):
+            if (self.cmd_progress.get(uid) is None or
+                int(self.cmd_progress[uid]) != int(state['progress'])):
 
-                logger.debug('Adding new task {0}'.format(self.HISTORY_ENTRY_FETCH % uid))
-                self.__tq.add_task_in(self.HISTORY_ENTRY_FETCH % uid,
-                    1, self._history_entry_update, state)
+                logger.debug('Adding new task {0}'.format(self.CMD_ENTRY_FETCH % uid))
+                self.__tq.add_task_in(self.CMD_ENTRY_FETCH % uid,
+                    1, self._cmd_entry_update, state)
 
         for uid, state in response_data.iteritems():
             if state['progress'] < 1.0:
@@ -205,7 +202,7 @@ class Minions(object):
 
         return response.body
 
-    def _get_wrapped_response(self, response, host):
+    def _unwrap_response(self, response, host):
         if response['status'] != 'success':
             logger.warn('Host: {0}, minion returned error: {1}'.format(
                 host, response['error']))
@@ -215,11 +212,13 @@ class Minions(object):
     def get_command(self, request):
         try:
             uid = request[0]
+            return self.get_last_cmd_state(uid).get()
         except ValueError:
-            raise ValueError('Invalid parameters')
-        if not uid in self.commands:
-            raise ValueError('Unknown minion command id {0}'.format(uid))
-        return self.commands[uid]
+            raise ValueError('Unknown command uid {0}'.format(uid))
+
+    @chain.source
+    def get_last_cmd_state(self, uid):
+        yield chain.concurrent(self._get_last_cmd_state)(uid)
 
     def get_commands(self, request):
         return sorted(self.commands.itervalues(), key=lambda c: c['start_ts'])
@@ -256,64 +255,31 @@ class Minions(object):
         data = self._process_state(host, self._get_response(host, response))
         return data
 
-    # history processing
-
-    def _fetch_history(self):
-        try:
-            logger.info('Fetching minion commands history')
-            dt = datetime.datetime.now()
-            for month in range(2):
-                dt = dt.replace(day=1)
-                logger.info('Fetching minions command history for date {0}'.format(dt))
-                for entry in self._history_entries(dt):
-                    if not entry['uid'] in self.history:
-                        logger.debug('Fetched history entry for command {0}'.format(entry['uid']))
-                    self.history[entry['uid']] = entry['progress']
-                dt = dt - datetime.timedelta(days=1)
-
-            self.history_ready = True
-            logger.info('Finished fetching minion commands history')
-        except Exception as e:
-            logger.info('Failed to fetch minion history')
-            logger.exception(e)
-        finally:
-            self.__tq.add_task_in(self.HISTORY_FETCH,
-                config.get('minions', {}).get('history_fetch_period', 120),
-                self._fetch_history)
-
-    def _history_entries(self, dt):
-        key = keys.MINION_HISTORY_KEY % dt.strftime('%Y-%m')
-        idxs = self.meta_session.find_all_indexes([key])
-        for idx in idxs:
-            data = idx.indexes[0].data
-            entry = self._unserialize(data)
-            yield entry
-
-    def _history_entry_update(self, state):
+    def _cmd_entry_update(self, state):
         try:
             uid = state['uid']
             logger.debug('Started updating minion history entry '
                          'for command {0}'.format(uid))
             update_history_entry = False
             try:
-                eid = self.meta_session.transform(keys.MINION_HISTORY_ENTRY_KEY % uid.encode('utf-8'))
-                # set to read_latest when it raises NotFoundError on non-existent keys
-                r = self.meta_session.list_indexes(eid).get()[0]
-                history_state = self._unserialize(r.data)
-                self.history[uid] = history_state['progress']
+                history_state = self._get_last_cmd_state(uid)
+                self.cmd_progress[uid] = history_state['progress']
                 # updating if process is finished
-                if int(self.history[uid]) != int(state['progress']):
+                if int(self.cmd_progress[uid]) != int(state['progress']):
                     update_history_entry = True
-            except (elliptics.NotFoundError, IndexError):
-                logger.debug('History state is not found')
+            except ValueError as e:
+                logger.debug(e)
                 update_history_entry = True
 
             if update_history_entry:
+                if isinstance(uid, unicode):
+                    uid = uid.encode('utf-8')
+                eid = self.meta_session.transform(keys.MINION_HISTORY_ENTRY_KEY % uid)
                 start = datetime.datetime.fromtimestamp(state['start_ts'])
                 key = keys.MINION_HISTORY_KEY % start.strftime('%Y-%m')
                 logger.info('Updating minion history entry for command {0} ({1})'.format(uid, key))
                 self.meta_session.update_indexes(eid, [key], [self._serialize(state)]).get()
-                self.history[uid] = state['progress']
+                self.cmd_progress[uid] = state['progress']
 
         except Exception as e:
             logger.error('Failed to update minion history entry for '
@@ -327,16 +293,17 @@ class Minions(object):
     def _serialize(data):
         return msgpack.packb(data)
 
-    def minion_history_log(self, request):
+    def _get_last_cmd_state(self, uid):
         try:
-            year, month = [int(_) for _ in request[0:2]]
-        except ValueError:
-            raise ValueError('Invalid parameters')
+            if isinstance(uid, unicode):
+                uid = uid.encode('utf-8')
+            eid = self.meta_session.transform(keys.MINION_HISTORY_ENTRY_KEY % uid)
+            r = self.meta_session.list_indexes(eid).get()[0]
+            state = self._unserialize(r.data)
+        except (elliptics.NotFoundError, IndexError):
+            raise ValueError('Unknown command uid {0}'.format(uid))
 
-        dt = datetime.datetime(year, month, 1)
-
-        entries = self._history_entries(dt)
-        return sorted(entries, key=lambda e: e['start_ts'])
+        return state
 
 
 class AsyncHTTPBatch(object):
