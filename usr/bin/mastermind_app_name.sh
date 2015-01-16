@@ -13,9 +13,10 @@ def main():
             config = json.load(config_file)
 
     except Exception as e:
-        raise ValueError('Failed to load config file %s: %s' % (CONFIG_PATH, e))
+        # raise ValueError('Failed to load config file %s: %s' % (CONFIG_PATH, e))
+        config = {}
 
-    sys.stdout.write(config.get('app_name', 'mastermind'))
+    sys.stdout.write(config.get('app_name', 'mastermind2.26'))
 
 
 if __name__ == '__main__':
