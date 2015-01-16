@@ -42,7 +42,7 @@ class JobProcessor(object):
 
     INDEX_BATCH_SIZE = 1000
 
-    def __init__(self, node, minions):
+    def __init__(self, node, meta_db, minions):
         logger.info('Starting JobProcessor')
         self.session = elliptics.Session(node)
         wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or config.get('wait_timeout', 5)

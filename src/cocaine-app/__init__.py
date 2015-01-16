@@ -14,6 +14,7 @@ sys.path.append('/usr/lib')
 
 import json
 import msgpack
+from pymongo.mongo_replica_set_client import MongoReplicaSetClient
 
 import elliptics
 
@@ -90,6 +91,8 @@ meta_session.set_timeout(meta_wait_timeout)
 meta_session.add_groups(list(config["metadata"]["groups"]))
 logger.info("trace %d" % (i.next()))
 n.meta_session = meta_session
+
+meta_db = MongoReplicaSetClient(config['metadata']['url'], **(config['metadata'].get('options', {})))
 
 balancelogicadapter.setConfig(config["balancer_config"])
 
@@ -191,7 +194,7 @@ def init_planner(job_processor):
 
 
 def init_job_processor(minions):
-    j = jobs.JobProcessor(n, minions)
+    j = jobs.JobProcessor(n, meta_db, minions)
     register_handle(j.create_job)
     register_handle(j.cancel_job)
     register_handle(j.approve_job)

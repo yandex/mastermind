@@ -5,6 +5,8 @@ import threading
 import time
 import uuid
 
+from db.mongo import MongoObject
+from db.mongo.job import JobView
 import helpers as h
 import keys
 from sync import sync_manager
@@ -20,7 +22,9 @@ from tasks import TaskFactory
 logger = logging.getLogger('mm.jobs')
 
 
-class Job(object):
+class Job(MongoObject):
+
+    MODEL = JobView
 
     STATUS_NOT_APPROVED = 'not_approved'
     STATUS_NEW = 'new'
@@ -42,6 +46,7 @@ class Job(object):
                        self.STATUS_NEW)
         self.create_ts = None
         self.start_ts = None
+        self.update_ts = None
         self.finish_ts = None
         self.type = None
         self.tasks = []
@@ -89,6 +94,7 @@ class Job(object):
         self.status = data['status']
         self.create_ts = data.get('create_ts') or data['start_ts']
         self.start_ts = data['start_ts']
+        self.update_ts = data['update_ts']
         self.finish_ts = data['finish_ts']
         self.type = data['type']
         self.error_msg = data.get('error_msg', [])
@@ -109,6 +115,7 @@ class Job(object):
                 'status': self.status,
                 'create_ts': self.create_ts,
                 'start_ts': self.start_ts,
+                'update_ts': self.update_ts,
                 'finish_ts': self.finish_ts,
                 'type': self.type,
                 'error_msg': self.error_msg}
