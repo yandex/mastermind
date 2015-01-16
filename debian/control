@@ -15,5 +15,5 @@ Description: Metabalancer for elliptics storage
 
 Package: mastermind-utils
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, python-opster (>= 4.0), cocaine-framework-python (>= 0.11.1.7), python-msgpack | msgpack-python, python-tornado (> 3.1)
+Depends: ${shlibs:Depends}, ${misc:Depends}, python-opster (>= 4.0), cocaine-framework-python (>= 0.11.1.7), python-msgpack | msgpack-python, python-tornado (<< 4)
 Description: Metabalancer CLI for elliptics storage
