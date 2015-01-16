@@ -1,3 +1,9 @@
+mastermind (2.15.20) lucid; urgency=low
+
+  * Changed dependencies (cocaine-tools << 0.12, cocaine-framework-python << 0.12)
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 16 Jan 2015 14:17:35 +0300
+
 mastermind (2.15.19) lucid; urgency=low
 
   * Changed dependencies (python-tornado << 4)
