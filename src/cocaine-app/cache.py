@@ -12,6 +12,7 @@ import elliptics
 import timed_queue
 
 from config import config
+import helpers as h
 import storage
 from cache_transport.transport import transport
 
@@ -94,6 +95,7 @@ class CacheManager(object):
             self.__tq.add_task_in('cache_list_update', cache_list_update_period, self.update_cache_list)
             logger.info('Cache list updated')
 
+    @h.concurrent_handler
     @update_lock
     def upload_list(self, request):
 
@@ -270,6 +272,7 @@ class CacheManager(object):
         logger.info('Updated indexes for key %s: %s %s' % (key_, updated_indexes, updated_datas))
         self.__session.set_indexes(eid, updated_indexes, updated_datas)
 
+    @h.concurrent_handler
     def get_cached_keys(self, request):
         res = []
         for ns_keys in self.keys.itervalues():
@@ -281,6 +284,7 @@ class CacheManager(object):
                     res.append((key, tuple([ci.group.group_id for ci in good_cis])))
         return res
 
+    @h.concurrent_handler
     def get_cached_keys_by_group(self, request):
 
         group_id = int(request)

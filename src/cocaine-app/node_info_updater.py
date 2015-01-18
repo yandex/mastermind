@@ -15,6 +15,7 @@ import balancer
 import balancelogicadapter as bla
 from config import config
 import errors
+import helpers as h
 import keys
 import timed_queue
 import storage
@@ -106,6 +107,7 @@ class NodeInfoUpdater(object):
             reload_period = config.get('nodes_reload_period', 60)
             self.__tq.add_task_in(GROUPS_META_UPDATE_TASK_ID, reload_period, self.update_symm_groups)
 
+    @h.concurrent_handler
     def force_nodes_update(self, request):
         logger.info('Forcing nodes update')
         self.execute_tasks()

@@ -10,6 +10,7 @@ import traceback
 import elliptics
 import msgpack
 
+import helpers as h
 import indexes
 import inventory
 from config import config
@@ -434,6 +435,7 @@ class Infrastructure(object):
             raise ValueError('Either path or port should be specified')
         return path or port_to_path(port)
 
+    @h.concurrent_handler
     def start_node_cmd(self, request):
 
         host, port = request[:2]
@@ -450,6 +452,7 @@ class Infrastructure(object):
 
         return cmd
 
+    @h.concurrent_handler
     def shutdown_node_cmd(self, request):
 
         host, port = request[:2]
@@ -473,6 +476,7 @@ class Infrastructure(object):
     _make_writable_node_backend_cmd = staticmethod(dnet_client_backend_command('make_writable'))
 
 
+    @h.concurrent_handler
     def enable_node_backend_cmd(self, request):
 
         host, port, family, backend_id = request[:4]
@@ -490,6 +494,7 @@ class Infrastructure(object):
 
         return cmd
 
+    @h.concurrent_handler
     def disable_node_backend_cmd(self, request):
 
         host, port, family, backend_id = request[:4]
@@ -544,6 +549,7 @@ class Infrastructure(object):
 
         return cmd
 
+    @h.concurrent_handler
     def reconfigure_node_cmd(self, request):
 
         host, port, family = request[:3]
@@ -564,6 +570,7 @@ class Infrastructure(object):
 
         return cmd
 
+    @h.concurrent_handler
     def recover_group_cmd(self, request):
 
         try:
@@ -601,6 +608,7 @@ class Infrastructure(object):
 
         return cmd
 
+    @h.concurrent_handler
     def defrag_node_backend_cmd(self, request):
 
         try:
@@ -622,6 +630,7 @@ class Infrastructure(object):
 
         return cmd
 
+    @h.concurrent_handler
     def search_history_by_path(self, request):
         params = request[0]
 

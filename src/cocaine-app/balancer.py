@@ -12,7 +12,6 @@ import sys
 import time
 import traceback
 
-from cocaine.futures import chain
 from cocaine.worker import Worker
 import elliptics
 import msgpack
@@ -48,46 +47,54 @@ class Balancer(object):
         self.statistics = statistics.Statistics(self)
         self.niu = None
 
-    def set_infrastructure(self, infrastructure):
+    def _set_infrastructure(self, infrastructure):
         self.infrastructure = infrastructure
 
-    def get_groups(self, request):
-        return tuple(group.group_id for group in storage.groups)
-
-    @h.handler
+    @h.concurrent_handler
     def get_symmetric_groups(self, request):
-        result = [couple.as_tuple() for couple in storage.couples if couple.status == storage.Status.OK]
+        result = self._good_couples()
         logger.debug('good_symm_groups: ' + str(result))
         return result
 
-    @h.handler
+    def _good_couples(self):
+        return [couple.as_tuple() for couple in storage.couples if couple.status == storage.Status.OK]
+
+    @h.concurrent_handler
     def get_bad_groups(self, request):
         result = [couple.as_tuple() for couple in storage.couples if couple.status not in storage.NOT_BAD_STATUSES]
         logger.debug('bad_symm_groups: ' + str(result))
         return result
 
-    @h.handler
+    @h.concurrent_handler
     def get_frozen_groups(self, request):
-        result = [couple.as_tuple() for couple in storage.couples if couple.status == storage.Status.FROZEN]
+        result = self._frozen_couples()
         logger.debug('frozen_couples: ' + str(result))
         return result
 
-    @h.handler
+    def _frozen_couples(self):
+        return [couple.as_tuple() for couple in storage.couples if couple.status == storage.Status.FROZEN]
+
+    @h.concurrent_handler
     def get_closed_groups(self, request):
-        result = [couple.as_tuple() for couple in storage.couples
-                  if couple.status == storage.Status.FULL]
+        result = self._closed_couples()
 
         logger.debug('closed couples: ' + str(result))
         return result
 
-    @h.handler
+    def _closed_couples(self):
+        return [couple.as_tuple() for couple in storage.couples
+                if couple.status == storage.Status.FULL]
+
+    @h.concurrent_handler
     def get_empty_groups(self, request):
         logger.info('len(storage.groups) = %d' % (len(storage.groups.elements)))
         logger.info('groups: %s' % str([(group.group_id, group.couple) for group in storage.groups if group.couple is None]))
-        result = [group.group_id for group in storage.groups if group.couple is None]
+        result = self._empty_group_ids()
         logger.debug('uncoupled groups: ' + str(result))
         return result
 
+    def _empty_group_ids(self):
+        return [group.group_id for group in storage.groups if group.couple is None]
 
     STATES = {
         'good': [storage.Status.OK],
@@ -97,10 +104,12 @@ class Balancer(object):
         'broken': [storage.Status.BROKEN]
     }
 
-    @h.handler
+    @h.concurrent_handler
     def get_couples_list(self, request):
         options = request[0]
+        return self._get_couples_list(options)
 
+    def _get_couples_list(self, options):
         couples = storage.couples.keys()
 
         if options.get('namespace', None):
@@ -125,7 +134,7 @@ class Balancer(object):
             data.append(info)
         return data
 
-    @h.handler
+    @h.concurrent_handler
     def get_group_meta(self, request):
         gid = request[0]
         key = request[1] or keys.SYMMETRIC_GROUPS_KEY
@@ -151,7 +160,7 @@ class Balancer(object):
                 'full_id': str(data.id),
                 'data': msgpack.unpackb(data.data) if unpack else data.data}
 
-    @h.handler
+    @h.concurrent_handler
     def groups_by_dc(self, request):
         groups = request[0]
         logger.info('Groups: %s' % (groups,))
@@ -184,7 +193,7 @@ class Balancer(object):
 
         return groups_by_dcs
 
-    @h.handler
+    @h.concurrent_handler
     def couples_by_namespace(self, request):
         couples = request[0]
         logger.info('Couples: %s' % (couples,))
@@ -209,7 +218,7 @@ class Balancer(object):
 
         return couples_by_nss
 
-    @h.handler
+    @h.concurrent_handler
     def get_group_weights(self, request):
         namespaces = {}
         all_symm_group_objects = []
@@ -245,7 +254,7 @@ class Balancer(object):
 
         for namespace, sizes in namespaces:
             try:
-                result[namespace] = self._namespaces_weights(
+                result[namespace] = self.__namespaces_weights(
                     namespace, sizes, symm_groups=all_symm_group_objects)
             except ValueError as e:
                 logger.error(e)
@@ -258,7 +267,7 @@ class Balancer(object):
         logger.info(str(result))
         return result
 
-    def _namespaces_weights(self, namespace, sizes, symm_groups=[]):
+    def __namespaces_weights(self, namespace, sizes, symm_groups=[]):
 
         found_couples = 0
 
@@ -297,7 +306,7 @@ class Balancer(object):
                 '{2} required'.format(namespace, found_couples, ns_min_units))
         return ns_weights
 
-    @h.handler
+    @h.concurrent_handler
     def repair_groups(self, request):
         logger.info('----------------------------------------')
         logger.info('New repair groups request: ' + str(request))
@@ -348,7 +357,7 @@ class Balancer(object):
 
         return {'message': 'Successfully repaired couple', 'couple': str(couple)}
 
-    @h.handler
+    @h.concurrent_handler
     def get_group_info(self, request):
         group = int(request)
         logger.info('get_group_info: request: %s' % (str(request),))
@@ -360,7 +369,7 @@ class Balancer(object):
 
         return storage.groups[group].info()
 
-    @h.handler
+    @h.concurrent_handler
     def get_group_history(self, request):
         group = int(request[0])
         group_history = {}
@@ -376,7 +385,7 @@ class Balancer(object):
 
     NODE_BACKEND_RE = re.compile('(.+):(\d+)/(\d+)')
 
-    @h.handler
+    @h.concurrent_handler
     def group_detach_node(self, request):
         group_id = int(request[0])
         node_backend_str = request[1]
@@ -413,7 +422,7 @@ class Balancer(object):
 
         return True
 
-    @h.handler
+    @h.concurrent_handler
     def get_couple_info(self, request):
         group_id = int(request)
         logger.info('get_couple_info: request: %s' % (str(request),))
@@ -437,26 +446,18 @@ class Balancer(object):
 
     VALID_COUPLE_INIT_STATES = (storage.Status.COUPLED, storage.Status.FROZEN)
 
-    @chain.source
-    def update_cluster_state(self, namespace=None):
+    def __update_cluster_state(self, namespace=None):
         logger.info('Starting concurrent cluster info update')
-        yield chain.concurrent(self.niu.execute_tasks)()
+        self.niu.execute_tasks()
         if namespace:
-            yield chain.concurrent(
-                infrastructure.infrastructure.sync_single_ns_settings
-            )(namespace)
+            infrastructure.infrastructure.sync_single_ns_settings(namespace)
         logger.info('Concurrent cluster info update completed')
 
-    @chain.source
-    def __groups_by_total_space(self, match_group_space=False):
-        yield chain.concurrent(
-            self.__do_groups_by_total_space)(match_group_space)
-
-    def __do_groups_by_total_space(self, match_group_space):
+    def __groups_by_total_space(self, match_group_space):
         suitable_groups = []
         total_spaces = []
 
-        for group_id in self.get_empty_groups(None):
+        for group_id in self._empty_group_ids():
             group = storage.groups[group_id]
 
             if not len(group.node_backends):
@@ -513,12 +514,7 @@ class Balancer(object):
 
         return groups_by_total_space
 
-    @chain.source
     def __couple_groups(self, size, couples, options, ns, groups_by_total_space):
-        yield chain.concurrent(
-            self.__do_couple_groups)(size, couples, options, ns, groups_by_total_space)
-
-    def __do_couple_groups(self, size, couples, options, ns, groups_by_total_space):
 
         created_couples = []
         error = None
@@ -527,7 +523,7 @@ class Balancer(object):
             tree, nodes = self.__build_cluster_state()
             self.__account_ns_couples(tree, nodes, ns)
 
-            units = self.groups_units(
+            units = self.__groups_units(
                 [group_id for group_ids in groups_by_total_space.itervalues()
                           for group_id in group_ids])
 
@@ -550,7 +546,7 @@ class Balancer(object):
                     self.__update_groups_list(tree)
 
                 ns_current_state = self.__ns_current_state(nodes)
-                groups_to_couple = self.choose_groups_to_couple(
+                groups_to_couple = self.__choose_groups_to_couple(
                     ns_current_state, units, size, groups_by_total_space, mandatory_groups)
                 if not groups_to_couple:
                     logger.warn('Not enough uncoupled groups to couple')
@@ -692,7 +688,7 @@ class Balancer(object):
         return sum((c - ns_current_type_state['avg']) ** 2
                    for c in comb_groups_count.values())
 
-    def weight_couple_groups(self, ns_current_state, units, group_ids):
+    def __weight_couple_groups(self, ns_current_state, units, group_ids):
         weight = []
         for node_type in self.NODE_TYPES[1:]:
             node_groups = {}
@@ -719,7 +715,7 @@ class Balancer(object):
                 len(nodes[node_type]))
         return ns_current_state
 
-    def choose_groups(self, ns_current_state, units, count, group_ids, levels, mandatory_groups):
+    def __choose_groups(self, ns_current_state, units, count, group_ids, levels, mandatory_groups):
         levels = levels[1:]
         node_type = levels[0]
         logger.info('Selecting {0} groups on level {1} among groups {2}'.format(
@@ -790,9 +786,9 @@ class Balancer(object):
         else:
             groups = reduce(
                 operator.add,
-                (self.choose_groups(ns_current_state, units, count,
-                                    groups_by_level_units[level_units],
-                                    levels, mandatory_groups)
+                (self.__choose_groups(ns_current_state, units, count,
+                                      groups_by_level_units[level_units],
+                                      levels, mandatory_groups)
                      for level_units, count in node_counts.iteritems()),
                 [])
 
@@ -805,7 +801,7 @@ class Balancer(object):
 
         return groups
 
-    def groups_units(self, group_ids):
+    def __groups_units(self, group_ids):
         units = {}
 
         for group_id in group_ids:
@@ -829,7 +825,7 @@ class Balancer(object):
 
         return units
 
-    def choose_groups_to_couple(self, ns_current_state, units, count, groups_by_total_space, mandatory_groups):
+    def __choose_groups_to_couple(self, ns_current_state, units, count, groups_by_total_space, mandatory_groups):
 
         candidates = []
         for ts, group_ids in groups_by_total_space.iteritems():
@@ -840,7 +836,7 @@ class Balancer(object):
 
             free_group_ids = [g for g in group_ids if g not in mandatory_groups]
 
-            candidate = self.choose_groups(
+            candidate = self.__choose_groups(
                 ns_current_state, units, count - len(mandatory_groups),
                 free_group_ids, self.NODE_TYPES, mandatory_groups)
             candidate += mandatory_groups
@@ -848,7 +844,7 @@ class Balancer(object):
                 candidates.append(candidate)
 
         if len(candidates) > 1:
-            weights = [(self.weight_couple_groups(ns_current_state, units, c), c) for c in candidates]
+            weights = [(self.__weight_couple_groups(ns_current_state, units, c), c) for c in candidates]
             weights.sort()
             logger.info('Choosing candidate with least weight: {0}'.format(weights))
             candidate = weights[0][1]
@@ -859,7 +855,7 @@ class Balancer(object):
 
         return candidate
 
-    @h.handler
+    @h.concurrent_handler
     def build_couples(self, request):
         logger.info('----------------------------------------')
         logger.info('New build couple request: ' + str(request))
@@ -887,24 +883,24 @@ class Balancer(object):
         ns = options['namespace']
         logger.info('namespace from request: {0}'.format(ns))
 
-        self.check_namespace(ns)
+        self.__check_namespace(ns)
 
         with sync_manager.lock(self.CLUSTER_CHANGES_LOCK, blocking=False):
 
             logger.info('Updating cluster info')
-            self.update_cluster_state(namespace=options['namespace']).get()
+            self.__update_cluster_state(namespace=options['namespace'])
             logger.info('Updating cluster info completed')
 
             groups_by_total_space = self.__groups_by_total_space(
-                options['match_group_space']).get()
+                options['match_group_space'])
 
             logger.info('groups by total space: {0}'.format(groups_by_total_space))
 
-            res, error = self.__couple_groups(size, couples, options, ns, groups_by_total_space).get()
+            res, error = self.__couple_groups(size, couples, options, ns, groups_by_total_space)
 
         return (res, str(error) if error else None)
 
-    @h.handler
+    @h.concurrent_handler
     def break_couple(self, request):
         logger.info('----------------------------------------')
         logger.info('New break couple request: ' + str(request))
@@ -916,7 +912,7 @@ class Balancer(object):
         with sync_manager.lock(self.CLUSTER_CHANGES_LOCK, blocking=False):
 
             logger.info('Updating cluster info')
-            self.update_cluster_state().get()
+            self.__update_cluster_state()
             logger.info('Updating cluster info completed')
 
             couple = storage.couples[couple_str]
@@ -945,7 +941,7 @@ class Balancer(object):
 
             return True
 
-    @h.handler
+    @h.concurrent_handler
     def get_next_group_number(self, request):
         groups_count = int(request)
         if groups_count < 0 or groups_count > 100:
@@ -963,7 +959,7 @@ class Balancer(object):
 
         return range(max_group + 1, max_group + 1 + groups_count)
 
-    @h.handler
+    @h.concurrent_handler
     def get_config_remotes(self, request):
         nodes = config.get('elliptics', {}).get('nodes', []) or config["elliptics_nodes"]
         return tuple(nodes)
@@ -981,10 +977,10 @@ class Balancer(object):
     NS_RE = re.compile('^[{alphanum}][{alphanum}{extra}]*[{alphanum}]$'.format(
         alphanum=ALPHANUM, extra=EXTRA))
 
-    def valid_namespace(self, namespace):
+    def __valid_namespace(self, namespace):
         return self.NS_RE.match(namespace) is not None
 
-    def validate_ns_settings(self, namespace, settings):
+    def __validate_ns_settings(self, namespace, settings):
 
         groups_count = None
         if settings.get('groups-count'):
@@ -1103,6 +1099,7 @@ class Balancer(object):
                 else:
                     self.__merge_dict(dst[k], src[k])
 
+    @h.concurrent_handler
     def namespace_setup(self, request):
         try:
             namespace, overwrite, settings = request[:3]
@@ -1144,7 +1141,7 @@ class Balancer(object):
 
         self.__merge_dict(cur_settings, settings)
 
-        if not self.valid_namespace(namespace):
+        if not self.__valid_namespace(namespace):
             raise ValueError('Namespace "{0}" is invalid'.format(namespace))
 
         settings = cur_settings
@@ -1166,7 +1163,7 @@ class Balancer(object):
                     del settings['redirect'][k]
 
             try:
-                self.validate_ns_settings(namespace, settings)
+                self.__validate_ns_settings(namespace, settings)
             except Exception as e:
                 logger.error(e)
                 raise
@@ -1175,14 +1172,14 @@ class Balancer(object):
 
         return True
 
-    def check_namespace(self, namespace):
+    def __check_namespace(self, namespace):
         if not namespace in self.infrastructure.ns_settings:
             raise ValueError('Namespace "{0}" does not exist'.format(namespace))
         else:
             if self.infrastructure.ns_settings[namespace]['__service'].get('is_deleted'):
                 raise ValueError('Namespace "{0}" is deleted'.format(namespace))
 
-    @h.handler
+    @h.concurrent_handler
     def namespace_delete(self, request):
         try:
             namespace = request[0]
@@ -1192,10 +1189,10 @@ class Balancer(object):
         with sync_manager.lock(self.CLUSTER_CHANGES_LOCK, blocking=False):
 
             logger.info('Updating cluster info')
-            self.update_cluster_state(namespace=namespace).get()
+            self.__update_cluster_state(namespace=namespace)
             logger.info('Updating cluster info completed')
 
-            self.check_namespace(namespace)
+            self.__check_namespace(namespace)
 
             for couple in storage.couples:
                 try:
@@ -1219,6 +1216,7 @@ class Balancer(object):
 
         return True
 
+    @h.concurrent_handler
     def get_namespace_settings(self, request):
         try:
             namespace = request[0]
@@ -1231,7 +1229,7 @@ class Balancer(object):
             options = {}
 
         try:
-            self.check_namespace(namespace)
+            self.__check_namespace(namespace)
         except ValueError:
             if (namespace not in self.infrastructure.ns_settings or
                 not options.get('deleted')):
@@ -1239,10 +1237,11 @@ class Balancer(object):
 
         return self.infrastructure.ns_settings[namespace]
 
+    @h.concurrent_handler
     def get_namespaces_settings(self, request):
         return self.infrastructure.ns_settings
 
-    @h.handler
+    @h.concurrent_handler
     def get_namespaces_statistics(self, request):
         per_dc_stat, per_ns_stat = self.statistics.per_entity_stat()
         ns_stats = {}
@@ -1250,7 +1249,7 @@ class Balancer(object):
             ns_stats[ns] = self.statistics.total_stats(stats)
         return ns_stats
 
-    @h.handler
+    @h.concurrent_handler
     def freeze_couple(self, request):
         logger.info('freezing couple %s' % str(request))
         couple = self.__get_couple(request)
@@ -1263,7 +1262,7 @@ class Balancer(object):
 
         return True
 
-    @h.handler
+    @h.concurrent_handler
     def unfreeze_couple(self, request):
         logger.info('unfreezing couple %s' % str(request))
         couple = self.__get_couple(request)
@@ -1305,11 +1304,11 @@ class Balancer(object):
                 [g.group_id for g in couple.groups], e))
             raise
 
-    @h.handler
+    @h.concurrent_handler
     def get_namespaces(self, request):
         return self.infrastructure.ns_settings.keys()
 
-    @h.handler
+    @h.concurrent_handler
     def get_namespaces_states(self, request):
         default = lambda: {
             'settings': {},
@@ -1353,10 +1352,10 @@ class Balancer(object):
         # weights
         for ns, sizes in symm_groups.iteritems():
             try:
-                # TODO: convert size inside of _namespaces_weights function
+                # TODO: convert size inside of __namespaces_weights function
                 # when get_groups_weights handle is gone
                 res[ns]['weights'] = dict((str(k), v)
-                    for k, v in self._namespaces_weights(ns, sizes).iteritems())
+                    for k, v in self.__namespaces_weights(ns, sizes).iteritems())
             except ValueError as e:
                 logger.error(e)
                 continue
@@ -1385,11 +1384,20 @@ class Balancer(object):
 
 def handlers(b):
     handlers = []
-    for attr_name in dir(b):
-        attr = b.__getattribute__(attr_name)
-        if not callable(attr) or attr_name.startswith('__'):
-            continue
-        handlers.append(attr)
+    try:
+        private_prefix = '_' + Balancer.__name__ + '__'
+        for attr_name in dir(b):
+            attr = b.__getattribute__(attr_name)
+            if (not callable(attr) or
+                attr.__name__.startswith('_') or
+                attr_name.startswith('__') or
+                attr_name.startswith(private_prefix)):
+                    continue
+            logger.info('adding handler: attr_name: {0}, attr.__name__ {1}'.format(attr_name, attr.__name__))
+            handlers.append(attr)
+    except Exception as e:
+        logger.error('handler exception: {0}'.format(e))
+        pass
     return handlers
 
 

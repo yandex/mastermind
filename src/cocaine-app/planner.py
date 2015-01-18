@@ -13,6 +13,7 @@ import msgpack
 from balancer import get_good_uncoupled_groups
 from coll import SortedCollection
 from config import config
+import helpers as h
 from infrastructure import infrastructure
 import inventory
 import jobs
@@ -510,7 +511,7 @@ class Planner(object):
                     logger.error('Failed to create couple defrag job: {0}'.format(e))
                     continue
 
-
+    @h.concurrent_handler
     def restore_group(self, request):
         logger.info('----------------------------------------')
         logger.info('New restore group request: ' + str(request))
@@ -568,9 +569,10 @@ class Planner(object):
             job_params['uncoupled_group'] = uncoupled_groups[0].group_id
             job_params['merged_groups'] = [g.group_id for g in uncoupled_groups[1:]]
 
-        job = self.job_processor._create_job(
-            jobs.JobTypes.TYPE_RESTORE_GROUP_JOB,
-            job_params)
+        with sync_manager.lock(self.job_processor.JOBS_LOCK):
+            job = self.job_processor._create_job(
+                jobs.JobTypes.TYPE_RESTORE_GROUP_JOB,
+                job_params)
 
         return job.dump()
 

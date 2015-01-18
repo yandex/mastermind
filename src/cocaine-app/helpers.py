@@ -3,6 +3,7 @@ import logging
 import traceback
 
 import elliptics
+from cocaine.futures import chain
 
 
 logger = logging.getLogger('mm.balancer')
@@ -16,6 +17,23 @@ def handler(f):
         except Exception as e:
             logger.error('Error: ' + str(e) + '\n' + traceback.format_exc())
             return {'Error': str(e)}
+
+    return wrapper
+
+
+def concurrent_handler(f):
+
+    def sync_wrapper(*args, **kwargs):
+        try:
+            return f(*args, **kwargs)
+        except Exception as e:
+            logger.error('Error: ' + str(e) + '\n' + traceback.format_exc())
+            return {'Error': str(e)}
+
+    @wraps(f)
+    @chain.source
+    def wrapper(*args, **kwargs):
+        yield chain.concurrent(sync_wrapper)(*args, **kwargs)
 
     return wrapper
 

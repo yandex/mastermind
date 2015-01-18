@@ -4,12 +4,12 @@ import logging
 import time
 import traceback
 
-from cocaine.futures import chain
 import elliptics
 
 from config import config
 import errors
 from error import JobBrokenError
+import helpers as h
 from job_types import JobTypes, TaskTypes
 from job import Job
 from couple_defrag import CoupleDefragJob
@@ -306,6 +306,7 @@ class JobProcessor(object):
 
     JOB_MANUAL_TIMEOUT = 20
 
+    @h.concurrent_handler
     def create_job(self, request):
         try:
             try:
@@ -322,7 +323,8 @@ class JobProcessor(object):
             except IndexError:
                 params = {}
 
-            job = self.async_create_job(job_type, params).get()
+            with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
+                job = self._create_job(job_type, params)
 
         except LockFailedError as e:
             raise
@@ -333,18 +335,7 @@ class JobProcessor(object):
 
         return job.dump()
 
-    @chain.source
-    def async_create_job(self, *args, **kwargs):
-        yield chain.concurrent(self._create_job)(*args, **kwargs)
-
-    def _create_job(self, *args, **kwargs):
-        if kwargs.pop('manual', None):
-            with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
-                return self._do_create_job(*args, **kwargs)
-        else:
-            return self._do_create_job(*args, **kwargs)
-
-    def _do_create_job(self, job_type, params):
+    def _create_job(self, job_type, params):
         # Forcing manual approval of newly created job
         params.setdefault('need_approving', True)
 
@@ -372,6 +363,7 @@ class JobProcessor(object):
 
         return job
 
+    @h.concurrent_handler
     def get_job_list(self, request):
         try:
             options = request[0]
@@ -405,6 +397,7 @@ class JobProcessor(object):
         return {'jobs': res,
                 'total': total_jobs}
 
+    @h.concurrent_handler
     def get_job_status(self, request):
         try:
             job_id = request[0]
@@ -416,6 +409,7 @@ class JobProcessor(object):
 
         return self.jobs[job_id].dump()
 
+    @h.concurrent_handler
     def get_jobs_status(self, request):
         try:
             job_ids = request[0]
@@ -431,6 +425,7 @@ class JobProcessor(object):
 
         return statuses
 
+    @h.concurrent_handler
     def cancel_job(self, request):
         job_id = None
         try:
@@ -467,6 +462,7 @@ class JobProcessor(object):
 
         return job.dump()
 
+    @h.concurrent_handler
     def approve_job(self, request):
         job_id = None
         try:
@@ -496,6 +492,7 @@ class JobProcessor(object):
 
         return job.dump()
 
+    @h.concurrent_handler
     def retry_failed_job_task(self, request):
         job_id = None
         try:
@@ -515,6 +512,7 @@ class JobProcessor(object):
 
         return job.dump()
 
+    @h.concurrent_handler
     def skip_failed_job_task(self, request):
         job_id = None
         try:
