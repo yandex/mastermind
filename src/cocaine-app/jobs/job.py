@@ -47,6 +47,7 @@ class Job(MongoObject):
         self.create_ts = None
         self.start_ts = None
         self.update_ts = None
+        self._update_ts = None
         self.finish_ts = None
         self.type = None
         self.tasks = []
@@ -60,6 +61,8 @@ class Job(MongoObject):
 
     @classmethod
     def new(cls, session, **kwargs):
+        super(Job, cls).new(session, **kwargs)
+
         cparams = {}
         for cparam in cls.COMMON_PARAMS:
             if cparam in kwargs:
@@ -67,7 +70,10 @@ class Job(MongoObject):
         job = cls(**cparams)
         for param in cls.PARAMS:
             setattr(job, param, kwargs.get(param, None))
-        job.create_ts = time.time()
+        ts = time.time()
+        job.create_ts = ts
+        job.update_ts = ts
+        job._dirty = True
         try:
             job.perform_locks()
         except LockError:
@@ -94,8 +100,8 @@ class Job(MongoObject):
         self.status = data['status']
         self.create_ts = data.get('create_ts') or data['start_ts']
         self.start_ts = data['start_ts']
-        self.update_ts = data['update_ts']
         self.finish_ts = data['finish_ts']
+        self.update_ts = data.get('update_ts') or self.finish_ts or self.start_ts
         self.type = data['type']
         self.error_msg = data.get('error_msg', [])
 
@@ -109,6 +115,17 @@ class Job(MongoObject):
             setattr(self, param, val)
 
         return self
+
+    @property
+    def update_ts(self):
+        return self._update_ts
+
+    @update_ts.setter
+    def update_ts(self, value):
+        if value is None:
+            self._update_ts = None
+        else:
+            self._update_ts = int(value)
 
     def _dump(self):
         data = {'id': self.id,
@@ -220,6 +237,7 @@ class Job(MongoObject):
         ts = time.time()
         if not self.start_ts:
             self.start_ts = ts
+        self.update_ts = ts
         self.finish_ts = ts
         self.release_locks()
 

@@ -49,6 +49,7 @@ class JobProcessor(object):
         self.session.set_timeout(wait_timeout)
         self.meta_session = node.meta_session
         self.minions = minions
+        self.collection = meta_db['mastermind_test_jobs']['jobs']
 
         self.jobs = {}
         self.jobs_index = indexes.TagSecondaryIndex(
@@ -64,9 +65,11 @@ class JobProcessor(object):
 
         self.job_tags = self._active_tags()
 
+        self.update_ts = None
         self._update_jobs()
         self.__tq.add_task_in(self.JOBS_EXECUTE,
             5, self._execute_jobs)
+
 
     def _start_tq(self):
         self.__tq.start()
@@ -80,11 +83,11 @@ class JobProcessor(object):
             dt = dt.replace(day=1)
         return tags
 
-    def _load_job(self, job_rawdata):
-        job_data = json.loads(job_rawdata)
+    def _load_job(self, job_data):
         if not job_data['id'] in self.jobs:
             job = self.jobs[job_data['id']] = JobFactory.make_job(job_data)
             logger.info('Job {0}: loaded from job index'.format(job.id))
+            job.collection = self.collection
         else:
             # TODO: Think about other ways of updating job
             job = self.jobs[job_data['id']].load(job_data)
@@ -92,7 +95,9 @@ class JobProcessor(object):
 
     def _update_jobs(self):
         try:
+            update_ts = time.time()
             self._do_update_jobs()
+            self.update_ts = int(update_ts)
         except Exception as e:
             logger.error('Failed to update jobs: {0}\n{1}'.format(
                 e, traceback.format_exc()))
@@ -103,10 +108,17 @@ class JobProcessor(object):
 
 
     def _do_update_jobs(self):
-        for tag in self.job_tags:
-            logger.debug('updating jobs with tag {0}'.format(tag))
-            for job in self.jobs_index.tagged(tag):
-                self._load_job(job)
+        # for tag in self.job_tags:
+        #     logger.debug('updating jobs with tag {0}'.format(tag))
+        #     for job in self.jobs_index.tagged(tag):
+        #         self._load_job(job)
+        ts = time.time()
+        logger.info('Updating jobs list')
+        for job in Job.updated_since(self.collection, self.update_ts):
+            logger.debug('Job updated: {0}'.format(job['id']))
+            self._load_job(job)
+        logger.info('Updating jobs list finished: {0:.3f}'.format(time.time() - ts))
+        logger.info('traceback: {0}'.format(traceback.format_stack()))
 
     def _get_processing_jobs_hosts(self):
         hosts = []
@@ -159,6 +171,8 @@ class JobProcessor(object):
                     try:
                         with job.tasks_lock():
                             self.__process_job(job)
+                        self.jobs_index[job.id] = self.__dump_job(job)
+                        job.save()
                     except LockError:
                         pass
                     except Exception as e:
@@ -167,7 +181,6 @@ class JobProcessor(object):
                         continue
                     else:
                         executing_count += 1
-                    self.jobs_index[job.id] = self.__dump_job(job)
 
         except LockFailedError as e:
             pass
@@ -198,6 +211,7 @@ class JobProcessor(object):
         if job.status == Job.STATUS_NEW:
             logger.info('Job {0}: setting job start time'.format(job.id))
             job.start_ts = time.time()
+            job._dirty = True
             try:
                 job.on_start()
             except JobBrokenError as e:
@@ -205,13 +219,17 @@ class JobProcessor(object):
                         job.id, e))
                 job.status = Job.STATUS_BROKEN
                 job.add_error_msg(str(e))
-                job.finish_ts = time.time()
+                ts = time.time()
+                job.update_ts = ts
+                job.finish_ts = ts
                 return
             except Exception as e:
                 logger.error('Job {0}: failed to start job: {1}\n{2}'.format(
                     job.id, e, traceback.format_exc()))
                 job.status = Job.STATUS_PENDING
-                job.finish_ts = time.time()
+                ts = time.time()
+                job.update_ts = ts
+                job.finish_ts = ts
                 return
 
         for task in job.tasks:
@@ -227,7 +245,10 @@ class JobProcessor(object):
                     task.error_msg.append(str(e))
                     task.status = Task.STATUS_FAILED
                     job.status = Job.STATUS_PENDING
-                    job.finish_ts = time.time()
+                    ts = time.time()
+                    job.update_ts = ts
+                    job.finish_ts = ts
+                    job._dirty = True
                     break
 
                 if not task.finished:
@@ -235,7 +256,10 @@ class JobProcessor(object):
                         job.id, task.id))
                     break
 
-                task.finish_ts = time.time()
+                ts = time.time()
+                job.update_ts = ts
+                job.finish_ts = ts
+                job._dirty = True
 
                 task.status = (Task.STATUS_FAILED
                                if task.failed else
@@ -246,7 +270,9 @@ class JobProcessor(object):
 
                 if task.status == Task.STATUS_FAILED:
                     job.status = Job.STATUS_PENDING
-                    job.finish_ts = time.time()
+                    ts = time.time()
+                    job.update_ts = ts
+                    job.finish_ts = ts
                     break
                 else:
                     continue
@@ -255,6 +281,8 @@ class JobProcessor(object):
                 try:
                     logger.info('Job {0}, executing new task {1}'.format(job.id, task))
                     self.__execute_task(task)
+                    job.update_ts = time.time()
+                    job._dirty = True
                     logger.info('Job {0}, task {1} execution was successfully requested'.format(
                         job.id, task.id))
                     task.status = Task.STATUS_EXECUTING
@@ -266,13 +294,19 @@ class JobProcessor(object):
                     task.status = Task.STATUS_FAILED
                     job.status = Job.STATUS_BROKEN
                     job.add_error_msg(str(e))
-                    job.finish_ts = time.time()
+                    ts = time.time()
+                    job.update_ts = ts
+                    job.finish_ts = ts
+                    job._dirty = True
                 except Exception as e:
                     logger.error('Job {0}, task {1}: failed to execute: {2}\n{3}'.format(
                         job.id, task, e, traceback.format_exc()))
                     task.status = Task.STATUS_FAILED
                     job.status = Job.STATUS_PENDING
-                    job.finish_ts = time.time()
+                    ts = time.time()
+                    job.update_ts = ts
+                    job.finish_ts = ts
+                    job._dirty = True
                 break
 
         if all([task.status in (Task.STATUS_COMPLETED, Task.STATUS_SKIPPED)
@@ -280,6 +314,7 @@ class JobProcessor(object):
             logger.info('Job {0}, tasks processing is finished'.format(job.id))
             try:
                 job.complete(self.session)
+                job._dirty = True
             except RuntimeError as e:
                 logger.error('Job {0}, failed to complete job: {1}'.format(job.id, e))
             else:
@@ -300,9 +335,6 @@ class JobProcessor(object):
 
     def __dump_job(self, job):
         return json.dumps(job.dump())
-
-    def __load_job(self, data):
-        return json.loads(data)
 
     JOB_MANUAL_TIMEOUT = 20
 
@@ -346,31 +378,37 @@ class JobProcessor(object):
 
     def _do_create_job(self, job_type, params):
         # Forcing manual approval of newly created job
-        params.setdefault('need_approving', True)
-
-        if job_type == JobTypes.TYPE_MOVE_JOB:
-            JobType = MoveJob
-        elif job_type == JobTypes.TYPE_RECOVER_DC_JOB:
-            JobType = RecoverDcJob
-        elif job_type == JobTypes.TYPE_COUPLE_DEFRAG_JOB:
-            JobType = CoupleDefragJob
-        elif job_type == JobTypes.TYPE_RESTORE_GROUP_JOB:
-            JobType = RestoreGroupJob
-        job = JobType.new(self.session, **params)
-
         try:
-            job.create_tasks()
+            params.setdefault('need_approving', True)
 
-            logger.info('Job {0} created: {1}'.format(job.id, job.dump()))
-            self.jobs_index[job.id] = self.__dump_job(job)
-            self.jobs_index.set_tag(job.id, self.tag(job))
+            if job_type == JobTypes.TYPE_MOVE_JOB:
+                JobType = MoveJob
+            elif job_type == JobTypes.TYPE_RECOVER_DC_JOB:
+                JobType = RecoverDcJob
+            elif job_type == JobTypes.TYPE_COUPLE_DEFRAG_JOB:
+                JobType = CoupleDefragJob
+            elif job_type == JobTypes.TYPE_RESTORE_GROUP_JOB:
+                JobType = RestoreGroupJob
+            job = JobType.new(self.session, **params)
+            job.collection = self.collection
 
-            self.jobs[job.id] = job
-        except Exception:
-            job.release_locks()
+            try:
+                job.create_tasks()
+
+                logger.info('Job {0} created: {1}'.format(job.id, job.dump()))
+                self.jobs_index[job.id] = self.__dump_job(job)
+                self.jobs_index.set_tag(job.id, self.tag(job))
+
+                self.jobs[job.id] = job
+                job.save()
+            except Exception:
+                job.release_locks()
+                raise
+
+            return job
+        except Exception as e:
+            logger.error('{0}, {1}'.format(e, traceback.format_exc()))
             raise
-
-        return job
 
     def get_job_list(self, request):
         try:
@@ -456,7 +494,10 @@ class JobProcessor(object):
 
                 job.status = Job.STATUS_CANCELLED
                 job.complete(self.session)
+                job._dirty = True
                 self.jobs_index[job.id] = self.__dump_job(job)
+
+                job.save()
 
                 logger.info('Job {0}: status set to {1}'.format(job.id, job.status))
 
@@ -486,8 +527,12 @@ class JobProcessor(object):
                         '"{2}"'.format(job.id, job.status, Job.STATUS_NOT_APPROVED))
 
                 job.status = Job.STATUS_NEW
+                job.update_ts = time.time()
+                job._dirty = True
 
                 self.jobs_index[job.id] = self.__dump_job(job)
+
+                job.save()
 
         except Exception as e:
             logger.error('Failed to approve job {0}: {1}\n{2}'.format(
@@ -562,7 +607,10 @@ class JobProcessor(object):
 
             task.status = status
             job.status = Job.STATUS_EXECUTING
+            job.update_ts = time.time()
+            job._dirty = True
             self.jobs_index[job.id] = self.__dump_job(job)
+            job.save()
             logger.info('Job {0}: task {1} status was reset to {2}, '
                 'job status was reset to {3}'.format(
                     job.id, task.id, task.status, job.status))
