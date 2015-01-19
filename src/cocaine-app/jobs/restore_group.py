@@ -107,11 +107,11 @@ class RestoreGroupJob(Job):
                              '')
 
 
-                shutdown_cmd = infrastructure.disable_node_backend_cmd([
+                shutdown_cmd = infrastructure._disable_node_backend_cmd(
                     merged_nb.node.host.addr,
                     merged_nb.node.port,
                     merged_nb.node.family,
-                    merged_nb.backend_id])
+                    merged_nb.backend_id)
 
                 params = {'node_backend': node_backend_str.encode('utf-8'),
                           'group': str(group_id),
@@ -136,10 +136,10 @@ class RestoreGroupJob(Job):
 
                 self.tasks.append(task)
 
-                reconfigure_cmd = infrastructure.reconfigure_node_cmd(
-                    [merged_nb.node.host.addr,
-                     merged_nb.node.port,
-                     merged_nb.node.family])
+                reconfigure_cmd = infrastructure._reconfigure_node_cmd(
+                    merged_nb.node.host.addr,
+                    merged_nb.node.port,
+                    merged_nb.node.family)
 
                 task = MinionCmdTask.new(self,
                     host=merged_nb.node.host.addr,
@@ -157,8 +157,8 @@ class RestoreGroupJob(Job):
 
 
             # destination backend should be stopped
-            shutdown_cmd = infrastructure.disable_node_backend_cmd([
-                dst_host, dst_port, dst_family, dst_backend_id])
+            shutdown_cmd = infrastructure._disable_node_backend_cmd(
+                dst_host, dst_port, dst_family, dst_backend_id)
 
             params = {'node_backend': dst_node_backend.encode('utf-8'),
                       'group': str(self.uncoupled_group)}
@@ -212,8 +212,8 @@ class RestoreGroupJob(Job):
                                      params=params)
             self.tasks.append(task)
 
-        reconfigure_cmd = infrastructure.reconfigure_node_cmd(
-            [dst_host, dst_port, dst_family])
+        reconfigure_cmd = infrastructure._reconfigure_node_cmd(
+            dst_host, dst_port, dst_family)
 
         task = MinionCmdTask.new(self,
             host=dst_host,
@@ -239,8 +239,8 @@ class RestoreGroupJob(Job):
             self.tasks.append(task)
 
 
-        start_cmd = infrastructure.enable_node_backend_cmd([
-            dst_host, dst_port, dst_family, dst_backend_id])
+        start_cmd = infrastructure._enable_node_backend_cmd(
+            dst_host, dst_port, dst_family, dst_backend_id)
         task = MinionCmdTask.new(self,
                                  host=dst_host,
                                  cmd=start_cmd,

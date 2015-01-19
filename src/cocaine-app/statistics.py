@@ -4,6 +4,7 @@ import logging
 
 import storage
 from config import config
+import helpers as h
 from infrastructure import infrastructure
 
 
@@ -186,12 +187,12 @@ class Statistics(object):
         return dict(reduce(self.dict_keys_sum, dc_stats))
 
     def get_couple_stats(self):
-        open_couples = self.balancer.get_symmetric_groups(None)
-        bad_couples = self.balancer.get_couples_list([{'state': 'bad'}])
-        broken_couples = self.balancer.get_couples_list([{'state': 'broken'}])
-        closed_couples = self.balancer.get_closed_groups(None)
-        frozen_couples = self.balancer.get_frozen_groups(None)
-        uncoupled_groups = self.balancer.get_empty_groups(None)
+        open_couples = self.balancer._good_couples()
+        bad_couples = self.balancer._get_couples_list({'state': 'bad'})
+        broken_couples = self.balancer._get_couples_list({'state': 'broken'})
+        closed_couples = self.balancer._closed_couples()
+        frozen_couples = self.balancer._frozen_couples()
+        uncoupled_groups = self.balancer._empty_group_ids()
 
         return {'open_couples': len(open_couples),
                 'frozen_couples': len(frozen_couples),
@@ -261,7 +262,7 @@ class Statistics(object):
 
         return res
 
-
+    @h.concurrent_handler
     def get_flow_stats(self, request):
 
         per_dc_stat, per_ns_stat = self.per_entity_stat()
@@ -275,7 +276,7 @@ class Statistics(object):
 
         return res
 
-
+    @h.concurrent_handler
     def get_groups_tree(self, request):
 
         try:
@@ -341,6 +342,7 @@ class Statistics(object):
             if not child.get('children'):
                 root['children'].remove(child)
 
+    @h.concurrent_handler
     def get_couple_statistics(self, request):
         group_id = int(request[0])
 

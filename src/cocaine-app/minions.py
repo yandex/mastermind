@@ -7,7 +7,6 @@ import time
 import traceback
 import urllib
 
-from cocaine.futures import chain
 import elliptics
 import msgpack
 from tornado.httpclient import AsyncHTTPClient, HTTPClient, HTTPError
@@ -15,6 +14,7 @@ from tornado.ioloop import IOLoop
 
 from config import config
 import errors
+import helpers as h
 import keys
 import timed_queue
 import storage
@@ -102,8 +102,7 @@ class Minions(object):
                 try:
                     data = self._get_response(host, response)
                 except ValueError as e:
-                    logger.error('Minion tasks fetch error')
-                    logger.debug(e)
+                    logger.error('Minion tasks fetch error: {0}'.format(e))
                     continue
                 try:
                     self._process_state(host.addr, data)
@@ -209,20 +208,19 @@ class Minions(object):
             raise errors.MinionApiError('Minion error: {0}'.format(response['error']))
         return response['response']
 
+    @h.concurrent_handler
     def get_command(self, request):
         try:
             uid = request[0]
-            return self.get_last_cmd_state(uid).get()
+            return self._get_last_cmd_state(uid)
         except ValueError:
             raise ValueError('Unknown command uid {0}'.format(uid))
 
-    @chain.source
-    def get_last_cmd_state(self, uid):
-        yield chain.concurrent(self._get_last_cmd_state)(uid)
-
+    @h.concurrent_handler
     def get_commands(self, request):
         return sorted(self.commands.itervalues(), key=lambda c: c['start_ts'])
 
+    @h.concurrent_handler
     def execute_cmd(self, request):
         try:
             host, command, params = request[0:3]

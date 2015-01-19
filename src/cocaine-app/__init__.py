@@ -9,6 +9,7 @@ import types
 import uuid
 
 from cocaine.worker import Worker
+from cocaine.futures import chain
 
 sys.path.append('/usr/lib')
 
@@ -117,7 +118,12 @@ def register_handle(h):
             logger.info(":{req_uid}: Running handler for event {0}, "
                 "data={1}".format(h.__name__, str(data), req_uid=req_uid))
             #msgpack.pack(h(data), response)
-            response.write(h(data))
+            res = h(data)
+            if isinstance(res, chain.Chain):
+                res = yield res
+            else:
+                logger.error('Synchronous handler for {0} handle'.format(h.__name__))
+            response.write(res)
         except Exception as e:
             logger.error(":{req_uid}: handler for event {0}, "
                 "data={1}: Balancer error: {2}\n{3}".format(
@@ -146,7 +152,7 @@ def init_infrastructure():
     register_handle(infstruct.recover_group_cmd)
     register_handle(infstruct.defrag_node_backend_cmd)
     register_handle(infstruct.search_history_by_path)
-    b.set_infrastructure(infstruct)
+    b._set_infrastructure(infstruct)
     return infstruct
 
 

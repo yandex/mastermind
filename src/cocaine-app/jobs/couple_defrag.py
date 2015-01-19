@@ -42,8 +42,8 @@ class CoupleDefragJob(Job):
 
         for group in couple.groups:
             for nb in group.node_backends:
-                cmd = infrastructure.defrag_node_backend_cmd([
-                    nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id])
+                cmd = infrastructure._defrag_node_backend_cmd(
+                    nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id)
 
                 node_backend = self.node_backend(
                     nb.node.host.addr, nb.node.port, nb.backend_id)
