@@ -63,8 +63,6 @@ class JobProcessor(object):
 
         self.__tq = timed_queue.TimedQueue()
 
-        self.job_tags = self._active_tags()
-
         self.update_ts = None
         self._update_jobs()
         self.__tq.add_task_in(self.JOBS_EXECUTE,
@@ -73,15 +71,6 @@ class JobProcessor(object):
 
     def _start_tq(self):
         self.__tq.start()
-
-    def _active_tags(self):
-        tags = []
-        dt = datetime.datetime.now().replace(day=1)
-        for month in range(1):
-            tags.append(self.tag_dt(dt))
-            dt = dt - datetime.timedelta(days=1)
-            dt = dt.replace(day=1)
-        return tags
 
     def _load_job(self, job_data):
         if not job_data['id'] in self.jobs:
@@ -108,17 +97,12 @@ class JobProcessor(object):
 
 
     def _do_update_jobs(self):
-        # for tag in self.job_tags:
-        #     logger.debug('updating jobs with tag {0}'.format(tag))
-        #     for job in self.jobs_index.tagged(tag):
-        #         self._load_job(job)
         ts = time.time()
         logger.info('Updating jobs list')
         for job in Job.updated_since(self.collection, self.update_ts):
             logger.debug('Job updated: {0}'.format(job['id']))
             self._load_job(job)
         logger.info('Updating jobs list finished: {0:.3f}'.format(time.time() - ts))
-        logger.info('traceback: {0}'.format(traceback.format_stack()))
 
     def _get_processing_jobs_hosts(self):
         hosts = []
@@ -146,27 +130,27 @@ class JobProcessor(object):
 
             with sync_manager.lock(self.JOBS_LOCK, blocking=False):
                 logger.debug('Lock acquired')
-                # TODO: check! # fetch jobs - read_latest!!!
                 self._do_update_jobs()
 
                 new_jobs, executing_jobs = [], []
                 type_jobs_count = {}
-                for job in filter(lambda j: j.status == Job.STATUS_EXECUTING, self.jobs.itervalues()):
-                    type_jobs_count.setdefault(job.type, 0)
-                    type_jobs_count[job.type] += 1
-                    executing_jobs.append(job)
-                for job in filter(lambda j: j.status == Job.STATUS_NEW, self.jobs.itervalues()):
-                    jobs_count = type_jobs_count.setdefault(job.type, 0)
-                    if jobs_count >= config.get('jobs', {}).get(job.type, {}).get('max_executing_jobs', 3):
-                        continue
-                    type_jobs_count[job.type] += 1
-                    new_jobs.append(job)
+                # TODO: do not loop through all jobs, we should have indexes of jobs by its status
+                for job in self.jobs.itervalues():
+                    if j.status == Job.STATUS_EXECUTING:
+                        type_jobs_count.setdefault(job.type, 0)
+                        type_jobs_count[job.type] += 1
+                        executing_jobs.append(job)
+                    elif j.status == Job.STATUS_NEW, self.jobs.itervalues()):
+                        jobs_count = type_jobs_count.setdefault(job.type, 0)
+                        if jobs_count >= config.get('jobs', {}).get(job.type, {}).get('max_executing_jobs', 3):
+                            continue
+                        type_jobs_count[job.type] += 1
+                        new_jobs.append(job)
 
                 new_jobs.sort(key=lambda j: j.create_ts)
                 ready_jobs = executing_jobs + new_jobs
                 logger.debug('Ready jobs: {0}'.format(len(ready_jobs)))
 
-                executing_count = 0
                 for job in ready_jobs:
                     try:
                         with job.tasks_lock():
@@ -179,8 +163,6 @@ class JobProcessor(object):
                         logger.error('Failed to process job {0}: '
                             '{1}\n{2}'.format(job.id, e, traceback.format_exc()))
                         continue
-                    else:
-                        executing_count += 1
 
         except LockFailedError as e:
             pass
@@ -282,11 +264,11 @@ class JobProcessor(object):
                     logger.info('Job {0}, executing new task {1}'.format(job.id, task))
                     self.__execute_task(task)
                     job.update_ts = time.time()
-                    job._dirty = True
                     logger.info('Job {0}, task {1} execution was successfully requested'.format(
                         job.id, task.id))
                     task.status = Task.STATUS_EXECUTING
                     job.status = Job.STATUS_EXECUTING
+                    job._dirty = True
                 except JobBrokenError as e:
                     logger.error('Job {0}, task {1}: cannot execute task, '
                         'not applicable for current storage state: {2}'.format(
@@ -397,6 +379,8 @@ class JobProcessor(object):
                 raise
 
             return job
+        except LockAlreadyAcquiredError as e:
+            raise
         except Exception as e:
             logger.error('{0}, {1}'.format(e, traceback.format_exc()))
             raise
@@ -418,10 +402,6 @@ class JobProcessor(object):
             return True
 
         jobs = self.jobs.itervalues()
-        if options.get('tag', None) and options['tag'] not in self.job_tags:
-            logger.info('Requested job list not from active tags: {0}'.format(options['tag']))
-            jobs = [self._load_job(job) for job in self.jobs_index.tagged(options['tag'])]
-
         jobs = sorted(filter(job_filter, jobs), key=lambda j: (j.create_ts, j.start_ts, j.finish_ts))
         total_jobs = len(jobs)
 
@@ -445,7 +425,7 @@ class JobProcessor(object):
         if not job_id in self.jobs:
             raise ValueError('Job {0} is not found'.format(job_id))
 
-        return self.jobs[job_id].dump()
+        return self.jobs[job_id].human_dump()
 
     @h.concurrent_handler
     def get_jobs_status(self, request):

@@ -12,6 +12,7 @@ import keys
 from sync import sync_manager
 from sync.error import (
     LockError,
+    LockFailedError,
     InconsistentLockError,
     LockAlreadyAcquiredError,
     API_ERROR_CODE
@@ -76,6 +77,9 @@ class Job(MongoObject):
         job._dirty = True
         try:
             job.perform_locks()
+        except LockFailedError as e:
+            logger.error('Job {0}: failed to perform required locks: {1}'.format(job.id, e))
+            raise
         except LockError:
             logger.error('Job {0}: failed to perform required locks'.format(job.id))
             raise
