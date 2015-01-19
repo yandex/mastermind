@@ -102,8 +102,7 @@ class Minions(object):
                 try:
                     data = self._get_response(host, response)
                 except ValueError as e:
-                    logger.error('Minion tasks fetch error')
-                    logger.debug(e)
+                    logger.error('Minion tasks fetch error: {0}'.format(e))
                     continue
                 try:
                     self._process_state(host.addr, data)

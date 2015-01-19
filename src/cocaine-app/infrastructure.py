@@ -559,15 +559,20 @@ class Infrastructure(object):
         if not node_addr in storage.nodes:
             raise ValueError("Node {0} doesn't exist".format(node_addr))
 
+        cmd = self._reconfigure_node_cmd(host, port, family)
+
+        logger.info('Command for reconfiguring elliptics node {0} '
+            'was requested: {1}'.format(node_addr, cmd))
+
+        return cmd
+
+    def _reconfigure_node_cmd(self, host, port, family):
+
         cmd = inventory.node_reconfigure(host, port, family)
 
         if cmd is None:
             raise RuntimeError('Node reconfiguration command is not provided '
                 'by inventory implementation')
-
-        logger.info('Command for reconfiguring elliptics node {0} '
-            'was requested: {1}'.format(node_addr, cmd))
-
         return cmd
 
     @h.concurrent_handler
@@ -580,6 +585,14 @@ class Infrastructure(object):
         except (ValueError, TypeError):
             raise ValueError('Group {0} is not found'.format(request[0]))
 
+        cmd = self._recover_group_cmd(group_id)
+
+        logger.info('Command for dc recovery for group {0} '
+            'was requested: {1}'.format(group_id, cmd))
+
+        return cmd
+
+    def _recover_group_cmd(self, group_id):
         group = storage.groups[group_id]
         if not group.couple:
             raise ValueError('Group {0} is not coupled'.format(group_id))
@@ -603,9 +616,6 @@ class Infrastructure(object):
             log_level=RECOVERY_DC_CNF.get('log_level', 1),
             processes_num=len(group.couple.groups) - 1 or 1)
 
-        logger.info('Command for dc recovery for group {0} '
-            'was requested: {1}'.format(group_id, cmd))
-
         return cmd
 
     @h.concurrent_handler
@@ -619,15 +629,20 @@ class Infrastructure(object):
         except (ValueError, TypeError, KeyError):
             raise ValueError('Node backend {0} is not found'.format(node_backend_str))
 
-        cmd = self.DNET_DEFRAG_CMD.format(
-            host=node_backend.node.host.addr,
-            port=node_backend.node.port,
-            family=node_backend.node.family,
-            backend_id=node_backend.backend_id)
+        cmd = self._defrag_node_backend_cmd(
+            node_backend.node.host.addr,
+            node_backend.node.port,
+            node_backend.node.family,
+            node_backend.backend_id)
 
         logger.info('Command for node backend {0} defragmentation '
             'was requested: {1}'.format(node_backend, cmd))
 
+        return cmd
+
+    def _defrag_node_backend_cmd(self, host, port, family, backend_id):
+        cmd = self.DNET_DEFRAG_CMD.format(
+            host=host, port=port, family=family, backend_id=backend_id)
         return cmd
 
     @h.concurrent_handler

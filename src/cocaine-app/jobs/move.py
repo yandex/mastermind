@@ -85,8 +85,8 @@ class MoveJob(Job):
 
     def create_tasks(self):
 
-        shutdown_cmd = infrastructure.disable_node_backend_cmd([
-            self.dst_host, self.dst_port, self.dst_family, self.dst_backend_id])
+        shutdown_cmd = infrastructure._disable_node_backend_cmd(
+            self.dst_host, self.dst_port, self.dst_family, self.dst_backend_id)
 
         group_file = (os.path.join(self.dst_base_path,
                                    self.GROUP_FILE_PATH)
@@ -112,10 +112,8 @@ class MoveJob(Job):
                                 params=params)
         self.tasks.append(task)
 
-
-
-        make_readonly_cmd = infrastructure.make_readonly_node_backend_cmd(
-            [self.src_host, self.src_port, self.src_family, self.src_backend_id])
+        make_readonly_cmd = infrastructure._make_readonly_node_backend_cmd(
+            self.src_host, self.src_port, self.src_family, self.src_backend_id)
 
         task = MinionCmdTask.new(self,
                                  host=self.src_host,
@@ -164,8 +162,8 @@ class MoveJob(Job):
             self.tasks.append(task)
 
 
-        shutdown_cmd = infrastructure.disable_node_backend_cmd([
-            self.src_host, self.src_port, self.src_family, self.src_backend_id])
+        shutdown_cmd = infrastructure._disable_node_backend_cmd(
+            self.src_host, self.src_port, self.src_family, self.src_backend_id)
 
         group_file = (os.path.join(self.src_base_path,
                                    self.GROUP_FILE_PATH)
@@ -195,8 +193,8 @@ class MoveJob(Job):
         self.tasks.append(task)
 
 
-        reconfigure_cmd = infrastructure.reconfigure_node_cmd(
-            [self.src_host, self.src_port, self.src_family])
+        reconfigure_cmd = infrastructure._reconfigure_node_cmd(
+            self.src_host, self.src_port, self.src_family)
 
         task = MinionCmdTask.new(self,
                                  host=self.src_host,
@@ -205,8 +203,8 @@ class MoveJob(Job):
 
         self.tasks.append(task)
 
-        reconfigure_cmd = infrastructure.reconfigure_node_cmd(
-            [self.dst_host, self.dst_port, self.dst_family])
+        reconfigure_cmd = infrastructure._reconfigure_node_cmd(
+            self.dst_host, self.dst_port, self.dst_family)
 
         task = MinionCmdTask.new(self,
                                  host=self.dst_host,
@@ -229,8 +227,8 @@ class MoveJob(Job):
                                          backend_id=self.dst_backend_id)
         self.tasks.append(task)
 
-        start_cmd = infrastructure.enable_node_backend_cmd([
-            self.dst_host, self.dst_port, self.dst_family, self.dst_backend_id])
+        start_cmd = infrastructure._enable_node_backend_cmd(
+            self.dst_host, self.dst_port, self.dst_family, self.dst_backend_id)
         task = MinionCmdTask.new(self,
                                  host=self.dst_host,
                                  cmd=start_cmd,
