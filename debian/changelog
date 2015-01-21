@@ -1,3 +1,9 @@
+mastermind (2.15.22) lucid; urgency=low
+
+  * Fix for minion cmd command execution
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 21 Jan 2015 13:10:30 +0300
+
 mastermind (2.15.21) lucid; urgency=low
 
   * General concurrent handler implemented, wraps all API handlers
