@@ -1,3 +1,9 @@
+mastermind (2.15.23) lucid; urgency=low
+
+  * Misprint fixed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 21 Jan 2015 13:37:07 +0300
+
 mastermind (2.15.22) lucid; urgency=low
 
   * Fix for minion cmd command execution
