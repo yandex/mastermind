@@ -212,9 +212,12 @@ class Minions(object):
     def get_command(self, request):
         try:
             uid = request[0]
-            return self._get_last_cmd_state(uid)
+            return self._get_command(uid)
         except ValueError:
             raise ValueError('Unknown command uid {0}'.format(uid))
+
+    def _get_command(self, uid):
+        return self._get_last_cmd_state(uid)
 
     @h.concurrent_handler
     def get_commands(self, request):
@@ -231,6 +234,9 @@ class Minions(object):
             logger.debug('Host was not found: {0}, {1}'.format(host, type(host)))
             raise ValueError('Host {0} is not present in cluster'.format(host))
 
+        return self._execute_cmd(host, command, params)
+
+    def _execute_cmd(self, host, command, params):
         url = self.START_URL_TPL.format(host=host, port=self.minion_port)
         data = {'command': command}
         for k, v in params.iteritems():
