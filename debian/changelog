@@ -1,3 +1,9 @@
+mastermind (2.15.24) lucid; urgency=low
+
+  * Fix for minions command execution
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 21 Jan 2015 16:53:22 +0300
+
 mastermind (2.15.23) lucid; urgency=low
 
   * Misprint fixed
