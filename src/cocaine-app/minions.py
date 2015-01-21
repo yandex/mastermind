@@ -231,6 +231,9 @@ class Minions(object):
             logger.debug('Host was not found: {0}, {1}'.format(host, type(host)))
             raise ValueError('Host {0} is not present in cluster'.format(host))
 
+        return self._execute_cmd(host, command, params)
+
+    def _execute_cmd(self, host, command, params):
         url = self.START_URL_TPL.format(host=host, port=self.minion_port)
         data = {'command': command}
         for k, v in params.iteritems():
