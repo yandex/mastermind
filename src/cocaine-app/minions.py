@@ -212,9 +212,12 @@ class Minions(object):
     def get_command(self, request):
         try:
             uid = request[0]
-            return self._get_last_cmd_state(uid)
+            return self._get_command(uid)
         except ValueError:
             raise ValueError('Unknown command uid {0}'.format(uid))
+
+    def _get_command(self, uid):
+        return self._get_last_cmd_state(uid)
 
     @h.concurrent_handler
     def get_commands(self, request):

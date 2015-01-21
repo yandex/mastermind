@@ -22,7 +22,7 @@ class MinionCmdTask(Task):
 
     def update_status(self, minions):
         try:
-            self.minion_cmd = minions.get_command([self.minion_cmd_id])
+            self.minion_cmd = minions._get_command(self.minion_cmd_id)
             logger.debug('Job {0}, task {1}, minion command status was updated: {2}'.format(
                 self.parent_job.id, self.id, self.minion_cmd))
         except ValueError:
