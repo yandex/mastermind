@@ -86,7 +86,11 @@ class RecoverDcJob(Job):
             couple = group.couple
             self.couple = str(couple)
 
-        couple = storage.couples[self.couple]
+        # get couple from group, because couple id could have been altered
+        # (sad but true)
+        group_id = int(self.couple.split(':')[0])
+        group = storage.groups[group_id]
+        couple = group.couple
 
         return (['{0}{1}'.format(self.GROUP_LOCK_PREFIX, g.group_id) for g in couple.groups] +
                 ['{0}{1}'.format(self.COUPLE_LOCK_PREFIX, str(couple))])

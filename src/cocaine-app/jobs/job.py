@@ -47,11 +47,10 @@ class Job(MongoObject):
         self.status = (self.STATUS_NOT_APPROVED
                        if need_approving else
                        self.STATUS_NEW)
-        self.create_ts = None
-        self.start_ts = None
-        self.update_ts = None
+        self._create_ts = None
+        self._start_ts = None
         self._update_ts = None
-        self.finish_ts = None
+        self._finish_ts = None
         self.type = None
         self.tasks = []
         self.__tasklist_lock = threading.Lock()
@@ -123,6 +122,28 @@ class Job(MongoObject):
         return self
 
     @property
+    def create_ts(self):
+        return self._create_ts
+
+    @create_ts.setter
+    def create_ts(self, value):
+        if value is None:
+            self._create_ts = None
+        else:
+            self._create_ts = int(value)
+
+    @property
+    def start_ts(self):
+        return self._start_ts
+
+    @start_ts.setter
+    def start_ts(self, value):
+        if value is None:
+            self._start_ts = None
+        else:
+            self._start_ts = int(value)
+
+    @property
     def update_ts(self):
         return self._update_ts
 
@@ -132,6 +153,17 @@ class Job(MongoObject):
             self._update_ts = None
         else:
             self._update_ts = int(value)
+
+    @property
+    def finish_ts(self):
+        return self._finish_ts
+
+    @finish_ts.setter
+    def finish_ts(self, value):
+        if value is None:
+            self._finish_ts = None
+        else:
+            self._finish_ts = int(value)
 
     def _dump(self):
         data = {'id': self.id,
