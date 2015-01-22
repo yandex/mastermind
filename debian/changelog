@@ -1,3 +1,9 @@
+mastermind (2.15.25) lucid; urgency=low
+
+  * Mongo working draft for testing
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 22 Jan 2015 17:09:56 +0300
+
 mastermind (2.15.24) lucid; urgency=low
 
   * Fix for minions command execution
