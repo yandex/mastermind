@@ -1,3 +1,9 @@
+mastermind (2.15.26) lucid; urgency=low
+
+  * Misprint fixed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 22 Jan 2015 19:39:47 +0300
+
 mastermind (2.15.25) lucid; urgency=low
 
   * Mongo working draft for testing
