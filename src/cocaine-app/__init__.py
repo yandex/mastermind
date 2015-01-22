@@ -15,13 +15,16 @@ sys.path.append('/usr/lib')
 
 import json
 import msgpack
-from pymongo.mongo_replica_set_client import MongoReplicaSetClient
 
 import elliptics
 
 import log
+logger = logging.getLogger('mm.init')
+
+
 import balancer
 import balancelogicadapter
+from db.mongo.pool import MongoReplicaSetClient
 import infrastructure
 import jobs
 import cache
@@ -31,7 +34,6 @@ from planner import Planner
 from config import config
 
 
-logger = logging.getLogger('mm.init')
 
 i = iter(xrange(100))
 logger.info("trace %d" % (i.next()))
@@ -93,7 +95,8 @@ meta_session.add_groups(list(config["metadata"]["groups"]))
 logger.info("trace %d" % (i.next()))
 n.meta_session = meta_session
 
-meta_db = MongoReplicaSetClient(config['metadata']['url'], **(config['metadata'].get('options', {})))
+mrsc_options = config['metadata'].get('options', {})
+meta_db = MongoReplicaSetClient(config['metadata']['url'], **mrsc_options)
 
 balancelogicadapter.setConfig(config["balancer_config"])
 

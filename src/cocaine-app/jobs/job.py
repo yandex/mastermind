@@ -19,6 +19,8 @@ from sync.error import (
 )
 from tasks import TaskFactory
 
+import pymongo
+
 
 logger = logging.getLogger('mm.jobs')
 
@@ -260,3 +262,20 @@ class Job(MongoObject):
         Should through JobBrokenError if job should not be started.
         """
         pass
+
+    @staticmethod
+    def list(collection, **kwargs):
+        params = {}
+        for k, v in kwargs.iteritems():
+            if v is None:
+                continue
+            params.update(condition(k, v))
+
+        return collection.find(params).sort('create_ts', pymongo.DESCENDING)
+
+
+def condition(field_name, field_val):
+    if isinstance(field_val, (list, tuple)):
+        return {field_name: {'$in': list(field_val)}}
+    else:
+        return {field_name: field_val}

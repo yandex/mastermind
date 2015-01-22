@@ -64,8 +64,9 @@ class Planner(object):
             logger.info('Starting move candidates planner')
 
             # prechecking for new or pending tasks
-            if self.__executing_jobs_count(jobs.JobTypes.TYPE_MOVE_JOB):
-                return
+            if self.job_processor.jobs_count(types=jobs.JobTypes.TYPE_MOVE_JOB,
+                statuses=jobs.Job.STATUS_NOT_APPROVED):
+                    return
 
             self._do_move_candidates()
         except Exception as e:
@@ -76,30 +77,16 @@ class Planner(object):
                 self.params.get('generate_plan_period', 1800),
                 self._move_candidates)
 
-    def __executing_jobs_count(self, job_type, add_statuses=None, limit=1):
-        statuses = [jobs.Job.STATUS_NOT_APPROVED]
-        if add_statuses:
-            statuses.extend(add_statuses)
-        found_jobs = 0
-        for job in self.job_processor.jobs.itervalues():
-            if job_type != job.type:
-                continue
-            if job.status in statuses:
-                found_jobs += 1
-            if limit and found_jobs >= limit:
-                logger.info('Planer found at least {0} jobs of statuses {1} '
-                    'and type {2} ({3})'.format(
-                        found_jobs, statuses, job_type, job.id))
-                break
-        return found_jobs
-
     def __busy_hosts(self, job_type):
+        jobs = self.job_processor.jobs(types=job_type, statuses=(
+            jobs.Job.STATUS_NOT_APPROVED,
+            jobs.Job.STATUS_NEW,
+            jobs.Job.STATUS_EXECUTING,
+            jobs.Job.STATUS_PENDING,
+            jobs.Job.STATUS_BROKEN))
+
         hosts = set()
-        for job in self.job_processor.jobs.itervalues():
-            if job_type != job.type:
-                continue
-            if job.status in (jobs.Job.STATUS_COMPLETED, jobs.Job.STATUS_CANCELLED):
-                continue
+        for job in jobs:
             hosts.update([job.src_host, job.dst_host])
         return hosts
 
@@ -115,10 +102,10 @@ class Planner(object):
             with sync_manager.lock(self.job_processor.JOBS_LOCK):
                 logger.debug('Lock acquired')
 
-                self.job_processor._do_update_jobs()
-
-                if self.__executing_jobs_count(jobs.JobTypes.TYPE_MOVE_JOB):
-                    raise ValueError('Not finished move jobs are found')
+                if self.job_processor.jobs_count(
+                    types=jobs.JobTypes.TYPE_MOVE_JOB,
+                    status=jobs.Job.STATUS_NOT_APPROVED):
+                        raise ValueError('Not finished move jobs are found')
 
                 for i, candidate in enumerate(candidates):
                     logger.info('Candidate {0}: data {1}, ms_error delta {2}:'.format(
@@ -326,17 +313,18 @@ class Planner(object):
         try:
             logger.info('Starting recover dc planner')
 
-            self.job_processor._do_update_jobs()
-
             max_recover_jobs = config.get('jobs', {}).get('recover_dc_job',
                 {}).get('max_executing_jobs', 3)
             # prechecking for new or pending tasks
-            if self.__executing_jobs_count(jobs.JobTypes.TYPE_RECOVER_DC_JOB,
-                add_statuses=[jobs.Job.STATUS_NEW, jobs.Job.STATUS_EXECUTING],
-                limit=max_recover_jobs) >= max_recover_jobs:
-                    logger.info('Found more than {0} unfinished recover '
-                        'dc jobs'.format(max_recover_jobs))
-                    return
+            count = self.job_processor.jobs_count(
+                types=jobs.JobTypes.TYPE_RECOVER_DC_JOB,
+                statuses=[jobs.Job.STATUS_NOT_APPROVED,
+                          jobs.Job.STATUS_NEW,
+                          jobs.Job.STATUS_EXECUTING])
+            if count >= max_recover_jobs:
+                logger.info('Found {0} unfinished recover dc jobs '
+                    '(>= {1})'.format(count, max_recover_jobs))
+                return
 
             self._do_recover_dc()
         except LockFailedError:
@@ -355,14 +343,15 @@ class Planner(object):
         with sync_manager.lock(self.job_processor.JOBS_LOCK):
             logger.debug('Lock acquired')
 
-            self.job_processor._do_update_jobs()
-
             max_recover_jobs = config.get('jobs', {}).get('recover_dc_job',
                 {}).get('max_executing_jobs', 3)
 
-            jobs_count = self.__executing_jobs_count(jobs.JobTypes.TYPE_RECOVER_DC_JOB,
-                add_statuses=[jobs.Job.STATUS_NEW, jobs.Job.STATUS_EXECUTING],
-                limit=None)
+            jobs_count = self.job_processor.jobs_count(
+                types=jobs.JobTypes.TYPE_RECOVER_DC_JOB,
+                statuses=(jobs.Job.STATUS_NOT_APPROVED,
+                          jobs.Job.STATUS_NEW,
+                          jobs.Job.STATUS_EXECUTING))
+
             slots = max_recover_jobs - jobs_count
             if slots <= 0:
                 logger.info('Found {0} unfinished recover dc jobs'.format(
@@ -434,12 +423,12 @@ class Planner(object):
         try:
             logger.info('Starting couple defrag planner')
 
-            self.job_processor._do_update_jobs()
-
             # prechecking for new or pending tasks
-            if self.__executing_jobs_count(jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB):
-                logger.info('Unfinished couple defrag jobs found')
-                return
+            if self.job_processor.jobs_count(
+                types=jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB,
+                statuses=jobs.Job.STATUS_NOT_APPROVED):
+                    logger.info('Unfinished couple defrag jobs found')
+                    return
 
             self._do_couple_defrag()
         except LockFailedError:
@@ -458,11 +447,11 @@ class Planner(object):
         with sync_manager.lock(self.job_processor.JOBS_LOCK):
             logger.debug('Lock acquired')
 
-            self.job_processor._do_update_jobs()
-
-            if self.__executing_jobs_count(jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB):
-                logger.info('Unfinished couple defrag jobs found')
-                return
+            if self.job_processor.jobs_count(
+                types=jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB,
+                statuses=jobs.Job.STATUS_NOT_APPROVED):
+                    logger.info('Unfinished couple defrag jobs found')
+                    return
 
             couples_to_defrag = []
             for couple in storage.couples:

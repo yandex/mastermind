@@ -7,6 +7,7 @@ import traceback
 import elliptics
 
 from config import config
+from db.mongo.pool import Collection
 import errors
 from error import JobBrokenError
 import helpers as h
@@ -42,16 +43,15 @@ class JobProcessor(object):
 
     INDEX_BATCH_SIZE = 1000
 
-    def __init__(self, node, meta_db, minions):
+    def __init__(self, node, db, minions):
         logger.info('Starting JobProcessor')
         self.session = elliptics.Session(node)
         wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or config.get('wait_timeout', 5)
         self.session.set_timeout(wait_timeout)
         self.meta_session = node.meta_session
         self.minions = minions
-        self.collection = meta_db['mastermind_test_jobs']['jobs']
+        self.collection = Collection(db[config['metadata']['jobs']['db']], 'jobs')
 
-        self.jobs = {}
         self.jobs_index = indexes.TagSecondaryIndex(
             keys.MM_JOBS_IDX,
             keys.MM_JOBS_IDX_TPL,
@@ -63,50 +63,15 @@ class JobProcessor(object):
 
         self.__tq = timed_queue.TimedQueue()
 
-        self.update_ts = None
-        self._update_jobs()
         self.__tq.add_task_in(self.JOBS_EXECUTE,
             5, self._execute_jobs)
-
 
     def _start_tq(self):
         self.__tq.start()
 
-    def _load_job(self, job_data):
-        if not job_data['id'] in self.jobs:
-            job = self.jobs[job_data['id']] = JobFactory.make_job(job_data)
-            logger.info('Job {0}: loaded from job index'.format(job.id))
-            job.collection = self.collection
-        else:
-            # TODO: Think about other ways of updating job
-            job = self.jobs[job_data['id']].load(job_data)
-        return job
-
-    def _update_jobs(self):
-        try:
-            update_ts = time.time()
-            self._do_update_jobs()
-            self.update_ts = int(update_ts)
-        except Exception as e:
-            logger.error('Failed to update jobs: {0}\n{1}'.format(
-                e, traceback.format_exc()))
-        finally:
-            self.__tq.add_task_in(self.JOBS_UPDATE,
-                config.get('jobs', {}).get('update_period', 50),
-                self._update_jobs)
-
-
-    def _do_update_jobs(self):
-        ts = time.time()
-        logger.info('Updating jobs list')
-        for job in Job.updated_since(self.collection, self.update_ts):
-            logger.debug('Job updated: {0}'.format(job['id']))
-            self._load_job(job)
-        logger.info('Updating jobs list finished: {0:.3f}'.format(time.time() - ts))
-
     def _get_processing_jobs_hosts(self):
         hosts = []
-        for job in filter(lambda j: j.status == Job.STATUS_EXECUTING, self.jobs.itervalues()):
+        for job in self.jobs(statuses=Job.STATUS_EXECUTING):
             for task in job.tasks:
                 if task.status == task.STATUS_EXECUTING and isinstance(task, MinionCmdTask):
                     if not task.host:
@@ -130,22 +95,20 @@ class JobProcessor(object):
 
             with sync_manager.lock(self.JOBS_LOCK, blocking=False):
                 logger.debug('Lock acquired')
-                self._do_update_jobs()
 
                 new_jobs, executing_jobs = [], []
                 type_jobs_count = {}
-                # TODO: do not loop through all jobs, we should have indexes of jobs by its status
-                for job in self.jobs.itervalues():
-                    if j.status == Job.STATUS_EXECUTING:
-                        type_jobs_count.setdefault(job.type, 0)
-                        type_jobs_count[job.type] += 1
-                        executing_jobs.append(job)
-                    elif j.status == Job.STATUS_NEW, self.jobs.itervalues()):
-                        jobs_count = type_jobs_count.setdefault(job.type, 0)
-                        if jobs_count >= config.get('jobs', {}).get(job.type, {}).get('max_executing_jobs', 3):
-                            continue
-                        type_jobs_count[job.type] += 1
-                        new_jobs.append(job)
+
+                for job in self.jobs(statuses=Job.STATUS_EXECUTING, ids=['f625ad0280ce4b3c8ec0792e672cfeac']):
+                    type_jobs_count.setdefault(job.type, 0)
+                    type_jobs_count[job.type] += 1
+                    executing_jobs.append(job)
+                for job in self.jobs(statuses=Job.STATUS_NEW, ids=['f625ad0280ce4b3c8ec0792e672cfeac']):
+                    jobs_count = type_jobs_count.setdefault(job.type, 0)
+                    if jobs_count >= config.get('jobs', {}).get(job.type, {}).get('max_executing_jobs', 3):
+                        continue
+                    type_jobs_count[job.type] += 1
+                    new_jobs.append(job)
 
                 new_jobs.sort(key=lambda j: j.create_ts)
                 ready_jobs = executing_jobs + new_jobs
@@ -392,28 +355,29 @@ class JobProcessor(object):
         except (TypeError, IndexError):
             options = {}
 
-        def job_filter(j):
-            if options.get('job_type', None) and j.type != options['job_type']:
-                return False
-            if options.get('tag', None) and self.tag(j) != options['tag']:
-                return False
-            if options.get('statuses', None) and j.status not in options['statuses']:
-                return False
-            return True
-
-        jobs = self.jobs.itervalues()
-        jobs = sorted(filter(job_filter, jobs), key=lambda j: (j.create_ts, j.start_ts, j.finish_ts))
-        total_jobs = len(jobs)
+        jobs_list = Job.list(self.collection,
+            status=options['statuses'],
+            type=options['job_type'])
+        total_jobs = jobs_list.count()
 
         if options.get('limit'):
             limit = int(options['limit'])
             offset = int(options.get('offset', 0))
 
-            jobs = jobs[offset:offset + limit]
+            jobs_list = jobs_list[offset:offset + limit]
 
-        res = [job.human_dump() for job in jobs]
+        res = [JobFactory.make_job(j).human_dump() for j in jobs_list]
         return {'jobs': res,
                 'total': total_jobs}
+
+    def __get_job(self, job_id):
+        jobs_list = Job.list(self.collection,
+            id=job_id).limit(1)
+        if not jobs_list:
+            raise ValueError('Job {0} is not found'.format(job_id))
+        job = JobFactory.make_job(jobs_list[0])
+        job.collection = self.collection
+        return job
 
     @h.concurrent_handler
     def get_job_status(self, request):
@@ -422,10 +386,7 @@ class JobProcessor(object):
         except (TypeError, IndexError):
             raise ValueError('Job id is required')
 
-        if not job_id in self.jobs:
-            raise ValueError('Job {0} is not found'.format(job_id))
-
-        return self.jobs[job_id].human_dump()
+        return self.__get_job(job_id).human_dump()
 
     @h.concurrent_handler
     def get_jobs_status(self, request):
@@ -434,14 +395,7 @@ class JobProcessor(object):
         except (TypeError, IndexError):
             raise ValueError('Job ids are required')
 
-        statuses = []
-        for job_id in job_ids:
-            if not job_id in self.jobs:
-                logger.error('Job {0} is not found'.format(job_id))
-                continue
-            statuses.append(self.jobs[job_id].human_dump())
-
-        return statuses
+        return [j.human_dump() for j in self.jobs(ids=job_ids)]
 
     @h.concurrent_handler
     def cancel_job(self, request):
@@ -452,14 +406,9 @@ class JobProcessor(object):
             except IndexError as e:
                 raise ValueError('Job id is required')
 
-            if not job_id in self.jobs:
-                raise ValueError('Job id {0} is not found'.format(job_id))
+            job = self.__get_job(job_id)
 
-            job = self.jobs[job_id]
-
-            logger.debug('Lock acquiring')
             with job.tasks_lock():
-                logger.debug('Lock acquired')
 
                 if job.status not in (Job.STATUS_PENDING,
                     Job.STATUS_NOT_APPROVED, Job.STATUS_BROKEN):
@@ -492,11 +441,9 @@ class JobProcessor(object):
             except IndexError as e:
                 raise ValueError('Job id is required')
 
-            job = self.jobs[job_id]
+            job = self.__get_job(job_id)
 
-            logger.debug('Lock acquiring')
             with job.tasks_lock():
-                logger.debug('Lock acquired')
 
                 if job.status != Job.STATUS_NOT_APPROVED:
                     raise ValueError('Job {0}: status is "{1}", should have been '
@@ -558,57 +505,67 @@ class JobProcessor(object):
         return job.dump()
 
     def __change_failed_task_status(self, job_id, task_id, status):
-        if not job_id in self.jobs:
-            raise ValueError('Job {0}: job is not found'.format(job_id))
-        job = self.jobs[job_id]
-
-        if job.status not in (Job.STATUS_PENDING, Job.STATUS_BROKEN):
-            raise ValueError('Job {0}: status is "{1}", should have been '
-                '{2}|{3}'.format(job.id, job.status, Job.STATUS_PENDING, Job.STATUS_BROKEN))
 
         logger.debug('Lock acquiring')
-        with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT), job.tasks_lock():
+        with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
             logger.debug('Lock acquired')
 
-            task = None
-            for t in job.tasks:
-                if t.id == task_id:
-                    task = t
-                    break
-            else:
-                raise ValueError('Job {0} does not contain task '
-                    'with id {1}'.format(job_id, task_id))
+            job = self.__get_job(job_id)
+            with job.tasks_lock():
+                if job.status not in (Job.STATUS_PENDING, Job.STATUS_BROKEN):
+                    raise ValueError('Job {0}: status is "{1}", should have been '
+                        '{2}|{3}'.format(job.id, job.status, Job.STATUS_PENDING, Job.STATUS_BROKEN))
 
-            if task.status != Task.STATUS_FAILED:
-                raise ValueError('Job {0}: task {1} has status {2}, should '
-                    'have been failed'.format(job.id, task.id, task.status))
+                task = None
+                for t in job.tasks:
+                    if t.id == task_id:
+                        task = t
+                        break
+                else:
+                    raise ValueError('Job {0} does not contain task '
+                        'with id {1}'.format(job_id, task_id))
 
-            task.status = status
-            job.status = Job.STATUS_EXECUTING
-            job.update_ts = time.time()
-            job._dirty = True
-            self.jobs_index[job.id] = self.__dump_job(job)
-            job.save()
-            logger.info('Job {0}: task {1} status was reset to {2}, '
-                'job status was reset to {3}'.format(
-                    job.id, task.id, task.status, job.status))
+                if task.status != Task.STATUS_FAILED:
+                    raise ValueError('Job {0}: task {1} has status {2}, should '
+                        'have been failed'.format(job.id, task.id, task.status))
+
+                task.status = status
+                job.status = Job.STATUS_EXECUTING
+                job.update_ts = time.time()
+                job._dirty = True
+                self.jobs_index[job.id] = self.__dump_job(job)
+                job.save()
+                logger.info('Job {0}: task {1} status was reset to {2}, '
+                    'job status was reset to {3}'.format(
+                        job.id, task.id, task.status, job.status))
 
         return job
 
+    def jobs_count(self, types=None, statuses=None):
+        return Job.list(self.collection,
+            status=statuses,
+            type=types).count()
+
+    def jobs(self, types=None, statuses=None, ids=None):
+        jobs = [JobFactory.make_job(j) for j in Job.list(self.collection,
+                                                         status=statuses,
+                                                         type=types,
+                                                         id=ids)]
+        for j in jobs:
+            j.collection = self.collection
+        return jobs
+
     def get_uncoupled_groups_in_service(self):
+        jobs = self.jobs(
+            types=(JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_RESTORE_GROUP_JOB),
+            statuses=(Job.STATUS_NOT_APPROVED,
+                      Job.STATUS_NEW,
+                      Job.STATUS_EXECUTING,
+                      Job.STATUS_PENDING,
+                      Job.STATUS_BROKEN))
+
         uncoupled_groups = []
-
-        try:
-            self._do_update_jobs()
-        except Exception as e:
-            logger.error('Failed to update jobs: {0}\n{1}'.format(
-                e, traceback.format_exc()))
-
-        for job in self.jobs.values():
-            if job.status in (Job.STATUS_COMPLETED, Job.STATUS_CANCELLED):
-                continue
-            if job.type not in (JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_RESTORE_GROUP_JOB):
-                continue
+        for job in jobs:
             if job.uncoupled_group:
                 uncoupled_groups.append(job.uncoupled_group)
             if job.type == JobTypes.TYPE_RESTORE_GROUP_JOB and job.merged_groups:
