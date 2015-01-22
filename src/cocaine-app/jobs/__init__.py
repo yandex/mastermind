@@ -99,11 +99,11 @@ class JobProcessor(object):
                 new_jobs, executing_jobs = [], []
                 type_jobs_count = {}
 
-                for job in self.jobs(statuses=Job.STATUS_EXECUTING, ids=['f625ad0280ce4b3c8ec0792e672cfeac']):
+                for job in self.jobs(statuses=Job.STATUS_EXECUTING):
                     type_jobs_count.setdefault(job.type, 0)
                     type_jobs_count[job.type] += 1
                     executing_jobs.append(job)
-                for job in self.jobs(statuses=Job.STATUS_NEW, ids=['f625ad0280ce4b3c8ec0792e672cfeac']):
+                for job in self.jobs(statuses=Job.STATUS_NEW):
                     jobs_count = type_jobs_count.setdefault(job.type, 0)
                     if jobs_count >= config.get('jobs', {}).get(job.type, {}).get('max_executing_jobs', 3):
                         continue
