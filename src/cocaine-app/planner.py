@@ -78,7 +78,7 @@ class Planner(object):
                 self._move_candidates)
 
     def __busy_hosts(self, job_type):
-        jobs = self.job_processor.jobs(types=job_type, statuses=(
+        not_finished_jobs = self.job_processor.jobs(types=job_type, statuses=(
             jobs.Job.STATUS_NOT_APPROVED,
             jobs.Job.STATUS_NEW,
             jobs.Job.STATUS_EXECUTING,
@@ -86,7 +86,7 @@ class Planner(object):
             jobs.Job.STATUS_BROKEN))
 
         hosts = set()
-        for job in jobs:
+        for job in not_finished_jobs:
             hosts.update([job.src_host, job.dst_host])
         return hosts
 
