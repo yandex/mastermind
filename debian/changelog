@@ -1,3 +1,9 @@
+mastermind (2.15.28) lucid; urgency=low
+
+  * Forced jobs ts convertion to int
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 22 Jan 2015 21:33:56 +0300
+
 mastermind (2.15.27) lucid; urgency=low
 
   * Dependencies updated
