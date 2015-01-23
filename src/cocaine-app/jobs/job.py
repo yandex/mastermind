@@ -262,8 +262,8 @@ class Job(MongoObject):
         try:
             sync_manager.persistent_locks_release(self._locks, self.id)
         except InconsistentLockError as e:
-            logger.error('Job {0}: lock for group {1} is already acquired by another '
-                'job {2}'.format(self.id, self.group, e.holder_id))
+            logger.error('Job {0}: lock is already acquired by another '
+                'job {1}'.format(self.id, e.holder_id))
             pass
 
     @property

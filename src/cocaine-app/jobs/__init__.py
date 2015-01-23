@@ -552,6 +552,7 @@ class JobProcessor(object):
                                                          id=ids)]
         for j in jobs:
             j.collection = self.collection
+            j._dirty = False
         return jobs
 
     def get_uncoupled_groups_in_service(self):
