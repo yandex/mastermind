@@ -104,7 +104,7 @@ class Planner(object):
 
                 if self.job_processor.jobs_count(
                     types=jobs.JobTypes.TYPE_MOVE_JOB,
-                    status=jobs.Job.STATUS_NOT_APPROVED):
+                    statuses=jobs.Job.STATUS_NOT_APPROVED):
                         raise ValueError('Not finished move jobs are found')
 
                 for i, candidate in enumerate(candidates):
