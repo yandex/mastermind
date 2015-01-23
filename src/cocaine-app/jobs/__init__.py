@@ -335,7 +335,6 @@ class JobProcessor(object):
                 self.jobs_index[job.id] = self.__dump_job(job)
                 self.jobs_index.set_tag(job.id, self.tag(job))
 
-                self.jobs[job.id] = job
                 job.save()
             except Exception:
                 job.release_locks()
