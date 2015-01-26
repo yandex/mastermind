@@ -1,3 +1,9 @@
+mastermind (2.16.1) lucid; urgency=low
+
+  * Optional unimportant jobs cancellation on creating restore job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 26 Jan 2015 18:48:18 +0300
+
 mastermind (2.15.34) lucid; urgency=low
 
   * Read preferences for mongo forced to PRIMARY_PREFFERED
