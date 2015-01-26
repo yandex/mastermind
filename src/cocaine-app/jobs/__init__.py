@@ -415,7 +415,7 @@ class JobProcessor(object):
                 if task.status == Task.STATUS_EXECUTING:
                     # Move task stop logic to tasks
                     if isinstance(task, MinionCmdTask):
-                        self.minions.terminate_cmd([task.host, task.minion_cmd_id])
+                        self.minions._terminate_cmd(task.host, task.minion_cmd_id)
                     task.status = Task.STATUS_FAILED
 
                     break

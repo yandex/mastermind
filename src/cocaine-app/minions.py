@@ -271,6 +271,9 @@ class Minions(object):
             logger.debug('Host was not found: {0}, {1}'.format(host, type(host)))
             raise ValueError('Host {0} is not present in cluster'.format(host))
 
+        return self._terminate_cmd(host, uid)
+
+    def _terminate_cmd(self, host, uid):
         url = self.TERMINATE_URL_TPL.format(host=host, port=self.minion_port)
         data = {'cmd_uid': uid}
 
