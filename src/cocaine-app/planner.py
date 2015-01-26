@@ -566,7 +566,7 @@ class Planner(object):
         with sync_manager.lock(self.job_processor.JOBS_LOCK):
             job = self.job_processor._create_job(
                 jobs.JobTypes.TYPE_RESTORE_GROUP_JOB,
-                job_params)
+                job_params, force=force)
 
         return job.dump()
 

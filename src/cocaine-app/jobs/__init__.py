@@ -305,8 +305,8 @@ class JobProcessor(object):
             except IndexError:
                 force = False
 
-            job = self._create_job_async(job_type, params,
-                force=force, lock_timeout=self.JOB_MANUAL_TIMEOUT).get()
+            with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
+                job = self._create_job(job_type, params, force=force)
 
         except LockFailedError as e:
             raise
@@ -317,7 +317,7 @@ class JobProcessor(object):
 
         return job.dump()
 
-    def _create_job(self, job_type, params):
+    def _create_job(self, job_type, params, force=False):
         # Forcing manual approval of newly created job
         params.setdefault('need_approving', True)
 
@@ -345,7 +345,7 @@ class JobProcessor(object):
             if job_type not in (JobTypes.TYPE_RESTORE_GROUP_JOB, JobTypes.TYPE_MOVE_JOB):
                 raise
 
-            jobs = [self.jobs[job_id] for job_id in job_ids]
+            jobs = self.jobs(ids=job_ids)
             for job in jobs:
                 if job.type not in STOP_ALLOWED_TYPES:
                     raise RuntimeError('Cannot stop job {0}, type is {1}'.format(job.id, job.type))
@@ -385,7 +385,7 @@ class JobProcessor(object):
             with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
                 logger.debug('Lock acquired')
 
-                jobs = [self.jobs[uid] for uid in job_uids if uid in self.jobs]
+                jobs = self.jobs(ids=job_uids)
                 self._stop_jobs(jobs)
 
         except LockFailedError as e:
@@ -399,8 +399,6 @@ class JobProcessor(object):
 
     def _stop_jobs(self, jobs):
 
-        self._do_update_jobs()
-
         executing_jobs = []
 
         for job in jobs:
@@ -413,7 +411,7 @@ class JobProcessor(object):
         for job in executing_jobs:
             for task in job.tasks:
                 if task.status == Task.STATUS_EXECUTING:
-                    # Move task stop logic to tasks
+                    # Move task stop handling to task itself?
                     if isinstance(task, MinionCmdTask):
                         self.minions._terminate_cmd(task.host, task.minion_cmd_id)
                     task.status = Task.STATUS_FAILED
@@ -424,6 +422,7 @@ class JobProcessor(object):
 
         for job in jobs:
             self.jobs_index[job.id] = self.__dump_job(job)
+            job.save()
 
         return jobs
 
