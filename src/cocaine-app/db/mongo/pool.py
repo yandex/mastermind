@@ -8,7 +8,7 @@ import threading
 import traceback
 
 from copy import deepcopy
-from pymongo import message, helpers, pool
+import pymongo
 from pymongo.collection import Collection as OriginalCollection
 from pymongo.errors import ConnectionFailure, OperationFailure, AutoReconnect
 from pymongo.mongo_replica_set_client import MongoReplicaSetClient as MRSC
@@ -49,7 +49,7 @@ class Request(object):
 
 request = Request()
 
-original_unpack_response = deepcopy(helpers._unpack_response)
+original_unpack_response = deepcopy(pymongo.helpers._unpack_response)
 
 
 def __set_request_message__(msg):
@@ -111,15 +111,14 @@ def __unpack_response(*args, **kwargs):
             request_message += ' '
         msg = request_message + '%s %s %.3f' % (result.get('number_returned'), sys.getsizeof(result.get('data')), delta)
         logger.debug(msg)
-        # logger.debug(result)
     return result
 pymongo.helpers._unpack_response = __unpack_response
 
 
-class CustomPool(pool.Pool):
+class CustomPool(pymongo.pool.Pool):
     def get_socket(self, *args, **kwargs):
         start = time.time()
-        result = pool.Pool.get_socket(self, *args, **kwargs)
+        result = pymongo.pool.Pool.get_socket(self, *args, **kwargs)
         delta = time.time() - start
         try:
             nose, sock_time, tail = RE_SOCKET_TIME.match(request.request_message).groups()
@@ -130,39 +129,10 @@ class CustomPool(pool.Pool):
         return result
 
 
-# class MPFSCommonMongoConnection(pymongo.connection.Connection):
-
-    # @log_request
-    # def _send_message(self, *args, **kwargs):
-    #     self.__maybe_reconnect_main_node()
-    #     try:
-    #         return super(MPFSCommonMongoConnection, self)._send_message(*args, **kwargs)
-    #     except OperationFailure, e:
-    #         s = str(e)
-    #         if '[SEND_ERROR]' in s:
-    #             # treat such errors as permanent network failures:
-    #             self.disconnect()
-    #             raise AutoReconnect(s)
-    #         else:
-    #             raise
-
-    # @log_request
-    # def _send_message_with_response(self, *args, **kwargs):
-    #     self.__maybe_reconnect_main_node()
-    #     try:
-    #         return super(MPFSCommonMongoConnection, self)._send_message_with_response(*args, **kwargs)
-    #     except OperationFailure, e:
-    #         s = str(e)
-    #         if '[SEND_ERROR]' in s:
-    #             # treat such errors as permanent network failures:
-    #             self.disconnect()
-    #             raise AutoReconnect(s)
-    #         else:
-    #             raise
-
 class MongoReplicaSetClient(MRSC):
     def __init__(self, *args, **kwargs):
         kwargs['_pool_class'] = CustomPool
+        kwargs['read_preference'] = pymongo.ReadPreference.PRIMARY_PREFERRED
         super(MongoReplicaSetClient, self).__init__(*args, **kwargs)
 
     @log_request
