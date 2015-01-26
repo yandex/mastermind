@@ -156,8 +156,8 @@ class NodeInfoUpdater(object):
     def update_statistics(m_stat, elapsed_time):
 
         node_addr = '{0}:{1}'.format(m_stat.address.host, m_stat.address.port)
-        logger.debug('Cluster updating: node {0} statistics time: {1}.{2}'.format(
-            node_addr, elapsed_time.tsec, elapsed_time.tnsec))
+        logger.debug('Cluster updating: node {0} statistics time: {1}.{2:03d}'.format(
+            node_addr, elapsed_time.tsec, int(round(elapsed_time.tnsec / (1000.0 * 1000.0)))))
         logger.info('Stats: {0}'.format(node_addr))
 
 
