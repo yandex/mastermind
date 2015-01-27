@@ -540,6 +540,9 @@ class Planner(object):
                 'should have STALLED or INIT status'.format(
                     group.group_id, str(group.node_backends[0]), group.node_backends[0].status))
 
+        if group.couple is None:
+            raise ValueError('Group {0} is uncoupled'.format(group.group_id))
+
         candidates = []
         for g in group.coupled_groups:
             if len(g.node_backends) > 1:
