@@ -207,14 +207,15 @@ class NodeInfoUpdater(object):
                 else:
                     group = storage.groups[gid]
 
-                if b_stat['status']['state'] == 0:
-                    logger.info('Disabling node backend %s' % (str(node_backend)))
+                if b_stat['status']['state'] != 1:
+                    logger.info('Node backend {0} is not enabled: state {1}'.format(
+                        str(node_backend), b_stat['status']['state']))
                     node_backend.disable()
                 else:
 
                     if not 'vfs' in b_stat['backend']:
                         logger.error('Failed to parse statistics for node backend {0}, '
-                            'vfs key not found: {1}'.format(node_backend, b_stat['backend']))
+                            'vfs key not found: {1}'.format(node_backend, b_stat))
                         continue
 
                     fsid = b_stat['backend']['vfs']['fsid']
