@@ -1,3 +1,9 @@
+mastermind (2.16.3) lucid; urgency=low
+
+  * Group move has 'force' parameter, which will try to cancel unimportant jobs
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 29 Jan 2015 18:13:03 +0300
+
 mastermind (2.16.2) lucid; urgency=low
 
   * More informative error message when trying to restore uncoupled group
