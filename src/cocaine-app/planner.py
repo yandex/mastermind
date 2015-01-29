@@ -566,9 +566,98 @@ class Planner(object):
             job_params['uncoupled_group'] = uncoupled_groups[0].group_id
             job_params['merged_groups'] = [g.group_id for g in uncoupled_groups[1:]]
 
-        with sync_manager.lock(self.job_processor.JOBS_LOCK):
+        with sync_manager.lock(self.job_processor.JOBS_LOCK, timeout=self.job_processor.JOB_MANUAL_TIMEOUT):
             job = self.job_processor._create_job(
                 jobs.JobTypes.TYPE_RESTORE_GROUP_JOB,
+                job_params, force=force)
+
+        return job.dump()
+
+    @h.concurrent_handler
+    def move_group(self, request):
+        logger.info('----------------------------------------')
+        logger.info('New move group request: ' + str(request))
+
+        if len(request) < 1:
+            raise ValueError('Group id is required')
+        elif len(request) < 2:
+            raise ValueError('Uncoupled group is required')
+
+        try:
+            group_id = int(request[0])
+            if not group_id in storage.groups:
+                raise ValueError
+        except (TypeError, ValueError):
+            raise ValueError('Group {0} is not found'.format(request[0]))
+
+        group = storage.groups[group_id]
+        if len(group.node_backends) != 1:
+            raise ValueError('Group {0} has {1} node backends, currently '
+                'only groups with 1 node backend can be used'.format(
+                    group.group_id, len(group.node_backends)))
+
+        src_backend = group.node_backends[0]
+        if src_backend.status != storage.Status.OK:
+            raise ValueError('Group {0} node backend {1} status is {2}, should be {3}'.format(
+                group.group_id, src_backend, src_backend.status, storage.Status.OK))
+
+        try:
+            uncoupled_group_id = int(request[1])
+            if not uncoupled_group_id in storage.groups:
+                raise ValueError
+        except (TypeError, ValueError):
+            raise ValueError('Uncoupled group {0} is not found'.format(uncoupled_group_id))
+
+        uncoupled_group = storage.groups[uncoupled_group_id]
+        if len(uncoupled_group.node_backends) != 1:
+            raise ValueError('Group {0} has {1} node backends, currently '
+                'only groups with 1 node backend can be used'.format(
+                    uncoupled_group.group_id, len(uncoupled_group.node_backends)))
+
+        if uncoupled_group.couple or uncoupled_group.status != storage.Status.INIT:
+            raise ValueError('Group {0} is not uncoupled'.format(uncoupled_group.group_id))
+
+        dst_backend = uncoupled_group.node_backends[0]
+        if dst_backend.status != storage.Status.OK:
+            raise ValueError('Group {0} node backend {1} status is {2}, should be {3}'.format(
+                uncoupled_group.group_id, dst_backend, dst_backend.status, storage.Status.OK))
+
+        try:
+            options = request[2]
+        except IndexError:
+            options = {}
+
+        if options.get('dc_check', True):
+            dcs = set()
+            for g in group.coupled_groups:
+                dcs.update(nb.node.host.dc for nb in g.node_backends)
+            if dst_backend.node.host.dc in dcs:
+                raise ValueError('Group {0} cannot be moved to uncoupled group {1}, '
+                    'couple {2} already has groups in dc {3}'.format(
+                        group.group_id, uncoupled_group.group_id,
+                        group.couple, dst_backend.node.host.dc))
+
+        try:
+            force = bool(request[3])
+        except IndexError:
+            force = False
+
+        job_params = {'group': group.group_id,
+                      'uncoupled_group': uncoupled_group.group_id,
+                      'src_host': src_backend.node.host.addr,
+                      'src_port': src_backend.node.port,
+                      'src_family': src_backend.node.family,
+                      'src_backend_id': src_backend.backend_id,
+                      'src_base_path': src_backend.base_path,
+                      'dst_host': dst_backend.node.host.addr,
+                      'dst_port': dst_backend.node.port,
+                      'dst_family': dst_backend.node.family,
+                      'dst_backend_id': dst_backend.backend_id,
+                      'dst_base_path': dst_backend.base_path}
+
+        with sync_manager.lock(self.job_processor.JOBS_LOCK, timeout=self.job_processor.JOB_MANUAL_TIMEOUT):
+            job = self.job_processor._create_job(
+                jobs.JobTypes.TYPE_MOVE_JOB,
                 job_params, force=force)
 
         return job.dump()

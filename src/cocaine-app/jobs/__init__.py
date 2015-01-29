@@ -43,6 +43,8 @@ class JobProcessor(object):
 
     INDEX_BATCH_SIZE = 1000
 
+    JOB_MANUAL_TIMEOUT = 20
+
     def __init__(self, node, db, minions):
         logger.info('Starting JobProcessor')
         self.session = elliptics.Session(node)
@@ -280,8 +282,6 @@ class JobProcessor(object):
 
     def __dump_job(self, job):
         return json.dumps(job.dump())
-
-    JOB_MANUAL_TIMEOUT = 20
 
     @h.concurrent_handler
     def create_job(self, request):

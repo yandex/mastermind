@@ -200,6 +200,7 @@ def init_minions():
 def init_planner(job_processor):
     planner = Planner(n.meta_session, job_processor)
     register_handle(planner.restore_group)
+    register_handle(planner.move_group)
     return planner
 
 

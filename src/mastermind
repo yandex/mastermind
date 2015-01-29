@@ -261,6 +261,8 @@ def group_force_update(host=None, app=None):
 def group_move(group, uncoupled_group,
                no_dc_check=('d', False, 'Disables checking if destination dc '
                    'already has groups coupled with <group>'),
+               force=('f', False, 'Cancel all pending jobs of low priority '
+                      '(e.g. recover-dc and defragmenation)'),
                host=None, app=None):
     '''Create job to move group's node backend to uncoupled group's node backend.
        Uncoupled group will be replaced, source group node backend will be disabled.
@@ -268,68 +270,10 @@ def group_move(group, uncoupled_group,
     s = service(host, app)
 
     (group, uncoupled_group) = map(int, (group, uncoupled_group))
-    group_data = retry(s, 'get_group_info', group)
-    if len(group_data['node_backends']) != 1:
-        print warn('Group {0} has {1} node backends, should have one'.format(
-            group, len(group_data['node_backends'])))
-        return
-    src_backend = group_data['node_backends'][0]
-    if src_backend['status'] != 'OK':
-        print warn('Group {0} node backend status is {1}, should be OK'.format(
-            group, src_backend['status']))
-        return
-    src_host, src_port, src_family = src_backend['node'].split(':')
-    (src_port, src_family) = map(int, (src_port, src_family))
 
-    uncoupled_group_data = retry(s, 'get_group_info', uncoupled_group)
-    if len(uncoupled_group_data['node_backends']) != 1:
-        print warn('Group {0} has {1} node backends, should have one'.format(
-            uncoupled_group, len(uncoupled_group_data['node_backends'])))
-        return
-
-    if uncoupled_group_data['status'] != 'INIT':
-        print warn('Group {0} has status {1}, should be INIT'.format(
-            uncoupled_group, uncoupled_group_data['status']))
-        return
-    dst_backend = uncoupled_group_data['node_backends'][0]
-    if dst_backend['status'] != 'OK':
-        print warn('Group {0} node backend status is {1}, should be OK'.format(
-            uncoupled_group, dst_backend['status']))
-        return
-    dst_host, dst_port, dst_family = dst_backend['node'].split(':')
-    (dst_port, dst_family) = map(int, (dst_port, dst_family))
-
-    if group_data.get('couples'):
-        # checking if new dc (of uncoupled group) is applicable for couple
-        couple_data = retry(s, 'get_couple_info', group)
-        couple_dcs = set()
-        for g in couple_data['groups']:
-            if g['id'] == group:
-                continue
-            for nb in g['node_backends']:
-                couple_dcs.add(nb['dc'])
-
-        if not no_dc_check and uncoupled_group_data['node_backends'][0]['dc'] in couple_dcs:
-            print warn('Group {0} cannot be moved to uncoupled group {1}, '
-                 'couple {2} already has groups in dc {3}'.format(
-                    group, uncoupled_group, couple_data['id'],
-                    uncoupled_group_data['node_backends'][0]['dc']))
-            return
-
-    job_data = s.enqueue('create_job', msgpack.packb(['move_job',
-        {'group': group,
-         'uncoupled_group': uncoupled_group,
-         'src_host': src_host,
-         'src_port': src_port,
-         'src_family': src_family,
-         'src_backend_id': src_backend['backend_id'],
-         'src_base_path': src_backend['path'],
-         'dst_host': dst_host,
-         'dst_port': dst_port,
-         'dst_family': dst_family,
-         'dst_backend_id': dst_backend['backend_id'],
-         'dst_base_path': dst_backend['path'],
-         }])).get()
+    job_data = s.enqueue('move_group', msgpack.packb([
+        group, uncoupled_group,
+        {'dc_check': not no_dc_check}, force])).get()
 
     print job_data
 
