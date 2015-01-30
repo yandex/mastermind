@@ -249,6 +249,10 @@ class NodeInfoUpdater(object):
                             logger.warn('Bad stat for node backend {0} ({1}): {2}'.format(node_backend, e, b_stat))
                             pass
 
+                    node_backend.stat_file_error = b_stat.get('backend', {}).get('global_stats', {}).get('stat_file_error', 0)
+                    if node_backend.stat_file_error != 0:
+                        node_backend.last_stat_file_error_text = b_stat['backend']['global_stats']['string_stat_file_error']
+
                     if b_stat['status']['read_only']:
                         node_backend.make_read_only()
                     else:

@@ -450,6 +450,8 @@ class NodeBackend(object):
         self.read_only = False
         self.disabled = False
         self.dstat_error_code = 0
+        self.stat_file_error = 0
+        self.last_stat_file_error_text = ''
         self.status = Status.INIT
         self.status_text = "Node %s is not inititalized yet" % (self.__str__())
 
@@ -492,6 +494,10 @@ class NodeBackend(object):
         elif self.disabled:
             self.status = Status.STALLED
             self.status_text = 'Node backend {0} has been disabled'.format(str(self))
+
+        elif self.stat_file_error:
+            self.status = Status.STALLED
+            self.status_text = 'Node backend {0} is {1}'.format(str(self), self.last_stat_file_error_text)
 
         elif self.stalled:
             self.status = Status.STALLED
