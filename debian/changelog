@@ -1,3 +1,9 @@
+mastermind (2.16.4) lucid; urgency=low
+
+  * Detecting stat file error from monitor stats
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 02 Feb 2015 12:41:27 +0300
+
 mastermind (2.16.3) lucid; urgency=low
 
   * Group move has 'force' parameter, which will try to cancel unimportant jobs
