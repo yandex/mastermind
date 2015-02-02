@@ -843,15 +843,16 @@ class Balancer(object):
             if candidate:
                 candidates.append(candidate)
 
+        if not candidates:
+            return None
+
+        candidate = candidates[0]
+
         if len(candidates) > 1:
             weights = [(self.__weight_couple_groups(ns_current_state, units, c), c) for c in candidates]
             weights.sort()
             logger.info('Choosing candidate with least weight: {0}'.format(weights))
             candidate = weights[0][1]
-        elif len(candidates):
-            candidate = candidates[0]
-        else:
-            return None
 
         return candidate
 

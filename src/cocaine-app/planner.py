@@ -685,11 +685,11 @@ class Planner(object):
 
         groups_by_fs = {}
 
-        for group in uncoupled_groups:
-            if group.group_id in busy_group_ids:
+        for g in uncoupled_groups:
+            if g.group_id in busy_group_ids:
                 continue
-            fs = group.node_backends[0].fs
-            groups_by_fs.setdefault(fs, []).append(group)
+            fs = g.node_backends[0].fs
+            groups_by_fs.setdefault(fs, []).append(g)
 
         candidates = []
         groups_by_dc = {}
