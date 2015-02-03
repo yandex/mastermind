@@ -520,12 +520,14 @@ class Balancer(object):
         error = None
 
         try:
-            tree, nodes = self.__build_cluster_state()
-            self.__account_ns_couples(tree, nodes, ns)
+            tree, nodes = self.infrastructure.filtered_cluster_tree(self.NODE_TYPES)
+            self.infrastructure.account_ns_couples(tree, nodes, ns)
 
-            units = self.__groups_units(
-                [group_id for group_ids in groups_by_total_space.itervalues()
-                          for group_id in group_ids])
+            units = self.infrastructure.groups_units(
+                [storage.groups[group_id]
+                    for group_ids in groups_by_total_space.itervalues()
+                    for group_id in group_ids],
+                self.NODE_TYPES)
 
             for _, mandatory_groups in itertools.izip_longest(
                     xrange(couples), options['mandatory_groups'][:couples]):
@@ -542,10 +544,10 @@ class Balancer(object):
                             'in cluster or is not uncoupled'.format(m_group))
 
                 if mandatory_groups:
-                    self.__account_ns_groups(nodes, [storage.groups[g] for g in mandatory_groups])
-                    self.__update_groups_list(tree)
+                    self.infrastructure.account_ns_groups(nodes, [storage.groups[g] for g in mandatory_groups])
+                    self.infrastructure.update_groups_list(tree)
 
-                ns_current_state = self.__ns_current_state(nodes)
+                ns_current_state = self.infrastructure.ns_current_state(nodes, self.NODE_TYPES[1:])
                 groups_to_couple = self.__choose_groups_to_couple(
                     ns_current_state, units, size, groups_by_total_space, mandatory_groups)
                 if not groups_to_couple:
@@ -571,8 +573,8 @@ class Balancer(object):
                             group_ids.remove(group.group_id)
                         break
 
-                self.__account_ns_groups(nodes, couple.groups)
-                self.__update_groups_list(tree)
+                self.infrastructure.account_ns_groups(nodes, couple.groups)
+                self.infrastructure.update_groups_list(tree)
 
                 created_couples.append(couple)
         except Exception as e:
@@ -594,90 +596,6 @@ class Balancer(object):
 
     NODE_TYPES = ['root'] + inventory.get_balancer_node_types() + ['hdd']
     DC_NODE_TYPE = inventory.get_dc_node_type()
-
-    def __build_cluster_state(self):
-        tree, nodes = self.infrastructure.cluster_tree()
-
-        def move_allowed_children(node, dest):
-            for child in node.get('children', []):
-                if child['type'] not in self.NODE_TYPES:
-                    move_allowed_children(child, dest)
-                else:
-                    dest['children'].append(child)
-
-        def flatten_tree(root):
-            for child in root.get('children', [])[:]:
-                if child['type'] not in self.NODE_TYPES:
-                    move_allowed_children(child, root)
-                    root['children'].remove(child)
-                else:
-                    flatten_tree(child)
-
-        flatten_tree(tree)
-
-        for k in nodes.keys():
-            if not k in self.NODE_TYPES:
-                del nodes[k]
-
-        nodes['hdd'] = {}
-
-        for nb in storage.node_backends:
-
-            full_path = nb.node.host.full_path
-
-            if not full_path in nodes['host']:
-                logger.warn('Host {0} is node found in cluster tree'.format(full_path))
-                continue
-            if nb.stat is None:
-                continue
-
-            fsid = str(nb.stat.fsid)
-            fsid_full_path = full_path + '|' + fsid
-            if not fsid_full_path in nodes['hdd']:
-                hdd_node = {
-                    'type': 'hdd',
-                    'name': fsid,
-                    'full_path': fsid_full_path,
-                }
-                nodes['hdd'][fsid_full_path] = hdd_node
-                nodes['host'][full_path].setdefault('children', []).append(hdd_node)
-
-        return tree, nodes
-
-    def __update_groups_list(self, root):
-        if not 'children' in root:
-            return root['groups']
-        root['groups'] = reduce(operator.or_,
-            (self.__update_groups_list(child) for child in root.get('children', [])),
-            set())
-        return root['groups']
-
-    def __account_ns_groups(self, nodes, groups):
-        for group in groups:
-            for nb in group.node_backends:
-                hdd_path = nb.node.host.full_path + '|' + str(nb.stat.fsid)
-                nodes['hdd'][hdd_path]['groups'].add(group.group_id)
-
-    def __account_ns_couples(self, tree, nodes, namespace):
-
-        for hdd in nodes['hdd'].itervalues():
-            hdd['groups'] = set()
-
-        for couple in storage.couples:
-            try:
-                ns = couple.namespace
-            except ValueError:
-                continue
-
-            if namespace != ns:
-                continue
-
-            if couple.status != storage.Status.OK:
-                continue
-
-            self.__account_ns_groups(nodes, couple.groups)
-
-        self.__update_groups_list(tree)
 
 
     def __weight_combination(self, ns_current_type_state, comb):
@@ -702,18 +620,6 @@ class Balancer(object):
                 comb))
 
         return weight
-
-    def __ns_current_state(self, nodes):
-        ns_current_state = {}
-        for node_type in self.NODE_TYPES[1:]:
-            ns_current_state[node_type] = {'nodes': {},
-                                           'avg': 0}
-            for child in nodes[node_type].itervalues():
-                ns_current_state[node_type]['nodes'][child['full_path']] = len(child['groups'])
-            ns_current_state[node_type]['avg'] = (
-                float(sum(ns_current_state[node_type]['nodes'].values())) /
-                len(nodes[node_type]))
-        return ns_current_state
 
     def __choose_groups(self, ns_current_state, units, count, group_ids, levels, mandatory_groups):
         levels = levels[1:]
@@ -780,16 +686,16 @@ class Balancer(object):
         if len(levels) == 1:
             groups = reduce(
                 operator.add,
-                (groups_by_level_units[level_units][:count]
-                     for level_units, count in node_counts.iteritems()),
+                (groups_by_level_units[level_units][:_count]
+                     for level_units, _count in node_counts.iteritems()),
                 [])
         else:
             groups = reduce(
                 operator.add,
-                (self.__choose_groups(ns_current_state, units, count,
+                (self.__choose_groups(ns_current_state, units, _count,
                                       groups_by_level_units[level_units],
                                       levels, mandatory_groups)
-                     for level_units, count in node_counts.iteritems()),
+                     for level_units, _count in node_counts.iteritems()),
                 [])
 
         if len(groups) < count:
@@ -801,29 +707,7 @@ class Balancer(object):
 
         return groups
 
-    def __groups_units(self, group_ids):
-        units = {}
 
-        for group_id in group_ids:
-            if group_id in units:
-                continue
-            group = storage.groups[group_id]
-            for nb in group.node_backends:
-                nb_units = {'root': 'root'}
-                units.setdefault(group_id, [])
-
-                parent = nb.node.host.parents
-                while parent:
-                    if parent['type'] in self.NODE_TYPES:
-                        nb_units[parent['type']] = parent['full_path']
-                    parent = parent.get('parent')
-
-                nb_units['hdd'] = (nb_units['host'] + '|' +
-                    str(nb.stat.fsid))
-
-                units[group_id].append(nb_units)
-
-        return units
 
     def __choose_groups_to_couple(self, ns_current_state, units, count, groups_by_total_space, mandatory_groups):
 

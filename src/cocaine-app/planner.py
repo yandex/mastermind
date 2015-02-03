@@ -1,5 +1,6 @@
 from copy import copy
 import itertools
+import heapq
 from logging import getLogger
 import msgpack
 import storage
@@ -580,8 +581,6 @@ class Planner(object):
 
         if len(request) < 1:
             raise ValueError('Group id is required')
-        elif len(request) < 2:
-            raise ValueError('Uncoupled group is required')
 
         try:
             group_id = int(request[0])
@@ -602,30 +601,47 @@ class Planner(object):
                 group.group_id, src_backend, src_backend.status, storage.Status.OK))
 
         try:
-            uncoupled_group_id = int(request[1])
-            if not uncoupled_group_id in storage.groups:
-                raise ValueError
-        except (TypeError, ValueError):
-            raise ValueError('Uncoupled group {0} is not found'.format(uncoupled_group_id))
+            options = request[1]
+        except IndexError:
+            options = {}
 
-        uncoupled_group = storage.groups[uncoupled_group_id]
-        if len(uncoupled_group.node_backends) != 1:
-            raise ValueError('Group {0} has {1} node backends, currently '
-                'only groups with 1 node backend can be used'.format(
-                    uncoupled_group.group_id, len(uncoupled_group.node_backends)))
+        uncoupled_group_ids = options.get('uncoupled_groups')
+        uncoupled_groups = []
+        if not uncoupled_group_ids:
+            uncoupled_groups = self.select_uncoupled_groups(group)
+            logger.info('Group {0} will be moved to uncoupled groups {1}'.format(
+                group.group_id, [g.group_id for g in uncoupled_groups]))
+        else:
+            dc, fsid = None, None
+            for gid in uncoupled_group_ids:
+                if not gid in storage.groups:
+                    raise ValueError('Uncoupled group {0} is not found'.format(gid))
+                unc_group = storage.groups[gid]
 
-        if uncoupled_group.couple or uncoupled_group.status != storage.Status.INIT:
-            raise ValueError('Group {0} is not uncoupled'.format(uncoupled_group.group_id))
+                if len(unc_group.node_backends) != 1:
+                    raise ValueError('Group {0} has {1} node backends, currently '
+                        'only groups with 1 node backend can be used'.format(
+                            unc_group.group_id, len(unc_group.node_backends)))
+
+                nb = unc_group.node_backends[0]
+                if not dc:
+                    dc, fsid = nb.node.host.dc, nb.fs.fsid
+                elif dc != nb.node.host.dc or fsid != nb.fs.fsid:
+                    raise ValueError('All uncoupled groups should be located '
+                        'on a single hdd on the same host')
+
+                if unc_group.couple or unc_group.status != storage.Status.INIT:
+                    raise ValueError('Group {0} is not uncoupled'.format(unc_group.group_id))
+
+                uncoupled_groups.append(unc_group)
+
+        uncoupled_group, merged_groups = uncoupled_groups[0], uncoupled_groups[1:]
 
         dst_backend = uncoupled_group.node_backends[0]
         if dst_backend.status != storage.Status.OK:
             raise ValueError('Group {0} node backend {1} status is {2}, should be {3}'.format(
                 uncoupled_group.group_id, dst_backend, dst_backend.status, storage.Status.OK))
 
-        try:
-            options = request[2]
-        except IndexError:
-            options = {}
 
         if options.get('dc_check', True):
             dcs = set()
@@ -644,6 +660,7 @@ class Planner(object):
 
         job_params = {'group': group.group_id,
                       'uncoupled_group': uncoupled_group.group_id,
+                      'merged_groups': [g.group_id for g in merged_groups],
                       'src_host': src_backend.node.host.addr,
                       'src_port': src_backend.node.port,
                       'src_family': src_backend.node.family,
@@ -662,37 +679,25 @@ class Planner(object):
 
         return job.dump()
 
-    def find_uncoupled_groups(self, group):
-        nodes_set = infrastructure.get_group_history(group.group_id)['nodes'][-1]['set']
-        if len(nodes_set) != 1:
-            raise ValueError('Group {0} does not have 1 backend according '
-                'to history'.format(group.group_id))
-
-        host_addr = nodes_set[0][0]
-        old_host_tree = infrastructure.get_host_tree(infrastructure.get_hostname_by_addr(host_addr))
-
-        couple = group.couple
+    def get_suitable_uncoupled_groups_list(self, group, uncoupled_groups):
+        logger.debug('{0}, {1}'.format(group.group_id, [g.group_id for g in group.coupled_groups]))
         required_ts = max([g.get_stat().total_space for g in group.coupled_groups])
+        groups_by_fs = {}
+
+        busy_group_ids = set(self.job_processor.get_uncoupled_groups_in_service())
 
         forbidden_dcs = set()
         if config.get('forbidden_dc_sharing_among_groups', False):
             forbidden_dcs = set([nb.node.host.dc for g in group.coupled_groups
                                                  for nb in g.node_backends])
 
-        uncoupled_groups = get_good_uncoupled_groups(max_node_backends=1)
-
-        busy_group_ids = set(self.job_processor.get_uncoupled_groups_in_service())
-
-        groups_by_fs = {}
-
         for g in uncoupled_groups:
-            if g.group_id in busy_group_ids:
+            if g.group_id in busy_group_ids or g.node_backends[0].node.host.dc in forbidden_dcs:
                 continue
             fs = g.node_backends[0].fs
             groups_by_fs.setdefault(fs, []).append(g)
 
         candidates = []
-        groups_by_dc = {}
 
         for fs, groups in groups_by_fs.iteritems():
             fs_candidates = []
@@ -708,14 +713,27 @@ class Planner(object):
                     candidate = []
                     ts = 0
 
-            host_addr = groups[0].node_backends[0].node.host.addr
-            dc = infrastructure.get_dc_by_host(
-                infrastructure.get_hostname_by_addr(host_addr))
-            groups_by_dc.setdefault(dc, []).extend(groups)
 
             fs_candidates = sorted(fs_candidates, key=lambda c: (len(c[0]), c[1]))
             if fs_candidates:
-                candidates.append(fs_candidates[0])
+                candidates.append(fs_candidates[0][0])
+
+        return candidates
+
+    def find_uncoupled_groups(self, group):
+        nodes_set = infrastructure.get_group_history(group.group_id)['nodes'][-1]['set']
+        if len(nodes_set) != 1:
+            raise ValueError('Group {0} does not have 1 backend according '
+                'to history'.format(group.group_id))
+
+        host_addr = nodes_set[0][0]
+        old_host_tree = infrastructure.get_host_tree(infrastructure.get_hostname_by_addr(host_addr))
+
+        uncoupled_groups = get_good_uncoupled_groups(max_node_backends=1)
+        groups_by_dc = {}
+        for unc_group in uncoupled_groups:
+            dc = unc_group.node_backends[0].node.host.dc
+            groups_by_dc.setdefault(dc, []).append(unc_group)
 
         logger.info('Uncoupled groups by dcs: {0}'.format(
             [(dc, len(groups)) for dc, groups in groups_by_dc.iteritems()]))
@@ -723,7 +741,8 @@ class Planner(object):
         dc_node_type = inventory.get_dc_node_type()
         weights = {}
 
-        for candidate, ts in candidates:
+        candidates = self.get_suitable_uncoupled_groups_list(group, uncoupled_groups)
+        for candidate in candidates:
             host_addr = candidate[0].node_backends[0].node.host.addr
             host_tree = infrastructure.get_host_tree(
                 infrastructure.get_hostname_by_addr(host_addr))
@@ -731,7 +750,6 @@ class Planner(object):
             diff = 0
             dc = None
             dc_change = False
-            forbidden_dc = False
             old_node = old_host_tree
             node = host_tree
             while old_node:
@@ -740,19 +758,13 @@ class Planner(object):
                 if node['type'] == dc_node_type:
                     dc = node['name']
                     dc_change = old_node['name'] != node['name']
-                    if node['name'] in forbidden_dcs:
-                        forbidden_dc = True
-                        break
                 old_node = old_node.get('parent', None)
                 node = node.get('parent', None)
-
-            if forbidden_dc:
-                continue
 
             logger.info('dc_node_type {0}, host_tree {1}, dc {2}'.format(
                 dc_node_type, host_tree, dc))
 
-            weights[tuple(candidate)] = (dc_change, diff, -len(groups_by_dc[dc]), ts)
+            weights[tuple(candidate)] = (dc_change, diff, -len(groups_by_dc[dc]))
 
         sorted_weights = sorted(weights.items(), key=lambda wi: wi[1])
         if not sorted_weights:
@@ -765,6 +777,73 @@ class Planner(object):
 
         return top_candidate
 
+
+    def select_uncoupled_groups(self, group):
+        if len(group.node_backends) != 1:
+            raise ValueError('Group {0} should have exactly 1 backend'.format(group.group.id))
+
+        types = ['root'] + inventory.get_balancer_node_types() + ['hdd']
+        tree, nodes = infrastructure.filtered_cluster_tree(types)
+
+        couple = group.couple
+        try:
+            ns = couple.namespace
+        except ValueError:
+            raise RuntimeError('Badly configured namespace for couple {0}'.format(couple))
+
+        infrastructure.account_ns_couples(tree, nodes, ns)
+        infrastructure.update_groups_list(tree)
+
+        uncoupled_groups = get_good_uncoupled_groups(max_node_backends=1)
+        candidates = self.get_suitable_uncoupled_groups_list(group, uncoupled_groups)
+        logger.debug('Candidate groups for group {0}: {1}'.format(group.group_id,
+            [[g.group_id for g in c] for c in candidates]))
+
+        units = infrastructure.groups_units(uncoupled_groups, types)
+
+        ns_current_state = infrastructure.ns_current_state(nodes, types[1:])
+        logger.debug('Current ns {0} state: {1}'.format(ns, ns_current_state))
+
+        cur_node = tree
+
+        if not candidates:
+            raise RuntimeError('No suitable uncoupled groups found')
+
+        for level_type in types[1:]:
+            ns_current_type_state = ns_current_state[level_type]
+
+            weights = []
+            for candidate in candidates:
+                weight_nodes = copy(ns_current_type_state['nodes'])
+                units_set = set()
+                for merged_unc_group in candidate:
+                    for nb_unit in units[merged_unc_group.group_id]:
+                        units_set.add(nb_unit[level_type])
+                for used_nb_nodes in units_set:
+                    weight_nodes[used_nb_nodes] += 1
+
+                weight = sum((c - ns_current_type_state['avg']) ** 2
+                             for c in weight_nodes.values())
+
+                heapq.heappush(weights, (weight, candidate))
+
+            logger.debug('Level {0}, ns {1} current state: {2}'.format(
+                level_type, ns, ns_current_type_state))
+
+            max_weight = weights[0][0]
+            selected_candidates = []
+            while weights:
+                c = heapq.heappop(weights)
+                if c[0] != max_weight:
+                    break
+                selected_candidates.append(c[1])
+
+            logger.debug('Level {0}, min weight candidates: {1}'.format(
+                level_type, [[g.group_id for g in c] for c in selected_candidates]))
+
+            candidates = selected_candidates
+
+        return candidates[0]
 
 def _recovery_applicable_couple(couple):
     if couple.status not in storage.GOOD_STATUSES:

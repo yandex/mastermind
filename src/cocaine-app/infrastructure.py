@@ -1,5 +1,6 @@
 import keys
 import logging
+import operator
 import os.path
 import re
 import socket
@@ -766,6 +767,137 @@ class Infrastructure(object):
         tree = {'type': 'root', 'name': 'root',
                 'children': root.values()}
         return tree, nodes
+
+    def filtered_cluster_tree(self, types, namespace=None):
+        tree, nodes = self.cluster_tree(namespace=namespace)
+
+        def move_allowed_children(node, dest):
+            for child in node.get('children', []):
+                if child['type'] not in types:
+                    move_allowed_children(child, dest)
+                else:
+                    dest['children'].append(child)
+
+        def flatten_tree(root):
+            for child in root.get('children', [])[:]:
+                if child['type'] not in types:
+                    move_allowed_children(child, root)
+                    root['children'].remove(child)
+                else:
+                    flatten_tree(child)
+
+        flatten_tree(tree)
+
+        for k in nodes.keys():
+            if not k in types:
+                del nodes[k]
+
+        nodes['hdd'] = {}
+
+        for nb in storage.node_backends:
+
+            full_path = nb.node.host.full_path
+
+            if not full_path in nodes['host']:
+                logger.warn('Host {0} is node found in cluster tree'.format(full_path))
+                continue
+            if nb.stat is None:
+                continue
+
+            fsid = str(nb.stat.fsid)
+            fsid_full_path = full_path + '|' + fsid
+            if not fsid_full_path in nodes['hdd']:
+                hdd_node = {
+                    'type': 'hdd',
+                    'name': fsid,
+                    'full_path': fsid_full_path,
+                }
+                nodes['hdd'][fsid_full_path] = hdd_node
+                nodes['host'][full_path].setdefault('children', []).append(hdd_node)
+
+        return tree, nodes
+
+    def ns_current_state(self, nodes):
+        ns_current_state = {}
+        for node_type in self.NODE_TYPES[1:]:
+            ns_current_state[node_type] = {'nodes': {},
+                                           'avg': 0}
+            for child in nodes[node_type].itervalues():
+                ns_current_state[node_type]['nodes'][child['full_path']] = len(child['groups'])
+            ns_current_state[node_type]['avg'] = (
+                float(sum(ns_current_state[node_type]['nodes'].values())) /
+                len(nodes[node_type]))
+        return ns_current_state
+
+    def update_groups_list(self, root):
+        if not 'children' in root:
+            return root['groups']
+        root['groups'] = reduce(operator.or_,
+            (self.update_groups_list(child) for child in root.get('children', [])),
+            set())
+        return root['groups']
+
+    def account_ns_groups(self, nodes, groups):
+        for group in groups:
+            for nb in group.node_backends:
+                hdd_path = nb.node.host.full_path + '|' + str(nb.stat.fsid)
+                nodes['hdd'][hdd_path]['groups'].add(group.group_id)
+
+    def account_ns_couples(self, tree, nodes, namespace):
+
+        for hdd in nodes['hdd'].itervalues():
+            hdd['groups'] = set()
+
+        for couple in storage.couples:
+            try:
+                ns = couple.namespace
+            except ValueError:
+                continue
+
+            if namespace != ns:
+                continue
+
+            if couple.status != storage.Status.OK:
+                continue
+
+            self.account_ns_groups(nodes, couple.groups)
+
+        self.update_groups_list(tree)
+
+    def ns_current_state(self, nodes, types):
+        ns_current_state = {}
+        for node_type in types:
+            ns_current_state[node_type] = {'nodes': {},
+                                           'avg': 0}
+            for child in nodes[node_type].itervalues():
+                ns_current_state[node_type]['nodes'][child['full_path']] = len(child['groups'])
+            ns_current_state[node_type]['avg'] = (
+                float(sum(ns_current_state[node_type]['nodes'].values())) /
+                len(nodes[node_type]))
+        return ns_current_state
+
+    def groups_units(self, groups, types):
+        units = {}
+
+        for group in groups:
+            if group.group_id in units:
+                continue
+            for nb in group.node_backends:
+                nb_units = {'root': 'root'}
+                units.setdefault(group.group_id, [])
+
+                parent = nb.node.host.parents
+                while parent:
+                    if parent['type'] in types:
+                        nb_units[parent['type']] = parent['full_path']
+                    parent = parent.get('parent')
+
+                nb_units['hdd'] = (nb_units['host'] + '|' +
+                    str(nb.stat.fsid))
+
+                units[group.group_id].append(nb_units)
+
+        return units
 
 
 class CacheItem(object):

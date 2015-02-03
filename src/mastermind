@@ -258,7 +258,9 @@ def group_force_update(host=None, app=None):
 
 @groupDispatcher.command(name='move')
 @log_action
-def group_move(group, uncoupled_group,
+def group_move(group, uncoupled_groups=('u', '', 'Use certain destination uncoupled groups '
+                   '(use comma-separated list if you want to merge several uncoupled groups '
+                   'into one)'),
                no_dc_check=('d', False, 'Disables checking if destination dc '
                    'already has groups coupled with <group>'),
                force=('f', False, 'Cancel all pending jobs of low priority '
@@ -269,11 +271,16 @@ def group_move(group, uncoupled_group,
        Applicable only for single node backend groups'''
     s = service(host, app)
 
-    (group, uncoupled_group) = map(int, (group, uncoupled_group))
+    group = int(group)
 
-    job_data = s.enqueue('move_group', msgpack.packb([
-        group, uncoupled_group,
-        {'dc_check': not no_dc_check}, force])).get()
+    if uncoupled_groups:
+        uncoupled_groups = map(int, uncoupled_groups.split(','))
+    else:
+        uncoupled_groups = None
+
+    job_data = s.enqueue('move_group', msgpack.packb([group,
+        {'dc_check': not no_dc_check,
+         'uncoupled_groups': uncoupled_groups}, force])).get()
 
     print job_data
 

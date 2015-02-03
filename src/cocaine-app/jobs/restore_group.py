@@ -88,7 +88,7 @@ class RestoreGroupJob(Job):
                 merged_nb = merged_group.node_backends[0]
 
                 merged_group_file = (os.path.join(merged_nb.base_path,
-                                  self.GROUP_FILE_PATH)
+                                     self.GROUP_FILE_PATH)
                       if self.GROUP_FILE_PATH else
                       '')
 
