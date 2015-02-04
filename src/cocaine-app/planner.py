@@ -679,6 +679,42 @@ class Planner(object):
 
         return job.dump()
 
+    def account_job(self, ns_current_state, types, job, ns):
+        if getattr(job, 'uncoupled_group', None) is None:
+            return ns_current_state
+
+        group = storage.groups[job.group]
+        uncoupled_group = storage.groups[job.uncoupled_group]
+        add_groups = []
+        remove_groups = []
+        if group.couple.namespace != ns:
+            return ns_current_state
+
+        if group.couple.status in (storage.Status.OK, storage.Status.FULL):
+            remove_groups.append(group)
+            add_groups.append(uncoupled_group)
+        else:
+            add_groups.append(uncoupled_group)
+            add_groups.extend(group.coupled_groups)
+
+        for group, diff in zip(remove_groups + add_groups,
+                [-1] * len(remove_groups) + [1] * len(add_groups)):
+
+            if not group.node_backends:
+                logger.debug('No node backend for group {0}, job for group {1}'.format(group.group_id, job.group))
+                continue
+            cur_node = group.node_backends[0].node.host.parents
+            while cur_node:
+                if cur_node['type'] in types:
+                    ns_current_type_state = ns_current_state[cur_node['type']]
+                    ns_current_type_state['nodes'][cur_node['full_path']] += diff
+                    ns_current_type_state['avg'] += float(diff) / len(ns_current_type_state['nodes'])
+                cur_node = cur_node.get('parent')
+
+        logger.info('Applying job {0}: {1}'.format(job.id, ns_current_state))
+
+        return ns_current_state
+
     def get_suitable_uncoupled_groups_list(self, group, uncoupled_groups):
         logger.debug('{0}, {1}'.format(group.group_id, [g.group_id for g in group.coupled_groups]))
         required_ts = max([g.get_stat().total_space for g in group.coupled_groups])
@@ -803,6 +839,20 @@ class Planner(object):
 
         ns_current_state = infrastructure.ns_current_state(nodes, types[1:])
         logger.debug('Current ns {0} state: {1}'.format(ns, ns_current_state))
+
+        active_jobs = self.job_processor.jobs(
+            types=(jobs.JobTypes.TYPE_MOVE_JOB,
+                   jobs.JobTypes.TYPE_RESTORE_GROUP_JOB),
+            statuses=(jobs.Job.STATUS_NOT_APPROVED,
+                      jobs.Job.STATUS_NEW,
+                      jobs.Job.STATUS_EXECUTING,
+                      jobs.Job.STATUS_PENDING,
+                      jobs.Job.STATUS_BROKEN))
+        for job in active_jobs:
+            ns_current_state = self.account_job(ns_current_state, types, job, ns)
+
+        logger.debug('Current ns {0} state after applied jobs: {1}'.format(
+            ns, ns_current_state))
 
         cur_node = tree
 
