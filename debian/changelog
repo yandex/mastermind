@@ -1,3 +1,10 @@
+mastermind (2.16.5) lucid; urgency=low
+
+  * Couples taking part in new and executing jobs are taken in account when creating new move job
+  * Group move --lucky option to automatically select uncoupled group to move source group to
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 04 Feb 2015 16:09:30 +0300
+
 mastermind (2.16.4) lucid; urgency=low
 
   * Detecting stat file error from monitor stats
