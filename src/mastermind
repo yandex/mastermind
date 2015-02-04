@@ -261,8 +261,6 @@ def group_force_update(host=None, app=None):
 def group_move(group, uncoupled_groups=('u', '', 'Use certain destination uncoupled groups '
                    '(use comma-separated list if you want to merge several uncoupled groups '
                    'into one)'),
-               no_dc_check=('d', False, 'Disables checking if destination dc '
-                   'already has groups coupled with <group>'),
                force=('f', False, 'Cancel all pending jobs of low priority '
                       '(e.g. recover-dc and defragmenation)'),
                host=None, app=None):
@@ -279,8 +277,7 @@ def group_move(group, uncoupled_groups=('u', '', 'Use certain destination uncoup
         uncoupled_groups = None
 
     job_data = s.enqueue('move_group', msgpack.packb([group,
-        {'dc_check': not no_dc_check,
-         'uncoupled_groups': uncoupled_groups}, force])).get()
+        {'uncoupled_groups': uncoupled_groups}, force])).get()
 
     print job_data
 
