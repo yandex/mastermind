@@ -212,7 +212,9 @@ class RestoreGroupJob(Job):
                                      params=params)
             self.tasks.append(task)
 
-        if group.node_backends and group.node_backends[0].status == storage.Status.RO:
+        if (group.node_backends and group.node_backends[0].status in
+            (storage.NodeBackend.ACTIVE_STATUSES)):
+
             nb = group.node_backends[0]
             shutdown_cmd = infrastructure._disable_node_backend_cmd(
                 nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id)

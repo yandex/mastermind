@@ -438,6 +438,9 @@ class Fs(object):
 
 
 class NodeBackend(object):
+
+    ACTIVE_STATUSES = (Status.OK, Status.RO, Status.BROKEN)
+
     def __init__(self, node, backend_id):
 
         self.node = node

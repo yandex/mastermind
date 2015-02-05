@@ -45,9 +45,5 @@ class NodeStopTask(MinionCmdTask):
                 if not group.couple:
                     raise JobBrokenError('Task {0}: group {1} is not '
                         'coupled'.format(self.id, self.group))
-                if group.couple.status not in storage.GOOD_STATUSES:
-                    if group.status not in (storage.Status.MIGRATING, storage.Status.RO):
-                        raise JobBrokenError('Task {0}: group {1} couple {2} '
-                            'status is {3}'.format(self.id, self.group, str(group.couple), group.couple.status))
 
         super(NodeStopTask, self).execute(minions)
