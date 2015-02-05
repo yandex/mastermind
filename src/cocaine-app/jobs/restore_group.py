@@ -212,6 +212,52 @@ class RestoreGroupJob(Job):
                                      params=params)
             self.tasks.append(task)
 
+        if group.node_backends and group.node_backends[0].status == storage.Status.RO:
+            nb = group.node_backends[0]
+            shutdown_cmd = infrastructure._disable_node_backend_cmd(
+                nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id)
+
+            group_file = (os.path.join(nb.base_path,
+                                       self.GROUP_FILE_PATH)
+                          if self.GROUP_FILE_PATH else
+                          '')
+
+            group_file_marker = (os.path.join(nb.base_path,
+                                              self.GROUP_FILE_MARKER_PATH)
+                                 if self.GROUP_FILE_MARKER_PATH else
+                                 '')
+
+            group_file_marker_fmt = group_file_marker.format(
+                group_id=str(self.group),
+                src_host=nb.node.host.addr,
+                src_hostname=infrastructure.get_hostname_by_addr(
+                    nb.node.host.addr),
+                src_backend_id=nb.backend_id,
+                src_port=str(nb.node.port),
+                src_base_path=nb.base_path,
+                dst_host=dst_host,
+                dst_hostname=infrastructure.get_hostname_by_addr(dst_host),
+                dst_port=str(dst_port),
+                dst_base_path=dst_base_path,
+                dst_backend_id=dst_backend_id)
+            params = {'node_backend': str(nb).encode('utf-8'),
+                      'group': str(self.group),
+                      'group_file_marker': group_file_marker_fmt,
+                      'remove_group_file': group_file}
+
+            if self.GROUP_FILE_DIR_MOVE_SRC_RENAME and group_file:
+                params['move_src'] = os.path.join(os.path.dirname(group_file))
+                params['move_dst'] = os.path.join(
+                    nb.base_path, self.GROUP_FILE_DIR_MOVE_SRC_RENAME)
+
+            task = NodeStopTask.new(self,
+                                    group=self.group,
+                                    host=nb.node.host.addr,
+                                    cmd=shutdown_cmd,
+                                    params=params)
+            self.tasks.append(task)
+
+
         reconfigure_cmd = infrastructure._reconfigure_node_cmd(
             dst_host, dst_port, dst_family)
 

@@ -522,21 +522,29 @@ class Planner(object):
             use_uncoupled_group = False
 
         try:
-            force = bool(request[2])
+            options = request[2]
+        except IndexError:
+            options = {}
+
+        try:
+            force = bool(request[3])
         except IndexError:
             force = False
 
         group = storage.groups[group_id]
+
+        job_params = {'group': group.group_id}
+
         if len(group.node_backends) > 1:
             raise ValueError('Group {0} has {1} node backends, should have at most one'.format(
                 group.group_id, len(group.node_backends)))
 
-        if group.status not in (storage.Status.BAD, storage.Status.INIT):
+        if group.status not in (storage.Status.BAD, storage.Status.INIT, storage.Status.RO):
             raise ValueError('Group {0} has {1} status, should have BAD or INIT'.format(
                 group.group_id, group.status))
 
         if (group.node_backends and group.node_backends[0].status not in (
-                storage.Status.STALLED, storage.Status.INIT)):
+                storage.Status.STALLED, storage.Status.INIT, storage.Status.RO)):
             raise ValueError('Group {0} has node backend {1} in status {2}, '
                 'should have STALLED or INIT status'.format(
                     group.group_id, str(group.node_backends[0]), group.node_backends[0].status))
@@ -545,22 +553,28 @@ class Planner(object):
             raise ValueError('Group {0} is uncoupled'.format(group.group_id))
 
         candidates = []
-        for g in group.coupled_groups:
-            if len(g.node_backends) > 1:
-                continue
-            if not all(nb.status == storage.Status.OK for nb in g.node_backends):
-                continue
-            candidates.append(g)
+        if not options.get('src_group'):
+            for g in group.coupled_groups:
+                if len(g.node_backends) > 1:
+                    continue
+                if not all(nb.status == storage.Status.OK for nb in g.node_backends):
+                    continue
+                candidates.append(g)
 
-        if not candidates:
-            raise ValueError('Group {0} cannot be restored, no suitable coupled '
-                'groups are found'.format(group.group_id))
+            if not candidates:
+                raise ValueError('Group {0} cannot be restored, no suitable coupled '
+                    'groups are found'.format(group.group_id))
 
-        candidates.sort(key=lambda g: g.get_stat().files, reverse=True)
-        src_group = candidates[0]
+            candidates.sort(key=lambda g: g.get_stat().files, reverse=True)
+            src_group = candidates[0]
 
-        job_params = {'group': group.group_id,
-                      'src_group': src_group.group_id}
+        else:
+            src_group = storage.groups[int(options['src_group'])]
+            if src_group not in group.couple.groups:
+                raise ValueError('Group {0} cannot be restored from group {1}, '
+                    'it is not member of a couple'.format(group.group_id, src_group.group_id))
+
+        job_params['src_group'] = src_group.group_id
 
         if use_uncoupled_group:
             uncoupled_groups = self.find_uncoupled_groups(group)

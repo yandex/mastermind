@@ -286,6 +286,7 @@ def group_move(group, uncoupled_groups=('u', '', 'Use certain destination uncoup
 @log_action
 def group_restore(group, uncoupled_group=('u', False, 'Use uncoupled group as '
                   'a restoration point instead of previous group location'),
+                  src_group=('s', '', 'Use selected group as a source group to copy data from'),
                   force=('f', False, 'Cancel all pending jobs of low priority '
                       '(e.g. recover-dc and defragmenation)'),
                   host=None, app=None):
@@ -299,7 +300,7 @@ def group_restore(group, uncoupled_group=('u', False, 'Use uncoupled group as '
     group = int(group)
 
     job_data = s.enqueue('restore_group', msgpack.packb([
-        group, uncoupled_group, force])).get()
+        group, uncoupled_group, {'src_group': src_group}, force])).get()
 
     print job_data
 

@@ -5,6 +5,7 @@ import threading
 import time
 import uuid
 
+from config import config
 from db.mongo import MongoObject
 from db.mongo.job import JobView
 import helpers as h
@@ -49,6 +50,9 @@ class Job(MongoObject):
     )
 
     COMMON_PARAMS = ('need_approving',)
+
+    GROUP_FILE_MARKER_PATH = config.get('restore', {}).get('group_file_marker', None)
+    GROUP_FILE_DIR_MOVE_SRC_RENAME = config.get('restore', {}).get('group_file_dir_move_src_rename', None)
 
     def __init__(self, need_approving=False):
         self.id = uuid.uuid4().hex

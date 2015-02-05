@@ -27,8 +27,6 @@ class MoveJob(Job):
     GROUP_FILE_PATH = config.get('restore', {}).get('group_file', None)
 
     # used to mark source node that content has been moved away from it
-    GROUP_FILE_MARKER_PATH = config.get('restore', {}).get('group_file_marker', None)
-    GROUP_FILE_DIR_MOVE_SRC_RENAME = config.get('restore', {}).get('group_file_dir_move_src_rename', None)
     GROUP_FILE_DIR_MOVE_DST_RENAME = config.get('restore', {}).get('group_file_dir_move_dst_rename', None)
     MERGE_GROUP_FILE_MARKER_PATH = config.get('restore', {}).get('merge_group_file_marker', None)
     MERGE_GROUP_FILE_DIR_MOVE_SRC_RENAME = config.get('restore', {}).get('merge_group_file_dir_move_src_rename', None)
