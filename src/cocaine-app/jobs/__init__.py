@@ -85,13 +85,13 @@ class JobProcessor(object):
 
         logger.info('Jobs execution started')
         try:
-            if not self.minions.ready:
-                if self.minions.pending_hosts is None:
-                    # set minion hosts which state should be fetched
-                    # before job processor can start to execute jobs
-                    self.minions.pending_hosts = set(self._get_processing_jobs_hosts())
-                    logger.info('Minions pending hosts: {0}'.format(self.minions.pending_hosts))
-                raise errors.NotReadyError
+            # if not self.minions.ready:
+            #     if self.minions.pending_hosts is None:
+            #         # set minion hosts which state should be fetched
+            #         # before job processor can start to execute jobs
+            #         self.minions.pending_hosts = set(self._get_processing_jobs_hosts())
+            #         logger.info('Minions pending hosts: {0}'.format(self.minions.pending_hosts))
+            #     raise errors.NotReadyError
 
             logger.debug('Lock acquiring')
 
@@ -131,8 +131,8 @@ class JobProcessor(object):
 
         except LockFailedError as e:
             pass
-        except errors.NotReadyError as e:
-            logger.warn('Failed to process jobs: minions state is not fetched')
+        # except errors.NotReadyError as e:
+        #     logger.warn('Failed to process jobs: minions state is not fetched')
         except Exception as e:
             logger.error('Failed to process existing jobs: {0}\n{1}'.format(
                 e, traceback.format_exc()))
