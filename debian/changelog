@@ -1,3 +1,9 @@
+mastermind (2.16.8) lucid; urgency=low
+
+  * Restore group job can now accept source group as a parameter
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 05 Feb 2015 19:10:06 +0300
+
 mastermind (2.16.7) lucid; urgency=low
 
   * Removed obsolete checking if tasks where successfully fetched from minions
