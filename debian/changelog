@@ -1,3 +1,9 @@
+mastermind (2.16.7) lucid; urgency=low
+
+  * Removed obsolete checking if tasks where successfully fetched from minions
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 05 Feb 2015 15:07:56 +0300
+
 mastermind (2.16.6) lucid; urgency=low
 
   * Fix for job accounting of groups with broken namespace settings
