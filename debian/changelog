@@ -1,3 +1,9 @@
+mastermind (2.16.9) lucid; urgency=low
+
+  * Removed constraints on node backend status during restore group job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 05 Feb 2015 20:17:43 +0300
+
 mastermind (2.16.8) lucid; urgency=low
 
   * Restore group job can now accept source group as a parameter
