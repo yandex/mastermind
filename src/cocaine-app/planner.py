@@ -686,7 +686,10 @@ class Planner(object):
         uncoupled_group = storage.groups[job.uncoupled_group]
         add_groups = []
         remove_groups = []
-        if group.couple.namespace != ns:
+        try:
+            if group.couple.namespace != ns:
+                return ns_current_state
+        except ValueError:
             return ns_current_state
 
         if group.couple.status in (storage.Status.OK, storage.Status.FULL):
