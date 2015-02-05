@@ -1,3 +1,9 @@
+mastermind (2.16.6) lucid; urgency=low
+
+  * Fix for job accounting of groups with broken namespace settings
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 05 Feb 2015 12:35:26 +0300
+
 mastermind (2.16.5) lucid; urgency=low
 
   * Couples taking part in new and executing jobs are taken in account when creating new move job
