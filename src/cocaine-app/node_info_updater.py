@@ -77,6 +77,7 @@ class NodeInfoUpdater(object):
                     return
 
                 curr_max_group = max((g.group_id for g in storage.groups))
+                logger.info('Current max group in storage: {0}'.format(curr_max_group))
                 if curr_max_group > max_group:
                     logger.info('Updating storage max group to {0}'.format(curr_max_group))
                     self.__node.meta_session.write_data(
