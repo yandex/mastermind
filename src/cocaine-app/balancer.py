@@ -1266,6 +1266,22 @@ class Balancer(object):
 
         return dict(res)
 
+    @h.concurrent_handler
+    def storage_keys_diff(self, request):
+        couples_diff = {}
+        for couple in storage.couples:
+            group_keys = []
+            for group in couple.groups:
+                if not len(group.node_backends):
+                    continue
+                group_keys.append(group.get_stat().files)
+            if not group_keys:
+                continue
+            group_keys.sort(reverse=True)
+            couples_diff[str(couple)] = sum([group_keys[0] - gk for gk in group_keys[1:]])
+        return {'couples': couples_diff,
+                'total_keys_diff': sum(couples_diff.itervalues())}
+
 
 def handlers(b):
     handlers = []
