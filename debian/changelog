@@ -1,3 +1,9 @@
+mastermind (2.16.10) lucid; urgency=low
+
+  * Fix for rsync group node backend checking
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 06 Feb 2015 17:41:47 +0300
+
 mastermind (2.16.9) lucid; urgency=low
 
   * Removed constraints on node backend status during restore group job
