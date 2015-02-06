@@ -820,6 +820,7 @@ def ns_setup(namespace,
                 'will be reserved for future updates, couple will be closed when '
                 'free effective space percentage is less than or equal to reserved '
                 'space percentage'),
+             check_for_update=('', '', 'Insert the key only of does not exist already (1|0)'),
              json_input=('j', False, 'Namespace settings will be imported without '
                 'validation from --input-source source (default /dev/stdin)'),
              input_source=('i', '/dev/stdin', 'Input file for namespace settings'),
@@ -899,6 +900,9 @@ def ns_setup(namespace,
 
         if features:
             settings['features'] = features
+
+        if check_for_update:
+            settings['check-for-update'] = check_for_update != '0'
 
     res = s.enqueue('namespace_setup', msgpack.packb([namespace, overwrite, settings, options])).get()
     print res

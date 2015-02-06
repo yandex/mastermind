@@ -885,6 +885,11 @@ class Balancer(object):
             raise ValueError('min-units should be positive integer')
 
         try:
+            settings['check-for-update'] = bool(settings['check-for-update'])
+        except (TypeError, ValueError):
+            raise ValueError('check-for-update should be boolean')
+
+        try:
             content_length_threshold = settings['redirect']['content-length-threshold'] = int(settings['redirect']['content-length-threshold'])
             if not content_length_threshold >= -1:
                 raise ValueError
@@ -969,7 +974,8 @@ class Balancer(object):
 
     ALLOWED_NS_KEYS = set(['success-copies-num', 'groups-count',
         'static-couple', 'auth-keys', 'signature', 'redirect',
-        'min-units', 'features', 'reserved-space-percentage'])
+        'min-units', 'features', 'reserved-space-percentage',
+        'check-for-update'])
     ALLOWED_NS_SIGN_KEYS = set(['token', 'path_prefix'])
     ALLOWED_NS_AUTH_KEYS = set(['write', 'read'])
     ALLOWED_REDIRECT_KEYS = set(['content-length-threshold', 'expire-time'])
