@@ -29,9 +29,12 @@ class RsyncBackendTask(MinionCmdTask):
             logger.info('Job {0}, task {1}: checking node backend status'.format(
                 self.parent_job.id, self.id, self.node_backend))
             node_backend = storage.node_backends[self.node_backend]
-            if node_backend.status not in (storage.Status.STALLED, storage.Status.INIT, storage.Status.RO):
+            if (node_backend in group.node_backends and
+                node_backend.status not in (storage.Status.STALLED, storage.Status.INIT, storage.Status.RO)):
+
                 raise JobBrokenError('Node backend {0} has status, expected {1}'.format(
                     node_backend.status, (storage.Status.STALLED, storage.Status.INIT, storage.Status.RO)))
+
         elif len(group.node_backends) > 0:
             raise JobBrokenError('Group {0} is running on backend {1} which '
                 'does not match {2}'.format(self.group, str(group.node_backends[0]),
