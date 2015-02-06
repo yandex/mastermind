@@ -83,7 +83,7 @@ class ReconnectableChain(object):
         try:
             return self.chain.get()
         except DisconnectionError:
-            sleep(5)
+            sleep(3)
             self.service.connect_service()
             self._create_chain()
             return self.chain.get()
