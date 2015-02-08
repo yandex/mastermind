@@ -830,7 +830,7 @@ class Couple(object):
             self.status_text = 'Couple {0} groups has unequal meta data'.format(str(self))
             return self.status
 
-        if any([group.meta.get('frozen') for group in self.groups]):
+        if any([group.meta and group.meta.get('frozen') for group in self.groups]):
             self.status = Status.FROZEN
             self.status_text = 'Couple {0} is frozen'.format(str(self))
             return self.status
