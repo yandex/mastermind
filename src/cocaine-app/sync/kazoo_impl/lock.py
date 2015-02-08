@@ -11,6 +11,7 @@ changes and re-act appropriately. In the event that a
 and/or the lease has been lost.
 
 """
+import logging
 import uuid
 
 from kazoo.retry import (
@@ -23,6 +24,9 @@ from kazoo.exceptions import KazooException
 from kazoo.exceptions import LockTimeout
 from kazoo.exceptions import NoNodeError
 from kazoo.protocol.states import KazooState
+
+
+logger = logging.getLogger('kazoo.client.lock')
 
 
 class Lock(object):
@@ -70,6 +74,7 @@ class Lock(object):
         self.is_acquired = False
         self.assured_path = False
         self.cancelled = False
+        self.node = None
         self._retry = KazooRetry(max_tries=None)
 
     def _ensure_path(self):
@@ -113,7 +118,12 @@ class Lock(object):
             raise
 
         if not self.is_acquired:
-            self._delete_node(self.node)
+            try:
+                retry = self._retry.copy()
+                retry(self._cleanup)
+            except KazooException as e:
+                logger.error('Failed to cleanup lock node: {0}'.format(e))
+                pass
 
         return self.is_acquired
 
@@ -193,11 +203,15 @@ class Lock(object):
 
     def _best_effort_cleanup(self):
         try:
-            node = self._find_node()
-            if node:
-                self._delete_node(node)
+            self._cleanup()
         except KazooException:  # pragma: nocover
             pass
+
+    def _cleanup(self):
+        if not self.node:
+           self.node = self._find_node()
+        if self.node:
+            self._delete_node(self.node)
 
     def release(self):
         """Release the lock immediately."""
