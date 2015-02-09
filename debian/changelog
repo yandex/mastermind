@@ -1,3 +1,10 @@
+mastermind (2.17.2) lucid; urgency=low
+
+  * Fix for zookeeper lock release
+  * Fix for updating couple status when all the groups did not respond during checking
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 09 Feb 2015 12:46:04 +0300
+
 mastermind (2.17.1) lucid; urgency=low
 
   * Check-for-update option for namespace setup
