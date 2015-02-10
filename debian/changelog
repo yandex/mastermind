@@ -1,3 +1,9 @@
+mastermind (2.17.7) lucid; urgency=low
+
+  * Fix for determing group space requirements on restore
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 10 Feb 2015 22:02:10 +0300
+
 mastermind (2.17.6) lucid; urgency=low
 
   * Fix for determing group space requirements on restore
