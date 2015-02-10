@@ -677,6 +677,7 @@ class Group(object):
         properties, state, etc."""
 
         if not self.node_backends:
+            logger.info('Group {0}: no node backends, status set to INIT'.format(self.group_id))
             self.status = Status.INIT
             self.status_text = ('Group {0} is in INIT state because there is '
                 'no node backends serving this group'.format(self.__str__()))
@@ -862,16 +863,17 @@ class Couple(object):
                         'namespace {1}, which is not set up'.format(str(self), ns))
                     return self.status
 
-        if FORBIDDEN_UNMATCHED_GROUP_TOTAL_SPACE:
-            group_stats = [g.get_stat() for g in self.groups]
-            total_spaces = [gs.total_space for gs in group_stats if gs]
-            if any([ts != total_spaces[0] for ts in total_spaces]):
-                self.status = Status.BROKEN
-                self.status_text = ('Couple {0} has unequal total space in groups'.format(
-                    str(self)))
-                return self.status
-
         if all([st == Status.COUPLED for st in statuses]):
+
+            if FORBIDDEN_UNMATCHED_GROUP_TOTAL_SPACE:
+                group_stats = [g.get_stat() for g in self.groups]
+                total_spaces = [gs.total_space for gs in group_stats if gs]
+                if any([ts != total_spaces[0] for ts in total_spaces]):
+                    self.status = Status.BROKEN
+                    self.status_text = ('Couple {0} has unequal total space in groups'.format(
+                        str(self)))
+                    return self.status
+
             stats = self.get_stat()
             if self.is_full():
                 self.status = Status.FULL
