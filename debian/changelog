@@ -1,3 +1,9 @@
+mastermind (2.17.5) lucid; urgency=low
+
+  * Fix for determing group space requirements on restore
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 10 Feb 2015 21:37:28 +0300
+
 mastermind (2.17.4) lucid; urgency=low
 
   * Fix for restore candidates selection
