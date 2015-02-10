@@ -733,7 +733,10 @@ class Planner(object):
 
     def get_suitable_uncoupled_groups_list(self, group, uncoupled_groups):
         logger.debug('{0}, {1}'.format(group.group_id, [g.group_id for g in group.coupled_groups]))
-        required_ts = max([g.get_stat().total_space for g in group.coupled_groups])
+        stats = filter(None, [g.get_stat() for g in group.couple.groups])
+        if not stats:
+            raise RuntimeError('Cannot determine group space requirements')
+        required_ts = max(st.total_space for st in stats)
         groups_by_fs = {}
 
         busy_group_ids = set(self.job_processor.get_uncoupled_groups_in_service())
