@@ -555,7 +555,7 @@ class Planner(object):
         candidates = []
         if not options.get('src_group'):
             for g in group.coupled_groups:
-                if len(g.node_backends) > 1:
+                if len(g.node_backends) != 1:
                     continue
                 if not all(nb.status == storage.Status.OK for nb in g.node_backends):
                     continue
