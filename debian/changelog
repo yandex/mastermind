@@ -1,3 +1,9 @@
+mastermind (2.17.4) lucid; urgency=low
+
+  * Fix for restore candidates selection
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 10 Feb 2015 21:22:19 +0300
+
 mastermind (2.17.3) lucid; urgency=low
 
   * Fix for couple status update on unlinking node backend from group
