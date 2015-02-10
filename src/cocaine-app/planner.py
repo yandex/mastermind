@@ -733,8 +733,7 @@ class Planner(object):
 
     def get_suitable_uncoupled_groups_list(self, group, uncoupled_groups):
         logger.debug('{0}, {1}'.format(group.group_id, [g.group_id for g in group.coupled_groups]))
-        stats = [g.get_stat() for g in group.couple.groups
-                 if g.status in storage.GOOD_STATUSES]
+        stats = [g.get_stat() for g in group.couple.groups if g.node_backends]
         if not stats:
             raise RuntimeError('Cannot determine group space requirements')
         required_ts = max(st.total_space for st in stats)
