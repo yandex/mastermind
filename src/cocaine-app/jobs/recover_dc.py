@@ -79,18 +79,31 @@ class RecoverDcJob(Job):
         self.tasks.append(task)
 
     @property
-    def _locks(self):
+    def _involved_groups(self):
         if self.couple is None:
             # fallback to old recover dc job format
             group = storage.groups[self.group]
-            couple = group.couple
+        else:
+            # get couple from group, because couple id could have been altered
+            # (sad but true)
+            group_id = int(self.couple.split(':')[0])
+            group = storage.groups[group_id]
+        couple = group.couple
+        if self.couple != str(couple):
             self.couple = str(couple)
 
-        # get couple from group, because couple id could have been altered
-        # (sad but true)
-        group_id = int(self.couple.split(':')[0])
-        group = storage.groups[group_id]
+        group_ids = [g.group_id for g in couple.groups]
+
+        return group_ids
+
+    @property
+    def _involved_couples(self):
+        if self.couple is None:
+            # fallback to old recover dc job format
+            group = storage.groups[self.group]
+        else:
+            group_id = int(self.couple.split(':')[0])
+            group = storage.groups[group_id]
         couple = group.couple
 
-        return (['{0}{1}'.format(self.GROUP_LOCK_PREFIX, g.group_id) for g in couple.groups] +
-                ['{0}{1}'.format(self.COUPLE_LOCK_PREFIX, str(couple))])
+        return [str(couple)]

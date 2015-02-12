@@ -22,6 +22,7 @@ import indexes
 import keys
 from tasks import Task, MinionCmdTask
 import timed_queue
+import storage
 from sync import sync_manager
 from sync.error import (
     LockError,
@@ -45,7 +46,7 @@ class JobProcessor(object):
 
     JOB_MANUAL_TIMEOUT = 20
 
-    def __init__(self, node, db, minions):
+    def __init__(self, node, db, niu, minions):
         logger.info('Starting JobProcessor')
         self.session = elliptics.Session(node)
         wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or config.get('wait_timeout', 5)
@@ -53,6 +54,7 @@ class JobProcessor(object):
         self.meta_session = node.meta_session
         self.minions = minions
         self.collection = Collection(db[config['metadata']['jobs']['db']], 'jobs')
+        self.node_info_updater = niu
 
         self.jobs_index = indexes.TagSecondaryIndex(
             keys.MM_JOBS_IDX,
@@ -357,6 +359,17 @@ class JobProcessor(object):
             job = JobType.new(self.session, **params)
 
         job.collection = self.collection
+
+        inv_group_ids = job._involved_groups
+        try:
+            logger.info('Job {0}: updating groups {1} status'.format(job.id, inv_group_ids))
+            inv_groups = [storage.groups[ig] for ig in inv_group_ids]
+            self.node_info_updater.monitor_stats(groups=inv_groups)
+            self.node_info_updater.update_symm_groups_async(groups=inv_groups)
+        except Exception as e:
+            logger.info('Job {0}: failed to update groups status: {1}\n{2}'.format(
+                job.id, e, traceback.format_exc()))
+            pass
 
         try:
             job.create_tasks()

@@ -213,7 +213,7 @@ class RestoreGroupJob(Job):
             self.tasks.append(task)
 
         if (group.node_backends and group.node_backends[0].status in
-            (storage.NodeBackend.ACTIVE_STATUSES)):
+            storage.NodeBackend.ACTIVE_STATUSES):
 
             nb = group.node_backends[0]
             shutdown_cmd = infrastructure._disable_node_backend_cmd(
@@ -296,22 +296,23 @@ class RestoreGroupJob(Job):
         self.tasks.append(task)
 
     @property
-    def _locks(self):
-        if not self.group in storage.groups:
-            raise JobBrokenError('Group {0} is not found'.format(self.group))
-
+    def _involved_groups(self):
+        group_ids = set([self.group])
         group = storage.groups[self.group]
-
-        if not group.couple:
-            raise JobBrokenError('Group {0} does not participate in any couple'.format(self.group))
-
-        groups = ['{0}{1}'.format(self.GROUP_LOCK_PREFIX, g.group_id) for g in group.couple.groups]
+        if group.couple:
+            group_ids.update([g.group_id for g in group.coupled_groups])
         if self.uncoupled_group:
-            groups.append('{0}{1}'.format(self.GROUP_LOCK_PREFIX, self.uncoupled_group))
-
+            group_ids.add(self.uncoupled_group)
         if self.merged_groups:
-            groups.extend(['{0}{1}'.format(self.GROUP_LOCK_PREFIX, mg) for mg in self.merged_groups])
+            group_ids.update(self.merged_groups)
+        if self.src_group:
+            group_ids.add(self.src_group)
+        return group_ids
 
-        return (groups +
-                ['{0}{1}'.format(self.COUPLE_LOCK_PREFIX, str(group.couple))])
-
+    @property
+    def _involved_couples(self):
+        couples = []
+        group = storage.groups[self.group]
+        if group.couple:
+            couples.append(str(group.couple))
+        return couples

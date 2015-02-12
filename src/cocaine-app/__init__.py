@@ -197,15 +197,15 @@ def init_minions():
     return m
 
 
-def init_planner(job_processor):
-    planner = Planner(n.meta_session, job_processor)
+def init_planner(job_processor, niu):
+    planner = Planner(n.meta_session, meta_db, niu, job_processor)
     register_handle(planner.restore_group)
     register_handle(planner.move_group)
     return planner
 
 
-def init_job_processor(minions):
-    j = jobs.JobProcessor(n, meta_db, minions)
+def init_job_processor(minions, niu):
+    j = jobs.JobProcessor(n, meta_db, niu, minions)
     register_handle(j.create_job)
     register_handle(j.cancel_job)
     register_handle(j.approve_job)
@@ -219,11 +219,12 @@ def init_job_processor(minions):
 
 co = init_cache()
 io = init_infrastructure()
-b.niu = init_node_info_updater()
+niu = init_node_info_updater()
+b.niu = niu
 init_statistics()
 m = init_minions()
-j = init_job_processor(m)
-po = init_planner(j)
+j = init_job_processor(m, niu)
+po = init_planner(j, niu)
 
 
 for handler in balancer.handlers(b):

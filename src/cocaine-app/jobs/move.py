@@ -309,14 +309,23 @@ class MoveJob(Job):
         self.tasks.append(task)
 
     @property
-    def _locks(self):
-        couple_keys = []
-        couple = self.group in storage.groups and storage.groups[self.group].couple or None
-        if couple:
-            couple_keys.append('{0}{1}'.format(self.COUPLE_LOCK_PREFIX, str(couple)))
-        return (['{0}{1}'.format(self.GROUP_LOCK_PREFIX, group)
-                 for group in (self.group, self.uncoupled_group)] +
-                couple_keys)
+    def _involved_groups(self):
+        group_ids = set([self.group])
+        group = storage.groups[self.group]
+        if group.couple:
+            group_ids.update([g.group_id for g in group.coupled_groups])
+        group_ids.add(self.uncoupled_group)
+        if self.merged_groups:
+            group_ids.update(self.merged_groups)
+        return group_ids
+
+    @property
+    def _involved_couples(self):
+        couples = []
+        group = storage.groups[self.group]
+        if group.couple:
+            couples.append(str(group.couple))
+        return couples
 
     def _group_marks(self):
         group = storage.groups[self.group]

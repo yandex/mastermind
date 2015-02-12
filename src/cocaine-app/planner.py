@@ -34,7 +34,7 @@ class Planner(object):
     RECOVER_DC = 'recover_dc'
     COUPLE_DEFRAG = 'couple_defrag'
 
-    def __init__(self, meta_session, job_processor):
+    def __init__(self, meta_session, db, niu, job_processor):
 
         self.params = config.get('planner', config.get('smoother')) or {}
 
@@ -56,6 +56,8 @@ class Planner(object):
                 11, self._recover_dc)
             self.__tq.add_task_in(self.COUPLE_DEFRAG,
                 12, self._couple_defrag)
+
+        self.node_info_updater = niu
 
     def _start_tq(self):
         self.__tq.start()
@@ -532,6 +534,9 @@ class Planner(object):
             force = False
 
         group = storage.groups[group_id]
+        involved_groups = [group]
+        involved_groups.extend(g for g in group.coupled_groups)
+        self.node_info_updater.update_status(involved_groups)
 
         job_params = {'group': group.group_id}
 
@@ -604,6 +609,10 @@ class Planner(object):
             raise ValueError('Group {0} is not found'.format(request[0]))
 
         group = storage.groups[group_id]
+        involved_groups = [group]
+        involved_groups.extend(g for g in group.coupled_groups)
+        self.node_info_updater.update_status(involved_groups)
+
         if len(group.node_backends) != 1:
             raise ValueError('Group {0} has {1} node backends, currently '
                 'only groups with 1 node backend can be used'.format(
@@ -627,6 +636,7 @@ class Planner(object):
                 group.group_id, [g.group_id for g in uncoupled_groups]))
         else:
             dc, fsid = None, None
+            self.node_info_updater.update_status([g for g in uncoupled_group_ids])
             for gid in uncoupled_group_ids:
                 if not gid in storage.groups:
                     raise ValueError('Uncoupled group {0} is not found'.format(gid))
@@ -696,8 +706,12 @@ class Planner(object):
         if getattr(job, 'uncoupled_group', None) is None:
             return ns_current_state
 
-        group = storage.groups[job.group]
-        uncoupled_group = storage.groups[job.uncoupled_group]
+        try:
+            group = storage.groups[job.group]
+            uncoupled_group = storage.groups[job.uncoupled_group]
+        except KeyError:
+            return ns_current_state
+
         add_groups = []
         remove_groups = []
         try:

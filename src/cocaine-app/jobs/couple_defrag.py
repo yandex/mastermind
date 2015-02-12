@@ -62,7 +62,9 @@ class CoupleDefragJob(Job):
         self.tasks.append(task)
 
     @property
-    def _locks(self):
-        group_ids = self.couple.split(':')
-        return (['{0}{1}'.format(self.GROUP_LOCK_PREFIX, g) for g in group_ids] +
-                ['{0}{1}'.format(self.COUPLE_LOCK_PREFIX, self.couple)])
+    def _involved_groups(self):
+        return self.couple.split(':')
+
+    @property
+    def _involved_couples(self):
+        return [self.couple]

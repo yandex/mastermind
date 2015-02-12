@@ -117,16 +117,24 @@ class NodeInfoUpdater(object):
 
     MONITOR_STAT_CATEGORIES = (elliptics.monitor_stat_categories.procfs |
                                elliptics.monitor_stat_categories.backend)
-    def monitor_stats(self):
-        hosts_id = {}
-        logger.info('Before calculating routes')
-        for r in self.__session.routes.get_unique_routes():
-            if not r.address in hosts_id:
-                hosts_id[r.address] = r.id
-        logger.info('Unique routes calculated')
+
+    def update_status(self, groups):
+        self.monitor_stats(groups=groups)
+        self.update_symm_groups_async(groups=groups)
+
+    def monitor_stats(self, groups=None):
+
+        if groups:
+            hosts = set((nb.node.host.addr, nb.node.port, nb.node.family)
+                        for g in groups for nb in g.node_backends)
+            host_addrs = [elliptics.Address(*host) for host in hosts]
+        else:
+            logger.info('Before calculating routes')
+            host_addrs = set(r.address for r in self.__session.routes.get_unique_routes())
+            logger.info('Unique routes calculated')
 
         requests = []
-        for address, eid in hosts_id.iteritems():
+        for address in host_addrs:
             session = self.__session.clone()
             session.set_direct_id(address)
             logger.debug('Request for monitor_stat of node {0}'.format(
@@ -142,14 +150,17 @@ class NodeInfoUpdater(object):
                     '{1}\n{2}'.format(address, e, traceback.format_exc()))
                 continue
 
-        for nb in storage.node_backends:
+        nbs = (groups and [nb for g in groups for nb in g.node_backends]
+                      or storage.node_backends.keys())
+        for nb in nbs:
             nb.update_statistics_status()
             nb.update_status()
 
-        for fs in storage.fs:
+        fss = (groups and set(nb.fs for nb in nbs) or storage.fs.keys())
+        for fs in fss:
             fs.update_status()
 
-        for group in storage.groups:
+        for group in groups or storage.groups.keys():
             logger.info('Updating status for group {0}'.format(group.group_id))
             group.update_status()
 
@@ -268,7 +279,7 @@ class NodeInfoUpdater(object):
             logger.error('Unable to process statictics for node {0}: '
                 '{1}\n{2}'.format(node_addr, e, traceback.format_exc()))
 
-    def update_symm_groups_async(self):
+    def update_symm_groups_async(self, groups=None):
 
         _queue = set()
         def _process_group_metadata(response, elapsed_time, group):
@@ -303,7 +314,7 @@ class NodeInfoUpdater(object):
             return
 
         try:
-            groups = storage.groups.keys()
+            groups = groups or storage.groups.keys()
 
             results = {}
             for group in groups:
@@ -311,7 +322,7 @@ class NodeInfoUpdater(object):
                 session.add_groups([group.group_id])
 
                 logger.debug('Request to read {0} for group {1}'.format(
-                     keys.SYMMETRIC_GROUPS_KEY.replace('\0', '\\0'), group.group_id))
+                    keys.SYMMETRIC_GROUPS_KEY.replace('\0', '\\0'), group.group_id))
                 results[group.group_id] = session.read_data(keys.SYMMETRIC_GROUPS_KEY)
 
             while results:

@@ -280,7 +280,10 @@ class Job(MongoObject):
 
     @property
     def _locks(self):
-        raise NotImplemented('Locks are listed in derived classes')
+        return (['{0}{1}'.format(self.GROUP_LOCK_PREFIX, group)
+                 for group in self._involved_groups] +
+                ['{0}{1}'.format(self.COUPLE_LOCK_PREFIX, couple)
+                 for couple in self._involved_couples])
 
     def complete(self, session):
         self.unmark_groups(session)
