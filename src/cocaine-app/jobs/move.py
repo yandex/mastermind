@@ -330,6 +330,9 @@ class MoveJob(Job):
     def _group_marks(self):
         group = storage.groups[self.group]
         updated_meta = copy.deepcopy(group.meta)
+        # valid convertion from tuple to dict
+        # TODO: move this to storage.Group.meta
+        updated_meta['version'] = 2
         updated_meta['service'] = {
             'status': storage.Status.MIGRATING,
             'job_id': self.id
