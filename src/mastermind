@@ -688,11 +688,11 @@ def couple_build(size, groups=('i', [], 'Use these groups in couple (example: -i
 
     if not namespace:
         print warn('Namespace should be set (--namespace | -n)')
-        return
+        return 1
 
     if not state or not state.lower() in ALLOWED_COUPLE_STATES:
         print warn('Initial couple state is required (--state): coupled | frozen')
-        return
+        return 1
 
     params = [size, couples, {'namespace': namespace,
                               'match_group_space': not ignore_space,
@@ -704,7 +704,7 @@ def couple_build(size, groups=('i', [], 'Use these groups in couple (example: -i
 
     if not isinstance(res,  tuple):
         print res
-        return
+        return 1
 
     good_couples, error = res
 
@@ -719,6 +719,8 @@ def couple_build(size, groups=('i', [], 'Use these groups in couple (example: -i
         print warn('Not enough valid dcs and/or groups of appropriate '
             'total space for remaining couples creation')
 
+    if not len(good_couples):
+        return 1
 
 @coupleDispatcher.command(name='break')
 @log_action
@@ -1293,4 +1295,4 @@ if __name__ == '__main__':
         command_helper(sys.argv)
         sys.exit(0)
 
-    d.dispatch()
+    sys.exit(d.dispatch())
