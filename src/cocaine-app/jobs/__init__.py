@@ -53,7 +53,6 @@ class JobProcessor(object):
         self.session.set_timeout(wait_timeout)
         self.meta_session = node.meta_session
         self.minions = minions
-        self.collection = Collection(db[config['metadata']['jobs']['db']], 'jobs')
         self.node_info_updater = niu
 
         self.jobs_index = indexes.TagSecondaryIndex(
@@ -67,8 +66,10 @@ class JobProcessor(object):
 
         self.__tq = timed_queue.TimedQueue()
 
-        self.__tq.add_task_in(self.JOBS_EXECUTE,
-            5, self._execute_jobs)
+        if config['metadata'].get('jobs', {}).get('db'):
+            self.collection = Collection(db[config['metadata']['jobs']['db']], 'jobs')
+            self.__tq.add_task_in(self.JOBS_EXECUTE,
+                5, self._execute_jobs)
 
     def _start_tq(self):
         self.__tq.start()
@@ -87,14 +88,6 @@ class JobProcessor(object):
 
         logger.info('Jobs execution started')
         try:
-            # if not self.minions.ready:
-            #     if self.minions.pending_hosts is None:
-            #         # set minion hosts which state should be fetched
-            #         # before job processor can start to execute jobs
-            #         self.minions.pending_hosts = set(self._get_processing_jobs_hosts())
-            #         logger.info('Minions pending hosts: {0}'.format(self.minions.pending_hosts))
-            #     raise errors.NotReadyError
-
             logger.debug('Lock acquiring')
 
             with sync_manager.lock(self.JOBS_LOCK, blocking=False):
