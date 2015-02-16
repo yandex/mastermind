@@ -1063,7 +1063,7 @@ class Balancer(object):
 
         self.infrastructure.set_ns_settings(namespace, settings)
 
-        logger.info('1: Namespace {0}, settings: {1}'.format(namespace, self.infrastructure.ns_settings[namespace]))
+        logger.info('Namespace {0}, settings set to {1}'.format(namespace, settings))
 
         return True
 
@@ -1071,7 +1071,7 @@ class Balancer(object):
         if not namespace in self.infrastructure.ns_settings:
             raise ValueError('Namespace "{0}" does not exist'.format(namespace))
         else:
-            logger.info('2: Namespace {0}, settings: {1}'.format(namespace, self.infrastructure.ns_settings[namespace]))
+            logger.info('Current namespace {0} settings: {1}'.format(namespace, self.infrastructure.ns_settings[namespace]))
             if self.infrastructure.ns_settings[namespace]['__service'].get('is_deleted'):
                 raise ValueError('Namespace "{0}" is deleted'.format(namespace))
 
