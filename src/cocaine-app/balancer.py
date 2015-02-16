@@ -886,6 +886,8 @@ class Balancer(object):
 
         try:
             settings['check-for-update'] = bool(settings['check-for-update'])
+        except KeyError:
+            pass
         except (TypeError, ValueError):
             raise ValueError('check-for-update should be boolean')
 
