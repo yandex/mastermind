@@ -32,6 +32,7 @@ import minions
 import node_info_updater
 from planner import Planner
 from config import config
+from manual_locks import manual_locker
 
 
 
@@ -219,6 +220,11 @@ def init_job_processor(minions, niu):
     register_handle(j.skip_failed_job_task)
     return j
 
+def init_manual_locker(manual_locker):
+    register_handle(manual_locker.host_acquire_lock)
+    register_handle(manual_locker.host_release_lock)
+    return manual_locker
+
 
 co = init_cache()
 io = init_infrastructure()
@@ -228,6 +234,7 @@ init_statistics()
 m = init_minions()
 j = init_job_processor(m, niu)
 po = init_planner(j, niu)
+ml = init_manual_locker(manual_locker)
 
 
 for handler in balancer.handlers(b):

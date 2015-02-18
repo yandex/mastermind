@@ -11,7 +11,7 @@ import traceback
 import elliptics
 import msgpack
 
-from balancer import get_good_uncoupled_groups
+from balancer import get_good_uncoupled_groups, is_uncoupled_group_good
 from coll import SortedCollection
 from config import config
 import helpers as h
@@ -19,6 +19,7 @@ from infrastructure import infrastructure
 import inventory
 import jobs
 import keys
+from manual_locks import manual_locker
 from sync import sync_manager
 from sync.error import LockFailedError
 
@@ -636,7 +637,8 @@ class Planner(object):
                 group.group_id, [g.group_id for g in uncoupled_groups]))
         else:
             dc, fsid = None, None
-            self.node_info_updater.update_status([g for g in uncoupled_group_ids])
+            self.node_info_updater.update_status([storage.groups[g] for g in uncoupled_group_ids])
+            locked_hosts = manual_locker.get_locked_hosts()
             for gid in uncoupled_group_ids:
                 if not gid in storage.groups:
                     raise ValueError('Uncoupled group {0} is not found'.format(gid))
@@ -646,6 +648,10 @@ class Planner(object):
                     raise ValueError('Group {0} has {1} node backends, currently '
                         'only groups with 1 node backend can be used'.format(
                             unc_group.group_id, len(unc_group.node_backends)))
+
+                if not is_uncoupled_group_good(unc_group, locked_hosts, max_node_backends=1):
+                    raise ValueError('Uncoupled group {0} is not applicable'.format(
+                        unc_group.group_id))
 
                 nb = unc_group.node_backends[0]
                 if not dc:

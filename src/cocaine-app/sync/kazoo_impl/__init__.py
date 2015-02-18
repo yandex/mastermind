@@ -44,8 +44,6 @@ class ZkSyncManager(object):
         except Exception as e:
             logger.error(e)
             raise
-        # self.locks = {}
-        # self.__locks_lock = threading.Lock()
 
         self._retry = KazooRetry(max_tries=self.RETRIES)
 
@@ -127,6 +125,14 @@ class ZkSyncManager(object):
             raise LockError
 
         return True
+
+    def get_children_locks(self, lock_prefix):
+        try:
+            retry = self._retry.copy()
+            result = retry(self.client.get_children, self.lock_path_prefix + lock_prefix)
+        except RetryFailedError:
+            raise LockError
+        return ['{0}/{1}'.format(lock_prefix, lock) for lock in result]
 
     def persistent_locks_release(self, locks, check=''):
         try:

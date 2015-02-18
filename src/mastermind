@@ -1008,6 +1008,59 @@ def couple_defrag(couple,
     print job_data
 
 
+# lock commands
+lockDispatcher = Dispatcher(globaloptions=(host_param, app_param))
+
+@lockDispatcher.command(name='host')
+@log_action
+def lock_host(lock_host,
+              json=('', None, 'Format additional data as json'),
+              host=None, app=None):
+    '''Acquire lock on a host'''
+    s = service(host, app)
+
+    try:
+        hostname = socket.gethostbyaddr(lock_host)[0]
+    except Exception as e:
+        print warn('Failed to resolve hostname {0}: {1}'.format(lock_host, e))
+        return
+
+    result = s.enqueue('host_acquire_lock', msgpack.packb([hostname])).get()
+
+    if 'Error' in result:
+        print result['Error']
+        return 1
+
+    print result
+
+
+# unlock commands
+unlockDispatcher = Dispatcher(globaloptions=(host_param, app_param))
+
+@unlockDispatcher.command(name='host')
+@log_action
+def unlock_host(lock_host,
+              json=('', None, 'Format additional data as json'),
+              host=None, app=None):
+    '''Release lock on a host'''
+    s = service(host, app)
+
+    try:
+        hostname = socket.gethostbyaddr(lock_host)[0]
+    except Exception as e:
+        print warn('Failed to resolve hostname {0}: {1}'.format(lock_host, e))
+        return
+
+    result = s.enqueue('host_release_lock', msgpack.packb([hostname])).get()
+
+    if 'Error' in result:
+        print result['Error']
+        return 1
+
+    print result
+
+
+
 DEFAULT = '\033[0m'
 DEFAULT_BOLD = '\033[1m'
 RED = '\033[1;31m'
@@ -1267,6 +1320,8 @@ d.nest('couple', coupleDispatcher, 'Perform couple action')
 d.nest('ns', nsDispatcher, 'Perform namespace action')
 d.nest('cache', cacheDispatcher, 'Perform cache action')
 d.nest('job', jobDispatcher, 'Perform jobs action')
+d.nest('lock', lockDispatcher, 'Acquire locks on storage infrastructure nodes')
+d.nest('unlock', unlockDispatcher, 'Release locks on storage infrastructure nodes')
 
 
 def command_helper(argv):
