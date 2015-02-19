@@ -34,7 +34,7 @@ class RecoverGroupDcTask(MinionCmdTask):
                 'should be {3}'.format(self, self.group,
                                        group.status, storage.Status.COUPLED))
 
-    def execute(self, minions):
+    def execute(self, processor):
 
         # checking if task still applicable
         logger.info('Job {0}, task {1}: checking group {2} and couple {3} '
@@ -48,4 +48,4 @@ class RecoverGroupDcTask(MinionCmdTask):
                 'expected {3}'.format(self, self.group,
                                        group.couple, self.couple))
 
-        super(RecoverGroupDcTask, self).execute(minions)
+        super(RecoverGroupDcTask, self).execute(processor)

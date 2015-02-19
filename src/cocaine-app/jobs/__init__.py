@@ -271,7 +271,7 @@ class JobProcessor(object):
     def __execute_task(self, task):
         task.start_ts, task.finish_ts = time.time(), None
         if isinstance(task, MinionCmdTask):
-            task.execute(self.minions)
+            task.execute(self)
         else:
             task.execute()
 

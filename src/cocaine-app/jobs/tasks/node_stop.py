@@ -16,7 +16,7 @@ class NodeStopTask(MinionCmdTask):
         super(NodeStopTask, self).__init__(job)
         self.type = TaskTypes.TYPE_NODE_STOP_TASK
 
-    def execute(self, minions):
+    def execute(self, processor):
 
         if self.group:
             # checking if task still applicable
@@ -46,4 +46,4 @@ class NodeStopTask(MinionCmdTask):
                     raise JobBrokenError('Task {0}: group {1} is not '
                         'coupled'.format(self.id, self.group))
 
-        super(NodeStopTask, self).execute(minions)
+        super(NodeStopTask, self).execute(processor)

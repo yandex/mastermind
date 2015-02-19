@@ -16,7 +16,7 @@ class RsyncBackendTask(MinionCmdTask):
         super(RsyncBackendTask, self).__init__(job)
         self.type = TaskTypes.TYPE_RSYNC_BACKEND_TASK
 
-    def execute(self, minions):
+    def execute(self, processor):
         logger.info('Job {0}, task {1}: checking group {2} and node backend {3} '
             'state'.format(self.parent_job.id, self.id, self.group, self.node_backend))
 
@@ -40,4 +40,4 @@ class RsyncBackendTask(MinionCmdTask):
                 'does not match {2}'.format(self.group, str(group.node_backends[0]),
                     self.node_backend))
 
-        super(RsyncBackendTask, self).execute(minions)
+        super(RsyncBackendTask, self).execute(processor)
