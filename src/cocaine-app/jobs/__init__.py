@@ -264,7 +264,7 @@ class JobProcessor(object):
 
     def __update_task_status(self, task):
         if isinstance(task, MinionCmdTask):
-            task.update_status(self.minions)
+            task.update_status(self)
         else:
             task.update_status()
 
