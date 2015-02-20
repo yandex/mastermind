@@ -1,3 +1,10 @@
+mastermind (2.18.2) lucid; urgency=low
+
+  * Effective free space statistics calculation fixed
+  * Minor job processor refactoring
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 20 Feb 2015 18:23:06 +0300
+
 mastermind (2.18.1) lucid; urgency=low
 
   * Host lock implemented, prevents active operations on selected host
