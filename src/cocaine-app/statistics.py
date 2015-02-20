@@ -53,11 +53,52 @@ class Statistics(object):
         if group.couple:
             data['free_space'] += stat.free_space
             data['total_space'] += stat.total_space
-            node_eff_space = group.couple.effective_space
-            data['effective_space'] += int(node_eff_space)
-            data['effective_free_space'] += max(stat.free_space - (stat.total_space - int(node_eff_space)), 0)
         else:
             data['uncoupled_space'] += stat.total_space
+
+    def ns_effective_space(self):
+        res = defaultdict(lambda: {'effective_space': 0,
+                                   'effective_free_space': 0})
+        for couple in storage.couples.keys():
+            try:
+                ns = couple.namespace
+                stat = couple.get_stat()
+                if not stat:
+                    raise ValueError
+            except ValueError:
+                continue
+
+            ns_stat = res[ns]
+            couple_eff_space = couple.effective_space
+            ns_stat['effective_space'] += couple_eff_space
+            ns_stat['effective_free_space'] += max(stat.free_space -
+                (stat.total_space - int(couple_eff_space)), 0)
+
+        return dict(res)
+
+    def per_ns_statistics(self):
+        ns_stats = {}
+        try:
+            _, per_ns_stat = self.per_entity_stat()
+        except Exception as e:
+            logger.error('Failed to calculate namespace statistics')
+            return ns_stats
+
+        ns_effective_space = self.ns_effective_space()
+
+        for ns, stats in per_ns_stat.iteritems():
+            try:
+                ns_stats[ns] = self.total_stats(stats)
+            except Exception as e:
+                logger.error('Failed to construct namespace {0} statistics: {1}'.format(ns, e))
+                continue
+            if not ns in ns_effective_space:
+                logger.error('Failed to update ns {0} statistics '
+                    'with effective data stats'.format(ns))
+                continue
+            ns_stats[ns].update(ns_effective_space[ns])
+
+        return ns_stats
 
     @staticmethod
     def account_keys(data, node_backend):

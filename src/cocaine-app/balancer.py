@@ -1139,11 +1139,7 @@ class Balancer(object):
 
     @h.concurrent_handler
     def get_namespaces_statistics(self, request):
-        per_dc_stat, per_ns_stat = self.statistics.per_entity_stat()
-        ns_stats = {}
-        for ns, stats in per_ns_stat.iteritems():
-            ns_stats[ns] = self.statistics.total_stats(stats)
-        return ns_stats
+        return self.statistics.per_ns_statistics()
 
     @h.concurrent_handler
     def freeze_couple(self, request):
@@ -1260,20 +1256,8 @@ class Balancer(object):
                 continue
 
         # statistics
-        per_ns_stat = {}
-
-        try:
-            per_dc_stat, per_ns_stat = self.statistics.per_entity_stat()
-        except Exception as e:
-            logger.error('Failed to calculate namespace statistics')
-            pass
-
-        for ns, stats in per_ns_stat.iteritems():
-            try:
-                res[ns]['statistics'] = self.statistics.total_stats(stats)
-            except Exception as e:
-                logger.error('Failed to construct namespace {0} statistics: {1}'.format(ns, e))
-                continue
+        for ns, stats in self.statistics.per_ns_statistics().iteritems():
+            res[ns]['statistics'] = stats
 
         return dict(res)
 
