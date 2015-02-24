@@ -1,3 +1,9 @@
+mastermind (2.18.3) lucid; urgency=low
+
+  * Minor job processing refactoring fixes
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 24 Feb 2015 16:47:07 +0300
+
 mastermind (2.18.2) lucid; urgency=low
 
   * Effective free space statistics calculation fixed
