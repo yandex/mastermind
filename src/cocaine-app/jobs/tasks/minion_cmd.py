@@ -30,8 +30,8 @@ class MinionCmdTask(Task):
                 'from minions'.format(self.parent_job.id, self.id, self.minion_cmd_id))
             pass
 
-    def execute(self, minions):
-        minion_response = minions._execute_cmd(self.host,
+    def execute(self, processor):
+        minion_response = processor.minions._execute_cmd(self.host,
             self.cmd, self.params)
         self.minion_cmd = minion_response.values()[0]
         logger.info('Job {0}, task {1}, minions task execution: {2}'.format(
