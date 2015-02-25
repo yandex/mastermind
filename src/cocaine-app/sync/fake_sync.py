@@ -43,3 +43,7 @@ class SyncManager(object):
                 return lock.release()
             else:
                 logger.warn('Persistent lock {0} is already removed'.format(lockid))
+
+    def get_children_locks(self, lock_prefix):
+        return [lock_id for lock_id in self.locks
+                if lock_id.startswith(lock_prefix)]
