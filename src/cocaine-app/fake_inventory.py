@@ -88,3 +88,18 @@ def node_reconfigure(host, port, family):
     E. g., reconfiguration is required for backend restart with updated group id.
     '''
     return None
+
+def set_net_monitoring_downtime(host):
+    '''
+    If your infrastructure monitors network activity, it can cause alerts
+    on every move/restore job that involves a certain host. This inventory
+    function allows you to implement network activity downtime setting
+    for the running time of rsync command.
+    '''
+    return None
+
+def remove_net_monitoring_downtime(host):
+    '''
+    See "set_net_monitoring_downtime" docs.
+    '''
+    return None
