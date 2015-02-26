@@ -183,7 +183,7 @@ class JobProcessor(object):
                     self.__update_task_status(task)
                 except Exception as e:
                     logger.error('Job {0}, task {1}: failed to update status: '
-                        '{2}\n{3}'.format(job.id, task, e, traceback.format_exc()))
+                        '{2}\n{3}'.format(job.id, task.id, e, traceback.format_exc()))
                     task.error_msg.append(str(e))
                     task.status = Task.STATUS_FAILED
                     job.status = Job.STATUS_PENDING
@@ -207,6 +207,14 @@ class JobProcessor(object):
                                if task.failed else
                                Task.STATUS_COMPLETED)
 
+                try:
+                    task.on_exec_stop(self)
+                except Exception as e:
+                    logger.error('Job {0}, task {1}: failed to execute task '
+                        'stop handler: {2}\n{3}'.format(
+                            job.id, task.id, e, traceback.format_exc()))
+                    pass
+
                 logger.debug('Job {0}, task {1} is finished, status {2}'.format(
                     job.id, task.id, task.status))
 
@@ -218,37 +226,60 @@ class JobProcessor(object):
                     break
                 else:
                     continue
-                pass
+
             elif task.status == Task.STATUS_QUEUED:
+                logger.info('Job {0}, executing new task {1}'.format(job.id, task))
+
                 try:
-                    logger.info('Job {0}, executing new task {1}'.format(job.id, task))
-                    self.__execute_task(task)
-                    job.update_ts = time.time()
-                    logger.info('Job {0}, task {1} execution was successfully requested'.format(
-                        job.id, task.id))
-                    task.status = Task.STATUS_EXECUTING
-                    job.status = Job.STATUS_EXECUTING
-                    job._dirty = True
-                except JobBrokenError as e:
-                    logger.error('Job {0}, task {1}: cannot execute task, '
-                        'not applicable for current storage state: {2}'.format(
-                            job.id, task, e))
+                    task.on_exec_start(self)
+                    logger.info('Job {0}, task {1} preparation completed'.format(job.id, task.id))
+                except Exception as e:
+                    logger.error('Job {0}, task {1}: failed to execute task '
+                        'start handler: {2}\n{3}'.format(
+                            job.id, task.id, e, traceback.format_exc()))
                     task.status = Task.STATUS_FAILED
-                    job.status = Job.STATUS_BROKEN
+                    job.status = Job.STATUS_PENDING
                     job.add_error_msg(str(e))
                     ts = time.time()
                     job.update_ts = ts
                     job.finish_ts = ts
                     job._dirty = True
+                    break
+
+                try:
+                    self.__execute_task(task)
+                    logger.info('Job {0}, task {1} execution was successfully requested'.format(
+                        job.id, task.id))
                 except Exception as e:
-                    logger.error('Job {0}, task {1}: failed to execute: {2}\n{3}'.format(
-                        job.id, task, e, traceback.format_exc()))
                     task.status = Task.STATUS_FAILED
-                    job.status = Job.STATUS_PENDING
+                    try:
+                        task.on_exec_stop(self)
+                    except Exception as e:
+                        logger.error('Job {0}, task {1}: failed to execute task '
+                            'stop handler: {2}\n{3}'.format(
+                                job.id, task.id, e, traceback.format_exc()))
+                        #TODO: Think on raising exec stop exception
+                        pass
+                    if isinstance(e, JobBrokenError):
+                        logger.error('Job {0}, task {1}: cannot execute task, '
+                            'not applicable for current storage state: {2}'.format(
+                                job.id, task.id, e))
+                        job.status = Job.STATUS_BROKEN
+                        job.add_error_msg(str(e))
+                    else:
+                        logger.error('Job {0}, task {1}: failed to execute: {2}\n{3}'.format(
+                            job.id, task.id, e, traceback.format_exc()))
+                        job.status = Job.STATUS_PENDING
                     ts = time.time()
                     job.update_ts = ts
                     job.finish_ts = ts
                     job._dirty = True
+                    break
+
+                job.update_ts = time.time()
+                task.status = Task.STATUS_EXECUTING
+                job.status = Job.STATUS_EXECUTING
+                job._dirty = True
                 break
 
         if all([task.status in (Task.STATUS_COMPLETED, Task.STATUS_SKIPPED)
@@ -420,6 +451,16 @@ class JobProcessor(object):
                     # Move task stop handling to task itself?
                     if isinstance(task, MinionCmdTask):
                         self.minions._terminate_cmd(task.host, task.minion_cmd_id)
+
+                    try:
+                        task.on_exec_stop(self)
+                    except Exception as e:
+                        logger.error('Job {0}, task {1}: failed to execute task '
+                            'stop handler: {2}\n{3}'.format(
+                                job.id, task.id, e, traceback.format_exc()))
+                        #TODO: Think on raising exec stop exception
+                        pass
+
                     task.status = Task.STATUS_FAILED
 
                     break

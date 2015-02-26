@@ -18,6 +18,18 @@ class Task(object):
         self.error_msg = []
         self.parent_job = job
 
+    def on_exec_start(self, processor):
+        """
+        Called every time task changes status from 'queued' to 'executing'
+        """
+        pass
+
+    def on_exec_stop(self, processor):
+        """
+        Called every time task changes status from 'executing' to anything else
+        """
+        pass
+
     @classmethod
     def new(cls, job, **kwargs):
         task = cls(job)
