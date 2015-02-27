@@ -1,3 +1,11 @@
+mastermind (2.18.7) lucid; urgency=low
+
+  * Downtimes for both src_host and dst_host during rsync task execution
+  * Use hostname in net downtimes
+  * Rsync node task is now used for move job instead of common MinionCmdTask
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 27 Feb 2015 19:39:16 +0300
+
 mastermind (2.18.6) lucid; urgency=low
 
   * IPv6 for tornado clients turned on
