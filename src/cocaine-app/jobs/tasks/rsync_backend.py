@@ -1,5 +1,6 @@
 import logging
 
+from infrastructure import infrastructure
 import inventory
 import jobs
 from jobs import JobBrokenError, TaskTypes
@@ -48,11 +49,14 @@ class RsyncBackendTask(MinionCmdTask):
         super(RsyncBackendTask, self).execute(processor)
 
     def on_exec_start(self, processor):
+        hostname = infrastructure.get_hostname_by_addr(self.host)
+
         dl = jobs.Job.list(processor.downtimes,
-                      {'host': self.host, 'type': 'network_load'})
+                           host=hostname, type='network_load')
+
         if dl.count() == 0:
             try:
-                inventory.set_net_monitoring_downtime(self.host)
+                inventory.set_net_monitoring_downtime(hostname)
             except Exception as e:
                 logger.error('Job {0}, task {1}: failed to set net monitoring downtime: '
                     '{2}'.format(self.parent_job.id, self.id, e))
@@ -60,26 +64,28 @@ class RsyncBackendTask(MinionCmdTask):
 
         try:
             res = processor.downtimes.insert({'task_id': self.id,
-                                              'host': self.host,
+                                              'host': hostname,
                                               'type': 'network_load'})
-            if res['ok'] != 1:
-                raise ValueError('unexpected mongo response: {0}'.format(res))
+            # if res['ok'] != 1:
+            #     raise ValueError('unexpected mongo response: {0}'.format(res))
+            logger.info('Mongo object: {0}'.format(res))
         except Exception as e:
             logger.error('Job {0}, task {1}: unexpected mongo error: '
                 '{2}'.format(self.parent_job.id, self.id, e))
             raise
 
     def on_exec_stop(self, processor):
+        hostname = infrastructure.get_hostname_by_addr(self.host)
 
         dl_total = jobs.Job.list(processor.downtimes,
-            {'host': self.host, 'type': 'network_load'})
+            host=hostname, type='network_load')
 
         dl_self = jobs.Job.list(processor.downtimes,
-            {'task_id': self.id, 'host': self.host, 'type': 'network_load'})
+            task_id=self.id, host=hostname, type='network_load')
 
         if dl_total.count() == dl_self.count():
             try:
-                inventory.remove_net_monitoring_downtime(self.host)
+                inventory.remove_net_monitoring_downtime(hostname)
             except Exception as e:
                 logger.error('Job {0}, task {1}: failed to remove net monitoring downtime: '
                     '{2}'.format(self.parent_job.id, self.id, e))
@@ -87,10 +93,8 @@ class RsyncBackendTask(MinionCmdTask):
 
         try:
             res = processor.downtimes.remove({'task_id': self.id,
-                                              'host': self.host,
+                                              'host': hostname,
                                               'type': 'network_load'})
-            if res['ok'] != 1:
-                raise ValueError('unexpected mongo response: {0}'.format(res))
         except Exception as e:
             logger.error('Job {0}, task {1}: unexpected mongo error: '
                 '{2}'.format(self.parent_job.id, self.id, e))
