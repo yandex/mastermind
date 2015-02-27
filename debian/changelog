@@ -1,3 +1,9 @@
+mastermind (2.18.8) lucid; urgency=low
+
+  * Fix for mongo queries
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 27 Feb 2015 20:29:15 +0300
+
 mastermind (2.18.7) lucid; urgency=low
 
   * Downtimes for both src_host and dst_host during rsync task execution

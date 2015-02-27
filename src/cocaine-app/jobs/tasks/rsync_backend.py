@@ -91,7 +91,7 @@ class RsyncBackendTask(MinionCmdTask):
 
         busy_hostnames = set()
         for rec in dl:
-            if dl['job_id'] != self.parent_job.id:
+            if rec['job_id'] != self.parent_job.id:
                 busy_hostnames.add(rec['host'])
 
         release_hostnames = hostnames - busy_hostnames
