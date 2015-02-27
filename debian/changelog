@@ -1,3 +1,9 @@
+mastermind (2.18.5) lucid; urgency=low
+
+  * Implementation of net monitoring usage during rsync tasks executing
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 27 Feb 2015 15:05:11 +0300
+
 mastermind (2.18.4) lucid; urgency=low
 
   * Fake sync manager get_children_locks implemented
