@@ -7,7 +7,7 @@ from error import JobBrokenError
 from infrastructure import infrastructure
 from job import Job
 from job_types import JobTypes
-from tasks import NodeStopTask, MinionCmdTask, HistoryRemoveNodeTask
+from tasks import NodeStopTask, RsyncBackendTask, MinionCmdTask, HistoryRemoveNodeTask
 import storage
 from sync.error import (
     LockError,
@@ -199,6 +199,7 @@ class MoveJob(Job):
         move_cmd = infrastructure.move_group_cmd(
             src_host=self.src_host,
             src_path=self.src_base_path,
+            src_family=self.src_family,
             dst_path=self.dst_base_path)
         group_file = (os.path.join(self.dst_base_path, self.GROUP_FILE_PATH)
                       if self.GROUP_FILE_PATH else
@@ -211,10 +212,11 @@ class MoveJob(Job):
             params['remove_path'] = remove_path
 
         # TODO: think about changing MinionCmdTask to RsyncBackendTask
-        task = MinionCmdTask.new(self,
-                                 host=self.dst_host,
-                                 cmd=move_cmd,
-                                 params=params)
+        task = RsyncBackendTask.new(self,
+                                    host=self.dst_host,
+                                    group=self.group,
+                                    cmd=move_cmd,
+                                    params=params)
         self.tasks.append(task)
 
         additional_files = config.get('restore', {}).get('move_additional_files', [])
@@ -222,6 +224,7 @@ class MoveJob(Job):
             rsync_cmd = infrastructure.move_group_cmd(
                 src_host=self.src_host,
                 src_path=self.src_base_path,
+                src_family=self.src_family,
                 dst_path=os.path.join(self.dst_base_path, dst_file_path),
                 file_tpl=src_file_tpl)
 

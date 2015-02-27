@@ -409,22 +409,22 @@ class Infrastructure(object):
             self._update_group(group.group_id, state_nodes, None, record_type=record_type or self.HISTORY_RECORD_MANUAL)
 
 
-    def move_group_cmd(self, src_host, src_port=None, dst_port=None,
-                       src_path=None, dst_path=None, user=None,
-                       file_tpl='data*'):
+    def move_group_cmd(self, src_host, src_port=None, src_family=2,
+                       src_path=None,  dst_port=None, dst_path=None,
+                       user=None, file_tpl='data*'):
         cmd_src_path = self.node_path(path=src_path, port=src_port)
         if RSYNC_MODULE:
             cmd = self.RSYNC_MODULE_CMD.format(
                 user=RSYNC_USER,
                 module=RSYNC_MODULE,
-                src_host=src_host,
+                src_host=src_host if src_family != 10 else '[{0}]'.format(src_host),
                 src_path=cmd_src_path.replace(BASE_STORAGE_PATH, ''),
                 dst_path=self.node_path(path=dst_path, port=dst_port),
                 file_tpl=file_tpl)
         else:
             cmd = self.RSYNC_CMD.format(
                 user=user,
-                src_host=src_host,
+                src_host=src_host if src_family != 10 else '[{0}]'.format(src_host),
                 src_path=cmd_src_path,
                 dst_path=self.node_path(path=dst_path, port=dst_port),
                 file_tpl=file_tpl)

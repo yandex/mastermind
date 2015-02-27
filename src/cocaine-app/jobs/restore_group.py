@@ -179,6 +179,7 @@ class RestoreGroupJob(Job):
         move_cmd = infrastructure.move_group_cmd(
             src_host=src_group.node_backends[0].node.host.addr,
             src_path=src_group.node_backends[0].base_path,
+            src_family=src_group.node_backends[0].node.family,
             dst_path=dst_base_path)
 
         params = {'group': str(self.group),

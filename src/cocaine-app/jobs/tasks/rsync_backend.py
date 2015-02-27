@@ -27,20 +27,23 @@ class RsyncBackendTask(MinionCmdTask):
 
         group = storage.groups[self.group]
 
-        if self.node_backend in storage.node_backends:
-            logger.info('Job {0}, task {1}: checking node backend status'.format(
-                self.parent_job.id, self.id, self.node_backend))
-            node_backend = storage.node_backends[self.node_backend]
-            if (node_backend in group.node_backends and
-                node_backend.status not in (storage.Status.STALLED, storage.Status.INIT, storage.Status.RO)):
+        if self.node_backend:
+            # Check if old backend is down
+            # This check is not applied to move job
+            if self.node_backend in storage.node_backends:
+                logger.info('Job {0}, task {1}: checking node backend status'.format(
+                    self.parent_job.id, self.id, self.node_backend))
+                node_backend = storage.node_backends[self.node_backend]
+                if (node_backend in group.node_backends and
+                    node_backend.status not in (storage.Status.STALLED, storage.Status.INIT, storage.Status.RO)):
 
-                raise JobBrokenError('Node backend {0} has status, expected {1}'.format(
-                    node_backend.status, (storage.Status.STALLED, storage.Status.INIT, storage.Status.RO)))
+                    raise JobBrokenError('Node backend {0} has status, expected {1}'.format(
+                        node_backend.status, (storage.Status.STALLED, storage.Status.INIT, storage.Status.RO)))
 
-        elif len(group.node_backends) > 0:
-            raise JobBrokenError('Group {0} is running on backend {1} which '
-                'does not match {2}'.format(self.group, str(group.node_backends[0]),
-                    self.node_backend))
+            elif len(group.node_backends) > 0:
+                raise JobBrokenError('Group {0} is running on backend {1} which '
+                    'does not match {2}'.format(self.group, str(group.node_backends[0]),
+                        self.node_backend))
 
         super(RsyncBackendTask, self).execute(processor)
 
