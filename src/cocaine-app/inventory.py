@@ -16,3 +16,5 @@ node_start_command = inv.node_start_command
 node_reconfigure = inv.node_reconfigure
 get_balancer_node_types = inv.get_balancer_node_types
 get_dc_node_type = inv.get_dc_node_type
+set_net_monitoring_downtime = inv.set_net_monitoring_downtime
+remove_net_monitoring_downtime = inv.remove_net_monitoring_downtime

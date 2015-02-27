@@ -95,11 +95,13 @@ def set_net_monitoring_downtime(host):
     on every move/restore job that involves a certain host. This inventory
     function allows you to implement network activity downtime setting
     for the running time of rsync command.
+    NB: This function should not throw an exception if net monitoring downtime
+    is already set.
     '''
     return None
 
 def remove_net_monitoring_downtime(host):
     '''
-    See "set_net_monitoring_downtime" docs.
+    See "set_net_monitoring_downtime" doc string.
     '''
     return None
