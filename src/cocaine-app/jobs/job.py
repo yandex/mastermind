@@ -311,13 +311,19 @@ class Job(MongoObject):
 
     @staticmethod
     def list(collection, **kwargs):
+        """
+        TODO: This should be moved to some kind of Mongo Session object
+        """
         params = {}
+        sort_by = kwargs.pop('sort_by', 'create_ts')
+        sort_by_order = kwargs.pop('sort_by_order', pymongo.DESCENDING)
+
         for k, v in kwargs.iteritems():
             if v is None:
                 continue
             params.update(condition(k, v))
 
-        return collection.find(params).sort('create_ts', pymongo.DESCENDING)
+        return collection.find(params).sort(sort_by, sort_by_order)
 
 
 def condition(field_name, field_val):

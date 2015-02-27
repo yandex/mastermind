@@ -68,6 +68,7 @@ class JobProcessor(object):
 
         if config['metadata'].get('jobs', {}).get('db'):
             self.collection = Collection(db[config['metadata']['jobs']['db']], 'jobs')
+            self.downtimes = Collection(db[config['metadata']['jobs']['db']], 'downtimes')
             self.__tq.add_task_in(self.JOBS_EXECUTE,
                 5, self._execute_jobs)
 
@@ -213,7 +214,7 @@ class JobProcessor(object):
                     logger.error('Job {0}, task {1}: failed to execute task '
                         'stop handler: {2}\n{3}'.format(
                             job.id, task.id, e, traceback.format_exc()))
-                    pass
+                    raise
 
                 logger.debug('Job {0}, task {1} is finished, status {2}'.format(
                     job.id, task.id, task.status))
@@ -237,29 +238,21 @@ class JobProcessor(object):
                     logger.error('Job {0}, task {1}: failed to execute task '
                         'start handler: {2}\n{3}'.format(
                             job.id, task.id, e, traceback.format_exc()))
-                    task.status = Task.STATUS_FAILED
-                    job.status = Job.STATUS_PENDING
-                    job.add_error_msg(str(e))
-                    ts = time.time()
-                    job.update_ts = ts
-                    job.finish_ts = ts
-                    job._dirty = True
-                    break
+                    raise
 
                 try:
                     self.__execute_task(task)
                     logger.info('Job {0}, task {1} execution was successfully requested'.format(
                         job.id, task.id))
                 except Exception as e:
-                    task.status = Task.STATUS_FAILED
                     try:
                         task.on_exec_stop(self)
                     except Exception as e:
                         logger.error('Job {0}, task {1}: failed to execute task '
                             'stop handler: {2}\n{3}'.format(
                                 job.id, task.id, e, traceback.format_exc()))
-                        #TODO: Think on raising exec stop exception
-                        pass
+                        raise
+                    task.status = Task.STATUS_FAILED
                     if isinstance(e, JobBrokenError):
                         logger.error('Job {0}, task {1}: cannot execute task, '
                             'not applicable for current storage state: {2}'.format(
@@ -458,8 +451,7 @@ class JobProcessor(object):
                         logger.error('Job {0}, task {1}: failed to execute task '
                             'stop handler: {2}\n{3}'.format(
                                 job.id, task.id, e, traceback.format_exc()))
-                        #TODO: Think on raising exec stop exception
-                        pass
+                        raise
 
                     task.status = Task.STATUS_FAILED
 
