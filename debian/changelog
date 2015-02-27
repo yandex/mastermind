@@ -1,3 +1,9 @@
+mastermind (2.18.6) lucid; urgency=low
+
+  * IPv6 for tornado clients turned on
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 27 Feb 2015 16:18:09 +0300
+
 mastermind (2.18.5) lucid; urgency=low
 
   * Implementation of net monitoring usage during rsync tasks executing
