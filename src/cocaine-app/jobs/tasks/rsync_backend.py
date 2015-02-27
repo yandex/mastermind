@@ -53,7 +53,7 @@ class RsyncBackendTask(MinionCmdTask):
                          for host in (self.host, self.src_host)])
 
         dl = jobs.Job.list(processor.downtimes,
-                           host=hostnames, type='network_load')
+                           host=list(hostnames), type='network_load')
 
         set_hostnames = set(record['host'] for record in dl)
         not_set_hostnames = hostnames - set_hostnames
@@ -87,7 +87,7 @@ class RsyncBackendTask(MinionCmdTask):
                          for host in (self.host, self.src_host)])
 
         dl = jobs.Job.list(processor.downtimes,
-                           host=hostnames, type='network_load')
+                           host=list(hostnames), type='network_load')
 
         busy_hostnames = set()
         for rec in dl:
