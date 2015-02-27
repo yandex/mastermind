@@ -665,22 +665,22 @@ class Planner(object):
 
                 uncoupled_groups.append(unc_group)
 
-            if config.get('forbidden_dc_sharing_among_groups', False):
-                dcs = set()
-                for g in group.coupled_groups:
-                    dcs.update(nb.node.host.dc for nb in g.node_backends)
-                if dst_backend.node.host.dc in dcs:
-                    raise ValueError('Group {0} cannot be moved to uncoupled group {1}, '
-                        'couple {2} already has groups in dc {3}'.format(
-                            group.group_id, uncoupled_group.group_id,
-                            group.couple, dst_backend.node.host.dc))
-
         uncoupled_group, merged_groups = uncoupled_groups[0], uncoupled_groups[1:]
 
         dst_backend = uncoupled_group.node_backends[0]
         if dst_backend.status != storage.Status.OK:
             raise ValueError('Group {0} node backend {1} status is {2}, should be {3}'.format(
                 uncoupled_group.group_id, dst_backend, dst_backend.status, storage.Status.OK))
+
+        if config.get('forbidden_dc_sharing_among_groups', False):
+            dcs = set()
+            for g in group.coupled_groups:
+                dcs.update(nb.node.host.dc for nb in g.node_backends)
+            if dst_backend.node.host.dc in dcs:
+                raise ValueError('Group {0} cannot be moved to uncoupled group {1}, '
+                    'couple {2} already has groups in dc {3}'.format(
+                        group.group_id, uncoupled_group.group_id,
+                        group.couple, dst_backend.node.host.dc))
 
         try:
             force = bool(request[3])
