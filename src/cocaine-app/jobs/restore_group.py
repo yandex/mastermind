@@ -190,6 +190,7 @@ class RestoreGroupJob(Job):
 
         task = RsyncBackendTask.new(self,
                                     host=dst_host,
+                                    src_host=old_host,
                                     group=self.group,
                                     cmd=move_cmd,
                                     node_backend=self.node_backend(old_host, old_port, old_backend_id),

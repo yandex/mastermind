@@ -13,7 +13,7 @@ logger = logging.getLogger('mm.jobs')
 
 class RsyncBackendTask(MinionCmdTask):
 
-    PARAMS = MinionCmdTask.PARAMS + ('node_backend',)
+    PARAMS = MinionCmdTask.PARAMS + ('node_backend', 'src_host')
 
     def __init__(self, job):
         super(RsyncBackendTask, self).__init__(job)
@@ -49,52 +49,67 @@ class RsyncBackendTask(MinionCmdTask):
         super(RsyncBackendTask, self).execute(processor)
 
     def on_exec_start(self, processor):
-        hostname = infrastructure.get_hostname_by_addr(self.host)
+        hostnames = set([infrastructure.get_hostname_by_addr(host)
+                         for host in (self.host, self.src_host)])
 
         dl = jobs.Job.list(processor.downtimes,
-                           host=hostname, type='network_load')
+                           host=hostnames, type='network_load')
 
-        if dl.count() == 0:
+        set_hostnames = set(record['host'] for record in dl)
+        not_set_hostnames = hostnames - set_hostnames
+
+        if not_set_hostnames:
             try:
-                inventory.set_net_monitoring_downtime(hostname)
+                for hostname in not_set_hostnames:
+                    inventory.set_net_monitoring_downtime(hostname)
             except Exception as e:
                 logger.error('Job {0}, task {1}: failed to set net monitoring downtime: '
                     '{2}'.format(self.parent_job.id, self.id, e))
                 raise
 
         try:
-            res = processor.downtimes.insert({'task_id': self.id,
-                                              'host': hostname,
-                                              'type': 'network_load'})
-            # if res['ok'] != 1:
-            #     raise ValueError('unexpected mongo response: {0}'.format(res))
-            logger.info('Mongo object: {0}'.format(res))
+            bulk_op = processor.downtimes.initialize_unordered_bulk_op()
+            for hostname in hostnames:
+                bulk_op.insert({'job_id': self.parent_job.id,
+                                'host': hostname,
+                                'type': 'network_load'})
+            res = bulk_op.execute()
+            if res['nInserted'] != len(hostnames):
+                raise ValueError('failed to set all downtimes: {0}/{1}'.format(
+                    res['nInserted'], len(hostnames)))
         except Exception as e:
             logger.error('Job {0}, task {1}: unexpected mongo error: '
                 '{2}'.format(self.parent_job.id, self.id, e))
             raise
 
     def on_exec_stop(self, processor):
-        hostname = infrastructure.get_hostname_by_addr(self.host)
+        hostnames = set([infrastructure.get_hostname_by_addr(host)
+                         for host in (self.host, self.src_host)])
 
-        dl_total = jobs.Job.list(processor.downtimes,
-            host=hostname, type='network_load')
+        dl = jobs.Job.list(processor.downtimes,
+                           host=hostnames, type='network_load')
 
-        dl_self = jobs.Job.list(processor.downtimes,
-            task_id=self.id, host=hostname, type='network_load')
+        busy_hostnames = set()
+        for rec in dl:
+            if dl['job_id'] != self.parent_job.id:
+                busy_hostnames.add(rec['host'])
 
-        if dl_total.count() == dl_self.count():
+        release_hostnames = hostnames - busy_hostnames
+        if release_hostnames:
             try:
-                inventory.remove_net_monitoring_downtime(hostname)
+                for hostname in release_hostnames:
+                    inventory.remove_net_monitoring_downtime(hostname)
             except Exception as e:
                 logger.error('Job {0}, task {1}: failed to remove net monitoring downtime: '
                     '{2}'.format(self.parent_job.id, self.id, e))
                 raise
 
         try:
-            res = processor.downtimes.remove({'task_id': self.id,
-                                              'host': hostname,
+            res = processor.downtimes.remove({'job_id': self.parent_job.id,
+                                              'host': {'$in': list(hostnames)},
                                               'type': 'network_load'})
+            if res['ok'] != 1:
+                raise ValueError('bad response: {0}'.format(res))
         except Exception as e:
             logger.error('Job {0}, task {1}: unexpected mongo error: '
                 '{2}'.format(self.parent_job.id, self.id, e))

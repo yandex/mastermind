@@ -214,6 +214,7 @@ class MoveJob(Job):
         # TODO: think about changing MinionCmdTask to RsyncBackendTask
         task = RsyncBackendTask.new(self,
                                     host=self.dst_host,
+                                    src_host=self.src_host,
                                     group=self.group,
                                     cmd=move_cmd,
                                     params=params)
