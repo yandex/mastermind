@@ -191,10 +191,10 @@ class Minions(object):
         else:
             error = response.error
         if error:
-            code = error.code
+            code = error.code if hasattr(error, 'code') else 599
             if code == 599:
                 error_msg = ('Failed to connect to minion '
-                             'on host {0} ({1})'.format(host, error.message))
+                             'on host {0} ({1})'.format(host, error.message or str(error)))
             else:
                 error_msg = ('Minion http error on host {0}, '
                              'code {1} ({2})'.format(host, code, error.message))
@@ -253,6 +253,7 @@ class Minions(object):
                                                headers=self.minion_headers,
                                                body=urllib.urlencode(data),
                                                request_timeout=5.0,
+                                               allow_ipv6=True,
                                                use_gzip=True)
         except HTTPError as e:
             response = e
@@ -358,7 +359,7 @@ class AsyncHTTPBatch(object):
             return self.responses
         max_clients = len(self.urls)
         [AsyncHTTPClient(max_clients=max_clients).fetch(url, callback=self._process,
-            request_timeout=self.timeout, headers=self.headers) for url in self.urls]
+            request_timeout=self.timeout, headers=self.headers, allow_ipv6=True) for url in self.urls]
         logger.debug('Minion states, starting ioloop')
         self.ioloop.start()
         return self.responses
