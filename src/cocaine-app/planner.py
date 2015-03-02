@@ -683,7 +683,7 @@ class Planner(object):
                         group.couple, dst_backend.node.host.dc))
 
         try:
-            force = bool(request[3])
+            force = bool(request[2])
         except IndexError:
             force = False
 
