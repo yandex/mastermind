@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 import logging
+import os.path
 import threading
 from time import sleep
 import traceback
@@ -129,9 +130,15 @@ class ZkSyncManager(object):
     def get_children_locks(self, lock_prefix):
         try:
             retry = self._retry.copy()
-            result = retry(self.client.get_children, self.lock_path_prefix + lock_prefix)
+            result = retry(self.__inner_get_children_locks, lock_prefix)
         except RetryFailedError:
             raise LockError
+        return result
+
+    def __inner_get_children_locks(self, lock_prefix):
+        full_path = self.lock_path_prefix + lock_prefix
+        self.client.ensure_path(os.path.normpath(full_path))
+        result = self.client.get_children(full_path)
         return ['{0}/{1}'.format(lock_prefix, lock) for lock in result]
 
     def persistent_locks_release(self, locks, check=''):
