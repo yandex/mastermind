@@ -1,3 +1,10 @@
+mastermind (2.18.11) lucid; urgency=low
+
+  * Ensure path before checking locked hosts
+  * Planner job creation fixed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 03 Mar 2015 20:05:17 +0300
+
 mastermind (2.18.10) lucid; urgency=low
 
   * Fix for group move handler --force option
