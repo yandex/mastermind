@@ -224,7 +224,8 @@ class Statistics(object):
     def total_stats(self, per_dc_stat):
         dc_stats = per_dc_stat.values()
         for dc in dc_stats:
-            del dc['outages']
+            if 'outages' in dc:
+                del dc['outages']
         return dict(reduce(self.dict_keys_sum, dc_stats))
 
     def get_couple_stats(self):
@@ -308,7 +309,10 @@ class Statistics(object):
 
         per_dc_stat, per_ns_stat = self.per_entity_stat()
 
+        ns_effective_space = self.ns_effective_space()
+
         res = self.total_stats(per_dc_stat)
+        res.update(self.total_stats(ns_effective_space))
         res.update({'dc': per_dc_stat,
                     'namespaces': per_ns_stat})
 
