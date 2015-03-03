@@ -85,7 +85,7 @@ class MoveJob(Job):
 
     def create_tasks(self):
 
-        for group_id in self.merged_groups:
+        for group_id in self.merged_groups or []:
             merged_group = storage.groups[group_id]
             merged_nb = merged_group.node_backends[0]
 
