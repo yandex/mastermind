@@ -1,3 +1,4 @@
+from collections import defaultdict
 from functools import wraps
 import logging
 import traceback
@@ -71,3 +72,16 @@ def session_op_retry(op, acc_codes):
 
 write_retry = session_op_retry('write_data', (0,))
 remove_retry = session_op_retry('remove', (0, -2))
+
+
+def defaultdict_to_dict(d):
+    res = {}
+
+    def convert_value(v):
+        if isinstance(v, (dict, defaultdict)):
+            return defaultdict_to_dict(v)
+        return v
+
+    for k, v in d.iteritems():
+        res[k] = convert_value(v)
+    return res

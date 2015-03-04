@@ -56,10 +56,16 @@ class Statistics(object):
         else:
             data['uncoupled_space'] += stat.total_space
 
-    def ns_effective_space(self):
-        res = defaultdict(lambda: {'effective_space': 0,
-                                   'effective_free_space': 0})
+    def effective_space(self):
+        by_ns = defaultdict(lambda: {'stats': {'effective_space': 0,
+                                              'effective_free_space': 0},
+                                     'dcs': defaultdict(lambda: {'effective_space': 0,
+                                                                 'effective_free_space': 0})})
+        by_dc = defaultdict(lambda: {'effective_space': 0,
+                                     'effective_free_space': 0})
         for couple in storage.couples.keys():
+            if couple.status not in storage.GOOD_STATUSES:
+                continue
             try:
                 ns = couple.namespace
                 stat = couple.get_stat()
@@ -68,13 +74,25 @@ class Statistics(object):
             except ValueError:
                 continue
 
-            ns_stat = res[ns]
-            couple_eff_space = couple.effective_space
-            ns_stat['effective_space'] += couple_eff_space
-            ns_stat['effective_free_space'] += max(stat.free_space -
-                (stat.total_space - int(couple_eff_space)), 0)
+            eff_space = couple.effective_space
+            eff_free_space = max(stat.free_space -
+                (stat.total_space - int(eff_space)), 0)
 
-        return dict(res)
+            ns_stat = by_ns[ns]['stats']
+            ns_stat['effective_space'] += eff_space
+            ns_stat['effective_free_space'] += eff_free_space
+
+            dcs = set(nb.node.host.dc for g in couple.groups
+                                      for nb in g.node_backends)
+            for dc in dcs:
+                by_dc[dc]['effective_space'] += eff_space
+                by_dc[dc]['effective_free_space'] += eff_free_space
+
+                ns_dc_stat = by_ns[ns]['dcs'][dc]
+                ns_dc_stat['effective_space'] += eff_space
+                ns_dc_stat['effective_free_space'] += eff_free_space
+
+        return h.defaultdict_to_dict(by_dc), h.defaultdict_to_dict(by_ns)
 
     def per_ns_statistics(self):
         ns_stats = {}
@@ -84,7 +102,7 @@ class Statistics(object):
             logger.error('Failed to calculate namespace statistics')
             return ns_stats
 
-        ns_effective_space = self.ns_effective_space()
+        ns_eff, dc_eff = self.effective_space()
 
         for ns, stats in per_ns_stat.iteritems():
             try:
@@ -92,11 +110,11 @@ class Statistics(object):
             except Exception as e:
                 logger.error('Failed to construct namespace {0} statistics: {1}'.format(ns, e))
                 continue
-            if not ns in ns_effective_space:
+            if not ns in ns_eff:
                 logger.error('Failed to update ns {0} statistics '
                     'with effective data stats'.format(ns))
                 continue
-            ns_stats[ns].update(ns_effective_space[ns])
+            ns_stats[ns].update(ns_eff[ns]['stats'])
 
         return ns_stats
 
@@ -171,7 +189,7 @@ class Statistics(object):
 
         self.count_outaged_couples(by_dc, by_ns)
 
-        return dict(by_dc), dict((k, dict(v)) for k, v in by_ns.iteritems())
+        return h.defaultdict_to_dict(by_dc), h.defaultdict_to_dict(by_ns)
 
     def count_outaged_couples(self, by_dc_stats, by_ns_stats):
         default = lambda: {
@@ -309,10 +327,18 @@ class Statistics(object):
 
         per_dc_stat, per_ns_stat = self.per_entity_stat()
 
-        ns_effective_space = self.ns_effective_space()
+        dc_eff, ns_eff = self.effective_space()
+
+        self.per_key_update(per_dc_stat, dc_eff)
+        for ns, ns_stats in per_ns_stat.iteritems():
+            if not ns in ns_eff:
+                logger.warn('No effective space statistics for namespace {0}'.format(
+                    ns))
+                continue
+            # logger.info('ns_eff {0}: {1}'.format(ns, ns_eff[ns]))
+            self.per_key_update(ns_stats, ns_eff[ns]['dcs'])
 
         res = self.total_stats(per_dc_stat)
-        res.update(self.total_stats(ns_effective_space))
         res.update({'dc': per_dc_stat,
                     'namespaces': per_ns_stat})
 
@@ -320,6 +346,13 @@ class Statistics(object):
         res.update(self.get_couple_stats())
 
         return res
+
+    @staticmethod
+    def per_key_update(dest, src):
+        for key, val in dest.iteritems():
+            if not key in src:
+                continue
+            val.update(src[key])
 
     @h.concurrent_handler
     def get_groups_tree(self, request):
