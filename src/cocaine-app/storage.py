@@ -648,7 +648,7 @@ class Group(object):
         if self.meta is None:
             return True
 
-        negligeable_keys = ['service']
+        negligeable_keys = ['service', 'version']
         for key in set(self.meta.keys() + other.meta.keys()):
             if key in negligeable_keys:
                 continue
