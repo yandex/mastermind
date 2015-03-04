@@ -1,3 +1,9 @@
+mastermind (2.18.13) lucid; urgency=low
+
+  * Effective space statistics fix
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 04 Mar 2015 14:49:07 +0300
+
 mastermind (2.18.12) lucid; urgency=low
 
   * Fix for total effective_free_space count
