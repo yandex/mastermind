@@ -1,3 +1,9 @@
+mastermind (2.19.2) lucid; urgency=low
+
+  * Planner does not operate without mongo db setup
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 05 Mar 2015 20:14:26 +0300
+
 mastermind (2.19.1) lucid; urgency=low
 
   * Recover dc queue is replaced by dynamic weighting of couples using last recovery timestamp and keys difference
