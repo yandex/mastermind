@@ -1023,7 +1023,7 @@ class Couple(object):
         return hash(self.__str__())
 
     def __eq__(self, other):
-        if isinstance(other, str):
+        if isinstance(other, (str, unicode)):
             return self.__str__() == other
 
         if isinstance(other, Couple):
