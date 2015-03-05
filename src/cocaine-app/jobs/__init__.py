@@ -127,8 +127,6 @@ class JobProcessor(object):
 
         except LockFailedError as e:
             pass
-        # except errors.NotReadyError as e:
-        #     logger.warn('Failed to process jobs: minions state is not fetched')
         except Exception as e:
             logger.error('Failed to process existing jobs: {0}\n{1}'.format(
                 e, traceback.format_exc()))
@@ -279,12 +277,12 @@ class JobProcessor(object):
                 for task in job.tasks]):
             logger.info('Job {0}, tasks processing is finished'.format(job.id))
             try:
-                job.complete(self.session)
+                job.status = Job.STATUS_COMPLETED
+                job.complete(self)
                 job._dirty = True
             except RuntimeError as e:
                 logger.error('Job {0}, failed to complete job: {1}'.format(job.id, e))
-            else:
-                job.status = Job.STATUS_COMPLETED
+                raise
 
     def __update_task_status(self, task):
         if isinstance(task, MinionCmdTask):
