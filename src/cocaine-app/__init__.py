@@ -213,6 +213,7 @@ def init_job_processor(minions, niu):
     register_handle(j.create_job)
     register_handle(j.cancel_job)
     register_handle(j.approve_job)
+    register_handle(j.stop_jobs)
     register_handle(j.get_job_list)
     register_handle(j.get_job_status)
     register_handle(j.get_jobs_status)
