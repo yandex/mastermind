@@ -1,4 +1,5 @@
 import logging
+import time
 
 from error import JobBrokenError
 from infrastructure import infrastructure
@@ -57,7 +58,6 @@ class RecoverDcJob(Job):
         data['hostname'] = infrastructure.get_hostname_by_addr(data['host'])
         return data
 
-
     def __min_keys_group(self, couple):
         return sorted(couple.groups, key=lambda g: g.get_stat().files)[0]
 
@@ -77,6 +77,9 @@ class RecoverDcJob(Job):
                         self.host, self.port, self.backend_id).encode('utf-8'),
                     'group': str(self.group)})
         self.tasks.append(task)
+
+    def on_complete(self, processor):
+        processor.planner.update_recover_ts(self.couple, time.time())
 
     @property
     def _involved_groups(self):

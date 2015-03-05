@@ -54,6 +54,7 @@ class JobProcessor(object):
         self.meta_session = node.meta_session
         self.minions = minions
         self.node_info_updater = niu
+        self.planner = None
 
         self.jobs_index = indexes.TagSecondaryIndex(
             keys.MM_JOBS_IDX,
@@ -551,7 +552,7 @@ class JobProcessor(object):
                 'is {1}'.format(job.id, job.status))
 
         job.status = Job.STATUS_CANCELLED
-        job.complete(self.session)
+        job.complete(self)
         job._dirty = True
 
     @h.concurrent_handler

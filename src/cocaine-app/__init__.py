@@ -235,6 +235,7 @@ init_statistics()
 m = init_minions()
 j = init_job_processor(m, niu)
 po = init_planner(j, niu)
+j.planner = po
 ml = init_manual_locker(manual_locker)
 
 

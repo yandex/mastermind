@@ -1007,6 +1007,18 @@ class Couple(object):
             res['used_space'] = int(stat.used_space)
         return res
 
+    @property
+    def keys_diff(self):
+        group_keys = []
+        for group in self.groups:
+            if not len(group.node_backends):
+                continue
+            group_keys.append(group.get_stat().files)
+        if not group_keys:
+            return None
+        group_keys.sort(reverse=True)
+        return sum([group_keys[0] - gk for gk in group_keys[1:]])
+
     def __contains__(self, group):
         return group in self.groups
 

@@ -285,8 +285,10 @@ class Job(MongoObject):
                 ['{0}{1}'.format(self.COUPLE_LOCK_PREFIX, couple)
                  for couple in self._involved_couples])
 
-    def complete(self, session):
-        self.unmark_groups(session)
+    def complete(self, processor):
+        if self.status == self.STATUS_COMPLETED:
+            self.on_complete(processor)
+        self.unmark_groups(processor.session)
         ts = time.time()
         if not self.start_ts:
             self.start_ts = ts
@@ -306,6 +308,12 @@ class Job(MongoObject):
         """
         Performs checkings before starting the job.
         Should through JobBrokenError if job should not be started.
+        """
+        pass
+
+    def on_complete(self, processor):
+        """
+        Performs action after job completion.
         """
         pass
 

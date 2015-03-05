@@ -10,10 +10,12 @@ import traceback
 
 import elliptics
 import msgpack
+import pymongo
 
 from balancer import get_good_uncoupled_groups, is_uncoupled_group_good
 from coll import SortedCollection
 from config import config
+from db.mongo.pool import Collection
 import helpers as h
 from infrastructure import infrastructure
 import inventory
@@ -31,9 +33,10 @@ logger = getLogger('mm.planner')
 class Planner(object):
 
     MOVE_CANDIDATES = 'move_candidates'
-    RECOVER_DC_QUEUE_UPDATE = 'recover_dc_queue_update'
     RECOVER_DC = 'recover_dc'
     COUPLE_DEFRAG = 'couple_defrag'
+
+    RECOVERY_OP_CHUNK = 200
 
     def __init__(self, meta_session, db, niu, job_processor):
 
@@ -41,24 +44,22 @@ class Planner(object):
 
         logger.info('Planner initializing')
         self.candidates = []
-        self.recover_dc_queue = []
-        self._recover_dc_queue_lock = threading.Lock()
         self.meta_session = meta_session
         self.job_processor = job_processor
         self.__max_plan_length = self.params.get('max_plan_length', 5)
         self.__tq = timed_queue.TimedQueue()
 
+        self.collection = Collection(db[config['metadata']['planner']['db']], 'planner')
+
+        self.node_info_updater = niu
+
         if (self.params.get('enabled', False)):
             self.__tq.add_task_in(self.MOVE_CANDIDATES,
                 10, self._move_candidates)
-            self.__tq.add_task_in(self.RECOVER_DC_QUEUE_UPDATE,
-                10, self._recover_dc_queue_update)
             self.__tq.add_task_in(self.RECOVER_DC,
                 11, self._recover_dc)
             self.__tq.add_task_in(self.COUPLE_DEFRAG,
                 12, self._couple_defrag)
-
-        self.node_info_updater = niu
 
     def _start_tq(self):
         self.__tq.start()
@@ -284,35 +285,6 @@ class Planner(object):
 
         return _candidates
 
-    def _recover_dc_queue_update(self):
-        try:
-            logger.info('Updating recover dc queue')
-
-            with self._recover_dc_queue_lock:
-                self._do_sync_recover_dc_queue()
-
-        except Exception as e:
-            logger.error('Failed to update recover dc queue: {0}\n{1}'.format(
-                e, traceback.format_exc()))
-        finally:
-            logger.info('Updating recover dc queue finished')
-            self.__tq.add_task_in(self.RECOVER_DC_QUEUE_UPDATE,
-                self.params.get('recover_dc_queue_update_period', 60),
-                self._recover_dc_queue_update)
-
-    def _do_sync_recover_dc_queue(self):
-        try:
-            self.recover_dc_queue = list(msgpack.unpackb(self.meta_session.read_data(
-                    keys.MM_PLANNER_RECOVER_DC_QUEUE).get()[0].data))
-            if self.recover_dc_queue and isinstance(self.recover_dc_queue[0], tuple):
-                self.recover_dc_queue = []
-        except elliptics.NotFoundError:
-            self.recover_dc_queue = []
-
-    def _do_update_recover_dc_queue(self):
-        self.meta_session.write_data(keys.MM_PLANNER_RECOVER_DC_QUEUE,
-            msgpack.packb(self.recover_dc_queue)).get()
-
     def _recover_dc(self):
         try:
             logger.info('Starting recover dc planner')
@@ -362,66 +334,175 @@ class Planner(object):
                     jobs_count))
                 return
 
-            with self._recover_dc_queue_lock:
-                self._do_sync_recover_dc_queue()
+            created_jobs = 0
+            logger.info('Trying to create {0} jobs'.format(slots))
 
-                if not self.recover_dc_queue:
-                    # create new recover dc queue
-                    logger.info('Recover dc queue is empty, setting it up')
-                    self.recover_dc_queue = self.__construct_recover_dc_queue()
+            for couple_id in self._recover_top_weight_couples(slots):
 
-                created_jobs = 0
-                max_jobs = min(max_recover_jobs, slots, len(self.recover_dc_queue))
-                logger.info('Trying to create {0} jobs (min of {1})'.format(max_jobs,
-                    (max_recover_jobs, slots, len(self.recover_dc_queue))))
+                logger.info('Creating recover job for couple {0}'.format(couple_id))
 
-                while created_jobs < max_jobs:
-                    try:
-                        couple_str = self.recover_dc_queue.pop()
-                    except IndexError:
-                        break
+                couple = storage.couples[couple_id]
 
-                    if not couple_str in storage.couples:
-                        logger.warn('Couple {0} is not found in storage'.format(couple_str))
-                        continue
-                    couple = storage.couples[couple_str]
+                if not _recovery_applicable_couple(couple):
+                    logger.info('Couple {0} is no more applicable for recovery job'.format(couple_id))
+                    continue
 
-                    if not _recovery_applicable_couple(couple):
-                        continue
+                try:
+                    job = self.job_processor._create_job(
+                        jobs.JobTypes.TYPE_RECOVER_DC_JOB,
+                        {'couple': couple_id,
+                         'need_approving': False})
+                    logger.info('Created recover dc job for couple {0}, '
+                        'job id {1}'.format(couple, job.id))
+                    created_jobs += 1
+                except Exception as e:
+                    logger.error('Failed to create recover dc job for '
+                        'couple {0}: {1}'.format(couple_id, e))
+                    continue
 
-                    try:
-                        job = self.job_processor._create_job(
-                            jobs.JobTypes.TYPE_RECOVER_DC_JOB,
-                            {'couple': couple_str,
-                             'need_approving': False})
-                        logger.info('Created recover dc job for couple {0}, '
-                            'job id {1}'.format(couple, job.id))
-                        created_jobs += 1
-                    except Exception as e:
-                        logger.error('Failed to create recover dc job: {0}'.format(e))
-                        continue
+            logger.info('Successfully created {0} recover dc jobs'.format(created_jobs))
 
-                self._do_update_recover_dc_queue()
+    def sync_recover_data(self):
 
+        recover_data_couples = set()
 
-    def __construct_recover_dc_queue(self):
-        couples_to_recover = []
-        for couple in storage.couples:
+        offset = 0
+        while True:
+            cursor = (self.collection.find(fields=['couple'],
+                sort=[('couple', pymongo.ASCENDING)],
+                skip=offset, limit=self.RECOVERY_OP_CHUNK))
+            count = 0
+            for rdc in cursor:
+                recover_data_couples.add(rdc['couple'])
+                count += 1
+            offset += count
 
+            if count < self.RECOVERY_OP_CHUNK:
+                break
+
+        ts = int(time.time())
+
+        storage_couples = set([str(c) for c in storage.couples.keys()])
+
+        logger.info('recover couples: {0}'.format(recover_data_couples))
+        logger.info('storage_couples: {0}'.format(storage_couples))
+
+        add_couples = list(storage_couples - recover_data_couples)
+        remove_couples = list(recover_data_couples - storage_couples)
+
+        logger.info('Couples to add to recover data list: {0}'.format(add_couples))
+        logger.info('Couples to remove from recover data list: {0}'.format(remove_couples))
+
+        offset = 0
+        while offset < len(add_couples):
+            bulk_op = self.collection.initialize_unordered_bulk_op()
+            bulk_add_couples = add_couples[offset:offset + self.RECOVERY_OP_CHUNK]
+            for couple in bulk_add_couples:
+                bulk_op.insert({'couple': couple,
+                                'recover_ts': ts})
+            res = bulk_op.execute()
+            if res['nInserted'] != len(bulk_add_couples):
+                raise ValueError('failed to add couples recover data: {0}/{1} ({2})'.format(
+                    res['nInserted'], len(bulk_add_couples), res))
+            offset += res['nInserted']
+
+        offset = 0
+        while offset < len(remove_couples):
+            bulk_op = self.collection.initialize_unordered_bulk_op()
+            bulk_remove_couples = remove_couples[offset:offset + self.RECOVERY_OP_CHUNK]
+            bulk_op.find({'couple': {'$in': bulk_remove_couples}}).remove()
+            res = bulk_op.execute()
+            if res['nRemoved'] != len(bulk_remove_couples):
+                raise ValueError('failed to remove couples recover data: {0}/{1} ({2})'.format(
+                    res['nRemoved'], len(bulk_remove_couples), res))
+            offset += res['nRemoved']
+
+    def _recover_top_weight_couples(self, count):
+        keys_diffs_sorted = []
+        keys_diffs = {}
+        ts_diffs = {}
+
+        for couple in storage.couples.keys():
             if not _recovery_applicable_couple(couple):
                 continue
+            c_diff = couple.keys_diff
+            keys_diffs_sorted.append((str(couple), c_diff))
+            keys_diffs[str(couple)] = c_diff
+        keys_diffs_sorted.sort(key=lambda x: x[1])
 
-            alive_keys = _couple_keys(couple)
+        KEYS_CF = 86400  # one key loss is equal to one day without recovery
+        TS_CF = 1
 
-            logger.info('Adding couple {0} to recover dc queue, number of keys '
-                'in groups: {1}'.format(str(couple), alive_keys))
+        cursor = self.collection.find().sort('recover_ts', pymongo.ASCENDING)
+        if cursor.count() < len(storage.couples):
+            logger.info('Sync recover data is required: {0} records/{1} couples'.format(
+                cursor.count(), len(storage.couples)))
+            self.sync_recover_data()
+            cursor = self.collection.find().sort('recover_ts', pymongo.ASCENDING)
 
-            couples_to_recover.append((couple, alive_keys[-1] - alive_keys[0]))
+        ts = int(time.time())
 
-        couples_to_recover.sort(key=lambda c: c[1])
+        def weight(keys_diff, last_ts):
+            return keys_diff * KEYS_CF + (ts - last_ts) * TS_CF
 
-        return [str(c[0]) for c in couples_to_recover]
+        weights = {}
+        for i in xrange(cursor.count() / self.RECOVERY_OP_CHUNK + 1):
+            couples_data = cursor[i * self.RECOVERY_OP_CHUNK:(i + 1) * self.RECOVERY_OP_CHUNK]
+            max_recover_ts = None
+            for couple_data in couples_data:
+                c = couple_data['couple']
+                ts_diffs[c] = couple_data['recover_ts']
+                if not c in keys_diffs:
+                    # couple was not applicable for recovery, skip
+                    continue
+                weights[c] = weight(keys_diffs[c], ts_diffs[c])
+                max_recover_ts = couple_data['recover_ts']
 
+            top_candidates_len = min(count, len(weights))
+
+            # TODO: Optimize this
+            candidates = sorted(weights.iteritems(), key=lambda x: x[1])
+            min_weight_candidate = candidates[-top_candidates_len]
+            min_keys_diff = 0
+            for candidate in candidates[-top_candidates_len:]:
+                c = candidate[0]
+                min_keys_diff = min(min_keys_diff, keys_diffs[c])
+
+            missed_candidate = None
+            idx = len(keys_diffs_sorted) - 1
+            while idx >= 0 and keys_diffs_sorted[idx] >= min_keys_diff:
+                c, keys_diff = keys_diffs_sorted[idx]
+                idx -= 1
+                if c in ts_diffs:
+                    continue
+                if weight(keys_diff, max_recover_ts) > min_weight_candidate[1]:
+                    # found possible candidate
+                    missed_candidate = c
+                    break
+            cursor.rewind()
+
+            logger.debug('Current round: {0}, current min weight candidate '
+                '{1}, weight: {2}, possible missed candidate is '
+                'couple {3}, keys diff: {4} (max recover ts = {5}, diff {6})'.format(
+                    i, min_weight_candidate[0], min_weight_candidate[1],
+                    missed_candidate, keys_diffs.get(missed_candidate, None),
+                    max_recover_ts, ts - max_recover_ts))
+
+            if missed_candidate is None:
+                break
+
+        logger.info('Top candidates: {0}'.format(candidates[-count:]))
+
+        return [candidate[0] for candidate in candidates[-count:]]
+
+    def update_recover_ts(self, couple_id, ts):
+        ts = int(ts)
+        res = self.collection.update({'couple': couple_id},
+            {'couple': couple_id, 'recover_ts': ts},
+            upsert=True)
+        if res['ok'] != 1:
+            logger.error('Unexpected mongo response during recover ts update: {0}'.format(res))
+            raise RuntimeError('Mongo operation result: {0}'.format(res['ok']))
 
     def _couple_defrag(self):
         try:
@@ -937,25 +1018,7 @@ class Planner(object):
 def _recovery_applicable_couple(couple):
     if couple.status not in storage.GOOD_STATUSES:
         return False
-
-    alive_keys = _couple_keys(couple)
-
-    if alive_keys[-1] - alive_keys[0] <= 0:
-        # number of keys in all groups is equal
-        return False
-
     return True
-
-def _couple_keys(couple):
-
-    group_alive_keys = {}
-    for group in couple:
-        for nb in group.node_backends:
-            group_alive_keys.setdefault(group, 0)
-            group_alive_keys[group] += nb.stat.files
-    alive_keys = sorted(group_alive_keys.values())
-    return alive_keys
-
 
 
 class Delta(object):

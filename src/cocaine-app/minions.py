@@ -283,6 +283,7 @@ class Minions(object):
                                                headers=self.minion_headers,
                                                body=urllib.urlencode(data),
                                                request_timeout=5.0,
+                                               allow_ipv6=True,
                                                use_gzip=True)
         except HTTPError as e:
             response = e
