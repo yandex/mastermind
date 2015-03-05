@@ -1,3 +1,13 @@
+mastermind (2.19.1) lucid; urgency=low
+
+  * Recover dc queue is replaced by dynamic weighting of couples using last recovery timestamp and keys difference
+  * Couples can be indexed by unicode str
+  * Workaround for hosts that cannot be resolved
+  * Do not compare couple groups' metadata version numbers
+  * Added namespace settings custom expiration time feature
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 05 Mar 2015 19:15:45 +0300
+
 mastermind (2.18.13) lucid; urgency=low
 
   * Effective space statistics fix
