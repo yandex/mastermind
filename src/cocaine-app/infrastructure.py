@@ -996,7 +996,13 @@ class HostnameCacheItem(CacheItem):
         super(HostnameCacheItem, self).__init__(*args, **kwargs)
 
     def get_value(self, key):
-        return socket.gethostbyaddr(key)[0]
+        try:
+            return socket.gethostbyaddr(key)[0]
+        except socket.herror as e:
+            if e.errno == 1:
+                # unknown host
+                return 'unresolved'
+            raise
 
 
 class HostTreeCacheItem(CacheItem):
