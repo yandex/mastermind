@@ -123,7 +123,7 @@ class MoveJob(Job):
             if merged_group_file_marker:
                 params['group_file_marker'] = merged_group_file_marker.format(
                     dst_group_id=self.uncoupled_group,
-                    dst_backend_id=dst_backend_id)
+                    dst_backend_id=merged_nb.backend_id)
 
             if merged_path:
                 params['move_src'] = os.path.dirname(merged_group_file)
