@@ -270,9 +270,11 @@ class NodeInfoUpdater(object):
                     else:
                         node_backend.make_writable()
 
-                    if not node_backend in group.node_backends:
-                        logger.debug('Adding node backend %d -> %s' %
-                                      (gid, node_backend))
+                    if not node_backend.group is group:
+                        logger.debug('Adding node backend {0} to group {1}{2}'.format(
+                            node_backend, group.group_id,
+                            ' (moved from group {0})'.format(node_backend.group.group_id)
+                                if node_backend.group else ''))
                         group.add_node_backend(node_backend)
 
         except Exception as e:

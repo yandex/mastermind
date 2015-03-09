@@ -446,6 +446,7 @@ class NodeBackend(object):
         self.node = node
         self.backend_id = backend_id
         self.fs = None
+        self.group = None
 
         self.stat = None
 
@@ -461,6 +462,9 @@ class NodeBackend(object):
         self.stalled = False
 
         self.base_path = None
+
+    def set_group(self, group):
+        self.group = group
 
     def disable(self):
         self.disabled = True
@@ -622,9 +626,9 @@ class Group(object):
 
     def add_node_backend(self, node_backend):
         self.node_backends.append(node_backend)
-
-    def has_node_backend(self, node_backend):
-        return node_backend in self.node_backends
+        if node_backend.group:
+            node_backend.group.remove_node_backend(node_backend)
+        node_backend.set_group(self)
 
     def remove_node_backend(self, node_backend):
         self.node_backends.remove(node_backend)
