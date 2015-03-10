@@ -709,21 +709,35 @@ class Planner(object):
         return job.dump()
 
     def account_job(self, ns_current_state, types, job, ns):
+
+        logger.info('Accounting job {0}'.format(job.id))
+
         if getattr(job, 'uncoupled_group', None) is None:
+            logger.error('No uncoupled group found for job {0}'.format(job.id))
             return ns_current_state
 
         try:
             group = storage.groups[job.group]
+        except KeyError:
+            logger.warn('Group {0} is not found in storage (job {1})'.format(
+                job.group, job.id))
+            return ns_current_state
+        try:
             uncoupled_group = storage.groups[job.uncoupled_group]
         except KeyError:
+            logger.warn('Uncoupled group {0} is not found in storage (job {1})'.format(
+                job.group, job.id))
             return ns_current_state
 
         add_groups = []
         remove_groups = []
         try:
             if group.couple.namespace != ns:
+                logger.info('Group {0} namespace is {1}, not applicable'.format(
+                    group.group_id, group.couple.namespace))
                 return ns_current_state
         except ValueError:
+            logger.error('Failed to fetch group\'s {0} namespace'.format(group.group_id))
             return ns_current_state
 
         if group.couple.status in (storage.Status.OK, storage.Status.FULL):
@@ -747,7 +761,8 @@ class Planner(object):
                     ns_current_type_state['avg'] += float(diff) / len(ns_current_type_state['nodes'])
                 cur_node = cur_node.get('parent')
 
-        logger.info('Applying job {0}: {1}'.format(job.id, ns_current_state))
+        logger.info('Accounting job {0} completed'.format(job.id, ns_current_state))
+        logger.debug('State after accounting job {0}: {1}'.format(job.id, ns_current_state))
 
         return ns_current_state
 
@@ -852,6 +867,22 @@ class Planner(object):
 
         return top_candidate
 
+    @h.concurrent_handler
+    def test_ns_current_state(self, request):
+        types = ['root'] + inventory.get_balancer_node_types() + ['hdd']
+        tree, nodes = infrastructure.filtered_cluster_tree(types)
+
+        ns = 'music'
+
+        infrastructure.account_ns_couples(tree, nodes, ns)
+        infrastructure.update_groups_list(tree)
+
+        uncoupled_groups = get_good_uncoupled_groups(max_node_backends=1)
+
+        ns_current_state = infrastructure.ns_current_state(nodes, types[1:])
+        logger.debug('Current ns {0} state: {1}'.format(ns, ns_current_state))
+
+        pass
 
     def select_uncoupled_groups(self, group):
         if len(group.node_backends) != 1:
