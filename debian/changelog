@@ -1,3 +1,9 @@
+mastermind (2.18.14) lucid; urgency=low
+
+  * Logging requests and test handler for ns_current_state logging
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 10 Mar 2015 12:53:16 +0300
+
 mastermind (2.18.13) lucid; urgency=low
 
   * Effective space statistics fix
