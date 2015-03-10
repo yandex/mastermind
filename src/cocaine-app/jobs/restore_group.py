@@ -22,11 +22,24 @@ class RestoreGroupJob(Job):
     GROUP_FILE_DIR_MOVE_DST_RENAME = config.get('restore', {}).get('group_file_dir_move_dst_rename', None)
     MERGE_GROUP_FILE_DIR_MOVE_SRC_RENAME = config.get('restore', {}).get('merge_group_file_dir_move_src_rename', None)
 
-    PARAMS = ('group', 'src_group', 'uncoupled_group', 'merged_groups')
+    PARAMS = ('group', 'src_group', 'uncoupled_group', 'uncoupled_group_fsid',
+              'merged_groups')
 
     def __init__(self, **kwargs):
         super(RestoreGroupJob, self).__init__(**kwargs)
         self.type = JobTypes.TYPE_RESTORE_GROUP_JOB
+
+    @classmethod
+    def new(cls, *args, **kwargs):
+        job = super(RestoreGroupJob, cls).new(*args, **kwargs)
+        try:
+            if 'uncoupled_group' in kwargs:
+                unc_group = storage.groups[kwargs['uncoupled_group']]
+                job.uncoupled_group_fsid = str(unc_group.node_backends[0].fs.fsid)
+        except Exception:
+            job.release_locks()
+            raise
+        return job
 
     def check_node_backends(self, group):
         if len(group.node_backends) != 1:

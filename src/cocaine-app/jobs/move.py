@@ -31,13 +31,24 @@ class MoveJob(Job):
     MERGE_GROUP_FILE_MARKER_PATH = config.get('restore', {}).get('merge_group_file_marker', None)
     MERGE_GROUP_FILE_DIR_MOVE_SRC_RENAME = config.get('restore', {}).get('merge_group_file_dir_move_src_rename', None)
 
-    PARAMS = ('group', 'uncoupled_group', 'merged_groups',
+    PARAMS = ('group', 'uncoupled_group', 'uncoupled_group_fsid', 'merged_groups',
               'src_host', 'src_port', 'src_backend_id', 'src_family', 'src_base_path',
               'dst_host', 'dst_port', 'dst_backend_id', 'dst_family', 'dst_base_path')
 
     def __init__(self, **kwargs):
         super(MoveJob, self).__init__(**kwargs)
         self.type = JobTypes.TYPE_MOVE_JOB
+
+    @classmethod
+    def new(cls, *args, **kwargs):
+        job = super(MoveJob, cls).new(*args, **kwargs)
+        try:
+            unc_group = storage.groups[kwargs['uncoupled_group']]
+            job.uncoupled_group_fsid = str(unc_group.node_backends[0].fs.fsid)
+        except Exception:
+            job.release_locks()
+            raise
+        return job
 
     @property
     def src_node_backend(self):

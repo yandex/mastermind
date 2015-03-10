@@ -708,63 +708,143 @@ class Planner(object):
 
         return job.dump()
 
+    # def account_job(self, ns_current_state, types, job, ns):
+
+    #     logger.info('Accounting job {0}'.format(job.id))
+
+    #     if getattr(job, 'uncoupled_group', None) is None:
+    #         logger.error('No uncoupled group found for job {0}'.format(job.id))
+    #         return ns_current_state
+
+    #     try:
+    #         group = storage.groups[job.group]
+    #     except KeyError:
+    #         logger.warn('Group {0} is not found in storage (job {1})'.format(
+    #             job.group, job.id))
+    #         return ns_current_state
+    #     try:
+    #         uncoupled_group = storage.groups[job.uncoupled_group]
+    #     except KeyError:
+    #         logger.warn('Uncoupled group {0} is not found in storage (job {1})'.format(
+    #             job.group, job.id))
+    #         return ns_current_state
+
+    #     add_groups = []
+    #     remove_groups = []
+    #     try:
+    #         if group.couple.namespace != ns:
+    #             logger.info('Group {0} namespace is {1}, not applicable'.format(
+    #                 group.group_id, group.couple.namespace))
+    #             return ns_current_state
+    #     except ValueError:
+    #         logger.error('Failed to fetch group\'s {0} namespace'.format(group.group_id))
+    #         return ns_current_state
+
+    #     if group.couple.status in (storage.Status.OK, storage.Status.FULL):
+    #         remove_groups.append(group)
+    #         # add_groups.append(uncoupled_group)
+    #     else:
+    #         # add_groups.append(uncoupled_group)
+    #         add_groups.extend(group.coupled_groups)
+
+    #     for group, diff in zip(remove_groups + add_groups,
+    #             [-1] * len(remove_groups) + [1] * len(add_groups)):
+
+    #         if not group.node_backends:
+    #             logger.debug('No node backend for group {0}, job for group {1}'.format(group.group_id, job.group))
+    #             continue
+    #         cur_node = group.node_backends[0].node.host.parents
+    #         while cur_node:
+    #             if cur_node['type'] in types:
+    #                 ns_current_type_state = ns_current_state[cur_node['type']]
+    #                 ns_current_type_state['nodes'][cur_node['full_path']] += diff
+    #                 ns_current_type_state['avg'] += float(diff) / len(ns_current_type_state['nodes'])
+    #             cur_node = cur_node.get('parent')
+
+    #     logger.info('Accounting job {0} completed'.format(job.id, ns_current_state))
+    #     logger.debug('State after accounting job {0}: {1}'.format(job.id, ns_current_state))
+
+    #     return ns_current_state
+
     def account_job(self, ns_current_state, types, job, ns):
 
-        logger.info('Accounting job {0}'.format(job.id))
-
-        if getattr(job, 'uncoupled_group', None) is None:
-            logger.error('No uncoupled group found for job {0}'.format(job.id))
-            return ns_current_state
+        add_groups = []
+        remove_groups = []
+        uncoupled_group_in_job = False
 
         try:
             group = storage.groups[job.group]
         except KeyError:
-            logger.warn('Group {0} is not found in storage (job {1})'.format(
+            logger.error('Group {0} is not found in storage (job {1})'.format(
                 job.group, job.id))
-            return ns_current_state
-        try:
-            uncoupled_group = storage.groups[job.uncoupled_group]
-        except KeyError:
-            logger.warn('Uncoupled group {0} is not found in storage (job {1})'.format(
-                job.group, job.id))
-            return ns_current_state
+            return
 
-        add_groups = []
-        remove_groups = []
-        try:
-            if group.couple.namespace != ns:
-                logger.info('Group {0} namespace is {1}, not applicable'.format(
-                    group.group_id, group.couple.namespace))
-                return ns_current_state
-        except ValueError:
-            logger.error('Failed to fetch group\'s {0} namespace'.format(group.group_id))
-            return ns_current_state
+        if getattr(job, 'uncoupled_group', None) is not None:
+            uncoupled_group_in_job = True
+            try:
+                uncoupled_group = storage.groups[job.uncoupled_group]
+            except KeyError:
+                logger.warn('Uncoupled group {0} is not found in storage '
+                    '(job {1})'.format(job.uncoupled_group, job.id))
+                pass
+            else:
+                uncoupled_group_fsid = job.uncoupled_group_fsid
+                if uncoupled_group_fsid is None:
+                    uncoupled_group_fsid = (uncoupled_group.node_backends and
+                        uncoupled_group.node_backends[0].fs.fsid or None)
+                if uncoupled_group_fsid:
+                    add_groups.append((uncoupled_group, uncoupled_group_fsid))
+                else:
+                    logger.warn('Uncoupled group {0} has empty backend list '
+                        '(job {1})'.format(job.uncoupled_group, job.id))
 
-        if group.couple.status in (storage.Status.OK, storage.Status.FULL):
-            remove_groups.append(group)
-            add_groups.append(uncoupled_group)
-        else:
-            add_groups.append(uncoupled_group)
-            add_groups.extend(group.coupled_groups)
+        # GOOD_STATUSES includes FULL status, but ns_current_state only accounts OK couples!
+        # Change behaviour
+        if group.couple.status not in storage.GOOD_STATUSES:
+            for g in group.coupled_groups:
+                for fsid in set(nb.fs.fsid for nb in g.node_backends):
+                    add_groups.append((g, fsid))
 
-        for group, diff in zip(remove_groups + add_groups,
-                [-1] * len(remove_groups) + [1] * len(add_groups)):
+        if uncoupled_group_in_job and group.couple.status in storage.GOOD_STATUSES:
+            remove_groups.append((group, group.node_backends[0].fs.fsid))
+
+        if (job.type == jobs.JobTypes.TYPE_RESTORE_GROUP_JOB and
+            not uncoupled_group_in_job and
+            group.couple.status not in storage.GOOD_STATUSES):
+
+            # try to add restoring group backend if mastermind knows about it
+            if group.node_backends:
+                add_groups.append((group, group.node_backends[0].fs.fsid))
+
+        # applying accounting
+        dc_node_type = inventory.get_dc_node_type()
+        for (group, fsid), diff in zip(remove_groups + add_groups,
+            [-1] * len(remove_groups) + [1] * len(add_groups)):
+
+            logger.debug('Accounting group {0}, fsid {1}, diff {2}'.format(group.group_id, fsid, diff))
 
             if not group.node_backends:
                 logger.debug('No node backend for group {0}, job for group {1}'.format(group.group_id, job.group))
                 continue
+
             cur_node = group.node_backends[0].node.host.parents
+
             while cur_node:
                 if cur_node['type'] in types:
                     ns_current_type_state = ns_current_state[cur_node['type']]
                     ns_current_type_state['nodes'][cur_node['full_path']] += diff
                     ns_current_type_state['avg'] += float(diff) / len(ns_current_type_state['nodes'])
+                    if cur_node['type'] == 'host' and 'hdd' in types:
+                        hdd_path = cur_node['full_path'] + '|' + str(fsid)
+                        ns_hdd_type_state = ns_current_state['hdd']
+                        if hdd_path in ns_hdd_type_state['nodes']:
+                            ns_hdd_type_state['nodes'][hdd_path] += diff
+                            ns_hdd_type_state['avg'] += float(diff) / len(ns_hdd_type_state['nodes'])
+                        else:
+                            logger.warn('Hdd path {0} is not found under host {1}'.format(
+                                hdd_path, cur_node['full_path']))
                 cur_node = cur_node.get('parent')
 
-        logger.info('Accounting job {0} completed'.format(job.id, ns_current_state))
-        logger.debug('State after accounting job {0}: {1}'.format(job.id, ns_current_state))
-
-        return ns_current_state
 
     def get_suitable_uncoupled_groups_list(self, group, uncoupled_groups):
         logger.debug('{0}, {1}'.format(group.group_id, [g.group_id for g in group.coupled_groups]))
@@ -818,6 +898,7 @@ class Planner(object):
 
         host_addr = nodes_set[0][0]
         old_host_tree = infrastructure.get_host_tree(infrastructure.get_hostname_by_addr(host_addr))
+        logger.info('Old host tree: {0}'.format(old_host_tree))
 
         uncoupled_groups = get_good_uncoupled_groups(max_node_backends=1)
         groups_by_dc = {}
@@ -919,7 +1000,7 @@ class Planner(object):
                       jobs.Job.STATUS_PENDING,
                       jobs.Job.STATUS_BROKEN))
         for job in active_jobs:
-            ns_current_state = self.account_job(ns_current_state, types, job, ns)
+            self.account_job(ns_current_state, types, job, ns)
 
         logger.debug('Current ns {0} state after applied jobs: {1}'.format(
             ns, ns_current_state))
