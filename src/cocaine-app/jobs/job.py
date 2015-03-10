@@ -99,8 +99,8 @@ class Job(MongoObject):
 
         try:
             job.mark_groups(session)
-        except RuntimeError:
-            logger.error('Job {0}: failed to mark required groups'.format(job.id))
+        except Exception as e:
+            logger.error('Job {0}: failed to mark required groups: {1}'.format(job.id, e))
             job.release_locks()
             raise
 
@@ -227,19 +227,15 @@ class Job(MongoObject):
 
 
     def mark_groups(self, session):
-        try:
-            for group_id, updated_meta in self._group_marks():
-                s = session.clone()
-                s.set_groups([group_id])
-                packed = msgpack.packb(updated_meta)
-                _, failed_group = h.write_retry(
-                    s, keys.SYMMETRIC_GROUPS_KEY, packed)
-                if failed_group:
-                    raise RuntimeError('Failed to mark group {0}'.format(
-                        group_id))
-        except Exception as e:
-            logger.error('Job {0}: {1}'.format(self.id, e))
-            raise
+        for group_id, updated_meta in self._group_marks():
+            s = session.clone()
+            s.set_groups([group_id])
+            packed = msgpack.packb(updated_meta)
+            _, failed_group = h.write_retry(
+                s, keys.SYMMETRIC_GROUPS_KEY, packed)
+            if failed_group:
+                raise RuntimeError('Failed to mark group {0}'.format(
+                    group_id))
 
     def _group_marks(self):
         """
