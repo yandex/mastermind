@@ -76,12 +76,7 @@ def ip_to_family(ip):
 def try_convert_group_history(index):
     try:
         data = msgpack.unpackb(index.data)
-        if data['id'] != 10:
-            return
-        # print
-        # print data
         for node_set in data['nodes']:
-            # updated_node_sets = []
             updated_node_set = []
             for node in node_set['set']:
                 record = []
@@ -96,16 +91,13 @@ def try_convert_group_history(index):
                     record.append(ip_to_family(node[0]))
                     record.extend(node[2:4])
                 elif len(node) == 5:
-                    #raise ValueError('Group {0} is already converted'.format(data['id']))
                     record.extend(node)
                 else:
                     raise ValueError('Group {0} history record is strange: {1}'.format(data['id'], data))
                 updated_node_set.append(tuple(record))
-            # updated_node_sets.append(tuple(updated_node_set))
             node_set['set'] = tuple(updated_node_set)
             if not 'type' in node_set:
                 node_set['type'] = 'automatic'
-        # data['nodes'][] = tuple(updated_node_sets)
 
         # print data
         eid = meta_session.transform('mastermind:group_%d' % data['id'])
@@ -125,9 +117,6 @@ if __name__ == '__main__':
     if len(sys.argv) < 2 or sys.argv[1] not in ('convert',):
         print "Usage: {0} convert".format(sys.argv[0])
         sys.exit(1)
-
-    # max_group_id = get_max_group_id()
-    # print "Max group id: {0}".format(max_group_id)
 
     convert_groups_history()
 
