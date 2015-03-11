@@ -189,6 +189,24 @@ class RestoreGroupJob(Job):
 
             self.tasks.append(task)
 
+        src_backend = src_group.node_backends[0]
+        make_readonly = src_backend.status == storage.Status.OK
+
+        if make_readonly:
+            make_readonly_cmd = infrastructure._make_readonly_node_backend_cmd(
+                src_backend.node.host.addr, src_backend.node.port,
+                src_backend.node.family, src_backend.backend_id)
+
+            task = MinionCmdTask.new(self,
+                host=src_backend.node.host.addr,
+                cmd=make_readonly_cmd,
+                params={'node_backend': self.node_backend(
+                    src_backend.node.host.addr, src_backend.node.port,
+                    src_backend.backend_id).encode('utf-8')
+                })
+
+            self.tasks.append(task)
+
         move_cmd = infrastructure.move_group_cmd(
             src_host=src_group.node_backends[0].node.host.addr,
             src_path=src_group.node_backends[0].base_path,
@@ -215,6 +233,7 @@ class RestoreGroupJob(Job):
             rsync_cmd = infrastructure.move_group_cmd(
                 src_host=src_group.node_backends[0].node.host.addr,
                 src_path=src_group.node_backends[0].base_path,
+                src_family=src_group.node_backends[0].node.family,
                 dst_path=os.path.join(dst_base_path, dst_file_path),
                 file_tpl=src_file_tpl)
 
@@ -309,6 +328,21 @@ class RestoreGroupJob(Job):
                                  cmd=start_cmd,
                                  params={'node_backend': dst_node_backend.encode('utf-8')})
         self.tasks.append(task)
+
+        if make_readonly:
+            make_writable_cmd = infrastructure._make_writable_node_backend_cmd(
+                src_backend.node.host.addr, src_backend.node.port,
+                src_backend.node.family, src_backend.backend_id)
+
+            task = MinionCmdTask.new(self,
+                host=src_backend.node.host.addr,
+                cmd=make_writable_cmd,
+                params={'node_backend': self.node_backend(
+                    src_backend.node.host.addr, src_backend.node.port,
+                    src_backend.backend_id).encode('utf-8')
+                })
+
+            self.tasks.append(task)
 
     @property
     def _involved_groups(self):
