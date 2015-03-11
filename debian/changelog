@@ -1,3 +1,9 @@
+mastermind (2.20.2) lucid; urgency=low
+
+  * Group history unified
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 11 Mar 2015 19:39:12 +0300
+
 mastermind (2.20.1) lucid; urgency=low
 
   * Restore job: make src backend readonly if possible to prevent blob truncation
