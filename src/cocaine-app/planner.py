@@ -1,4 +1,4 @@
-from copy import copy
+from copy import copy, deepcopy
 import itertools
 import heapq
 from logging import getLogger
@@ -989,7 +989,8 @@ class Planner(object):
         units = infrastructure.groups_units(uncoupled_groups, types)
 
         ns_current_state = infrastructure.ns_current_state(nodes, types[1:])
-        logger.debug('Current ns {0} state: {1}'.format(ns, ns_current_state))
+        logger.debug('Current ns {0} dc state: {1}'.format(
+            ns, ns_current_state[inventory.get_dc_node_type()]))
 
         active_jobs = self.job_processor.jobs(
             types=(jobs.JobTypes.TYPE_MOVE_JOB,
@@ -999,11 +1000,19 @@ class Planner(object):
                       jobs.Job.STATUS_EXECUTING,
                       jobs.Job.STATUS_PENDING,
                       jobs.Job.STATUS_BROKEN))
-        for job in active_jobs:
-            self.account_job(ns_current_state, types, job, ns)
 
-        logger.debug('Current ns {0} state after applied jobs: {1}'.format(
-            ns, ns_current_state))
+        def log_ns_current_state_diff(ns1, ns2, tpl):
+            node_type = 'hdd'
+            for k in ns1[node_type]['nodes']:
+                if ns1[node_type]['nodes'][k] != ns2[node_type]['nodes'][k]:
+                    logger.debug(tpl.format(
+                        k, ns1[node_type]['nodes'][k], ns2[node_type]['nodes'][k]))
+
+        for job in active_jobs:
+            cmp_ns_current_state = deepcopy(ns_current_state)
+            self.account_job(ns_current_state, types, job, ns)
+            log_ns_current_state_diff(cmp_ns_current_state, ns_current_state,
+                'Applying job {0}, path {{0}}, old value: {{1}}, new value: {{2}}'.format(job.id))
 
         cur_node = tree
 
@@ -1028,9 +1037,6 @@ class Planner(object):
 
                 heapq.heappush(weights, (weight, candidate))
 
-            logger.debug('Level {0}, ns {1} current state: {2}'.format(
-                level_type, ns, ns_current_type_state))
-
             max_weight = weights[0][0]
             selected_candidates = []
             while weights:
@@ -1039,8 +1045,8 @@ class Planner(object):
                     break
                 selected_candidates.append(c[1])
 
-            logger.debug('Level {0}, min weight candidates: {1}'.format(
-                level_type, [[g.group_id for g in c] for c in selected_candidates]))
+            logger.debug('Level {0}, ns {1}, min weight candidates: {2}'.format(
+                level_type, ns, [[g.group_id for g in c] for c in selected_candidates]))
 
             candidates = selected_candidates
 
