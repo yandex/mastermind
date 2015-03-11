@@ -1,3 +1,11 @@
+mastermind (2.18.15) lucid; urgency=low
+
+  * Logging for move group planner improved
+  * Refactored job accounting: now it should properly account destination hdds of existing jobs
+  * Fix for lock release on error during groups' marking
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 11 Mar 2015 14:45:53 +0300
+
 mastermind (2.18.14) lucid; urgency=low
 
   * Logging requests and test handler for ns_current_state logging
