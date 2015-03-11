@@ -333,22 +333,28 @@ def group_search_by_path(group_host, group_path,
     s = service(host, app)
 
     try:
-        ip = socket.gethostbyname(group_host)
+        ips = set()
+        addrinfo = socket.getaddrinfo(group_host, 1025)
+        for res in addrinfo:
+            ips.add(res[4][0])
     except Exception:
         print warn('Failed to resolve hostname {0}'.format(group_host))
         return
 
     group_path = os.path.normpath(group_path) + '/'
 
-    res = s.enqueue('search_history_by_path', msgpack.packb([
-        {'host': ip,
-         'path': group_path,
-         'last': last}])).get()
+    ips_res = []
+    for ip in ips:
+        res = s.enqueue('search_history_by_path', msgpack.packb([
+            {'host': ip,
+             'path': group_path,
+             'last': last}])).get()
 
-    if isinstance(res, dict):
-        # error
-        print res
-        return
+        if isinstance(res, dict):
+            # error
+            print res
+        else:
+            ips_res.extend(res)
 
     if json:
         print dumps(res)
@@ -356,7 +362,7 @@ def group_search_by_path(group_host, group_path,
 
     print color('{0:^25} | {1:^10} | {2:^50} | {3:^15}'.format(
         'Date', 'Group id', 'Nodes', 'Type of record'), GREEN)
-    for r in res:
+    for r in ips_res:
         for nodes in r['set'][:1]:
             print '{0:25} | {1:>10} | {2:50} | {3}'.format(
                 ts_to_dt(r['timestamp']), r['group'], nodes, r['type'])
