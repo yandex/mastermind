@@ -102,7 +102,7 @@ class Statistics(object):
             logger.error('Failed to calculate namespace statistics')
             return ns_stats
 
-        ns_eff, dc_eff = self.effective_space()
+        dc_eff, ns_eff = self.effective_space()
 
         for ns, stats in per_ns_stat.iteritems():
             try:
