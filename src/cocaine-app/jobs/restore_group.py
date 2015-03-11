@@ -74,7 +74,7 @@ class RestoreGroupJob(Job):
             # gettings dst_* from group history
             dst_host, dst_port, dst_backend_id = old_host, old_port, old_backend_id
             # TODO: Fix hardcoded family value
-            dst_base_path, dst_family = old_base_path, 2
+            dst_base_path, dst_family = old_base_path, old_family
 
         dst_node_backend = self.node_backend(dst_host, dst_port, dst_backend_id)
 
