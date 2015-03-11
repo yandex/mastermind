@@ -1,3 +1,9 @@
+mastermind (2.20.3) lucid; urgency=low
+
+  * Fix for search-by-path using ipv6 ip addrs
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 11 Mar 2015 20:11:59 +0300
+
 mastermind (2.20.2) lucid; urgency=low
 
   * Group history unified
