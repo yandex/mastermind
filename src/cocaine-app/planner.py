@@ -423,8 +423,12 @@ class Planner(object):
         keys_diffs = {}
         ts_diffs = {}
 
+        coupled_locks = sync_manager.get_children_locks(jobs.Job.COUPLE_LOCK_PREFIX)
+        locked_couples = set([lock[len(jobs.Job.COUPLE_LOCK_PREFIX):] for lock in coupled_locks])
+        logger.debug('Locked couples: {0}'.format(locked_couples))
+
         for couple in storage.couples.keys():
-            if not _recovery_applicable_couple(couple):
+            if not _recovery_applicable_couple(couple, locked_couples=locked_couples):
                 continue
             c_diff = couple.keys_diff
             keys_diffs_sorted.append((str(couple), c_diff))
@@ -790,64 +794,6 @@ class Planner(object):
 
         return job.dump()
 
-    # def account_job(self, ns_current_state, types, job, ns):
-
-    #     logger.info('Accounting job {0}'.format(job.id))
-
-    #     if getattr(job, 'uncoupled_group', None) is None:
-    #         logger.error('No uncoupled group found for job {0}'.format(job.id))
-    #         return ns_current_state
-
-    #     try:
-    #         group = storage.groups[job.group]
-    #     except KeyError:
-    #         logger.warn('Group {0} is not found in storage (job {1})'.format(
-    #             job.group, job.id))
-    #         return ns_current_state
-    #     try:
-    #         uncoupled_group = storage.groups[job.uncoupled_group]
-    #     except KeyError:
-    #         logger.warn('Uncoupled group {0} is not found in storage (job {1})'.format(
-    #             job.group, job.id))
-    #         return ns_current_state
-
-    #     add_groups = []
-    #     remove_groups = []
-    #     try:
-    #         if group.couple.namespace != ns:
-    #             logger.info('Group {0} namespace is {1}, not applicable'.format(
-    #                 group.group_id, group.couple.namespace))
-    #             return ns_current_state
-    #     except ValueError:
-    #         logger.error('Failed to fetch group\'s {0} namespace'.format(group.group_id))
-    #         return ns_current_state
-
-    #     if group.couple.status in (storage.Status.OK, storage.Status.FULL):
-    #         remove_groups.append(group)
-    #         # add_groups.append(uncoupled_group)
-    #     else:
-    #         # add_groups.append(uncoupled_group)
-    #         add_groups.extend(group.coupled_groups)
-
-    #     for group, diff in zip(remove_groups + add_groups,
-    #             [-1] * len(remove_groups) + [1] * len(add_groups)):
-
-    #         if not group.node_backends:
-    #             logger.debug('No node backend for group {0}, job for group {1}'.format(group.group_id, job.group))
-    #             continue
-    #         cur_node = group.node_backends[0].node.host.parents
-    #         while cur_node:
-    #             if cur_node['type'] in types:
-    #                 ns_current_type_state = ns_current_state[cur_node['type']]
-    #                 ns_current_type_state['nodes'][cur_node['full_path']] += diff
-    #                 ns_current_type_state['avg'] += float(diff) / len(ns_current_type_state['nodes'])
-    #             cur_node = cur_node.get('parent')
-
-    #     logger.info('Accounting job {0} completed'.format(job.id, ns_current_state))
-    #     logger.debug('State after accounting job {0}: {1}'.format(job.id, ns_current_state))
-
-    #     return ns_current_state
-
     def account_job(self, ns_current_state, types, job, ns):
 
         add_groups = []
@@ -1134,8 +1080,10 @@ class Planner(object):
 
         return candidates[0]
 
-def _recovery_applicable_couple(couple):
+def _recovery_applicable_couple(couple, locked_couples=None):
     if couple.status not in storage.GOOD_STATUSES:
+        return False
+    if locked_couples and str(couple) in locked_couples:
         return False
     return True
 

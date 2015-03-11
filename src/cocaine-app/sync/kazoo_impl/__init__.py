@@ -139,7 +139,7 @@ class ZkSyncManager(object):
         full_path = self.lock_path_prefix + lock_prefix
         self.client.ensure_path(os.path.normpath(full_path))
         result = self.client.get_children(full_path)
-        return ['{0}/{1}'.format(lock_prefix, lock) for lock in result]
+        return ['{0}{1}'.format(lock_prefix, lock) for lock in result]
 
     def persistent_locks_release(self, locks, check=''):
         try:
