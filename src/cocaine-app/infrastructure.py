@@ -125,16 +125,8 @@ class Infrastructure(object):
         nodes_history = []
         for node_set in self.state[group_id]['nodes']:
 
-            nb_list = []
-            for node in node_set['set']:
-                if len(node) == 2:
-                    # old version history
-                    nb_list.append(node + (port_to_path(node[1]),))
-                else:
-                    nb_list.append(node)
-
             nodes_history.append(
-                {'set': nb_list,
+                {'set': node_set['set'],
                  'timestamp': node_set['timestamp'],
                  'type': self.__node_state_type(node_set)
                 })
@@ -150,7 +142,7 @@ class Infrastructure(object):
             if len(k) == 2:
                 # old style history record
                 continue
-            nb_host, nb_port, nb_backend_id = k[:3]
+            nb_host, nb_port, nb_family, nb_backend_id = k[:4]
             if host == nb_host and port == nb_port and backend_id == nb_backend_id:
                 return True
 
@@ -201,7 +193,7 @@ class Infrastructure(object):
                         if self.__node_state_type(nodes_state) != self.HISTORY_RECORD_AUTOMATIC:
                             nodes_set = set(nodes_state['set'])
                             for nb in group.node_backends:
-                                if not (nb.node.host.addr, nb.node.port, nb.backend_id, nb.base_path) in nodes_set:
+                                if not (nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id, nb.base_path) in nodes_set:
                                     logger.info('Removing {0} from group {1} due to manual group detaching'.format(nb, group.group_id))
                                     group.remove_node_backend(nb)
                             group.update_status_recursive()
@@ -251,7 +243,7 @@ class Infrastructure(object):
                 group_state = self.state.get(g.group_id,
                                              self._new_group_state(g.group_id))
 
-                storage_nodes = tuple((nb.node.host.addr, nb.node.port, nb.backend_id, nb.base_path)
+                storage_nodes = tuple((nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id, nb.base_path)
                                       for nb in g.node_backends if nb.stat)
                 storage_couple = (tuple([group.group_id for group in g.couple])
                                   if g.couple is not None else
@@ -396,7 +388,7 @@ class Infrastructure(object):
                 if len(state_node) == 2:
                     # old elliptics pre-26 record, should not be removed
                     continue
-                state_host, state_port, state_backend_id = state_node[:3]
+                state_host, state_port, state_family, state_backend_id = state_node[:4]
                 if state_host == host and state_port == port and state_backend_id == backend_id:
                     logger.debug('Removing node backend {0}:{1}/{2} from '
                         'group {3} history state'.format(host, port, backend_id, group.group_id))
@@ -439,10 +431,9 @@ class Infrastructure(object):
     @h.concurrent_handler
     def start_node_cmd(self, request):
 
-        host, port = request[:2]
+        host, port, family = request[:3]
 
-        # TODO: Fix family value
-        cmd = inventory.node_start_command(host, port, 2)
+        cmd = inventory.node_start_command(host, port, family)
 
         if cmd is None:
             raise RuntimeError('Node start command is not provided '
@@ -664,16 +655,6 @@ class Infrastructure(object):
             path = path + '$'
         path = path.replace('*', '.*')
 
-        def convert(node_set):
-            nb_list = []
-            for node in node_set['set']:
-                if len(node) == 2:
-                    # old version history
-                    nb_list.append(node + (port_to_path(node[1]),))
-                else:
-                    nb_list.append(node)
-            return nb_list
-
         start_idx = 0
         if params.get('last', False):
             start_idx = -1
@@ -683,11 +664,7 @@ class Infrastructure(object):
                 ts = node_set['timestamp']
                 for node in node_set['set']:
 
-                    if len(node) == 2:
-                        # old version history
-                        node_path = port_to_path(node[1])
-                    else:
-                        node_path = node[3]
+                    node_path = node[4]
 
                     if not node_path:
                         continue
@@ -701,7 +678,7 @@ class Infrastructure(object):
 
         for entry in entries:
             result.append({'group': entry[1],
-                           'set': convert(entry[2]),
+                           'set': entry[2]['set'],
                            'timestamp': entry[0],
                            'type': self.__node_state_type(entry[2])})
 
@@ -996,13 +973,7 @@ class HostnameCacheItem(CacheItem):
         super(HostnameCacheItem, self).__init__(*args, **kwargs)
 
     def get_value(self, key):
-        try:
-            return socket.gethostbyaddr(key)[0]
-        except socket.herror as e:
-            if e.errno == 1:
-                # unknown host
-                return 'unresolved'
-            raise
+        return socket.gethostbyaddr(key)[0]
 
 
 class HostTreeCacheItem(CacheItem):

@@ -59,13 +59,7 @@ class RestoreGroupJob(Job):
             raise JobBrokenError('History of group {0} lists {1} '
                 'node backends, 1 expected'.format(self.group, len(old_group_state)))
 
-        if len(old_group_state[0]) == 3:
-            # convert old version port to new backend id
-            old_host, old_version_port, old_base_path = old_group_state[0][:3]
-            old_backend_id = old_version_port - BASE_PORT
-            old_port = BASE_PORT + 1
-        else:
-            old_host, old_port, old_backend_id, old_base_path = old_group_state[0][:4]
+        old_host, old_port, old_family, old_backend_id, old_base_path = old_group_state[0][:5]
 
         if self.uncoupled_group:
             uncoupled_group = storage.groups[self.uncoupled_group]
