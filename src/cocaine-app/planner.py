@@ -706,9 +706,6 @@ class Planner(object):
                     group.group_id, len(group.node_backends)))
 
         src_backend = group.node_backends[0]
-        if src_backend.status != storage.Status.OK:
-            raise ValueError('Group {0} node backend {1} status is {2}, should be {3}'.format(
-                group.group_id, src_backend, src_backend.status, storage.Status.OK))
 
         try:
             options = request[1]

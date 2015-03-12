@@ -74,6 +74,12 @@ class MoveJob(Job):
                         '{1}, because group {2} is already in dc {3}'.format(
                             self.group, self.uncoupled_group, g.group_id, ug_dc))
 
+        src_backend = group.node_backends[0]
+        if src_backend.status != storage.Status.OK:
+            raise JobBrokenError('Group {0} node backend {1} status is {2}, should be {3}'.format(
+                group.group_id, src_backend, src_backend.status, storage.Status.OK))
+
+
     def human_dump(self):
         data = super(MoveJob, self).human_dump()
         data['src_hostname'] = infrastructure.get_hostname_by_addr(data['src_host'])
