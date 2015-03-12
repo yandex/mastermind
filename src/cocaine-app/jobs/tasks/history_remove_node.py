@@ -70,7 +70,7 @@ class HistoryRemoveNodeTask(Task):
         logger.debug('Job {0}, task {1}: checking node backend {2} '
             'with group {3} node backends: {4}'.format(
                 self.parent_job.id, self.id, node_backend, group, group.node_backends))
-        nb_in_group = node_backend.group is group
+        nb_in_group = storage.node_backends[node_backend].group is group
 
         nb_in_history = infrastructure.node_backend_in_last_history_state(
             group.group_id, self.host, self.port, self.backend_id)
