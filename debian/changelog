@@ -1,3 +1,10 @@
+mastermind (2.20.4) lucid; urgency=low
+
+  * Jobs handler: move all groups from host
+  * Moved src backend status check to move job start phase instead of creation phase
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 13 Mar 2015 20:41:18 +0300
+
 mastermind (2.20.3) lucid; urgency=low
 
   * Fix for search-by-path using ipv6 ip addrs
