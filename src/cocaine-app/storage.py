@@ -466,6 +466,9 @@ class NodeBackend(object):
     def set_group(self, group):
         self.group = group
 
+    def remove_group(self):
+        self.group = None
+
     def disable(self):
         self.disabled = True
 
@@ -632,6 +635,8 @@ class Group(object):
 
     def remove_node_backend(self, node_backend):
         self.node_backends.remove(node_backend)
+        if node_backend.group is self:
+            node_backend.remove_group()
 
     def parse_meta(self, meta):
         if meta is None:
