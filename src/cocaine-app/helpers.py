@@ -1,10 +1,12 @@
 from collections import defaultdict
 from functools import wraps
 import logging
+import socket
 import traceback
 
 import elliptics
 from cocaine.futures import chain
+from config import config
 
 
 logger = logging.getLogger('mm.balancer')
@@ -85,3 +87,13 @@ def defaultdict_to_dict(d):
     for k, v in d.iteritems():
         res[k] = convert_value(v)
     return res
+
+
+def ips_set(hostname):
+    ips = set()
+    addrinfo = socket.getaddrinfo(hostname,
+        config.get('elliptics_base_port', 1024))
+    for res in addrinfo:
+        ips.add(res[4][0])
+
+    return ips

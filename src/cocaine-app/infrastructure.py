@@ -1,3 +1,4 @@
+from copy import deepcopy
 import keys
 import logging
 import operator
@@ -711,7 +712,7 @@ class Infrastructure(object):
             hosts = storage.hosts.keys()
 
         for host in hosts:
-            tree_node = host.parents
+            tree_node = deepcopy(host.parents)
             new_child = None
             while True:
                 parts = [tree_node['name']]
@@ -864,9 +865,18 @@ class Infrastructure(object):
                 units.setdefault(group.group_id, [])
 
                 parent = nb.node.host.parents
+
+                parts = []
+                cur_node = parent
+                while cur_node:
+                    parts.insert(0, cur_node['name'])
+                    cur_node = cur_node.get('parent')
+
                 while parent:
                     if parent['type'] in types:
-                        nb_units[parent['type']] = parent['full_path']
+                        full_path = '|'.join(reversed(parts))
+                        nb_units[parent['type']] = '|'.join(parts)
+                    parts.pop()
                     parent = parent.get('parent')
 
                 nb_units['hdd'] = (nb_units['host'] + '|' +

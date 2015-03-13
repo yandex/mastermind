@@ -3,6 +3,7 @@ import itertools
 import heapq
 from logging import getLogger
 import msgpack
+import socket
 import storage
 import threading
 import time
@@ -681,6 +682,50 @@ class Planner(object):
         return job.dump()
 
     @h.concurrent_handler
+    def move_groups_from_host(self, request):
+        try:
+            host_or_ip = request[0]
+        except IndexError:
+            raise ValueError('Host is required')
+
+        try:
+            hostname = socket.getfqdn(host_or_ip)
+        except Exception as e:
+            raise ValueError('Failed to get hostname for {0}: {1}'.format(host_or_ip, e))
+
+        try:
+            ips = h.ips_set(hostname)
+        except Exception as e:
+            raise ValueError('Failed to get ip list for {0}: {1}'.format(hostname, e))
+
+        res = {
+            'jobs': [],
+            'failed': {},
+        }
+
+        with sync_manager.lock(self.job_processor.JOBS_LOCK, timeout=self.job_processor.JOB_MANUAL_TIMEOUT):
+            for couple in storage.couples.keys():
+                for group in couple.groups:
+                    if len(group.node_backends) != 1:
+                        # skip group if more than one backend
+                        continue
+
+                    if group.node_backends[0].node.host.addr in ips:
+                        try:
+                            job_params = self._get_move_group_params(group)
+                            job = self.job_processor._create_job(
+                                jobs.JobTypes.TYPE_MOVE_JOB,
+                                job_params, force=True)
+                            res['jobs'].append(job.dump())
+                        except Exception as e:
+                            logger.error('Failed to create move job for group {0}: {1}\n{2}'.format(
+                                group.group_id, e, traceback.format_exc()))
+                            res['failed'][group.group_id] = str(e)
+                            pass
+
+        return res
+
+    @h.concurrent_handler
     def move_group(self, request):
         logger.info('----------------------------------------')
         logger.info('New move group request: ' + str(request))
@@ -696,6 +741,35 @@ class Planner(object):
             raise ValueError('Group {0} is not found'.format(request[0]))
 
         group = storage.groups[group_id]
+
+        try:
+            options = request[1]
+        except IndexError:
+            options = {}
+
+        try:
+            force = bool(request[2])
+        except IndexError:
+            force = False
+
+        uncoupled_groups = []
+        for gid in options.get('uncoupled_groups') or []:
+            if not gid in storage.groups:
+                raise ValueError('Uncoupled group {0} is not found'.format(gid))
+            uncoupled_groups.append(storage.groups[gid])
+
+        job_params = self._get_move_group_params(group, uncoupled_groups=uncoupled_groups)
+
+        with sync_manager.lock(self.job_processor.JOBS_LOCK, timeout=self.job_processor.JOB_MANUAL_TIMEOUT):
+            job = self.job_processor._create_job(
+                jobs.JobTypes.TYPE_MOVE_JOB,
+                job_params, force=force)
+
+        return job.dump()
+
+
+    def _get_move_group_params(self, group, uncoupled_groups=None):
+
         involved_groups = [group]
         involved_groups.extend(g for g in group.coupled_groups)
         self.node_info_updater.update_status(involved_groups)
@@ -707,26 +781,15 @@ class Planner(object):
 
         src_backend = group.node_backends[0]
 
-        try:
-            options = request[1]
-        except IndexError:
-            options = {}
-
-        uncoupled_group_ids = options.get('uncoupled_groups')
-        uncoupled_groups = []
-        if not uncoupled_group_ids:
+        if not uncoupled_groups:
             uncoupled_groups = self.select_uncoupled_groups(group)
             logger.info('Group {0} will be moved to uncoupled groups {1}'.format(
                 group.group_id, [g.group_id for g in uncoupled_groups]))
         else:
             dc, fsid = None, None
-            self.node_info_updater.update_status([storage.groups[g] for g in uncoupled_group_ids])
+            self.node_info_updater.update_status(uncoupled_groups)
             locked_hosts = manual_locker.get_locked_hosts()
-            for gid in uncoupled_group_ids:
-                if not gid in storage.groups:
-                    raise ValueError('Uncoupled group {0} is not found'.format(gid))
-                unc_group = storage.groups[gid]
-
+            for unc_group in uncoupled_groups:
                 if len(unc_group.node_backends) != 1:
                     raise ValueError('Group {0} has {1} node backends, currently '
                         'only groups with 1 node backend can be used'.format(
@@ -765,10 +828,6 @@ class Planner(object):
                         group.group_id, uncoupled_group.group_id,
                         group.couple, dst_backend.node.host.dc))
 
-        try:
-            force = bool(request[2])
-        except IndexError:
-            force = False
 
         job_params = {'group': group.group_id,
                       'uncoupled_group': uncoupled_group.group_id,
@@ -784,12 +843,7 @@ class Planner(object):
                       'dst_backend_id': dst_backend.backend_id,
                       'dst_base_path': dst_backend.base_path}
 
-        with sync_manager.lock(self.job_processor.JOBS_LOCK, timeout=self.job_processor.JOB_MANUAL_TIMEOUT):
-            job = self.job_processor._create_job(
-                jobs.JobTypes.TYPE_MOVE_JOB,
-                job_params, force=force)
-
-        return job.dump()
+        return job_params
 
     def account_job(self, ns_current_state, types, job, ns):
 
@@ -802,6 +856,12 @@ class Planner(object):
         except KeyError:
             logger.error('Group {0} is not found in storage (job {1})'.format(
                 job.group, job.id))
+            return
+
+        try:
+            if group.couple.namespace != ns:
+                return
+        except Exception:
             return
 
         if getattr(job, 'uncoupled_group', None) is not None:
@@ -854,20 +914,29 @@ class Planner(object):
 
             cur_node = group.node_backends[0].node.host.parents
 
+            parts = []
+            parent = cur_node
+            while parent:
+                parts.insert(0, parent['name'])
+                parent = parent.get('parent')
+
             while cur_node:
                 if cur_node['type'] in types:
                     ns_current_type_state = ns_current_state[cur_node['type']]
-                    ns_current_type_state['nodes'][cur_node['full_path']] += diff
+                    full_path = '|'.join(parts)
+                    ns_current_type_state['nodes'][full_path] += diff
                     ns_current_type_state['avg'] += float(diff) / len(ns_current_type_state['nodes'])
+
                     if cur_node['type'] == 'host' and 'hdd' in types:
-                        hdd_path = cur_node['full_path'] + '|' + str(fsid)
+                        hdd_path = full_path + '|' + str(fsid)
                         ns_hdd_type_state = ns_current_state['hdd']
                         if hdd_path in ns_hdd_type_state['nodes']:
                             ns_hdd_type_state['nodes'][hdd_path] += diff
                             ns_hdd_type_state['avg'] += float(diff) / len(ns_hdd_type_state['nodes'])
                         else:
                             logger.warn('Hdd path {0} is not found under host {1}'.format(
-                                hdd_path, cur_node['full_path']))
+                                hdd_path, full_path))
+                parts.pop()
                 cur_node = cur_node.get('parent')
 
 
@@ -972,23 +1041,6 @@ class Planner(object):
             [g.group_id for g in top_candidate]))
 
         return top_candidate
-
-    @h.concurrent_handler
-    def test_ns_current_state(self, request):
-        types = ['root'] + inventory.get_balancer_node_types() + ['hdd']
-        tree, nodes = infrastructure.filtered_cluster_tree(types)
-
-        ns = 'music'
-
-        infrastructure.account_ns_couples(tree, nodes, ns)
-        infrastructure.update_groups_list(tree)
-
-        uncoupled_groups = get_good_uncoupled_groups(max_node_backends=1)
-
-        ns_current_state = infrastructure.ns_current_state(nodes, types[1:])
-        logger.debug('Current ns {0} state: {1}'.format(ns, ns_current_state))
-
-        pass
 
     def select_uncoupled_groups(self, group):
         if len(group.node_backends) != 1:

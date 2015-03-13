@@ -798,6 +798,33 @@ def job_status(job_id,
         pprint(res)
 
 
+@jobDispatcher.command(name='move-groups')
+@log_action
+def job_move_groups(src_host,
+                    host=None, app=None):
+    '''Create jobs to move all groups' node backends from source host.
+       Mastermind will try to preserve namespace balance across storage.
+       Applicable only for single node backend groups'''
+    s = service(host, app)
+
+    res = s.enqueue('move_groups_from_host', msgpack.packb([src_host])).get()
+
+    if not 'jobs' in res:
+        print res
+        return 1
+
+    if res['jobs']:
+        print color('Created jobs:', GREEN)
+        for job in res['jobs']:
+            print '{group_id}: {job_id}'.format(group_id=job['group'], job_id=job['id'])
+        print
+
+    if res['failed']:
+        print color('Failed groups', RED)
+        for group_id, err in res['failed'].iteritems():
+            print '{group_id}: {err}'.format(group_id=group_id, err=err)
+        print
+
 
 # namespace commands
 nsDispatcher = Dispatcher(globaloptions=(host_param, app_param))

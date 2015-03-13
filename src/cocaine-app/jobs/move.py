@@ -79,7 +79,6 @@ class MoveJob(Job):
             raise JobBrokenError('Group {0} node backend {1} status is {2}, should be {3}'.format(
                 group.group_id, src_backend, src_backend.status, storage.Status.OK))
 
-
     def human_dump(self):
         data = super(MoveJob, self).human_dump()
         data['src_hostname'] = infrastructure.get_hostname_by_addr(data['src_host'])

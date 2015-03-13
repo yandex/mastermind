@@ -205,7 +205,7 @@ def init_planner(job_processor, niu):
     planner = Planner(n.meta_session, meta_db, niu, job_processor)
     register_handle(planner.restore_group)
     register_handle(planner.move_group)
-    register_handle(planner.test_ns_current_state)
+    register_handle(planner.move_groups_from_host)
     return planner
 
 
