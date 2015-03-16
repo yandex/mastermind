@@ -37,6 +37,9 @@ class RecoverDcJob(Job):
             couple = storage.couples[kwargs['couple']]
             keys = []
             for g in couple.groups:
+                if not g.node_backends:
+                    raise JobBrokenError('Group {0} has no active backends, '
+                        'cannot create recover job'.format(g.group_id))
                 keys.append(g.get_stat().files)
             keys.sort(reverse=True)
             job.keys = keys
