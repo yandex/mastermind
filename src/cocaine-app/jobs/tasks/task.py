@@ -15,6 +15,7 @@ class Task(object):
         self.type = None
         self.start_ts = None
         self.finish_ts = None
+        self.attempts = 0
         self.error_msg = []
         self.parent_job = job
 
@@ -51,6 +52,7 @@ class Task(object):
         self.start_ts = data['start_ts']
         self.finish_ts = data['finish_ts']
         self.error_msg = data['error_msg']
+        self.attempts = data['attempts']
 
         for param in self.PARAMS:
             val = data.get(param, None)
@@ -64,7 +66,8 @@ class Task(object):
                'type': self.type,
                'start_ts': self.start_ts,
                'finish_ts': self.finish_ts,
-               'error_msg': self.error_msg}
+               'error_msg': self.error_msg,
+               'attempts': self.attempts}
         res.update(dict([(k, getattr(self, k)) for k in self.PARAMS]))
         return res
 

@@ -102,7 +102,7 @@ class Minions(object):
 
                 try:
                     data = self._get_response(host, response)
-                except ValueError as e:
+                except HTTPError as e:
                     logger.error('Minion tasks fetch error: {0}'.format(e))
                     continue
                 try:
@@ -186,19 +186,20 @@ class Minions(object):
         return response_data
 
     def _get_response(self, host, response):
-        if isinstance(response, HTTPError):
-            error = response
-        else:
+        if response.error:
             error = response.error
-        if error:
-            code = error.code if hasattr(error, 'code') else 599
+            if not isinstance(error, HTTPError):
+                raise TypeError('Unexpected http error type "{0}": '
+                    '{1}'.format(type(error).__name__, error))
+            code = error.code
             if code == 599:
                 error_msg = ('Failed to connect to minion '
-                             'on host {0} ({1})'.format(host, error.message or str(error)))
+                             'on host {0} ({1})'.format(host, error.message))
             else:
                 error_msg = ('Minion http error on host {0}, '
                              'code {1} ({2})'.format(host, code, error.message))
-            raise ValueError(error_msg)
+            logger.error(error_msg)
+            raise error
 
         return response.body
 
@@ -248,15 +249,13 @@ class Minions(object):
                 raise ValueError('Only strings are accepted as command parameters')
             data[k] = v
 
-        try:
-            response = HTTPClient().fetch(url, method='POST',
-                                               headers=self.minion_headers,
-                                               body=urllib.urlencode(data),
-                                               request_timeout=5.0,
-                                               allow_ipv6=True,
-                                               use_gzip=True)
-        except HTTPError as e:
-            response = e
+        response = HTTPClient().fetch(url, method='POST',
+                                           headers=self.minion_headers,
+                                           body=urllib.urlencode(data),
+                                           request_timeout=5.0,
+                                           allow_ipv6=True,
+                                           use_gzip=True,
+                                           raise_error=False)
 
         data = self._process_state(host, self._get_response(host, response))
         return data
@@ -278,15 +277,13 @@ class Minions(object):
         url = self.TERMINATE_URL_TPL.format(host=host, port=self.minion_port)
         data = {'cmd_uid': uid}
 
-        try:
-            response = HTTPClient().fetch(url, method='POST',
-                                               headers=self.minion_headers,
-                                               body=urllib.urlencode(data),
-                                               request_timeout=5.0,
-                                               allow_ipv6=True,
-                                               use_gzip=True)
-        except HTTPError as e:
-            response = e
+        response = HTTPClient().fetch(url, method='POST',
+                                           headers=self.minion_headers,
+                                           body=urllib.urlencode(data),
+                                           request_timeout=5.0,
+                                           allow_ipv6=True,
+                                           use_gzip=True,
+                                           raise_error=False)
 
         data = self._process_state(host, self._get_response(host, response))
         return data
@@ -360,7 +357,8 @@ class AsyncHTTPBatch(object):
             return self.responses
         max_clients = len(self.urls)
         [AsyncHTTPClient(max_clients=max_clients).fetch(url, callback=self._process,
-            request_timeout=self.timeout, headers=self.headers, allow_ipv6=True) for url in self.urls]
+            request_timeout=self.timeout, headers=self.headers, allow_ipv6=True, raise_error=False)
+         for url in self.urls]
         logger.debug('Minion states, starting ioloop')
         self.ioloop.start()
         return self.responses

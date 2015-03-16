@@ -1,8 +1,10 @@
 import logging
 import time
 
+from tornado.httpclient import HTTPError
+
 from infrastructure import infrastructure
-from jobs import TaskTypes
+from jobs import TaskTypes, RetryError
 from task import Task
 
 
@@ -20,6 +22,12 @@ class MinionCmdTask(Task):
         self.minion_cmd_id = None
         self.type = TaskTypes.TYPE_MINION_CMD
 
+    @classmethod
+    def new(cls, job, **kwargs):
+        task = super(MinionCmdTask, cls).new(job, **kwargs)
+        task.params['task_id'] = task.id
+        return task
+
     def update_status(self, processor):
         try:
             self.minion_cmd = processor.minions._get_command(self.minion_cmd_id)
@@ -31,8 +39,11 @@ class MinionCmdTask(Task):
             pass
 
     def execute(self, processor):
-        minion_response = processor.minions._execute_cmd(self.host,
-            self.cmd, self.params)
+        try:
+            minion_response = processor.minions._execute_cmd(self.host,
+                self.cmd, self.params)
+        except HTTPError as e:
+            raise RetryError(self.attempts, e)
         self.minion_cmd = minion_response.values()[0]
         logger.info('Job {0}, task {1}, minions task execution: {2}'.format(
             self.parent_job.id, self.id, self.minion_cmd))
