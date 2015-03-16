@@ -9,7 +9,7 @@ import elliptics
 from config import config
 from db.mongo.pool import Collection
 import errors
-from error import JobBrokenError
+from error import JobBrokenError, RetryError
 import helpers as h
 from job_types import JobTypes, TaskTypes
 from job import Job
@@ -34,6 +34,8 @@ from sync.error import (
 
 
 logger = logging.getLogger('mm.jobs')
+
+JOB_CONFIG = config.get('jobs', {})
 
 
 class JobProcessor(object):
@@ -104,7 +106,7 @@ class JobProcessor(object):
                     executing_jobs.append(job)
                 for job in self.jobs(statuses=Job.STATUS_NEW):
                     jobs_count = type_jobs_count.setdefault(job.type, 0)
-                    if jobs_count >= config.get('jobs', {}).get(job.type, {}).get('max_executing_jobs', 3):
+                    if jobs_count >= JOB_CONFIG.get(job.type, {}).get('max_executing_jobs', 3):
                         continue
                     type_jobs_count[job.type] += 1
                     new_jobs.append(job)
@@ -134,7 +136,7 @@ class JobProcessor(object):
         finally:
             logger.info('Jobs execution finished')
             self.__tq.add_task_in(self.JOBS_EXECUTE,
-                config.get('jobs', {}).get('execute_period', 60),
+                JOB_CONFIG.get('execute_period', 60),
                 self._execute_jobs)
 
     def tag(self, job):
@@ -240,6 +242,7 @@ class JobProcessor(object):
                     raise
 
                 try:
+                    task.attempts += 1
                     self.__execute_task(task)
                     logger.info('Job {0}, task {1} execution was successfully requested'.format(
                         job.id, task.id))
@@ -251,6 +254,14 @@ class JobProcessor(object):
                             'stop handler: {2}\n{3}'.format(
                                 job.id, task.id, e, traceback.format_exc()))
                         raise
+
+                    if isinstance(e, RetryError):
+                        if task.attempts < JOB_CONFIG.get('minions', {}).get('execute_attempts', 3):
+                            job._dirty = True
+                            break
+                        else:
+                            job.add_error_msg(str(e))
+
                     task.status = Task.STATUS_FAILED
                     if isinstance(e, JobBrokenError):
                         logger.error('Job {0}, task {1}: cannot execute task, '
