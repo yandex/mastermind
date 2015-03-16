@@ -1,3 +1,9 @@
+mastermind (2.21.1) lucid; urgency=low
+
+  * Minion requests retry on http errors
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 16 Mar 2015 19:33:46 +0300
+
 mastermind (2.20.6) lucid; urgency=low
 
   * Move job: fix for unmarking group that is down at the moment
