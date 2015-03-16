@@ -52,7 +52,7 @@ class Task(object):
         self.start_ts = data['start_ts']
         self.finish_ts = data['finish_ts']
         self.error_msg = data['error_msg']
-        self.attempts = data['attempts']
+        self.attempts = data.get('attempts', 0)
 
         for param in self.PARAMS:
             val = data.get(param, None)
