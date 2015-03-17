@@ -4,7 +4,7 @@ class JobBrokenError(Exception):
     pass
 
 
-class RetryError(object):
+class RetryError(Exception):
     def __init__(self, attempts, e):
         self.attempts = attempts
         self.original_e = e
