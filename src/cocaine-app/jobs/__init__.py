@@ -664,6 +664,7 @@ class JobProcessor(object):
                         'have been failed'.format(job.id, task.id, task.status))
 
                 task.status = status
+                task.attempts = 0
                 job.status = Job.STATUS_EXECUTING
                 job.update_ts = time.time()
                 job._dirty = True
