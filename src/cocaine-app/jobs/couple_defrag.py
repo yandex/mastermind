@@ -1,4 +1,5 @@
 import logging
+import math
 
 from error import JobBrokenError
 from infrastructure import infrastructure
@@ -40,26 +41,33 @@ class CoupleDefragJob(Job):
 
         couple = storage.couples[self.couple]
 
-        for group in couple.groups:
-            for nb in group.node_backends:
-                cmd = infrastructure._defrag_node_backend_cmd(
-                    nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id)
+        def make_defrag_tasks(groups):
+            for group in groups:
+                for nb in group.node_backends:
+                    cmd = infrastructure._defrag_node_backend_cmd(
+                        nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id)
 
-                node_backend = self.node_backend(
-                    nb.node.host.addr, nb.node.port, nb.backend_id)
+                    node_backend = self.node_backend(
+                        nb.node.host.addr, nb.node.port, nb.backend_id)
 
-                task = NodeBackendDefragTask.new(self,
-                    host=nb.node.host.addr,
-                    cmd=cmd,
-                    node_backend=node_backend,
-                    group=group.group_id,
-                    params={'group': str(group.group_id),
-                            'node_backend': node_backend.encode('utf-8')})
+                    task = NodeBackendDefragTask.new(self,
+                        host=nb.node.host.addr,
+                        cmd=cmd,
+                        node_backend=node_backend,
+                        group=group.group_id,
+                        params={'group': str(group.group_id),
+                                'node_backend': node_backend.encode('utf-8')})
 
-                self.tasks.append(task)
+                    self.tasks.append(task)
 
-        task = CoupleDefragStateCheckTask.new(self, couple=str(couple))
-        self.tasks.append(task)
+        partition_idx = int(math.ceil(len(couple.groups) / 2.0))
+        partitions = ((couple.groups[:partition_idx], couple.groups[partition_idx:])
+                      if len(couple.groups) > 1 else
+                      (couple.groups,))
+        for groups in partitions:
+            make_defrag_tasks(groups)
+            task = CoupleDefragStateCheckTask.new(self, couple=str(couple))
+            self.tasks.append(task)
 
     @property
     def _involved_groups(self):

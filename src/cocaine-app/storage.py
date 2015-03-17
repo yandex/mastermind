@@ -580,6 +580,7 @@ class NodeBackend(object):
             res['records_alive'] = self.stat.files
             res['records_removed'] = self.stat.files_removed
             res['fragmentation'] = self.stat.fragmentation
+            res['defrag_state'] = self.stat.defrag_state
         if self.base_path:
             res['path'] = self.base_path
 
