@@ -48,6 +48,8 @@ mastermind (2.19.4) lucid; urgency=low
 
  -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 12 Mar 2015 14:55:52 +0300
 
+=======
+>>>>>>> db79f0f444e8cda9ec204ed303fc9918224f1372
 mastermind (2.19.3) lucid; urgency=low
 
   * Recovery planner accounts locked couples
