@@ -1,4 +1,5 @@
 import datetime
+import functools
 import json
 import logging
 import random
@@ -10,6 +11,7 @@ import urllib
 import elliptics
 import msgpack
 from tornado.httpclient import AsyncHTTPClient, HTTPClient, HTTPError
+from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.ioloop import IOLoop
 
 from config import config
@@ -111,19 +113,6 @@ class Minions(object):
                     continue
 
                 successful_hosts.add(host.addr)
-
-            # if not self.ready and not active_hosts and self.pending_hosts is not None:
-            #     # toggle ready state only if acitve_hosts == False (all minions are traversed)
-            #     self.ready = set(self.pending_hosts).issubset(successful_hosts)
-            #     if not self.ready:
-            #         logger.warn('Failed to sync minions state: '
-            #             'received responses from {0}/{1} minions'.format(
-            #                 len(successful_hosts), len(states)))
-            #     else:
-            #         self.pending_hosts = None
-            #         logger.info('Minion states was successfully synced: '
-            #             'received responses from {0}/{1} minions'.format(
-            #                 len(successful_hosts), len(states)))
 
             logger.info('Finished fetching minion states task')
         except errors.NotReadyError as e:
@@ -249,13 +238,15 @@ class Minions(object):
                 raise ValueError('Only strings are accepted as command parameters')
             data[k] = v
 
-        response = HTTPClient().fetch(url, method='POST',
-                                           headers=self.minion_headers,
-                                           body=urllib.urlencode(data),
-                                           request_timeout=5.0,
-                                           allow_ipv6=True,
-                                           use_gzip=True,
-                                           raise_error=False)
+        io_loop = IOLoop()
+        client = SimpleAsyncHTTPClient(io_loop)
+        response = io_loop.run_sync(functools.partial(
+            client.fetch, url, method='POST',
+                               headers=self.minion_headers,
+                               body=urllib.urlencode(data),
+                               request_timeout=5.0,
+                               allow_ipv6=True,
+                               use_gzip=True))
 
         data = self._process_state(host, self._get_response(host, response))
         return data
@@ -277,13 +268,15 @@ class Minions(object):
         url = self.TERMINATE_URL_TPL.format(host=host, port=self.minion_port)
         data = {'cmd_uid': uid}
 
-        response = HTTPClient().fetch(url, method='POST',
-                                           headers=self.minion_headers,
-                                           body=urllib.urlencode(data),
-                                           request_timeout=5.0,
-                                           allow_ipv6=True,
-                                           use_gzip=True,
-                                           raise_error=False)
+        io_loop = IOLoop()
+        client = SimpleAsyncHTTPClient(io_loop)
+        response = io_loop.run_sync(functools.partial(
+            client.fetch, url, method='POST',
+                               headers=self.minion_headers,
+                               body=urllib.urlencode(data),
+                               request_timeout=5.0,
+                               allow_ipv6=True,
+                               use_gzip=True))
 
         data = self._process_state(host, self._get_response(host, response))
         return data
@@ -357,7 +350,7 @@ class AsyncHTTPBatch(object):
             return self.responses
         max_clients = len(self.urls)
         [AsyncHTTPClient(max_clients=max_clients).fetch(url, callback=self._process,
-            request_timeout=self.timeout, headers=self.headers, allow_ipv6=True, raise_error=False)
+            request_timeout=self.timeout, headers=self.headers, allow_ipv6=True)
          for url in self.urls]
         logger.debug('Minion states, starting ioloop')
         self.ioloop.start()
