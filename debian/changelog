@@ -1,3 +1,9 @@
+mastermind (2.21.5) lucid; urgency=low
+
+  * Misprint
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 17 Mar 2015 16:45:53 +0300
+
 mastermind (2.21.4) lucid; urgency=low
 
   * Fix for planner recovery job creation (a batch of applicable couple is empty)
