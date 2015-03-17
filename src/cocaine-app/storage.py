@@ -89,8 +89,8 @@ class NodeStat(object):
         self.ts = None
         self.load_average = 0.0
 
-    def update(self, raw_stat):
-        self.ts = time.time()
+    def update(self, raw_stat, collect_ts):
+        self.ts = collect_ts
         self.load_average = float(raw_stat['procfs']['vm']['la'][0]) / 100
 
     def __add__(self, other):
@@ -135,12 +135,10 @@ class NodeBackendStat(object):
         self.max_blob_base_size = 0
         self.blob_size = 0
 
-    def update(self, raw_stat):
-
-        now = time.time()
+    def update(self, raw_stat, collect_ts):
 
         if self.ts:
-            dt = now - self.ts
+            dt = collect_ts - self.ts
 
             last_read = raw_stat['backend']['dstat']['read_ios']
             last_write = raw_stat['backend']['dstat']['write_ios']
@@ -155,7 +153,7 @@ class NodeBackendStat(object):
             self.last_read = last_read
             self.last_write = last_write
 
-        self.ts = now
+        self.ts = collect_ts
 
         self.vfs_total_space = raw_stat['backend']['vfs']['blocks'] * raw_stat['backend']['vfs']['bsize']
         self.vfs_free_space = raw_stat['backend']['vfs']['bavail'] * raw_stat['backend']['vfs']['bsize']
@@ -341,10 +339,10 @@ class Node(object):
 
         self.stat = None
 
-    def update_statistics(self, new_stat):
+    def update_statistics(self, new_stat, collect_ts):
         if self.stat is None:
             self.stat = NodeStat()
-        self.stat.update(new_stat)
+        self.stat.update(new_stat, collect_ts)
 
     def __repr__(self):
         return '<Node object: host={host}, port={port}>'.format(
@@ -369,8 +367,8 @@ class FsStat(object):
         self.ts = None
         self.total_space = 0
 
-    def update(self, raw_stat):
-        self.ts = time.time()
+    def update(self, raw_stat, collect_ts):
+        self.ts = collect_ts
         self.total_space = raw_stat['blocks'] * raw_stat['bsize']
 
 
@@ -393,10 +391,10 @@ class Fs(object):
     def remove_node_backend(self, nb):
         del self.node_backends[nb]
 
-    def update_statistics(self, new_stat):
+    def update_statistics(self, new_stat, collect_ts):
         if self.stat is None:
             self.stat = FsStat()
-        self.stat.update(new_stat)
+        self.stat.update(new_stat, collect_ts)
 
     def update_status(self):
         nbs = self.node_backends.keys()
@@ -481,10 +479,10 @@ class NodeBackend(object):
     def make_writable(self):
         self.read_only = False
 
-    def update_statistics(self, new_stat):
+    def update_statistics(self, new_stat, collect_ts):
         if self.stat is None:
             self.stat = NodeBackendStat(self.node.stat)
-        self.stat.update(new_stat)
+        self.stat.update(new_stat, collect_ts)
         self.base_path = os.path.dirname(new_stat['backend']['config'].get('data') or
                                          new_stat['backend']['config'].get('file')) + '/'
 

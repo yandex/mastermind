@@ -165,13 +165,14 @@ class NodeInfoUpdater(object):
             group.update_status()
 
     @staticmethod
-    def update_statistics(m_stat, elapsed_time):
+    def update_statistics(m_stat, elapsed_time=None, end_time=None):
 
         node_addr = '{0}:{1}'.format(m_stat.address.host, m_stat.address.port)
         logger.debug('Cluster updating: node {0} statistics time: {1}.{2:03d}'.format(
             node_addr, elapsed_time.tsec, int(round(elapsed_time.tnsec / (1000.0 * 1000.0)))))
         logger.info('Stats: {0}'.format(node_addr))
 
+        collect_ts = end_time.tsec
 
         stat = m_stat.statistics
 
@@ -189,7 +190,7 @@ class NodeInfoUpdater(object):
                 node = storage.nodes[node_addr]
 
             try:
-                node.update_statistics(stat)
+                node.update_statistics(stat, collect_ts)
             except KeyError as e:
                 logger.warn('Bad procfs stat for node {0} ({1}): {2}'.format(node_addr, e, stat))
                 pass
@@ -241,7 +242,7 @@ class NodeInfoUpdater(object):
 
                     if not node_backend in fs.node_backends:
                         fs.add_node_backend(node_backend)
-                    fs.update_statistics(b_stat['backend']['vfs'])
+                    fs.update_statistics(b_stat['backend']['vfs'], collect_ts)
 
                     node_backend.enable()
                     node_backend.dstat_error_code = b_stat.get('backend', {}).get('dstat', {}).get('error', 0)
@@ -256,7 +257,7 @@ class NodeInfoUpdater(object):
                         elif not 'dstat' in b_stat['backend']:
                             logger.warn('No dstat in backend: {0}'.format(b_stat['backend']))
                         try:
-                            node_backend.update_statistics(b_stat)
+                            node_backend.update_statistics(b_stat, collect_ts)
                         except KeyError as e:
                             logger.warn('Bad stat for node backend {0} ({1}): {2}'.format(node_backend, e, b_stat))
                             pass
@@ -284,7 +285,7 @@ class NodeInfoUpdater(object):
     def update_symm_groups_async(self, groups=None):
 
         _queue = set()
-        def _process_group_metadata(response, elapsed_time, group):
+        def _process_group_metadata(response, group, elapsed_time=None, end_time=None):
             logger.debug('Cluster updating: group {0} meta key read time: {1}.{2}'.format(
                     group.group_id, elapsed_time.tsec, elapsed_time.tnsec))
             meta = response.data
@@ -371,7 +372,8 @@ class NodeInfoUpdater(object):
         if entry.error.code:
             raise Exception(entry.error.message)
 
-        return processor(entry, result.elapsed_time(), *args, **kwargs)
+        return processor(entry, elapsed_time=result.elapsed_time(),
+                         end_time=result.end_time(), *args, **kwargs)
 
     def stop(self):
         self.__tq.shutdown()
