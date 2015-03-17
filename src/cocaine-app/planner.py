@@ -452,6 +452,7 @@ class Planner(object):
             return keys_diff * KEYS_CF + (ts - last_ts) * TS_CF
 
         weights = {}
+        candidates = []
         for i in xrange(cursor.count() / self.RECOVERY_OP_CHUNK + 1):
             couples_data = cursor[i * self.RECOVERY_OP_CHUNK:(i + 1) * self.RECOVERY_OP_CHUNK]
             max_recover_ts = None
