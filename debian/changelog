@@ -1,3 +1,9 @@
+mastermind (2.21.3) lucid; urgency=low
+
+  * tornado < 4.1 does not support raise_error option, fallback to async request with error checking
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 17 Mar 2015 15:07:02 +0300
+
 mastermind (2.21.2) lucid; urgency=low
 
   * Fix for jobs rendering
