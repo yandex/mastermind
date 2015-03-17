@@ -464,7 +464,12 @@ class Planner(object):
                 weights[c] = weight(keys_diffs[c], ts_diffs[c])
                 max_recover_ts = couple_data['recover_ts']
 
+            cursor.rewind()
+
             top_candidates_len = min(count, len(weights))
+
+            if not top_candidates_len:
+                continue
 
             # TODO: Optimize this
             candidates = sorted(weights.iteritems(), key=lambda x: x[1])
@@ -485,7 +490,6 @@ class Planner(object):
                     # found possible candidate
                     missed_candidate = c
                     break
-            cursor.rewind()
 
             logger.debug('Current round: {0}, current min weight candidate '
                 '{1}, weight: {2}, possible missed candidate is '
