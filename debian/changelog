@@ -1,3 +1,9 @@
+mastermind (2.21.4) lucid; urgency=low
+
+  * Fix for planner recovery job creation (a batch of applicable couple is empty)
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 17 Mar 2015 15:51:18 +0300
+
 mastermind (2.21.3) lucid; urgency=low
 
   * tornado < 4.1 does not support raise_error option, fallback to async request with error checking
