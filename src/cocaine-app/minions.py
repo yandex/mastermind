@@ -24,6 +24,8 @@ import storage
 
 logger = logging.getLogger('mm.minions')
 
+MINIONS_CFG = config.get('minions', {})
+
 
 class Minions(object):
 
@@ -55,9 +57,9 @@ class Minions(object):
             5, self._fetch_states)
 
         self.minion_headers = ({'X-Auth': config['minions']['authkey']}
-                               if config.get('minions', {}).get('authkey') else
+                               if MINIONS_CFG.get('authkey') else
                                None)
-        self.minion_port = config.get('minions', {}).get('port', 8081)
+        self.minion_port = MINIONS_CFG.get('port', 8081)
 
         self.__commands_lock = threading.Lock()
         self.__active_hosts_lock = threading.Lock()
@@ -96,7 +98,7 @@ class Minions(object):
             logger.debug('Starting async batch')
             responses = AsyncHTTPBatch(states.keys(),
                 headers=self.minion_headers,
-                timeout=config.get('minion', {}).get('commands_fetch_timeout', 15)).get()
+                timeout=MINIONS_CFG.get('commands_fetch_timeout', 15)).get()
 
             successful_hosts = set()
             for url, response in responses.iteritems():
@@ -123,7 +125,7 @@ class Minions(object):
                          (e, traceback.format_exc()))
         finally:
             self.__tq.add_task_in(self.STATE_FETCH,
-                config.get('minions', {}).get('commands_fetch_period', 120),
+                MINIONS_CFG.get('commands_fetch_period', 120),
                 self._fetch_states)
 
     def _process_state(self, addr, response):
@@ -163,7 +165,7 @@ class Minions(object):
 
                 try:
                     self.__tq.add_task_in(self.STATE_FETCH_ACTIVE,
-                        config.get('minions', {}).get('active_fetch_period', 5),
+                        MINIONS_CFG.get('active_fetch_period', 5),
                         self._fetch_states,
                         active_hosts=True)
                 except Exception:
@@ -244,7 +246,7 @@ class Minions(object):
             client.fetch, url, method='POST',
                                headers=self.minion_headers,
                                body=urllib.urlencode(data),
-                               request_timeout=5.0,
+                               request_timeout=MINIONS_CFG.get('request_timeout', 5.0),
                                allow_ipv6=True,
                                use_gzip=True))
 
@@ -274,7 +276,7 @@ class Minions(object):
             client.fetch, url, method='POST',
                                headers=self.minion_headers,
                                body=urllib.urlencode(data),
-                               request_timeout=5.0,
+                               request_timeout=MINIONS_CFG.get('request_timeout', 5.0),
                                allow_ipv6=True,
                                use_gzip=True))
 
