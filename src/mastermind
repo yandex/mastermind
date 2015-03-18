@@ -771,15 +771,6 @@ def couple_repair(group,
     print res
 
 
-@coupleDispatcher.command(name='list-namespaces')
-@log_action
-def couple_list_namespaces(host=None, app=None):
-    '''List all couple namespaces'''
-    s = service(host, app)
-    res = s.enqueue('get_namespaces', '').get()
-    print res
-
-
 # jobs commands
 jobDispatcher = Dispatcher(globaloptions=(host_param, app_param))
 
@@ -963,6 +954,15 @@ def ns_settings(namespace,
     if not service_key:
         res.pop('__service', None)
 
+    print res
+
+
+@nsDispatcher.command(name='list')
+@log_action
+def ns_list(host=None, app=None):
+    '''List all couple namespaces'''
+    s = service(host, app)
+    res = s.enqueue('get_namespaces', '').get()
     print res
 
 
