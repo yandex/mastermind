@@ -44,8 +44,6 @@ class JobProcessor(object):
     JOBS_UPDATE = 'jobs_update'
     JOBS_LOCK = 'jobs'
 
-    INDEX_BATCH_SIZE = 1000
-
     JOB_MANUAL_TIMEOUT = 20
 
     def __init__(self, node, db, niu, minions):
@@ -57,15 +55,6 @@ class JobProcessor(object):
         self.minions = minions
         self.node_info_updater = niu
         self.planner = None
-
-        self.jobs_index = indexes.TagSecondaryIndex(
-            keys.MM_JOBS_IDX,
-            keys.MM_JOBS_IDX_TPL,
-            keys.MM_JOBS_KEY_TPL,
-            self.meta_session,
-            logger=logger,
-            batch_size=self.INDEX_BATCH_SIZE,
-            namespace='jobs')
 
         self.__tq = timed_queue.TimedQueue()
 
@@ -119,7 +108,6 @@ class JobProcessor(object):
                     try:
                         with job.tasks_lock():
                             self.__process_job(job)
-                        self.jobs_index[job.id] = self.__dump_job(job)
                         job.save()
                     except LockError:
                         pass
@@ -402,8 +390,6 @@ class JobProcessor(object):
             job.create_tasks()
 
             logger.info('Job {0} created: {1}'.format(job.id, job.dump()))
-            self.jobs_index[job.id] = self.__dump_job(job)
-            self.jobs_index.set_tag(job.id, self.tag(job))
 
             job.save()
         except Exception:
@@ -470,7 +456,6 @@ class JobProcessor(object):
             self._cancel_job(job)
 
         for job in jobs:
-            self.jobs_index[job.id] = self.__dump_job(job)
             job.save()
 
         return jobs
@@ -544,7 +529,6 @@ class JobProcessor(object):
                             Job.STATUS_PENDING, Job.STATUS_NOT_APPROVED, Job.STATUS_BROKEN))
 
                 self._cancel_job(job)
-                self.jobs_index[job.id] = self.__dump_job(job)
 
                 job.save()
 
@@ -586,8 +570,6 @@ class JobProcessor(object):
                 job.status = Job.STATUS_NEW
                 job.update_ts = time.time()
                 job._dirty = True
-
-                self.jobs_index[job.id] = self.__dump_job(job)
 
                 job.save()
 
@@ -668,7 +650,6 @@ class JobProcessor(object):
                 job.status = Job.STATUS_EXECUTING
                 job.update_ts = time.time()
                 job._dirty = True
-                self.jobs_index[job.id] = self.__dump_job(job)
                 job.save()
                 logger.info('Job {0}: task {1} status was reset to {2}, '
                     'job status was reset to {3}'.format(

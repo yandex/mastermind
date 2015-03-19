@@ -21,6 +21,3 @@ MM_NAMESPACE_SETTINGS_KEY_TPL = 'mastermind:ns_setttings:%s'
 
 MINION_HISTORY_KEY = 'minion_cmd_log:%s'
 MINION_HISTORY_ENTRY_KEY = 'minion_cmd_entry:%s'
-MM_JOBS_IDX = 'mastermind:jobs_idx'
-MM_JOBS_IDX_TPL = 'mastermind:jobs_idx:%s'
-MM_JOBS_KEY_TPL = 'mastermind:jobs_%s'
