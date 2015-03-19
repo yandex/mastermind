@@ -146,19 +146,14 @@ class JobProcessor(object):
             job._dirty = True
             try:
                 job.on_start()
-            except JobBrokenError as e:
-                logger.error('Job {0}: cannot start job: {1}'.format(
-                        job.id, e))
-                job.status = Job.STATUS_BROKEN
-                job.add_error_msg(str(e))
-                ts = time.time()
-                job.update_ts = ts
-                job.finish_ts = ts
-                return
             except Exception as e:
                 logger.error('Job {0}: failed to start job: {1}\n{2}'.format(
                     job.id, e, traceback.format_exc()))
-                job.status = Job.STATUS_PENDING
+                if isinstance(e, JobBrokenError):
+                    job.status = Job.STATUS_BROKEN
+                else:
+                    job.status = Job.STATUS_PENDING
+                job.add_error_msg(str(e))
                 ts = time.time()
                 job.update_ts = ts
                 job.finish_ts = ts
@@ -256,11 +251,11 @@ class JobProcessor(object):
                             'not applicable for current storage state: {2}'.format(
                                 job.id, task.id, e))
                         job.status = Job.STATUS_BROKEN
-                        job.add_error_msg(str(e))
                     else:
                         logger.error('Job {0}, task {1}: failed to execute: {2}\n{3}'.format(
                             job.id, task.id, e, traceback.format_exc()))
                         job.status = Job.STATUS_PENDING
+                    job.add_error_msg(str(e))
                     ts = time.time()
                     job.update_ts = ts
                     job.finish_ts = ts
