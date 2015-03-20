@@ -15,6 +15,7 @@ def periodic_timer(seconds=0, minutes=0, hours=0, days=0):
     while True:
         yield math.ceil(time() / period) * period
 
+
 def periodic_datetimer(**kwargs):
     timer = periodic_timer(**kwargs)
     while True:

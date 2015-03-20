@@ -31,6 +31,7 @@ from sync.error import (
     InconsistentLockError,
     API_ERROR_CODE
 )
+from timer import periodic_timer
 
 
 logger = logging.getLogger('mm.jobs')
@@ -59,10 +60,11 @@ class JobProcessor(object):
         self.__tq = timed_queue.TimedQueue()
 
         if config['metadata'].get('jobs', {}).get('db'):
+            self.jobs_timer = periodic_timer(seconds=JOB_CONFIG.get('execute_period', 60))
             self.collection = Collection(db[config['metadata']['jobs']['db']], 'jobs')
             self.downtimes = Collection(db[config['metadata']['jobs']['db']], 'downtimes')
-            self.__tq.add_task_in(self.JOBS_EXECUTE,
-                5, self._execute_jobs)
+            self.__tq.add_task_at(self.JOBS_EXECUTE,
+                self.jobs_timer.next(), self._execute_jobs)
 
     def _start_tq(self):
         self.__tq.start()
@@ -123,8 +125,8 @@ class JobProcessor(object):
                 e, traceback.format_exc()))
         finally:
             logger.info('Jobs execution finished')
-            self.__tq.add_task_in(self.JOBS_EXECUTE,
-                JOB_CONFIG.get('execute_period', 60),
+            self.__tq.add_task_at(self.JOBS_EXECUTE,
+                self.jobs_timer.next(),
                 self._execute_jobs)
 
     def tag(self, job):
