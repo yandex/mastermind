@@ -59,20 +59,21 @@ class TimedQueue:
                     task = self.__hurry.pop()
                 elif self.__heap and time.time() >= self.__heap[0][0]:
                     task = heapq.heappop(self.__heap)[1]
+
             if task is None:
                 time.sleep(1)
-            else:
-                with self.__heap_lock:
-                    id_ = task.id()
-                    if id_ in self.__task_by_id:
-                        del self.__task_by_id[id_]
-                if not task.done():
-                    try:
-                        task.execute()
-                    except:
-                        # Task should handle its exceptions. If it doesn't, will lose it here.
-                        # The loop should not stop because of it.
-                        pass
+                continue
+
+            with self.__heap_lock:
+                id_ = task.id()
+                self.__task_by_id.pop(id_, None)
+            if not task.done():
+                try:
+                    task.execute()
+                except:
+                    # Task should handle its exceptions. If it doesn't, will lose it here.
+                    # The loop should not stop because of it.
+                    pass
 
     def add_task_in(self, task_id, secs, function, *args, **kwargs):
         self.add_task_at(task_id, time.time() + secs, function, *args, **kwargs)
