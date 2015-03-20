@@ -234,8 +234,8 @@ class Job(MongoObject):
             _, failed_group = h.write_retry(
                 s, keys.SYMMETRIC_GROUPS_KEY, packed)
             if failed_group:
-                raise RuntimeError('Failed to mark group {0}'.format(
-                    group_id))
+                logger.error('Job {0}: failed to mark group {1}'.format(
+                    self.id, group_id))
 
     def _group_marks(self):
         """
@@ -245,19 +245,15 @@ class Job(MongoObject):
         return []
 
     def unmark_groups(self, session):
-        try:
-            for group, updated_meta in self._group_unmarks():
-                s = session.clone()
-                s.set_groups([group])
-                packed = msgpack.packb(updated_meta)
-                _, failed_group = h.write_retry(
-                    s, keys.SYMMETRIC_GROUPS_KEY, packed)
-                if failed_group:
-                    raise RuntimeError('Failed to unmark group {1}'.format(
-                        self.id, group))
-        except Exception as e:
-            logger.error('Job {0}: {1}'.format(self.id, e))
-            raise
+        for group_id, updated_meta in self._group_unmarks():
+            s = session.clone()
+            s.set_groups([group_id])
+            packed = msgpack.packb(updated_meta)
+            _, failed_group = h.write_retry(
+                s, keys.SYMMETRIC_GROUPS_KEY, packed)
+            if failed_group:
+                logger.error('Job {0}: failed to unmark group {1}'.format(
+                    self.id, group_id))
 
     def _group_unmarks(self):
         """
@@ -284,7 +280,12 @@ class Job(MongoObject):
     def complete(self, processor):
         if self.status == self.STATUS_COMPLETED:
             self.on_complete(processor)
-        self.unmark_groups(processor.session)
+        try:
+            self.unmark_groups(processor.session)
+        except Exception as e:
+            logger.error('Job {0}: failed to unmark required groups: {1}'.format(
+                job.id, e))
+            raise
         ts = time.time()
         if not self.start_ts:
             self.start_ts = ts
