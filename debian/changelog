@@ -1,3 +1,10 @@
+mastermind (2.21.9) lucid; urgency=low
+
+  * Jobs processor uses periodic timer
+  * Periodic timer implementation for timed queue
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 20 Mar 2015 16:52:58 +0300
+
 mastermind (2.21.8) lucid; urgency=low
 
   * If job fails exception is saved to error messages list of job
