@@ -362,8 +362,10 @@ class MoveJob(Job):
 
     def _group_unmarks(self):
         if not self.group in storage.groups:
-          raise RuntimeError('Group {0} is not found'.format(self.group))
+            raise RuntimeError('Group {0} is not found'.format(self.group))
         group = storage.groups[self.group]
+        if not group.meta:
+            raise StopIteration
         updated_meta = copy.deepcopy(group.meta)
         updated_meta.pop('service', None)
 

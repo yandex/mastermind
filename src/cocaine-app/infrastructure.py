@@ -377,7 +377,7 @@ class Infrastructure(object):
         eid = self.meta_session.transform(keys.MM_ISTRUCT_GROUP % group_id)
         logger.info('Updating state for group %s' % group_id)
         self.meta_session.update_indexes(eid, [keys.MM_GROUPS_IDX],
-                                              [self._serialize(group)])
+                                              [self._serialize(group)]).get()
 
     def detach_node(self, group, host, port, backend_id, record_type=None):
         with self.__state_lock:

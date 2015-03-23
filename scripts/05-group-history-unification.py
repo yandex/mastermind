@@ -102,7 +102,7 @@ def try_convert_group_history(index):
         # print data
         eid = meta_session.transform('mastermind:group_%d' % data['id'])
         meta_session.update_indexes(eid, ['mastermind:groups_idx'],
-                                         [msgpack.packb(data)])
+                                         [msgpack.packb(data)]).get()
         print "Converted group {0}".format(data['id'])
     except Exception as e:
         print "Failed to convert index record: {0}, data: {1}".format(e, index.data)
