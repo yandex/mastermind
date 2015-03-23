@@ -1,3 +1,9 @@
+mastermind (2.20.6) lucid; urgency=low
+
+  * Move job: fix for unmarking group that is down at the moment
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 23 Mar 2015 13:24:25 +0300
+
 mastermind (2.20.5) lucid; urgency=low
 
   * Node backend statistics time is extracted from elliptics async result
