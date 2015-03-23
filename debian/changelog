@@ -1,3 +1,9 @@
+mastermind (2.21.11) lucid; urgency=low
+
+  * Version bump for release-2.20 hotfix
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 23 Mar 2015 14:39:59 +0300
+
 mastermind (2.21.10) lucid; urgency=low
 
   * Do not stop job execution when mark/unmark groups failed
