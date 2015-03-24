@@ -682,7 +682,7 @@ class JobProcessor(object):
         for job in jobs:
             if job.uncoupled_group:
                 uncoupled_groups.append(job.uncoupled_group)
-            if job.type == JobTypes.TYPE_RESTORE_GROUP_JOB and job.merged_groups:
+            if job.merged_groups:
                 uncoupled_groups.extend(job.merged_groups)
 
         return uncoupled_groups

@@ -955,6 +955,8 @@ class Planner(object):
 
         busy_group_ids = set(self.job_processor.get_uncoupled_groups_in_service())
 
+        logger.info('Busy uncoupled groups: {0}'.format(busy_group_ids))
+
         forbidden_dcs = set()
         if config.get('forbidden_dc_sharing_among_groups', False):
             forbidden_dcs = set([nb.node.host.dc for g in group.coupled_groups
