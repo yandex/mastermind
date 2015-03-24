@@ -171,7 +171,7 @@ class JobProcessor(object):
                 except Exception as e:
                     logger.error('Job {0}, task {1}: failed to update status: '
                         '{2}\n{3}'.format(job.id, task.id, e, traceback.format_exc()))
-                    task.error_msg.append(str(e))
+                    job.add_error_msg(str(e))
                     task.status = Task.STATUS_FAILED
                     job.status = Job.STATUS_PENDING
                     ts = time.time()

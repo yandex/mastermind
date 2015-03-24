@@ -1,6 +1,7 @@
 import logging
 import time
 
+import elliptics
 from tornado.httpclient import HTTPError
 
 from infrastructure import infrastructure
@@ -33,9 +34,10 @@ class MinionCmdTask(Task):
             self.minion_cmd = processor.minions._get_command(self.minion_cmd_id)
             logger.debug('Job {0}, task {1}, minion command status was updated: {2}'.format(
                 self.parent_job.id, self.id, self.minion_cmd))
-        except ValueError:
-            logger.warn('Job {0}, task {1}, minion command status {2} is not fetched '
-                'from minions'.format(self.parent_job.id, self.id, self.minion_cmd_id))
+        except elliptics.Error as e:
+            logger.warn('Job {0}, task {1}, minion command status {2} failed to fetch '
+                'from metadb: {3}'.format(self.parent_job.id, self.id,
+                    self.minion_cmd_id, e))
             pass
 
     def execute(self, processor):
