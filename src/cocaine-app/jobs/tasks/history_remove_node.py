@@ -72,26 +72,31 @@ class HistoryRemoveNodeTask(Task):
                 self.__node_in_group())
 
     def __node_in_group(self):
-        group = storage.groups[self.group]
-        node_backend = '{0}:{1}/{2}'.format(self.host, self.port, self.backend_id).encode('utf-8')
-        logger.debug('Job {0}, task {1}: checking node backend {2} '
-            'with group {3} node backends: {4}'.format(
-                self.parent_job.id, self.id, node_backend, group, group.node_backends))
-        nb_in_group = storage.node_backends[node_backend].group is group
+        group = self.group in storage.groups and storage.groups[self.group] or None
+        nb_str = '{0}:{1}/{2}'.format(self.host, self.port, self.backend_id).encode('utf-8')
+        node_backend = nb_str in storage.node_backends and storage.node_backends[nb_str] or None
+
+        if group and node_backend:
+            logger.debug('Job {0}, task {1}: checking node backend {2} '
+                'with group {3} node backends: {4}'.format(
+                    self.parent_job.id, self.id, node_backend, self.group, group.node_backends))
+            nb_in_group = node_backend.group is group
+        else:
+            nb_in_group = False
 
         nb_in_history = infrastructure.node_backend_in_last_history_state(
-            group.group_id, self.host, self.port, self.backend_id)
+            self.group, self.host, self.port, self.backend_id)
         logger.debug('Job {0}, task {1}: checking node backend {2} '
             'in group {3} history set: {4}'.format(
-                self.parent_job.id, self.id, node_backend, group.group_id, nb_in_history))
+                self.parent_job.id, self.id, nb_str, self.group, nb_in_history))
 
         if nb_in_group:
             logger.info('Job {0}, task {1}: node backend {2} is still '
-                'in group {3}'.format(self.parent_job.id, self.id, node_backend, group))
+                'in group {3}'.format(self.parent_job.id, self.id, nb_str, self.group))
         if nb_in_history:
             logger.info('Job {0}, task {1}: node backend {2} is still '
                 'in group\'s {3} history'.format(
-                    self.parent_job.id, self.id, node_backend, group))
+                    self.parent_job.id, self.id, nb_str, self.group))
 
         return nb_in_group or nb_in_history
 
