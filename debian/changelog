@@ -1,3 +1,9 @@
+mastermind (2.21.12) lucid; urgency=low
+
+  * Fix for busy uncoupled list groups fetching
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 24 Mar 2015 13:13:21 +0300
+
 mastermind (2.21.11) lucid; urgency=low
 
   * Version bump for release-2.20 hotfix
