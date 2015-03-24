@@ -1,3 +1,9 @@
+mastermind (2.21.13) lucid; urgency=low
+
+  * Do not fail job when elliptics request request for command status update was unsuccessful
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 24 Mar 2015 15:39:18 +0300
+
 mastermind (2.21.12) lucid; urgency=low
 
   * Fix for busy uncoupled list groups fetching
