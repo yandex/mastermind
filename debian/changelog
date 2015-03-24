@@ -1,3 +1,9 @@
+mastermind (2.21.15) lucid; urgency=low
+
+  * Fix for detaching node backend from group: based on group_id, not object of type storage.Group
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 24 Mar 2015 19:27:46 +0300
+
 mastermind (2.21.14) lucid; urgency=low
 
   * Fix for detaching node backend from group: based on group_id, not object of type storage.Group
