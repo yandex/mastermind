@@ -394,7 +394,9 @@ class Balancer(object):
         if not group_id in storage.groups:
             raise ValueError('Group %d is not found' % group_id)
 
-        group = storage.groups[group_id]
+        group = (group_id in storage.groups and
+                 storage.groups[group_id] or
+                 None)
         node_backend = (node_backend_str in storage.node_backends and
                         storage.node_backends[node_backend_str] or
                         None)
@@ -407,18 +409,18 @@ class Balancer(object):
         except (IndexError, ValueError, AttributeError):
             raise ValueError('Node backend should be of form <host>:<port>:<backend_id>')
 
-        if node_backend and node_backend in group.node_backends:
+        if group and node_backend and node_backend in group.node_backends:
             logger.info('Removing node backend {0} from group {1} nodes'.format(node_backend, group))
             group.remove_node_backend(node_backend)
             group.update_status_recursive()
             logger.info('Removed node backend {0} from group {1} nodes'.format(node_backend, group))
 
-        logger.info('Removing node backend {0} from group {1} history'.format(node_backend, group))
+        logger.info('Removing node backend {0} from group {1} history'.format(node_backend, group_id))
         try:
-            self.infrastructure.detach_node(group, host, port, backend_id)
-            logger.info('Removed node backend {0} from group {1} history'.format(node_backend, group))
+            self.infrastructure.detach_node(group_id, host, port, backend_id)
+            logger.info('Removed node backend {0} from group {1} history'.format(node_backend, group_id))
         except Exception as e:
-            logger.error('Failed to remove {0} from group {1} history: {2}'.format(node_backend, group, str(e)))
+            logger.error('Failed to remove {0} from group {1} history: {2}'.format(node_backend, group_id, str(e)))
             raise
 
         return True

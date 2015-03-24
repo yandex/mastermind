@@ -379,27 +379,29 @@ class Infrastructure(object):
         self.meta_session.update_indexes(eid, [keys.MM_GROUPS_IDX],
                                               [self._serialize(group)]).get()
 
-    def detach_node(self, group, host, port, backend_id, record_type=None):
+    def detach_node(self, group_id, host, port, backend_id, record_type=None):
         with self.__state_lock:
-            group_state = self.state[group.group_id]
+            if not group_id in self.state:
+                raise ValueError('Node backend {0}:{1}/{2} not found in '
+                    'group {3} history state'.format(host, port, backend_id, group_id))
+
+            group_state = self.state[group_id]
             state_nodes = list(group_state['nodes'][-1]['set'][:])
 
             logger.info('{0}'.format(state_nodes))
             for i, state_node in enumerate(state_nodes):
-                if len(state_node) == 2:
-                    # old elliptics pre-26 record, should not be removed
-                    continue
                 state_host, state_port, state_family, state_backend_id = state_node[:4]
                 if state_host == host and state_port == port and state_backend_id == backend_id:
                     logger.debug('Removing node backend {0}:{1}/{2} from '
-                        'group {3} history state'.format(host, port, backend_id, group.group_id))
+                        'group {3} history state'.format(host, port, backend_id, group_id))
                     del state_nodes[i]
                     break
             else:
                 raise ValueError('Node backend {0}:{1}/{2} not found in '
-                    'group {3} history state'.format(host, port, backend_id, group.group_id))
+                    'group {3} history state'.format(host, port, backend_id, group_id))
 
-            self._update_group(group.group_id, state_nodes, None, record_type=record_type or self.HISTORY_RECORD_MANUAL)
+            self._update_group(group_id, state_nodes, None,
+                record_type=record_type or self.HISTORY_RECORD_MANUAL)
 
 
     def move_group_cmd(self, src_host, src_port=None, src_family=2,

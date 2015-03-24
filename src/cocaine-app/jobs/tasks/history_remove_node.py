@@ -25,21 +25,28 @@ class HistoryRemoveNodeTask(Task):
         pass
 
     def execute(self):
-        group = storage.groups[self.group]
+        nb_str = '{0}:{1}/{2}'.format(self.host, self.port, self.backend_id).encode('utf-8')
         try:
-            infrastructure.detach_node(group, self.host, self.port, self.backend_id,
+            logger.info('Job {0}, task {1}: removing node backend {2} '
+                'from group {3} history'.format(
+                    self.parent_job.id, self.id, nb_str, self.group))
+            infrastructure.detach_node(self.group, self.host, self.port, self.backend_id,
                 infrastructure.HISTORY_RECORD_JOB)
+            logger.info('Job {0}, task {1}: removed node backend {2} '
+                'from group {3} history'.format(
+                    self.parent_job.id, self.id, nb_str, self.group))
         except ValueError as e:
             # TODO: Think about changing ValueError to some dedicated exception
             # to differentiate between event when there is no such node in group
             # and an actual ValueError being raised
-            logger.error('Job {0}, task {1}: failed to execute {2}: {3}'.format(
-                self.parent_job.id, self.id, str(self), e))
+            logger.error('Job {0}, task {1}: failed to remove node backend {2} '
+                'from group {3} history: {4}'.format(
+                    self.parent_job.id, self.id, nb_str, self.group, e))
             pass
 
-        nb_str = '{0}:{1}/{2}'.format(self.host, self.port, self.backend_id).encode('utf-8')
+        group = self.group in storage.groups and storage.groups[self.group] or None
         node_backend = nb_str in storage.node_backends and storage.node_backends[nb_str] or None
-        if node_backend and node_backend in group.node_backends:
+        if group and node_backend and node_backend in group.node_backends:
             logger.info('Job {0}, task {1}: removing node backend {2} '
                 'from group {3} node backends'.format(
                     self.parent_job.id, self.id, node_backend, group))

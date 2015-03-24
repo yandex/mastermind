@@ -239,7 +239,7 @@ def group_detach_node(group, node=None,
     if not node:
         res = s.enqueue('get_group_info', msgpack.packb(group)).get()
         pprint(res)
-        print 'You have to select node to be detached (<host>:<port>)'
+        print 'You have to select node to be detached (<host>:<port>/<backend_id>)'
         return
 
     res = s.enqueue('group_detach_node', msgpack.packb([group, node])).get()
