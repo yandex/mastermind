@@ -1,3 +1,9 @@
+mastermind (2.21.14) lucid; urgency=low
+
+  * Fix for detaching node backend from group: based on group_id, not object of type storage.Group
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 24 Mar 2015 19:00:33 +0300
+
 mastermind (2.21.13) lucid; urgency=low
 
   * Do not fail job when elliptics request request for command status update was unsuccessful
