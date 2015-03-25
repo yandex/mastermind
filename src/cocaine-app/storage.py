@@ -10,7 +10,7 @@ import traceback
 import msgpack
 
 import inventory
-from infrastructure import infrastructure, port_to_path
+from infrastructure import infrastructure
 from config import config
 
 

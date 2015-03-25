@@ -407,29 +407,23 @@ class Infrastructure(object):
     def move_group_cmd(self, src_host, src_port=None, src_family=2,
                        src_path=None,  dst_port=None, dst_path=None,
                        user=None, file_tpl='data*'):
-        cmd_src_path = self.node_path(path=src_path, port=src_port)
+        cmd_src_path = src_path
         if RSYNC_MODULE:
             cmd = self.RSYNC_MODULE_CMD.format(
                 user=RSYNC_USER,
                 module=RSYNC_MODULE,
                 src_host=src_host if src_family != 10 else '[{0}]'.format(src_host),
                 src_path=cmd_src_path.replace(BASE_STORAGE_PATH, ''),
-                dst_path=self.node_path(path=dst_path, port=dst_port),
+                dst_path=dst_path,
                 file_tpl=file_tpl)
         else:
             cmd = self.RSYNC_CMD.format(
                 user=user,
                 src_host=src_host if src_family != 10 else '[{0}]'.format(src_host),
                 src_path=cmd_src_path,
-                dst_path=self.node_path(path=dst_path, port=dst_port),
+                dst_path=dst_path,
                 file_tpl=file_tpl)
         return cmd
-
-    @staticmethod
-    def node_path(path=None, port=None):
-        if not path and not port:
-            raise ValueError('Either path or port should be specified')
-        return path or port_to_path(port)
 
     @h.concurrent_handler
     def start_node_cmd(self, request):
@@ -1007,14 +1001,3 @@ class HostTreeCacheItem(CacheItem):
 
 
 infrastructure = Infrastructure()
-
-
-def port_to_path(port):
-    assert port >= BASE_PORT
-    if port == CACHE_DEFAULT_PORT:
-        return CACHE_DEFAULT_PATH
-    return os.path.join(BASE_STORAGE_PATH, port_to_dir(port) + '/')
-
-
-def port_to_dir(port):
-    return str(port - BASE_PORT)
