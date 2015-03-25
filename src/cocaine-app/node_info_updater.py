@@ -40,19 +40,9 @@ class NodeInfoUpdater(object):
 
         self.__cluster_update_lock = threading.Lock()
 
+    def start():
         self.node_statistics_update()
         self.update_symm_groups()
-
-    def execute_tasks(self):
-        try:
-
-            with self.__cluster_update_lock:
-                self.monitor_stats()
-                self.update_symm_groups_async()
-
-        except Exception as e:
-            logger.info('Failed to execute cluster update tasks: {0}\n{1}'.format(e, traceback.format_exc()))
-            raise
 
     def _start_tq(self):
         self.__tq.start()
@@ -111,9 +101,17 @@ class NodeInfoUpdater(object):
     @h.concurrent_handler
     def force_nodes_update(self, request):
         logger.info('Forcing nodes update')
-        self.execute_tasks()
+        self.do_force_nodes_update()
         logger.info('Cluster was successfully updated')
         return True
+
+    def _force_nodes_update(self):
+        try:
+            with self.__cluster_update_lock:
+                self.update_status(groups=None)
+        except Exception as e:
+            logger.info('Failed to update nodes status: {0}\n{1}'.format(e, traceback.format_exc()))
+            raise
 
     MONITOR_STAT_CATEGORIES = (elliptics.monitor_stat_categories.procfs |
                                elliptics.monitor_stat_categories.backend)

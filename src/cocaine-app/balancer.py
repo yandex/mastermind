@@ -451,7 +451,7 @@ class Balancer(object):
 
     def __update_cluster_state(self, namespace=None):
         logger.info('Starting concurrent cluster info update')
-        self.niu.execute_tasks()
+        self.niu._force_nodes_update()
         if namespace:
             infrastructure.infrastructure.sync_single_ns_settings(namespace)
         logger.info('Concurrent cluster info update completed')

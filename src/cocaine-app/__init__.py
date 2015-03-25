@@ -181,6 +181,7 @@ def init_infrastructure():
 def init_node_info_updater():
     logger.info("trace node info updater %d" % (i.next()))
     niu = node_info_updater.NodeInfoUpdater(n)
+    niu.start()
     register_handle(niu.force_nodes_update)
 
     return niu

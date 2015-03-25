@@ -376,8 +376,7 @@ class JobProcessor(object):
         try:
             logger.info('Job {0}: updating groups {1} status'.format(job.id, inv_group_ids))
             inv_groups = [storage.groups[ig] for ig in inv_group_ids]
-            self.node_info_updater.monitor_stats(groups=inv_groups)
-            self.node_info_updater.update_symm_groups_async(groups=inv_groups)
+            self.node_info_updater.update_status(groups=inv_groups)
         except Exception as e:
             logger.info('Job {0}: failed to update groups status: {1}\n{2}'.format(
                 job.id, e, traceback.format_exc()))
