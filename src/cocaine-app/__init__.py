@@ -19,6 +19,7 @@ import msgpack
 import elliptics
 
 import log
+log.setup_logger()
 logger = logging.getLogger('mm.init')
 
 
