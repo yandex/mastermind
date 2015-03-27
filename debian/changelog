@@ -1,3 +1,10 @@
+mastermind (2.21.16) lucid; urgency=low
+
+  * Do not crash if failed to resolve some infrastructure host
+  * Do not crash when any of elliptics hostnames from config cannot be resolved
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 27 Mar 2015 18:01:57 +0300
+
 mastermind (2.21.15) lucid; urgency=low
 
   * Fix for detaching node backend from group: based on group_id, not object of type storage.Group
