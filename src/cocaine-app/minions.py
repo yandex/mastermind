@@ -128,7 +128,7 @@ class Minions(object):
                 MINIONS_CFG.get('commands_fetch_period', 120),
                 self._fetch_states)
 
-    def _process_state(self, addr, response):
+    def _process_state(self, addr, response, sync=False):
 
         response_data = self._unwrap_response(json.loads(response), addr)
 
@@ -154,9 +154,12 @@ class Minions(object):
             if (self.cmd_progress.get(uid) is None or
                 int(self.cmd_progress[uid]) != int(state['progress'])):
 
-                logger.debug('Adding new task {0}'.format(self.CMD_ENTRY_FETCH % uid))
-                self.__tq.add_task_in(self.CMD_ENTRY_FETCH % uid,
-                    1, self._history_entry_update, state)
+                if not sync:
+                    logger.debug('Adding new task {0}'.format(self.CMD_ENTRY_FETCH % uid))
+                    self.__tq.add_task_in(self.CMD_ENTRY_FETCH % uid,
+                        1, self._history_entry_update, state)
+                else:
+                    self._history_entry_update(state)
 
         for uid, state in response_data.iteritems():
             if state['progress'] < 1.0:
@@ -253,7 +256,7 @@ class Minions(object):
                                allow_ipv6=True,
                                use_gzip=True))
 
-        data = self._process_state(host, self._get_response(host, response))
+        data = self._process_state(host, self._get_response(host, response), sync=True)
         return data
 
     @h.concurrent_handler
@@ -283,7 +286,7 @@ class Minions(object):
                                allow_ipv6=True,
                                use_gzip=True))
 
-        data = self._process_state(host, self._get_response(host, response))
+        data = self._process_state(host, self._get_response(host, response), sync=True)
         return data
 
     def _history_entry_update(self, state):
