@@ -185,7 +185,14 @@ class RestoreGroupJob(Job):
             self.tasks.append(task)
 
         src_backend = src_group.node_backends[0]
-        make_readonly = src_backend.status == storage.Status.OK
+        restore_backend = group.node_backends and group.node_backends[0]
+
+        make_readonly = (src_backend is not restore_backend and
+                         src_backend.status == storage.Status.OK)
+
+        mark_src_backend = self.make_path(
+            self.BACKEND_DOWN_MARKER, base_path=src_backend.base_path).format(
+                backend_id=src_backend.backend_id)
 
         if make_readonly:
             make_readonly_cmd = infrastructure._make_readonly_node_backend_cmd(
@@ -197,8 +204,8 @@ class RestoreGroupJob(Job):
                 cmd=make_readonly_cmd,
                 params={'node_backend': self.node_backend(
                     src_backend.node.host.addr, src_backend.node.port,
-                    src_backend.backend_id).encode('utf-8')
-                })
+                    src_backend.backend_id).encode('utf-8'),
+                        'mark_backend': mark_src_backend})
 
             self.tasks.append(task)
 
@@ -241,7 +248,7 @@ class RestoreGroupJob(Job):
                                      params=params)
             self.tasks.append(task)
 
-        if (group.node_backends and group.node_backends[0].status in
+        if (restore_backend and restore_backend.status in
             storage.NodeBackend.ACTIVE_STATUSES):
 
             nb = group.node_backends[0]
@@ -334,9 +341,24 @@ class RestoreGroupJob(Job):
                 cmd=make_writable_cmd,
                 params={'node_backend': self.node_backend(
                     src_backend.node.host.addr, src_backend.node.port,
-                    src_backend.backend_id).encode('utf-8')
-                })
+                    src_backend.backend_id).encode('utf-8'),
+                        'unmark_backend': mark_src_backend})
 
+            self.tasks.append(task)
+
+            # This start command is executed for the case when elliptics
+            # was restarted between make_readonly and make_writable commands
+            start_cmd = infrastructure._enable_node_backend_cmd(
+                src_backend.node.host.addr,
+                src_backend.node.port,
+                src_backend.node.family,
+                src_backend.backend_id)
+
+            task = MinionCmdTask.new(self,
+                host=src_backend.node.host.addr,
+                cmd=start_cmd,
+                params={'node_backend': str(src_backend).encode('utf-8'),
+                        'success_code': str(self.DNET_CLIENT_ALREADY_IN_PROGRESS)})
             self.tasks.append(task)
 
     @property

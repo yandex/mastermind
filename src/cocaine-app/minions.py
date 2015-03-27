@@ -235,6 +235,9 @@ class Minions(object):
         for k, v in params.iteritems():
             if k == 'command':
                 raise ValueError('Parameter "command" is not accepted as command parameter')
+
+            # TODO: if v is list or tuple, add several POST parameters for each value
+
             if not isinstance(v, basestring):
                 logger.warn('Failed parameter: %s' % (v,))
                 raise ValueError('Only strings are accepted as command parameters')

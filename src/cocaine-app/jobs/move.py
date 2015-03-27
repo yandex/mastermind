@@ -5,8 +5,8 @@ import os.path
 from config import config
 from error import JobBrokenError
 from infrastructure import infrastructure
-from job import Job
 from infrastructure_cache import cache
+from job import Job, RESTORE_CFG
 from job_types import JobTypes
 from tasks import NodeStopTask, RsyncBackendTask, MinionCmdTask, HistoryRemoveNodeTask
 import storage
@@ -25,12 +25,12 @@ logger = logging.getLogger('mm.jobs')
 class MoveJob(Job):
 
     # used to write group id
-    GROUP_FILE_PATH = config.get('restore', {}).get('group_file', None)
+    GROUP_FILE_PATH = RESTORE_CFG.get('group_file', None)
 
     # used to mark source node that content has been moved away from it
-    GROUP_FILE_DIR_MOVE_DST_RENAME = config.get('restore', {}).get('group_file_dir_move_dst_rename', None)
-    MERGE_GROUP_FILE_MARKER_PATH = config.get('restore', {}).get('merge_group_file_marker', None)
-    MERGE_GROUP_FILE_DIR_MOVE_SRC_RENAME = config.get('restore', {}).get('merge_group_file_dir_move_src_rename', None)
+    GROUP_FILE_DIR_MOVE_DST_RENAME = RESTORE_CFG.get('group_file_dir_move_dst_rename', None)
+    MERGE_GROUP_FILE_MARKER_PATH = RESTORE_CFG.get('merge_group_file_marker', None)
+    MERGE_GROUP_FILE_DIR_MOVE_SRC_RENAME = RESTORE_CFG.get('merge_group_file_dir_move_src_rename', None)
 
     PARAMS = ('group', 'uncoupled_group', 'uncoupled_group_fsid', 'merged_groups',
               'src_host', 'src_port', 'src_backend_id', 'src_family', 'src_base_path',
@@ -205,10 +205,15 @@ class MoveJob(Job):
         make_readonly_cmd = infrastructure._make_readonly_node_backend_cmd(
             self.src_host, self.src_port, self.src_family, self.src_backend_id)
 
+        mark_backend = self.make_path(
+            self.BACKEND_DOWN_MARKER, base_path=self.src_base_path).format(
+                backend_id=self.src_backend_id)
+
         task = MinionCmdTask.new(self,
                                  host=self.src_host,
                                  cmd=make_readonly_cmd,
-                                 params={'node_backend': self.src_node_backend.encode('utf-8')})
+                                 params={'node_backend': self.src_node_backend.encode('utf-8'),
+                                         'mark_backend': mark_backend})
 
         self.tasks.append(task)
 
@@ -237,7 +242,7 @@ class MoveJob(Job):
                                     params=params)
         self.tasks.append(task)
 
-        additional_files = config.get('restore', {}).get('move_additional_files', [])
+        additional_files = RESTORE_CFG.get('move_additional_files', [])
         for src_file_tpl, dst_file_path in additional_files:
             rsync_cmd = infrastructure.move_group_cmd(
                 src_host=self.src_host,
@@ -272,7 +277,8 @@ class MoveJob(Job):
         params = {'node_backend': self.src_node_backend.encode('utf-8'),
                   'group': str(self.group),
                   'group_file_marker': self.marker_format(group_file_marker),
-                  'remove_group_file': group_file}
+                  'remove_group_file': group_file,
+                  'success_code': str(self.DNET_CLIENT_ALREADY_IN_PROGRESS)}
 
         if self.GROUP_FILE_DIR_MOVE_SRC_RENAME and group_file:
             params['move_src'] = os.path.join(os.path.dirname(group_file))

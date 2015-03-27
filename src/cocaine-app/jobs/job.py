@@ -25,6 +25,8 @@ import pymongo
 
 logger = logging.getLogger('mm.jobs')
 
+RESTORE_CFG = config.get('restore', {})
+
 
 class Job(MongoObject):
 
@@ -51,8 +53,11 @@ class Job(MongoObject):
 
     COMMON_PARAMS = ('need_approving',)
 
-    GROUP_FILE_MARKER_PATH = config.get('restore', {}).get('group_file_marker', None)
-    GROUP_FILE_DIR_MOVE_SRC_RENAME = config.get('restore', {}).get('group_file_dir_move_src_rename', None)
+    GROUP_FILE_MARKER_PATH = RESTORE_CFG.get('group_file_marker', None)
+    GROUP_FILE_DIR_MOVE_SRC_RENAME = RESTORE_CFG.get('group_file_dir_move_src_rename', None)
+    BACKEND_DOWN_MARKER = RESTORE_CFG.get('backend_down_marker', None)
+
+    DNET_CLIENT_ALREADY_IN_PROGRESS = -114
 
     def __init__(self, need_approving=False):
         self.id = uuid.uuid4().hex
@@ -132,6 +137,15 @@ class Job(MongoObject):
             setattr(self, param, val)
 
         return self
+
+    def make_path(self, path, base_path=None):
+        if not path:
+            return ''
+        if os.path.isabs(path):
+            return path
+        if base_path:
+            path = os.path.join(base_path, path)
+        return path
 
     @property
     def create_ts(self):
