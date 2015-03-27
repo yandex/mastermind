@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 import logging
 import msgpack
+import os.path
 import threading
 import time
 import uuid

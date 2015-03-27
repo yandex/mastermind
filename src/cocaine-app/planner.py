@@ -766,7 +766,9 @@ class Planner(object):
 
         job_params = self._get_move_group_params(group, uncoupled_groups=uncoupled_groups)
 
+        logger.debug('Lock acquiring')
         with sync_manager.lock(self.job_processor.JOBS_LOCK, timeout=self.job_processor.JOB_MANUAL_TIMEOUT):
+            logger.debug('Lock acquired')
             job = self.job_processor._create_job(
                 jobs.JobTypes.TYPE_MOVE_JOB,
                 job_params, force=force)
@@ -801,6 +803,7 @@ class Planner(object):
                         'only groups with 1 node backend can be used'.format(
                             unc_group.group_id, len(unc_group.node_backends)))
 
+                is_uncoupled_group_good(unc_group, locked_hosts, max_node_backends=1)
                 if not is_uncoupled_group_good(unc_group, locked_hosts, max_node_backends=1):
                     raise ValueError('Uncoupled group {0} is not applicable'.format(
                         unc_group.group_id))
@@ -814,8 +817,6 @@ class Planner(object):
 
                 if unc_group.couple or unc_group.status != storage.Status.INIT:
                     raise ValueError('Group {0} is not uncoupled'.format(unc_group.group_id))
-
-                uncoupled_groups.append(unc_group)
 
         uncoupled_group, merged_groups = uncoupled_groups[0], uncoupled_groups[1:]
 

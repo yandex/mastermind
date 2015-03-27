@@ -19,7 +19,6 @@ from kazoo.retry import KazooRetry, RetryFailedError
 # from queue import FilteredLockingQueue
 # from errors import ConnectionError, InvalidDataError
 from lock import Lock
-from log import _handler
 from sync.error import LockError, LockFailedError, LockAlreadyAcquiredError, InconsistentLockError
 
 
@@ -27,7 +26,7 @@ logger = logging.getLogger('mm.sync')
 
 kazoo_logger = logging.getLogger('kazoo')
 kazoo_logger.propagate = False
-kazoo_logger.addHandler(_handler)
+[kazoo_logger.addHandler(h) for h in logger.handlers]
 kazoo_logger.setLevel(logging.INFO)
 
 

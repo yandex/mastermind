@@ -11,7 +11,7 @@ class SyncManager(object):
         self.__locks_lock = Lock()
 
     @contextmanager
-    def lock(self, lockid, blocking=True):
+    def lock(self, lockid, blocking=True, timeout=None):
         """ Locks mastermind jobs list.
         This is just a demo implementation that provides locking among
         different threads of the same process, you should provide your
