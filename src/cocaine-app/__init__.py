@@ -58,8 +58,15 @@ n = elliptics.Node(log, node_config)
 
 logger.info("trace %d" % (i.next()))
 
-addresses = [elliptics.Address(host=str(node[0]), port=node[1], family=node[2])
-             for node in nodes]
+addresses = []
+for node in nodes:
+    try:
+        addresses.append(elliptics.Address(
+            host=str(node[0]), port=node[1], family=node[2]))
+    except Exception as e:
+        logger.error('Failed to connect to storage node: {0}:{1}:{2}'.format(
+            node[0], node[1], node[2]))
+        pass
 
 try:
     n.add_remotes(addresses)
@@ -71,8 +78,16 @@ except Exception as e:
 logger.info("trace %d" % (i.next()))
 meta_node = elliptics.Node(log, node_config)
 
-addresses = [elliptics.Address(host=str(node[0]), port=node[1], family=node[2])
-             for node in config["metadata"]["nodes"]]
+addresses = []
+for node in config["metadata"]["nodes"]:
+    try:
+        addresses.append(elliptics.Address(
+            host=str(node[0]), port=node[1], family=node[2]))
+    except Exception as e:
+        logger.error('Failed to connect to meta node: {0}:{1}:{2}'.format(
+            node[0], node[1], node[2]))
+        pass
+
 logger.info('Connecting to meta nodes: {0}'.format(config["metadata"]["nodes"]))
 
 try:
