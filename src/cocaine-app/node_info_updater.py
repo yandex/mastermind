@@ -218,6 +218,9 @@ class NodeInfoUpdater(object):
                 else:
                     group = storage.groups[gid]
 
+                if backend_id == config.get('cache', {}).get('backend_id'):
+                    group.setup_cache_group()
+
                 if b_stat['status']['state'] != 1:
                     logger.info('Node backend {0} is not enabled: state {1}'.format(
                         str(node_backend), b_stat['status']['state']))

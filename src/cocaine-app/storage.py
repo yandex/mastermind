@@ -623,6 +623,7 @@ class Group(object):
         self.couple = None
         self.meta = None
         self.status_text = "Group %s is not inititalized yet" % (self.__str__())
+        self.is_cache = False
 
         for node_backend in node_backends or []:
             self.add_node_backend(node_backend)
@@ -650,6 +651,11 @@ class Group(object):
             self.meta = parsed
         else:
             raise Exception('Unable to parse meta')
+
+    def setup_cache_group(self):
+        self.is_cache = (self.meta and
+                         (self.meta.get('cache', False) == True) or
+                         False)
 
     def equal_meta(self, other):
         if type(self.meta) != type(other.meta):
