@@ -973,7 +973,10 @@ class DcCacheItem(CacheItem):
         super(DcCacheItem, self).__init__(*args, **kwargs)
 
     def get_value(self, key):
-        return inventory.get_dc_by_host(key)
+        try:
+            return inventory.get_dc_by_host(key)
+        except Exception as e:
+            return 'unknown'
 
 
 class HostnameCacheItem(CacheItem):
@@ -985,7 +988,10 @@ class HostnameCacheItem(CacheItem):
         super(HostnameCacheItem, self).__init__(*args, **kwargs)
 
     def get_value(self, key):
-        return socket.gethostbyaddr(key)[0]
+        try:
+            return socket.gethostbyaddr(key)[0]
+        except Exception as e:
+            return 'unknown'
 
 
 class HostTreeCacheItem(CacheItem):
