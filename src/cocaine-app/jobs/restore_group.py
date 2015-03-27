@@ -3,7 +3,8 @@ import os.path
 
 from config import config
 from error import JobBrokenError
-from infrastructure import infrastructure, BASE_PORT
+from infrastructure import infrastructure
+from infrastructure_cache import cache
 from job import Job
 from job_types import JobTypes
 from tasks import (NodeBackendDefragTask, CoupleDefragStateCheckTask,
@@ -260,13 +261,13 @@ class RestoreGroupJob(Job):
             group_file_marker_fmt = group_file_marker.format(
                 group_id=str(self.group),
                 src_host=nb.node.host.addr,
-                src_hostname=infrastructure.get_hostname_by_addr(
+                src_hostname=cache.get_hostname_by_addr(
                     nb.node.host.addr),
                 src_backend_id=nb.backend_id,
                 src_port=str(nb.node.port),
                 src_base_path=nb.base_path,
                 dst_host=dst_host,
-                dst_hostname=infrastructure.get_hostname_by_addr(dst_host),
+                dst_hostname=cache.get_hostname_by_addr(dst_host),
                 dst_port=str(dst_port),
                 dst_base_path=dst_base_path,
                 dst_backend_id=dst_backend_id)

@@ -2,6 +2,7 @@ import logging
 import time
 
 from infrastructure import infrastructure
+from infrastructure_cache import cache
 from jobs import TaskTypes
 import storage
 from sync import sync_manager
@@ -58,7 +59,7 @@ class HistoryRemoveNodeTask(Task):
 
     def human_dump(self):
         data = super(HistoryRemoveNodeTask, self).human_dump()
-        data['hostname'] = infrastructure.get_hostname_by_addr(data['host'])
+        data['hostname'] = cache.get_hostname_by_addr(data['host'])
         return data
 
     @property

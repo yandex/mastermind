@@ -11,6 +11,7 @@ import msgpack
 
 import inventory
 from infrastructure import infrastructure
+from infrastructure_cache import cache
 from config import config
 
 
@@ -287,16 +288,16 @@ class Host(object):
 
     @property
     def hostname(self):
-        return infrastructure.get_hostname_by_addr(self.addr)
+        return cache.get_hostname_by_addr(self.addr)
 
     @property
     def dc(self):
-        return infrastructure.get_dc_by_host(self.addr)
+        return cache.get_dc_by_host(self.addr)
 
     @property
     def parents(self):
-        return infrastructure.get_host_tree(
-            infrastructure.get_hostname_by_addr(self.addr))
+        return cache.get_host_tree(
+            cache.get_hostname_by_addr(self.addr))
 
     @property
     def full_path(self):
@@ -561,7 +562,7 @@ class NodeBackend(object):
         res['node'] = '{0}:{1}:{2}'.format(self.node.host, self.node.port, self.node.family)
         res['backend_id'] = self.backend_id
         res['addr'] = str(self)
-        res['hostname'] = infrastructure.get_hostname_by_addr(self.node.host.addr)
+        res['hostname'] = cache.get_hostname_by_addr(self.node.host.addr)
         res['status'] = self.status
         res['status_text'] = self.status_text
         res['dc'] = self.node.host.dc

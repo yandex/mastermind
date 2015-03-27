@@ -5,6 +5,7 @@ import elliptics
 from tornado.httpclient import HTTPError
 
 from infrastructure import infrastructure
+from infrastructure_cache import cache
 from jobs import TaskTypes, RetryError
 from task import Task
 
@@ -53,7 +54,7 @@ class MinionCmdTask(Task):
 
     def human_dump(self):
         data = super(MinionCmdTask, self).human_dump()
-        data['hostname'] = infrastructure.get_hostname_by_addr(data['host'])
+        data['hostname'] = cache.get_hostname_by_addr(data['host'])
         return data
 
     @property

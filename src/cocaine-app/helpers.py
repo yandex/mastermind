@@ -1,8 +1,11 @@
 from collections import defaultdict
 from functools import wraps
 import logging
+import msgpack
 import socket
+from time import time
 import traceback
+import uuid
 
 import elliptics
 from cocaine.futures import chain
@@ -97,3 +100,50 @@ def ips_set(hostname):
         ips.add(res[4][0])
 
     return ips
+
+
+def register_handle(W, h):
+    logger = logging.getLogger('mm.init')
+    @wraps(h)
+    def wrapper(request, response):
+        start_ts = time()
+        req_uid = uuid.uuid4().hex
+        try:
+            data = yield request.read()
+            data = msgpack.unpackb(data)
+            logger.info(":{req_uid}: Running handler for event {0}, "
+                "data={1}".format(h.__name__, str(data), req_uid=req_uid))
+            #msgpack.pack(h(data), response)
+            res = h(data)
+            if isinstance(res, chain.Chain):
+                res = yield res
+            else:
+                logger.error('Synchronous handler for {0} handle'.format(h.__name__))
+            response.write(res)
+        except Exception as e:
+            logger.error(":{req_uid}: handler for event {0}, "
+                "data={1}: Balancer error: {2}\n{3}".format(
+                    h.__name__, str(data), e,
+                    traceback.format_exc(),
+                    req_uid=req_uid))
+            response.write({"Balancer error": str(e)})
+        finally:
+            logger.info(':{req_uid}: Finished handler for event {0}, '
+                'time: {1:.3f}'.format(h.__name__, time() - start_ts, req_uid=req_uid))
+        response.close()
+
+    W.on(h.__name__, wrapper)
+    logger.info("Registering handler for event %s" % h.__name__)
+    return wrapper
+
+
+def process_elliptics_async_result(result, processor, *args, **kwargs):
+    result.wait()
+    if not len(result.get()):
+        raise ValueError('empty response')
+    entry = result.get()[0]
+    if entry.error.code:
+        raise Exception(entry.error.message)
+
+    return processor(entry, elapsed_time=result.elapsed_time(),
+                     end_time=result.end_time(), *args, **kwargs)

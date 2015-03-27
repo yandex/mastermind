@@ -40,7 +40,7 @@ class NodeInfoUpdater(object):
 
         self.__cluster_update_lock = threading.Lock()
 
-    def start():
+    def start(self):
         self.node_statistics_update()
         self.update_symm_groups()
 
@@ -142,7 +142,7 @@ class NodeInfoUpdater(object):
 
         for result, address in requests:
             try:
-                self._process_elliptics_async_result(result, self.update_statistics)
+                h.process_elliptics_async_result(result, self.update_statistics)
             except Exception as e:
                 logger.error('Failed to request monitor_stat for node {0}: '
                     '{1}\n{2}'.format(address, e, traceback.format_exc()))
@@ -338,7 +338,7 @@ class NodeInfoUpdater(object):
                 group = storage.groups[group_id]
 
                 try:
-                    self._process_elliptics_async_result(result, _process_group_metadata, group)
+                    h.process_elliptics_async_result(result, _process_group_metadata, group)
                 except elliptics.NotFoundError as e:
                     logger.warn('Failed to read symmetric_groups '
                         'from group {0}: {1}'.format(group_id, e))
@@ -360,18 +360,6 @@ class NodeInfoUpdater(object):
             logger.error('Critical error during symmetric group '
                                  'update, {0}: {1}'.format(str(e),
                                      traceback.format_exc()))
-
-    @staticmethod
-    def _process_elliptics_async_result(result, processor, *args, **kwargs):
-        result.wait()
-        if not len(result.get()):
-            raise ValueError('empty response')
-        entry = result.get()[0]
-        if entry.error.code:
-            raise Exception(entry.error.message)
-
-        return processor(entry, elapsed_time=result.elapsed_time(),
-                         end_time=result.end_time(), *args, **kwargs)
 
     def stop(self):
         self.__tq.shutdown()

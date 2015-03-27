@@ -1,6 +1,7 @@
 import logging
 
 from infrastructure import infrastructure
+from infrastructure_cache import cache
 import inventory
 import jobs
 from jobs import JobBrokenError, TaskTypes
@@ -49,7 +50,7 @@ class RsyncBackendTask(MinionCmdTask):
         super(RsyncBackendTask, self).execute(processor)
 
     def on_exec_start(self, processor):
-        hostnames = set([infrastructure.get_hostname_by_addr(host)
+        hostnames = set([cache.get_hostname_by_addr(host)
                          for host in (self.host, self.src_host)])
 
         dl = jobs.Job.list(processor.downtimes,
@@ -83,7 +84,7 @@ class RsyncBackendTask(MinionCmdTask):
             raise
 
     def on_exec_stop(self, processor):
-        hostnames = set([infrastructure.get_hostname_by_addr(host)
+        hostnames = set([cache.get_hostname_by_addr(host)
                          for host in (self.host, self.src_host)])
 
         dl = jobs.Job.list(processor.downtimes,

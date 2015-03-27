@@ -3,6 +3,7 @@ import time
 
 from error import JobBrokenError
 from infrastructure import infrastructure
+from infrastructure_cache import cache
 from job import Job
 from job_types import JobTypes
 from tasks import NodeBackendDefragTask, CoupleDefragStateCheckTask, RecoverGroupDcTask
@@ -58,7 +59,7 @@ class RecoverDcJob(Job):
 
     def human_dump(self):
         data = super(RecoverDcJob, self).human_dump()
-        data['hostname'] = infrastructure.get_hostname_by_addr(data['host'])
+        data['hostname'] = cache.get_hostname_by_addr(data['host'])
         return data
 
     def __min_keys_group(self, couple):

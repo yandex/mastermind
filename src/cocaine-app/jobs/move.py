@@ -6,6 +6,7 @@ from config import config
 from error import JobBrokenError
 from infrastructure import infrastructure
 from job import Job
+from infrastructure_cache import cache
 from job_types import JobTypes
 from tasks import NodeStopTask, RsyncBackendTask, MinionCmdTask, HistoryRemoveNodeTask
 import storage
@@ -81,20 +82,20 @@ class MoveJob(Job):
 
     def human_dump(self):
         data = super(MoveJob, self).human_dump()
-        data['src_hostname'] = infrastructure.get_hostname_by_addr(data['src_host'])
-        data['dst_hostname'] = infrastructure.get_hostname_by_addr(data['dst_host'])
+        data['src_hostname'] = cache.get_hostname_by_addr(data['src_host'])
+        data['dst_hostname'] = cache.get_hostname_by_addr(data['dst_host'])
         return data
 
     def marker_format(self, marker):
         return marker.format(
             group_id=str(self.group),
             src_host=self.src_host,
-            src_hostname=infrastructure.get_hostname_by_addr(self.src_host),
+            src_hostname=cache.get_hostname_by_addr(self.src_host),
             src_backend_id=self.src_backend_id,
             src_port=str(self.src_port),
             src_base_path=self.src_base_path,
             dst_host=self.dst_host,
-            dst_hostname=infrastructure.get_hostname_by_addr(self.dst_host),
+            dst_hostname=cache.get_hostname_by_addr(self.dst_host),
             dst_port=str(self.dst_port),
             dst_base_path=self.dst_base_path,
             dst_backend_id=self.dst_backend_id)

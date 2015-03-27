@@ -19,6 +19,7 @@ from config import config
 from db.mongo.pool import Collection
 import helpers as h
 from infrastructure import infrastructure
+from infrastructure_cache import cache
 import inventory
 import jobs
 import keys
@@ -123,8 +124,8 @@ class Planner(object):
                         assert len(src_group.node_backends) == 1, 'Src group {0} should have only 1 node backend'.format(src_group.group_id)
                         assert len(dst_group.node_backends) == 1, 'Dst group {0} should have only 1 node backend'.format(dst_group.group_id)
 
-                        src_dc_cnt = infrastructure.get_dc_by_host(src_group.node_backends[0].node.host.addr)
-                        dst_dc_cnt = infrastructure.get_dc_by_host(dst_group.node_backends[0].node.host.addr)
+                        src_dc_cnt = cache.get_dc_by_host(src_group.node_backends[0].node.host.addr)
+                        dst_dc_cnt = cache.get_dc_by_host(dst_group.node_backends[0].node.host.addr)
 
                         assert src_dc_cnt == src_dc, \
                             'Dc for src group {0} has been changed: {1} != {2}'.format(
@@ -998,7 +999,7 @@ class Planner(object):
                 'to history'.format(group.group_id))
 
         host_addr = nodes_set[0][0]
-        old_host_tree = infrastructure.get_host_tree(infrastructure.get_hostname_by_addr(host_addr))
+        old_host_tree = cache.get_host_tree(infrastructure.get_hostname_by_addr(host_addr))
         logger.info('Old host tree: {0}'.format(old_host_tree))
 
         uncoupled_groups = get_good_uncoupled_groups(max_node_backends=1)
@@ -1016,8 +1017,8 @@ class Planner(object):
         candidates = self.get_suitable_uncoupled_groups_list(group, uncoupled_groups)
         for candidate in candidates:
             host_addr = candidate[0].node_backends[0].node.host.addr
-            host_tree = infrastructure.get_host_tree(
-                infrastructure.get_hostname_by_addr(host_addr))
+            host_tree = cache.get_host_tree(
+                cache.get_hostname_by_addr(host_addr))
 
             diff = 0
             dc = None
@@ -1032,9 +1033,6 @@ class Planner(object):
                     dc_change = old_node['name'] != node['name']
                 old_node = old_node.get('parent', None)
                 node = node.get('parent', None)
-
-            logger.info('dc_node_type {0}, host_tree {1}, dc {2}'.format(
-                dc_node_type, host_tree, dc))
 
             weights[tuple(candidate)] = (dc_change, diff, -len(groups_by_dc[dc]))
 
