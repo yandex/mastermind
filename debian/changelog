@@ -1,3 +1,9 @@
+mastermind (2.21.17) lucid; urgency=low
+
+  * Several minor fixes
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 27 Mar 2015 20:20:06 +0300
+
 mastermind (2.21.16) lucid; urgency=low
 
   * Do not crash if failed to resolve some infrastructure host
