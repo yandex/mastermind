@@ -128,6 +128,16 @@ class CacheItem(object):
         return val
 
 
+def unknown_host_error(f):
+    def wrapper(self, *args, **kwargs):
+        try:
+            return f(self, *args, **kwargs)
+        except socket.herror as e:
+            # [Errno 1] Unknown host
+            return 'unknown'
+    return wrapper
+
+
 class DcCacheItem(CacheItem):
     def __init__(self, *args, **kwargs):
         self.taskname = 'infrastructure_dc_cache_sync'
@@ -136,6 +146,7 @@ class DcCacheItem(CacheItem):
         self.key_expire_time = config.get('infrastructure_dc_cache_valid_time', 604800)
         super(DcCacheItem, self).__init__(*args, **kwargs)
 
+    @unknown_host_error
     def get_value(self, key):
         return inventory.get_dc_by_host(key)
 
@@ -148,6 +159,7 @@ class HostnameCacheItem(CacheItem):
         self.key_expire_time = config.get('infrastructure_hostname_cache_valid_time', 604800)
         super(HostnameCacheItem, self).__init__(*args, **kwargs)
 
+    @unknown_host_error
     def get_value(self, key):
         return socket.gethostbyaddr(key)[0]
 
