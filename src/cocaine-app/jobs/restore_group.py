@@ -342,7 +342,8 @@ class RestoreGroupJob(Job):
                 params={'node_backend': self.node_backend(
                     src_backend.node.host.addr, src_backend.node.port,
                     src_backend.backend_id).encode('utf-8'),
-                        'unmark_backend': mark_src_backend})
+                        'unmark_backend': mark_src_backend,
+                        'success_code': str(self.DNET_CLIENT_ALREADY_IN_PROGRESS)})
 
             self.tasks.append(task)
 
