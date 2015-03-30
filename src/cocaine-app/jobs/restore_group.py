@@ -218,7 +218,7 @@ class RestoreGroupJob(Job):
         params = {'group': str(self.group),
                   'group_file': group_file}
 
-        if remove_path:
+        if remove_path and self.uncoupled_group:
             params['remove_path'] = remove_path
 
         task = RsyncBackendTask.new(self,
