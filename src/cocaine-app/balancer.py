@@ -391,9 +391,6 @@ class Balancer(object):
         group_id = int(request[0])
         node_backend_str = request[1]
 
-        if not group_id in storage.groups:
-            raise ValueError('Group %d is not found' % group_id)
-
         group = (group_id in storage.groups and
                  storage.groups[group_id] or
                  None)
@@ -415,12 +412,12 @@ class Balancer(object):
             group.update_status_recursive()
             logger.info('Removed node backend {0} from group {1} nodes'.format(node_backend, group))
 
-        logger.info('Removing node backend {0} from group {1} history'.format(node_backend, group_id))
+        logger.info('Removing node backend {0} from group {1} history'.format(node_backend_str, group_id))
         try:
             self.infrastructure.detach_node(group_id, host, port, backend_id)
-            logger.info('Removed node backend {0} from group {1} history'.format(node_backend, group_id))
+            logger.info('Removed node backend {0} from group {1} history'.format(node_backend_str, group_id))
         except Exception as e:
-            logger.error('Failed to remove {0} from group {1} history: {2}'.format(node_backend, group_id, str(e)))
+            logger.error('Failed to remove {0} from group {1} history: {2}'.format(node_backend_str, group_id, str(e)))
             raise
 
         return True
