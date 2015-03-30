@@ -156,8 +156,13 @@ class Minions(object):
 
                 if not sync:
                     logger.debug('Adding new task {0}'.format(self.CMD_ENTRY_FETCH % uid))
-                    self.__tq.add_task_in(self.CMD_ENTRY_FETCH % uid,
-                        1, self._history_entry_update, state)
+                    try:
+                        self.__tq.add_task_in(self.CMD_ENTRY_FETCH % uid,
+                            1, self._history_entry_update, state)
+                    except Exception as e:
+                        logger.info('Task for command {0} already '
+                            'added to task queue'.format(uid))
+                        continue
                 else:
                     self._history_entry_update(state)
 
