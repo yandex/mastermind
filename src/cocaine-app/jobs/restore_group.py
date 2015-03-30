@@ -343,7 +343,7 @@ class RestoreGroupJob(Job):
                     src_backend.node.host.addr, src_backend.node.port,
                     src_backend.backend_id).encode('utf-8'),
                         'unmark_backend': mark_src_backend,
-                        'success_code': str(self.DNET_CLIENT_ALREADY_IN_PROGRESS)})
+                        'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]})
 
             self.tasks.append(task)
 
@@ -359,7 +359,7 @@ class RestoreGroupJob(Job):
                 host=src_backend.node.host.addr,
                 cmd=start_cmd,
                 params={'node_backend': str(src_backend).encode('utf-8'),
-                        'success_code': str(self.DNET_CLIENT_ALREADY_IN_PROGRESS)})
+                        'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]})
             self.tasks.append(task)
 
     @property

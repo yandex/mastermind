@@ -240,23 +240,33 @@ class Minions(object):
     def _execute_cmd(self, host, command, params):
         url = self.START_URL_TPL.format(host=host, port=self.minion_port)
         data = {'command': command}
+
+        params_rename = {
+            'success_codes': 'success_code'
+        }
+
+        def check_param(key, val):
+            if not isinstance(val, (int, long, basestring)):
+                logger.warn('Failed parameter {0}, value {1}'.format(key, val))
+                raise ValueError('Only strings are accepted as command parameters')
+
         for k, v in params.iteritems():
             if k == 'command':
                 raise ValueError('Parameter "command" is not accepted as command parameter')
 
-            # TODO: if v is list or tuple, add several POST parameters for each value
-
-            if not isinstance(v, basestring):
-                logger.warn('Failed parameter: %s' % (v,))
-                raise ValueError('Only strings are accepted as command parameters')
-            data[k] = v
+            if isinstance(v, (list, tuple)):
+                for val in v:
+                    check_param(k, val)
+            else:
+                check_param(k, v)
+            data[params_rename.get(k, k)] = v
 
         io_loop = IOLoop()
         client = SimpleAsyncHTTPClient(io_loop)
         response = io_loop.run_sync(functools.partial(
             client.fetch, url, method='POST',
                                headers=self.minion_headers,
-                               body=urllib.urlencode(data),
+                               body=urllib.urlencode(data, doseq=True),
                                request_timeout=MINIONS_CFG.get('request_timeout', 5.0),
                                allow_ipv6=True,
                                use_gzip=True))

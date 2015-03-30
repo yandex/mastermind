@@ -278,7 +278,7 @@ class MoveJob(Job):
                   'group': str(self.group),
                   'group_file_marker': self.marker_format(group_file_marker),
                   'remove_group_file': group_file,
-                  'success_code': str(self.DNET_CLIENT_ALREADY_IN_PROGRESS)}
+                  'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]}
 
         if self.GROUP_FILE_DIR_MOVE_SRC_RENAME and group_file:
             params['move_src'] = os.path.join(os.path.dirname(group_file))

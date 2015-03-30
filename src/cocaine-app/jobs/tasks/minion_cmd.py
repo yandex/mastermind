@@ -65,7 +65,11 @@ class MinionCmdTask(Task):
 
     @property
     def failed(self):
-        return self.minion_cmd is None or self.minion_cmd['exit_code'] != 0
+        if self.minion_cmd is None:
+            return True
+        return (self.minion_cmd['exit_code'] != 0 and
+                self.minion_cmd.get('command_code', None) not in
+                    self.minion_cmd['params'].get('success_codes', []))
 
     def __str__(self):
         return 'MinionCmdTask[id: {0}]<{1}>'.format(self.id, self.cmd)
