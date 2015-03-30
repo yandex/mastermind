@@ -1,3 +1,9 @@
+mastermind (2.21.21) lucid; urgency=low
+
+  * Fix for restore group job when executed on old node backend
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 30 Mar 2015 19:36:51 +0300
+
 mastermind (2.21.20) lucid; urgency=low
 
   * Minor fixed
