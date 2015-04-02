@@ -101,7 +101,7 @@ class NodeInfoUpdater(object):
     @h.concurrent_handler
     def force_nodes_update(self, request):
         logger.info('Forcing nodes update')
-        self.do_force_nodes_update()
+        self._force_nodes_update()
         logger.info('Cluster was successfully updated')
         return True
 
