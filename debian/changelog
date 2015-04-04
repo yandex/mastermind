@@ -28,6 +28,12 @@ mastermind (2.21.17) lucid; urgency=low
 
  -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 27 Mar 2015 20:20:06 +0300
 
+mastermind (2.21.16-1) lucid; urgency=low
+
+  * Configurable autoapprove for recovery jobs
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sat, 04 Apr 2015 12:33:17 +0300
+
 mastermind (2.21.16) lucid; urgency=low
 
   * Do not crash if failed to resolve some infrastructure host
