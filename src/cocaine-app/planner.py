@@ -339,6 +339,8 @@ class Planner(object):
             created_jobs = 0
             logger.info('Trying to create {0} jobs'.format(slots))
 
+            need_approving = not self.params.get('recover_dc', {}).get('autoapprove', False)
+
             for couple_id in self._recover_top_weight_couples(slots):
 
                 logger.info('Creating recover job for couple {0}'.format(couple_id))
@@ -353,7 +355,7 @@ class Planner(object):
                     job = self.job_processor._create_job(
                         jobs.JobTypes.TYPE_RECOVER_DC_JOB,
                         {'couple': couple_id,
-                         'need_approving': False})
+                         'need_approving': need_approving})
                     logger.info('Created recover dc job for couple {0}, '
                         'job id {1}'.format(couple, job.id))
                     created_jobs += 1
