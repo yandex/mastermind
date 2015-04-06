@@ -71,12 +71,22 @@ class Planner(object):
         try:
             logger.info('Starting move candidates planner')
 
-            # prechecking for new or pending tasks
-            if self.job_processor.jobs_count(types=jobs.JobTypes.TYPE_MOVE_JOB,
-                statuses=jobs.Job.STATUS_NOT_APPROVED):
-                    return
+            max_move_jobs = config.get('jobs', {}).get('move_job',
+                {}).get('max_executing_jobs', 3)
 
-            self._do_move_candidates()
+            # prechecking for new or pending tasks
+            count = self.job_processor.jobs_count(types=jobs.JobTypes.TYPE_MOVE_JOB,
+                statuses=[jobs.Job.STATUS_NOT_APPROVED,
+                          jobs.Job.STATUS_NEW,
+                          jobs.Job.STATUS_EXECUTING,
+                          jobs.Job.STATUS_PENDING])
+
+            if count >= max_move_jobs:
+                logger.info('Found {0} unfinished move jobs '
+                    '(>= {1})'.format(count, max_move_jobs))
+                return
+
+            self._do_move_candidates(max_move_jobs - count)
         except Exception as e:
             logger.error('{0}: {1}'.format(e, traceback.format_exc()))
         finally:
@@ -110,10 +120,19 @@ class Planner(object):
             with sync_manager.lock(self.job_processor.JOBS_LOCK):
                 logger.debug('Lock acquired')
 
-                if self.job_processor.jobs_count(
-                    types=jobs.JobTypes.TYPE_MOVE_JOB,
-                    statuses=jobs.Job.STATUS_NOT_APPROVED):
-                        raise ValueError('Not finished move jobs are found')
+                max_move_jobs = config.get('jobs', {}).get('move_job',
+                    {}).get('max_executing_jobs', 3)
+
+                # prechecking for new or pending tasks
+                jobs_count = self.job_processor.jobs_count(types=jobs.JobTypes.TYPE_MOVE_JOB,
+                    statuses=[jobs.Job.STATUS_NOT_APPROVED,
+                              jobs.Job.STATUS_NEW,
+                              jobs.Job.STATUS_EXECUTING,
+                              jobs.Job.STATUS_PENDING])
+
+                if jobs_count >= max_move_jobs:
+                    raise ValueError('Found {0} unfinished move jobs'.format(
+                        jobs_count))
 
                 for i, candidate in enumerate(candidates):
                     logger.info('Candidate {0}: data {1}, ms_error delta {2}:'.format(
@@ -153,7 +172,8 @@ class Planner(object):
                                  'dst_family': dst_group.node_backends[0].node.family,
                                  'dst_backend_id': dst_group.node_backends[0].backend_id,
                                  'dst_base_path': dst_group.node_backends[0].base_path,
-                                 })
+                                 },
+                                 force=True)
                             logger.info('Job successfully created: {0}'.format(job.id))
                         except jobs.LockFailedError as e:
                             logger.error('Failed to create move job for moving '
@@ -170,14 +190,14 @@ class Planner(object):
         except ValueError as e:
             logger.error('Plan cannot be applied: {0}'.format(e))
 
-    def _do_move_candidates(self, step=0, busy_hosts=None):
+    def _do_move_candidates(self, max_plan_length, step=0, busy_hosts=None):
         if step == 0:
             self.candidates = [[StorageState.current()]]
         if busy_hosts is None:
             busy_hosts = self.__busy_hosts(jobs.JobTypes.TYPE_MOVE_JOB)
             logger.debug('Busy hosts from executing jobs: {0}'.format(list(busy_hosts)))
 
-        if step >= self.__max_plan_length:
+        if step >= min(self.__max_plan_length, max_plan_length):
             self.__apply_plan()
             return
 
@@ -199,7 +219,7 @@ class Planner(object):
             busy_hosts.add(src_group.node_backends[0].node.host.addr)
             busy_hosts.add(dst_group.node_backends[0].node.host.addr)
 
-        self._do_move_candidates(step=step + 1, busy_hosts=busy_hosts)
+        self._do_move_candidates(max_plan_length, step=step + 1, busy_hosts=busy_hosts)
 
 
     def _generate_candidates(self, candidate, busy_hosts):
