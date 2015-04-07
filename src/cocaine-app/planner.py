@@ -1022,7 +1022,7 @@ class Planner(object):
                 'to history'.format(group.group_id))
 
         host_addr = nodes_set[0][0]
-        old_host_tree = cache.get_host_tree(infrastructure.get_hostname_by_addr(host_addr))
+        old_host_tree = cache.get_host_tree(cache.get_hostname_by_addr(host_addr))
         logger.info('Old host tree: {0}'.format(old_host_tree))
 
         uncoupled_groups = get_good_uncoupled_groups(max_node_backends=1)
