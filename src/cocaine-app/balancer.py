@@ -616,7 +616,7 @@ class Balancer(object):
                 ng_keys = tuple(gu[node_type] for gu in units[group_id])
                 comb.append(ng_keys)
 
-            weight.append(self.weight_combination(
+            weight.append(self.__weight_combination(
                 ns_current_state[node_type],
                 comb))
 
