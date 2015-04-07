@@ -1,3 +1,15 @@
+mastermind (2.21.23) lucid; urgency=low
+
+  * Planner will try to create job if there is less than max_executing_jobs running
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 06 Apr 2015 15:32:26 +0300
+
+mastermind (2.21.22) lucid; urgency=low
+
+  * Force update fixed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 06 Apr 2015 14:32:10 +0300
+
 mastermind (2.21.21) lucid; urgency=low
 
   * Fix for restore group job when executed on old node backend
