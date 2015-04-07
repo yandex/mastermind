@@ -791,15 +791,15 @@ class Balancer(object):
         logger.info('----------------------------------------')
         logger.info('New break couple request: ' + str(request))
 
-        couple_str = ':'.join(map(str, sorted(request[0], key=lambda x: int(x))))
-        if not couple_str in storage.couples:
-            raise KeyError('Couple %s was not found' % (couple_str))
-
         with sync_manager.lock(self.CLUSTER_CHANGES_LOCK, blocking=False):
 
             logger.info('Updating cluster info')
             self.__update_cluster_state()
             logger.info('Updating cluster info completed')
+
+            couple_str = ':'.join(map(str, sorted(request[0], key=lambda x: int(x))))
+            if not couple_str in storage.couples:
+                raise KeyError('Couple %s was not found' % (couple_str))
 
             couple = storage.couples[couple_str]
             confirm = request[1]
