@@ -772,18 +772,6 @@ class Infrastructure(object):
 
         return tree, nodes
 
-    def ns_current_state(self, nodes):
-        ns_current_state = {}
-        for node_type in self.NODE_TYPES[1:]:
-            ns_current_state[node_type] = {'nodes': {},
-                                           'avg': 0}
-            for child in nodes[node_type].itervalues():
-                ns_current_state[node_type]['nodes'][child['full_path']] = len(child['groups'])
-            ns_current_state[node_type]['avg'] = (
-                float(sum(ns_current_state[node_type]['nodes'].values())) /
-                len(nodes[node_type]))
-        return ns_current_state
-
     def update_groups_list(self, root):
         if not 'children' in root:
             return root['groups']
@@ -825,7 +813,9 @@ class Infrastructure(object):
             ns_current_state[node_type] = {'nodes': {},
                                            'avg': 0}
             for child in nodes[node_type].itervalues():
-                ns_current_state[node_type]['nodes'][child['full_path']] = len(child['groups'])
+                if not 'groups' in child:
+                    logger.error('No groups in child {0}'.format(child))
+                ns_current_state[node_type]['nodes'][child['full_path']] = len(child.get('groups', []))
             ns_current_state[node_type]['avg'] = (
                 float(sum(ns_current_state[node_type]['nodes'].values())) /
                 len(nodes[node_type]))
