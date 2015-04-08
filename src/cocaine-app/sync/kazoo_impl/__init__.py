@@ -51,7 +51,6 @@ class ZkSyncManager(object):
 
     @contextmanager
     def lock(self, lockid, blocking=True, timeout=LOCK_TIMEOUT):
-        # with self.__locks_lock:
         lock = Lock(self.client, self.lock_path_prefix + lockid)
         try:
             acquired = lock.acquire(blocking=blocking, timeout=timeout)
@@ -65,7 +64,7 @@ class ZkSyncManager(object):
             raise LockFailedError(lock_id=lockid)
         except LockFailedError:
             raise
-        except Exception as e:
+        except LockError as e:
             logger.error('Failed to acquire lock {0}: {1}\n{2}'.format(
                 lockid, e, traceback.format_exc()))
             raise
