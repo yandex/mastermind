@@ -572,6 +572,8 @@ class Planner(object):
                     logger.info('Unfinished couple defrag jobs found')
                     return
 
+            need_approving = not self.params.get('couple_defrag', {}).get('autoapprove', False)
+
             couples_to_defrag = []
             for couple in storage.couples:
                 if couple.status not in storage.GOOD_STATUSES:
@@ -612,7 +614,8 @@ class Planner(object):
                 try:
                     job = self.job_processor._create_job(
                         jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB,
-                        {'couple': couple_tuple})
+                        {'couple': couple_tuple,
+                         'need_approving': need_approving})
                     logger.info('Created couple defrag job for couple {0}, job id {1}'.format(
                         couple_tuple, job.id))
                 except Exception as e:
