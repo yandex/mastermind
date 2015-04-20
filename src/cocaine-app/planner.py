@@ -333,7 +333,7 @@ class Planner(object):
         finally:
             logger.info('Recover dc planner finished')
             self.__tq.add_task_in(self.RECOVER_DC,
-                self.params.get('recover_dc_period', 60),
+                self.params.get('recover_dc', {}).get('recover_dc_period', 60),
                 self._recover_dc)
 
     def _do_recover_dc(self):
@@ -564,7 +564,7 @@ class Planner(object):
         finally:
             logger.info('Couple defrag planner finished')
             self.__tq.add_task_in(self.COUPLE_DEFRAG,
-                self.params.get('couple_defrag', 60),
+                self.params.get('couple_defrag', {}).get('couple_defrag_period', 60),
                 self._couple_defrag)
 
     def _do_couple_defrag(self):
