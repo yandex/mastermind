@@ -542,12 +542,19 @@ class Planner(object):
         try:
             logger.info('Starting couple defrag planner')
 
+            max_defrag_jobs = config.get('jobs', {}).get('couple_defrag_job',
+                {}).get('max_executing_jobs', 3)
             # prechecking for new or pending tasks
-            if self.job_processor.jobs_count(
+            count = self.job_processor.jobs_count(
                 types=jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB,
-                statuses=jobs.Job.STATUS_NOT_APPROVED):
-                    logger.info('Unfinished couple defrag jobs found')
-                    return
+                statuses=[jobs.Job.STATUS_NOT_APPROVED,
+                          jobs.Job.STATUS_NEW,
+                          jobs.Job.STATUS_EXECUTING])
+
+            if count >= max_defrag_jobs:
+                logger.info('Found {0} unfinished couple defrag jobs '
+                    '(>= {1})'.format(count, max_defrag_jobs))
+                return
 
             self._do_couple_defrag()
         except LockFailedError:
@@ -566,11 +573,20 @@ class Planner(object):
         with sync_manager.lock(self.job_processor.JOBS_LOCK):
             logger.debug('Lock acquired')
 
-            if self.job_processor.jobs_count(
+            max_defrag_jobs = config.get('jobs', {}).get('couple_defrag_job',
+                {}).get('max_executing_jobs', 3)
+
+            jobs_count = self.job_processor.jobs_count(
                 types=jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB,
-                statuses=jobs.Job.STATUS_NOT_APPROVED):
-                    logger.info('Unfinished couple defrag jobs found')
-                    return
+                statuses=[jobs.Job.STATUS_NOT_APPROVED,
+                          jobs.Job.STATUS_NEW,
+                          jobs.Job.STATUS_EXECUTING])
+
+            slots = max_defrag_jobs - jobs_count
+            if slots <= 0:
+                logger.info('Found {0} unfinished recover dc jobs'.format(
+                    jobs_count))
+                return
 
             need_approving = not self.params.get('couple_defrag', {}).get('autoapprove', False)
 
@@ -605,10 +621,12 @@ class Planner(object):
 
                 couples_to_defrag.append((str(couple), couple_stat.files_removed_size))
 
+            created_jobs = 0
+            logger.info('Trying to create {0} jobs'.format(slots))
+
             couples_to_defrag.sort(key=lambda c: c[1])
 
-            for i in xrange(min(self.params.get('couple_defrag', {}).get('jobs_batch_size', 10),
-                                len(couples_to_defrag))):
+            while couples_to_defrag and created_jobs < slots:
                 couple_tuple, fragmentation = couples_to_defrag.pop()
 
                 try:
@@ -618,9 +636,12 @@ class Planner(object):
                          'need_approving': need_approving})
                     logger.info('Created couple defrag job for couple {0}, job id {1}'.format(
                         couple_tuple, job.id))
+                    created_jobs += 1
                 except Exception as e:
                     logger.error('Failed to create couple defrag job: {0}'.format(e))
                     continue
+
+            logger.info('Successfully created {0} couple defrag jobs'.format(created_jobs))
 
     @h.concurrent_handler
     def restore_group(self, request):

@@ -1,3 +1,9 @@
+mastermind (2.23.2) lucid; urgency=low
+
+  * Properly job slots checking in planner for couple defrag jobs
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 20 Apr 2015 23:25:43 +0300
+
 mastermind (2.23.1) lucid; urgency=low
 
   * Config option for autoapproving defrag jobs
