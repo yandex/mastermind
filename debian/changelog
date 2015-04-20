@@ -1,3 +1,9 @@
+mastermind (2.23.3) lucid; urgency=low
+
+  * Misprint fixed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 20 Apr 2015 23:41:56 +0300
+
 mastermind (2.23.2) lucid; urgency=low
 
   * Properly job slots checking in planner for couple defrag jobs
