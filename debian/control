@@ -9,11 +9,11 @@ Vcs-Git: git://github.com/toshic/mastermind.git
 
 Package: mastermind
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, cocaine-framework-python (<< 0.12), python-balancelogic (>= 0.4), python-tornado (<< 4), cocaine-tools (<< 0.12), python-pymongo, cocaine-runtime (<< 0.12)
+Depends: ${shlibs:Depends}, ${misc:Depends}, cocaine-framework-python (<< 0.12), python-balancelogic (>= 0.4), python-tornado, cocaine-tools (<< 0.12), python-pymongo, cocaine-runtime (<< 0.12)
 Recommends: python-kazoo
 Description: Metabalancer for elliptics storage
 
 Package: mastermind-utils
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, python-opster (>= 4.0), cocaine-framework-python (<< 0.12), python-msgpack | msgpack-python, python-tornado (<< 4)
+Depends: ${shlibs:Depends}, ${misc:Depends}, python-opster (>= 4.0), cocaine-framework-python (<< 0.12), python-msgpack | msgpack-python, python-tornado
 Description: Metabalancer CLI for elliptics storage
