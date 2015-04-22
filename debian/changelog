@@ -1,3 +1,9 @@
+mastermind (2.24.1) lucid; urgency=low
+
+  * Distributed cache manager (for gatlinggun)
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 22 Apr 2015 17:04:56 +0300
+
 mastermind (2.23.3) lucid; urgency=low
 
   * Misprint fixed
