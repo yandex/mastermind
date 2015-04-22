@@ -1,3 +1,9 @@
+mastermind (2.24.4) lucid; urgency=low
+
+  * Fix for make_tree script
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 22 Apr 2015 18:01:23 +0300
+
 mastermind (2.24.3) lucid; urgency=low
 
   * Misprint in postinst fixed
