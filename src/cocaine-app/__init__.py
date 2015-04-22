@@ -188,20 +188,6 @@ def init_node_info_updater():
     return niu
 
 
-def init_cache():
-    manager = cache.CacheManager()
-    if 'cache' in config:
-        manager.setup(n.meta_session, config['cache'].get('index_prefix', 'cached_files_'))
-        [manager.add_namespace(ns) for ns in config['cache'].get('namespaces', [])]
-
-    # registering cache handlers
-    register_handle(manager.get_cached_keys)
-    register_handle(manager.get_cached_keys_by_group)
-    register_handle(manager.upload_list)
-
-    return manager
-
-
 def init_statistics():
     register_handle(b.statistics.get_flow_stats)
     register_handle(b.statistics.get_groups_tree)
@@ -245,7 +231,6 @@ def init_manual_locker(manual_locker):
     return manual_locker
 
 
-co = init_cache()
 io = init_infrastructure()
 niu = init_node_info_updater()
 b.niu = niu
