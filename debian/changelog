@@ -1,3 +1,9 @@
+mastermind (2.24.6) lucid; urgency=low
+
+  * Misprint fixed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 22 Apr 2015 18:50:12 +0300
+
 mastermind (2.24.5) lucid; urgency=low
 
   * Removed obsolete cache manager usage
