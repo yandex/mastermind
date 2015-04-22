@@ -248,7 +248,7 @@ for handler in balancer.handlers(b):
 
 logger.info('activating timed queues')
 try:
-    tq_to_activate = [co, io, b.niu, m, j, po]
+    tq_to_activate = [io, b.niu, m, j, po]
     for tqo in tq_to_activate:
         tqo._start_tq()
 except Exception as e:
