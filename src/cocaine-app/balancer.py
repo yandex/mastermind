@@ -1375,19 +1375,22 @@ def make_symm_group(n, couple, namespace, frozen):
     return
 
 
-def get_good_uncoupled_groups(max_node_backends=None):
+def get_good_uncoupled_groups(types=(storage.Group.TYPE_DATA,), max_node_backends=None):
     suitable_groups = []
     locked_hosts = manual_locker.get_locked_hosts()
     for group in storage.groups.keys():
         if is_uncoupled_group_good(group,
                                    locked_hosts,
+                                   types,
                                    max_node_backends=max_node_backends):
             suitable_groups.append(group)
 
     return suitable_groups
 
 
-def is_uncoupled_group_good(group, locked_hosts, max_node_backends=None):
+def is_uncoupled_group_good(group, locked_hosts,
+    types, max_node_backends=None):
+
     if group.couple is not None:
         return False
 
@@ -1395,6 +1398,9 @@ def is_uncoupled_group_good(group, locked_hosts, max_node_backends=None):
         return False
 
     if group.status != storage.Status.INIT:
+        return False
+
+    if group.type not in types:
         return False
 
     for nb in group.node_backends:

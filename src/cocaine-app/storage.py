@@ -616,14 +616,16 @@ class Group(object):
 
     DEFAULT_NAMESPACE = 'default'
 
+    TYPE_DATA = 'data'
+    TYPE_CACHE = 'cache'
+
     def __init__(self, group_id, node_backends=None):
         self.group_id = group_id
         self.status = Status.INIT
         self.node_backends = []
         self.couple = None
         self.meta = None
-        self.status_text = "Group %s is not inititalized yet" % (self.__str__())
-        self.is_cache = False
+        self.status_text = "Group %s is not inititalized yet" % (self)
 
         for node_backend in node_backends or []:
             self.add_node_backend(node_backend)
@@ -651,11 +653,6 @@ class Group(object):
             self.meta = parsed
         else:
             raise Exception('Unable to parse meta')
-
-    def setup_cache_group(self):
-        self.is_cache = (self.meta and
-                         (self.meta.get('cache', False) == True) or
-                         False)
 
     def equal_meta(self, other):
         if type(self.meta) != type(other.meta):
@@ -685,6 +682,14 @@ class Group(object):
     def effective_space(self):
         return sum([nb.effective_space for nb in self.node_backends])
 
+    @property
+    def type(self):
+        if not self.meta:
+            return self.TYPE_DATA
+        if self.meta.get('type') == self.TYPE_CACHE:
+            return self.TYPE_CACHE
+        return self.TYPE_DATA
+
     def update_status(self):
         """Updates group's own status.
         WARNING: This method should not take into consideration any of the
@@ -695,18 +700,17 @@ class Group(object):
             logger.info('Group {0}: no node backends, status set to INIT'.format(self.group_id))
             self.status = Status.INIT
             self.status_text = ('Group {0} is in INIT state because there is '
-                'no node backends serving this group'.format(self.__str__()))
+                'no node backends serving this group'.format(self))
             return self.status
 
-        # node statuses should be updated before group status is set
-        # statuses = tuple(nb.update_status() for nb in self.node_backends)
+        # node backends should have been updated by now
         statuses = tuple(nb.status for nb in self.node_backends)
 
-        logger.info('In group {0} meta = {1}'.format(self.group_id, str(self.meta)))
-        if (not self.meta) or (not 'couple' in self.meta) or (not self.meta['couple']):
+        logger.info('In group {0} meta = {1}'.format(self, str(self.meta)))
+        if not self.meta:
             self.status = Status.INIT
-            self.status_text = ('Group {0} is in INIT state because there is '
-                'no coupling info'.format(self.__str__()))
+            self.status_text = ('Group {0} is in INIT state because meta key '
+                'was not read from it'.format(self))
             return self.status
 
         if FORBIDDEN_DHT_GROUPS and len(self.node_backends) > 1:
@@ -719,31 +723,21 @@ class Group(object):
         if Status.BROKEN in statuses:
             self.status = Status.BROKEN
             self.status_text = ('Group {0} has BROKEN status because '
-                'some node statuses are BROKEN'.format(self.__str__()))
+                'some node statuses are BROKEN'.format(self))
             return self.status
 
-        if (not self.couple) and self.meta['couple']:
-            self.status = Status.BAD
-            self.status_text = ('Group {0} is in Bad state because '
-                'couple did not created'.format(self.__str__()))
-            return self.status
-
-        if not self.couple.check_groups(self.meta['couple']):
-            self.status = Status.BAD
-            self.status_text = ('Group {0} is in Bad state because '
-                'couple check fails'.format(self.__str__()))
-            return self.status
-
-        if not self.meta['namespace']:
-            self.status = Status.BAD
-            self.status_text = ('Group {0} is in Bad state because '
-                'no namespace has been assigned to it'.format(self.__str__()))
-            return self.status
+        if self.type == self.TYPE_DATA:
+            # perform checks for common data group
+            status = self.update_storage_group_status()
+            if status:
+                return status
+        elif self.type == self.TYPE_CACHE:
+            pass
 
         if Status.RO in statuses:
             self.status = Status.RO
             self.status_text = ('Group {0} is in Read-Only state because '
-                'there is RO node backends'.format(self.__str__()))
+                'there is RO node backends'.format(self))
 
             service_status = self.meta.get('service', {}).get('status')
             if service_status == Status.MIGRATING:
@@ -756,19 +750,45 @@ class Group(object):
         if not all([st == Status.OK for st in statuses]):
             self.status = Status.BAD
             self.status_text = ('Group {0} is in Bad state because '
-                'some node statuses are not OK'.format(self.__str__()))
+                'some node statuses are not OK'.format(self))
+            return self.status
+
+        self.status = Status.COUPLED
+        self.status_text = 'Group {0} is OK'.format(self)
+
+        return self.status
+
+    def update_storage_group_status(self):
+        if not self.meta['couple']:
+            self.status = Status.INIT
+            self.status_text = ('Group {0} is in INIT state because there is '
+                'no coupling info'.format(self))
+            return self.status
+
+        if not self.couple and self.meta['couple']:
+            self.status = Status.BAD
+            self.status_text = ('Group {0} is in Bad state because '
+                'couple did not created'.format(self))
+            return self.status
+
+        if not self.couple.check_groups(self.meta['couple']):
+            self.status = Status.BAD
+            self.status_text = ('Group {0} is in Bad state because '
+                'couple check fails'.format(self))
+            return self.status
+
+        if not self.meta['namespace']:
+            self.status = Status.BAD
+            self.status_text = ('Group {0} is in Bad state because '
+                'no namespace has been assigned to it'.format(self))
             return self.status
 
         if not self.group_id in self.meta['couple']:
             self.status = Status.BROKEN
             self.status_text = ('Group {0} is in BROKEN state because '
-                'its group id is missing from coupling info'.format(self.group_id))
+                'its group id is missing from coupling info'.format(self))
             return self.status
 
-        self.status = Status.COUPLED
-        self.status_text = 'Group {0} is OK'.format(self.__str__())
-
-        return self.status
 
     def info(self):
         res = {}
@@ -782,9 +802,16 @@ class Group(object):
         else:
             res['couples'] = None
         if self.meta:
-            res['namespace'] = self.meta['namespace']
+            res['namespace'] = self.meta.get('namespace')
 
         return res
+
+    @classmethod
+    def compose_cache_group_meta(cls):
+        return {
+            'version': 2,
+            'type': cls.TYPE_CACHE,
+        }
 
     @property
     def coupled_groups(self):
@@ -797,7 +824,7 @@ class Group(object):
         return hash(self.group_id)
 
     def __str__(self):
-        return '%d' % (self.group_id)
+        return str(self.group_id)
 
     def __repr__(self):
         return '<Group object: group_id=%d, status=%s node backends=[%s], meta=%s, couple=%s>' % (self.group_id, self.status, ', '.join((repr(nb) for nb in self.node_backends)), str(self.meta), str(self.couple))

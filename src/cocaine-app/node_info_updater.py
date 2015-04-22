@@ -218,9 +218,6 @@ class NodeInfoUpdater(object):
                 else:
                     group = storage.groups[gid]
 
-                if backend_id == config.get('cache', {}).get('backend_id'):
-                    group.setup_cache_group()
-
                 if b_stat['status']['state'] != 1:
                     logger.info('Node backend {0} is not enabled: state {1}'.format(
                         str(node_backend), b_stat['status']['state']))
@@ -292,7 +289,12 @@ class NodeInfoUpdater(object):
             meta = response.data
 
             group.parse_meta(meta)
-            couple = group.meta['couple']
+            couple = group.meta.get('couple')
+            if couple is None:
+                logger.info('Read symmetric groups from group '
+                    '{0} (no couple data): {1}'.format(group.group_id, meta))
+                return
+
             logger.info('Read symmetric groups from group '
                 '{0}: {1}'.format(group.group_id, couple))
             for gid in couple:

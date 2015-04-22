@@ -27,7 +27,6 @@ BASE_PORT = config.get('elliptics_base_port', 1024)
 CACHE_DEFAULT_PORT = 9999
 
 BASE_STORAGE_PATH = config.get('elliptics_base_storage_path', '/srv/storage/')
-CACHE_DEFAULT_PATH = '/srv/cache/'
 
 RSYNC_MODULE = config.get('restore', {}).get('rsync_use_module') and \
                config['restore'].get('rsync_module')
