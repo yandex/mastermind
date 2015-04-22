@@ -7,7 +7,22 @@ set -e
 
 case "$1" in
     configure)
-    /usr/bin/mastermind_deploy.sh `/usr/bin/mastermind_app_name.sh` ||true
+
+    DEPLOY_DIR="/usr/lib/mastermind"
+
+    mkdir /var/log/mastermind
+    chown cocaine -R $DEPLOY_DIR
+    chown cocaine -R /var/log/mastermind
+
+    $BASE_APP_NAME=`/usr/bin/mastermind_app_name.sh`
+
+    /usr/bin/mastermind_deploy.sh $DEPLOY_DIR $BASE_APP_NAME mastermind.manifest mastermind.profile
+    cocaine-tool runlist add-app -n default --app $BASE_APP_NAME --profile $BASE_APP_NAME --force
+
+    /usr/bin/mastermind_deploy.sh $DEPLOY_DIR $BASE_APP_NAME-cache mastermind-cache.manifest mastermind-cache.profile
+
+    /etc/init.d/cocaine-runtime restart
+
     ;;
     abort-upgrade|abort-remove|abort-deconfigure)
     ;;

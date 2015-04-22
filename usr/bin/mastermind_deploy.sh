@@ -1,27 +1,17 @@
 #! /bin/bash
 
-DEPLOY_DIR="/usr/lib/mastermind"
+DEPLOY_DIR=$1
+APP_NAME=$2
+MANIFEST=$3
+PROFILE=$4
 
-APP_NAME=$1
+echo "Cleaning old version of application $APP_NAME..."
 
-echo "Clean old version of Mastermind:"
+rm -rf /var/lib/cocaine/apps/$APP_NAME
+rm -rf /var/spool/cocaine/$APP_NAME
+rm -rf /var/cache/cocaine/apps/$APP_NAME
+rm -f /var/cache/cocaine/manifests/$APP_NAME
 
-for app in $APP_NAME;
-do 
-	rm -rf /var/lib/cocaine/apps/$app
-	rm -rf /var/spool/cocaine/$app
-	rm -rf /var/cache/cocaine/apps/$app
-	rm -f /var/cache/cocaine/manifests/$app
-done
-
-echo "Deploy New Mastermind:"
-cocaine-tool app upload --manifest $DEPLOY_DIR/cocaine-app/mastermind.manifest --package $DEPLOY_DIR/cocaine-app/mastermind.tar.gz -n $APP_NAME
-cocaine-tool profile upload -n $APP_NAME --profile $DEPLOY_DIR/cocaine-app/mastermind.profile
-cocaine-tool runlist add-app -n default --app $APP_NAME --profile $APP_NAME --force
-
-mkdir /var/log/mastermind
-chown cocaine -R /usr/lib/mastermind
-chown cocaine -R /var/log/mastermind
-
-
-/etc/init.d/cocaine-runtime restart
+echo "Deploying new application $app"
+cocaine-tool app upload --manifest $DEPLOY_DIR/cocaine-app/$MANIFEST --package $DEPLOY_DIR/cocaine-app/mastermind.tar.gz -n $APP_NAME
+cocaine-tool profile upload -n $APP_NAME --profile $DEPLOY_DIR/cocaine-app/$PROFILE
