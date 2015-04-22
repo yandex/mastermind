@@ -138,12 +138,20 @@ def register_handle(W, h):
 
 
 def process_elliptics_async_result(result, processor, *args, **kwargs):
+    """Universal processing of elliptics concurrent session requests.
+
+    Additional keyword parameters:
+        raise_on_error: raise exception in case of error returned with
+            elliptics async result (default is True)
+    """
     result.wait()
     if not len(result.get()):
         raise ValueError('empty response')
     entry = result.get()[0]
-    if entry.error.code:
+    raise_on_error = kwargs.pop('raise_on_error', True)
+    if entry.error.code and raise_on_error:
         raise Exception(entry.error.message)
 
     return processor(entry, elapsed_time=result.elapsed_time(),
-                     end_time=result.end_time(), *args, **kwargs)
+                     end_time=result.end_time(),
+                     *args, **kwargs)
