@@ -95,7 +95,7 @@ class Balancer(object):
         return result
 
     def _empty_group_ids(self):
-        return [group.group_id for group in storage.groups if group.couple is None]
+        return [group.group_id for group in get_good_uncoupled_groups()]
 
     STATES = {
         'good': [storage.Status.OK],
