@@ -16,7 +16,7 @@ from kazoo.exceptions import (
 )
 from kazoo.retry import KazooRetry, RetryFailedError
 
-# from queue import FilteredLockingQueue
+from queue import FilteredLockingQueue
 # from errors import ConnectionError, InvalidDataError
 from lock import Lock
 from sync.error import LockError, LockFailedError, LockAlreadyAcquiredError, InconsistentLockError
@@ -165,3 +165,30 @@ class ZkSyncManager(object):
                 logger.warn('Persistent lock {0} is already removed'.format(lockid))
                 pass
         return True
+
+
+class ZkCacheTaskManager(object):
+
+    RETRIES = 2
+
+    def __init__(self, host='127.0.0.1:2181', lock_path_prefix='/mastermind/cache/'):
+        self.client = KazooClient(host, timeout=3)
+        logger.info('Connecting to zookeeper host {0}, '
+            'lock_path_prefix: {1}'.format(host, lock_path_prefix))
+        try:
+            self.client.start()
+        except Exception as e:
+            logger.error(e)
+            raise
+
+        self.lock_path_prefix = lock_path_prefix
+        self.queue = FilteredLockingQueue(self.client, lock_path_prefix, None)
+
+    def put_task(self, task):
+        return self.queue.put(task)
+
+    def put_all(self, tasks):
+        return self.queue.put_all(tasks)
+
+    def list(self):
+        return self.queue.list()
