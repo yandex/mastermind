@@ -10,7 +10,7 @@ case "$1" in
 
     DEPLOY_DIR="/usr/lib/mastermind"
 
-    mkdir /var/log/mastermind
+    mkdir -p /var/log/mastermind
     chown cocaine -R $DEPLOY_DIR
     chown cocaine -R /var/log/mastermind
 
