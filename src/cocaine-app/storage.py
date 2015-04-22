@@ -89,10 +89,31 @@ class NodeStat(object):
     def __init__(self):
         self.ts = None
         self.load_average = 0.0
+        self.tx_bytes, self.rx_bytes = None, None
+        self.tx_rate, self.rx_rate = None, None
 
     def update(self, raw_stat, collect_ts):
-        self.ts = collect_ts
         self.load_average = float(raw_stat['procfs']['vm']['la'][0]) / 100
+        interfaces = raw_stat['procfs'].get('net', {}).get('net_interfaces', {})
+
+        new_rx_bytes = sum(map(
+            lambda if_: if_[1].get('receive', {}).get('bytes', 0.0) if if_[0] != 'lo' else 0.0,
+            interfaces.items()))
+        new_tx_bytes = sum(map(
+            lambda if_: if_[1].get('transmit', {}).get('bytes', 0.0) if if_[0] != 'lo' else 0.0,
+            interfaces.items()))
+
+        if self.ts is not None:
+            # conditions are checked for the case of *x_bytes counter overflow
+            if new_tx_bytes >= self.tx_bytes:
+                self.tx_rate = float(new_tx_bytes - self.tx_bytes) / (collect_ts - self.ts)
+            if new_rx_bytes >= self.rx_bytes:
+                self.rx_rate = float(new_rx_bytes - self.rx_bytes) / (collect_ts - self.ts)
+
+        self.tx_bytes = new_tx_bytes
+        self.rx_bytes = new_rx_bytes
+
+        self.ts = collect_ts
 
     def __add__(self, other):
         res = NodeStat()
@@ -569,6 +590,9 @@ class NodeBackend(object):
         res['last_stat_update'] = (self.stat and
             datetime.datetime.fromtimestamp(self.stat.ts).strftime('%Y-%m-%d %H:%M:%S') or
             'unknown')
+        if self.node.stat:
+            res['tx_rate'] = self.node.stat.tx_rate
+            res['rx_rate'] = self.node.stat.rx_rate
         if self.stat:
             res['free_space'] = int(self.stat.free_space)
             res['effective_space'] = self.effective_space
