@@ -10,7 +10,7 @@ log.setup_logger('mm_cache_logging')
 logger = logging.getLogger('mm.init')
 
 from config import config
-import cache2 as cache
+import cache
 from db.mongo.pool import MongoReplicaSetClient
 import infrastructure
 import infrastructure_cache
@@ -93,6 +93,8 @@ def init_cache_worker(W, n, meta_db):
     h.register_handle(W, c.get_top_keys)
     h.register_handle(W, c.test_get_groups_list)
     h.register_handle(W, c.test_distribute)
+    h.register_handle(W, c.cache_statistics)
+
     return c
 
 

@@ -1,3 +1,4 @@
+from collections import defaultdict
 import copy
 import logging
 import math
@@ -52,7 +53,7 @@ class CacheManager(object):
             logger.error('Config parameter metadata.cache.db is required for cache manager')
             raise
         self.keys_db = Collection(db[keys_db_uri], 'keys')
-        self.distibutor = CacheDistributor(self.node, self.keys_db)
+        self.distributor = CacheDistributor(self.node, self.keys_db)
 
         self.niu = node_info_updater.NodeInfoUpdater(self.node)
 
@@ -134,11 +135,7 @@ class CacheManager(object):
             if key['id'] == self.service_metakey:
                 continue
 
-            new_top_keys.setdefault(key['id'], {'groups': [],
-                                                'id': key['id'],
-                                                'size': 0,
-                                                'frequency': 0,
-                                                'period_in_seconds': 1})
+            new_top_keys.setdefault(key['id'], self.distributor._new_key_stat(key['id']))
             top_key = new_top_keys[key['id']]
             top_key['groups'].append(key['group'])
             top_key['size'] += key['size']
@@ -230,7 +227,41 @@ class CacheManager(object):
 
     def test_distribute(self, request):
         self.monitor_top_stats()
-        self.distibutor.distribute(self.top_keys)
+        self.distributor.distribute(self.top_keys)
+
+    @h.concurrent_handler
+    def cache_statistics(self, request):
+
+        keys = defaultdict(lambda: {
+                'id': None,
+                'top_rate': 0.0,  # rate according to elliptics top statistics
+                'mm_rate': 0.0,  # rate used to distribute key
+                'cache_groups': [],
+            })
+        top_keys = self.top_keys
+        for key_stat in self.top_keys.itervalues():
+            key_id = key_stat['id']
+            key = keys[key_id]
+            key['id'] = key_id
+            key['top_rate'] = self.distributor._key_bw(key_stat)
+        for key_cached in self.distributor._get_distributed_keys():
+            key_id = key_cached['id']
+            key = keys[key_id]
+            key['id'] = key_id
+            key['cache_groups'] = key_cached['cache_groups'][:]
+            key['mm_rate'] = key_cached['rate']
+
+        cache_groups = defaultdict(dict)
+        groups_units = self.distributor.groups_units
+        dc_node_type = self.distributor.dc_node_type
+        for cache_group in self.distributor.cache_groups:
+            cg = cache_groups[cache_group.group_id]
+            cg_units = groups_units[cache_group.group_id]
+            cg['dc'] = self.distributor._group_unit(cg_units[0][dc_node_type])
+            cg['host'] = self.distributor._group_unit(cg_units[0]['host'])
+
+        return {'keys': dict(keys),
+                'cache_groups': dict(cache_groups)}
 
 
 class CacheDistributor(object):
@@ -291,8 +322,16 @@ class CacheDistributor(object):
         return {
             'id': key_stat['id'],
             'sgroups': list(data_group.couple.as_tuple()),
+            'rate': 0,
             'cache_groups': []
         }
+
+    def _new_key_stat(self, key_id):
+        return {'groups': [],
+                'id': key_id,
+                'size': 0,
+                'frequency': 0,
+                'period_in_seconds': 1}
 
     def distribute(self, top):
         """ Distributes top keys across available cache groups.
@@ -314,7 +353,7 @@ class CacheDistributor(object):
         def process_key(key):
             if key['id'] not in top:
                 copies_diff = -len(key['cache_groups'])
-                key_stat = {}
+                key_stat = self._new_key_stat(key['id'])
                 logger.info('Key {0}: not in top anymore, will be removed'.format(key['id']))
             else:
                 key_stat = top[key['id']]
@@ -348,6 +387,7 @@ class CacheDistributor(object):
             process_key(key)
 
     def _update_key(self, key, key_stat, copies_diff):
+        key['rate'] = self._key_bw(key_stat)
         if copies_diff > 0:
             self._increase_copies(key, key_stat, copies_diff)
         else:
@@ -406,8 +446,8 @@ class CacheDistributor(object):
         else:
             self.keys_db.remove({'id': key['id']})
 
-    def _group_unit_dc(self, dc_full_path):
-        return dc_full_path.rsplit('|', 1)[-1]
+    def _group_unit(self, full_path):
+        return full_path.rsplit('|', 1)[-1]
 
     def _key_by_dc(self, key):
         eid = elliptics.Id(key['id'].encode('utf-8'))
@@ -431,7 +471,7 @@ class CacheDistributor(object):
                 else:
                     raise lookup.error
 
-            dc = self._group_unit_dc(self.groups_units[group_id][0][self.dc_node_type])
+            dc = self._group_unit(self.groups_units[group_id][0][self.dc_node_type])
             key_by_dc[dc] = {
                 'group': group_id,
                 'size': lookup.size,
@@ -481,7 +521,7 @@ class CacheDistributor(object):
                     'at the moment'.format(key['id'], cache_group.group_id))
                 continue
             # TODO: decide on caching keys from different dc
-            # dc = self._group_unit_dc(self.groups_units[cache_group.group_id][0][self.dc_node_type])
+            # dc = self._group_unit(self.groups_units[cache_group.group_id][0][self.dc_node_type])
             # if dc not in key_by_dc:
             #     continue
             key_max_size = max([key_by_dc[dc]['size'] for dc in key_by_dc])
@@ -503,7 +543,7 @@ class CacheDistributor(object):
         # cache group
         for group_id in key['cache_groups'] + key['sgroups']:
             if group_id in self.groups_units:
-                dc = self._group_unit_dc(self.groups_units[group_id][0][self.dc_node_type])
+                dc = self._group_unit(self.groups_units[group_id][0][self.dc_node_type])
                 copies_count_by_dc[dc] += 1
 
         def units_diff(u1, u2):
@@ -525,7 +565,7 @@ class CacheDistributor(object):
         # count group weights among cache groups that are left
         weights = {}
         for cache_group in cache_groups:
-            dc = self._group_unit_dc(self.groups_units[cache_group.group_id][0][self.dc_node_type])
+            dc = self._group_unit(self.groups_units[cache_group.group_id][0][self.dc_node_type])
             if dc in key_by_dc:
                 sgroup = key_by_dc[dc]['group']
             elif min_load_dc[0]:
@@ -546,7 +586,7 @@ class CacheDistributor(object):
             cache_group, weight = cache_group_w
             del weights[cache_group]
 
-            dc = self._group_unit_dc(self.groups_units[cache_group.group_id][0][self.dc_node_type])
+            dc = self._group_unit(self.groups_units[cache_group.group_id][0][self.dc_node_type])
             if dc in key_by_dc:
                 sgroup = key_by_dc[dc]['group']
             else:
@@ -672,9 +712,6 @@ class CacheDistributor(object):
             self.cache_groups = new_cache_groups
             self.groups_units = new_groups_units
             self.executing_tasks = new_executing_tasks
-
-    # def _remove_key(self, key):
-    #     pass
 
 
 def mbit_per_s(bytes_per_s):
