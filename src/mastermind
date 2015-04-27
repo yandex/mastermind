@@ -218,7 +218,10 @@ def group_list_uncoupled(by_dc=('', None, 'Group by dc and provide some useful d
     res = s.enqueue("get_empty_groups", "").get()
 
     if not by_dc:
-        print res
+        if json:
+            print dumps(res)
+        else:
+            print res
 
     if by_dc:
         groups_by_dcs = s.enqueue('groups_by_dc',
