@@ -2,12 +2,20 @@
 import logging
 import time
 
+from cocaine.asio.exceptions import LocatorResolveError
 from cocaine.worker import Worker
 import elliptics
 
 import log
-log.setup_logger('mm_cache_logging')
-logger = logging.getLogger('mm.init')
+
+try:
+    log.setup_logger('mm_cache_logging')
+    logger = logging.getLogger('mm.init')
+except LocatorResolveError:
+    log.setup_logger()
+    logger = logging.getLogger('mm.init')
+    logger.warn('mm_cache_logging is not set up properly in '
+        'cocaine.conf, fallback to default logging service')
 
 from config import config
 import cache
