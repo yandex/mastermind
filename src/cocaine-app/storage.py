@@ -27,6 +27,8 @@ FORBIDDEN_DC_SHARING_AMONG_GROUPS = config.get('forbidden_dc_sharing_among_group
 FORBIDDEN_NS_WITHOUT_SETTINGS = config.get('forbidden_ns_without_settings', False)
 FORBIDDEN_UNMATCHED_GROUP_TOTAL_SPACE = config.get('forbidden_unmatched_group_total_space', False)
 
+CACHE_GROUP_PATH_PREFIX = config.get('cache', {}).get('group_path_prefix')
+
 
 def ts_str(ts):
     return time.asctime(time.localtime(ts))
@@ -642,6 +644,7 @@ class Group(object):
 
     TYPE_DATA = 'data'
     TYPE_CACHE = 'cache'
+    TYPE_UNMARKED = 'unmarked'
 
     def __init__(self, group_id, node_backends=None):
         self.group_id = group_id
@@ -709,6 +712,10 @@ class Group(object):
     @property
     def type(self):
         if not self.meta:
+            if (CACHE_GROUP_PATH_PREFIX and
+                any([nb.base_path.startswith(CACHE_GROUP_PATH_PREFIX)
+                        for nb in self.node_backends])):
+                return self.TYPE_UNMARKED
             return self.TYPE_DATA
         if self.meta.get('type') == self.TYPE_CACHE:
             return self.TYPE_CACHE

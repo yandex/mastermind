@@ -190,7 +190,7 @@ class CacheManager(object):
 
         # searching for unmarked cache groups to mark them
         for group in balancer.get_good_uncoupled_groups(
-            types=[storage.Group.TYPE_DATA]):
+            types=[storage.Group.TYPE_UNMARKED]):
 
             if not group.node_backends[0].base_path.startswith(CACHE_GROUP_PATH_PREFIX):
                 continue
