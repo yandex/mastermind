@@ -650,10 +650,11 @@ class CacheDistributor(object):
         sgroups_num = len(key['sgroups'])
         copies_num = len(key['cache_groups']) + len(key['sgroups'])
 
-        if req_copies_num < math.ceil(copies_num * self.copies_reduce_factor):
-            return max(sgroups_num, req_copies_num) - copies_num
-        elif req_copies_num >= copies_num + self.copies_expand_step:
-            return req_copies_num - copies_num
+        req_copies = int(math.ceil(req_copies_num))
+        if req_copies < math.ceil(copies_num * self.copies_reduce_factor):
+            return max(sgroups_num, req_copies) - copies_num
+        elif req_copies >= copies_num + self.copies_expand_step:
+            return req_copies - copies_num
         return 0
 
     def _filter_by_bandwidth(self, top):
