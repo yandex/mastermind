@@ -1,3 +1,9 @@
+mastermind (2.24.8) lucid; urgency=low
+
+  * Do not use not marked uncoupled groups located at cache groups paths as data uncoupled groups
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 27 Apr 2015 16:23:24 +0300
+
 mastermind (2.24.7) lucid; urgency=low
 
   * Removed obsolete tornado version dependency
