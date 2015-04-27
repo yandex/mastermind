@@ -1,3 +1,9 @@
+mastermind (2.24.10) lucid; urgency=low
+
+  * Fix for increasing cache key copies number
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 27 Apr 2015 20:24:00 +0300
+
 mastermind (2.24.9) lucid; urgency=low
 
   * Fallback to default cocaine logging service if mm_cache_logging service is not set up in cocaine
