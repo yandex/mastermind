@@ -116,7 +116,7 @@ class Planner(object):
             if hasattr(job, 'dst_host'):
                 hosts.add(job.dst_host)
             elif hasattr(job, 'group'):
-                dst_group_id = job.dst_group
+                dst_group_id = job.group
                 if dst_group_id in storage.groups:
                     dst_group = storage.groups[dst_group_id]
                     if dst_group.node_backends:
@@ -299,6 +299,8 @@ class Planner(object):
 
                 new_candidate = candidate.copy()
 
+                dst_dc = unc_group.node_backends[0].node.host.dc
+
                 new_candidate.move_group(src_dc, src_group, dst_dc, unc_group, merged_groups)
 
                 if new_candidate.state_ms_error < base_ms:
@@ -307,13 +309,13 @@ class Planner(object):
                         '(swap with group {7})'.format(
                             src_group.group_id, src_dc, dst_dc, base_ms,
                             new_candidate.state_ms_error, new_candidate.delta.weight,
-                            gb(new_candidate.delta.lost_space), dst_group.group_id))
+                            gb(new_candidate.delta.lost_space), unc_group.group_id))
                     _candidates.append(new_candidate)
                 else:
                     logger.debug('bad candidate: {0} group from {1} to {2}, '
                         'deviation changed from {3} to {4} (swap with group {5})'.format(
                             src_group.group_id, src_dc, dst_dc, base_ms,
-                            new_candidate.state_ms_error, dst_group.group_id))
+                            new_candidate.state_ms_error, unc_group.group_id))
                     logger.debug('Base candidate:')
                     candidate._debug()
                     logger.debug('New candidate aftere moving:')
