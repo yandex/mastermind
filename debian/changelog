@@ -1,3 +1,9 @@
+mastermind (2.23.5) lucid; urgency=low
+
+  * Busy hosts accounting fixed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 28 Apr 2015 17:49:02 +0300
+
 mastermind (2.23.4) lucid; urgency=low
 
   * Using groups merging on move jobs planning
