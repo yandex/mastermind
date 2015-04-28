@@ -105,7 +105,22 @@ class Planner(object):
 
         hosts = set()
         for job in not_finished_jobs:
-            hosts.update([job.src_host, job.dst_host])
+            if hasattr(job, 'src_host'):
+                hosts.add(job.src_host)
+            elif hasattr(job, 'src_group'):
+                src_group_id = job.src_group
+                if src_group_id in storage.groups:
+                    src_group = storage.groups[src_group_id]
+                    if src_group.node_backends:
+                        hosts.add(src_group.node_backends[0].node.host.addr)
+            if hasattr(job, 'dst_host'):
+                hosts.add(job.dst_host)
+            elif hasattr(job, 'group'):
+                dst_group_id = job.dst_group
+                if dst_group_id in storage.groups:
+                    dst_group = storage.groups[dst_group_id]
+                    if dst_group.node_backends:
+                        hosts.add(dst_group.node_backends[0].node.host.addr)
         return hosts
 
     def __apply_plan(self):
