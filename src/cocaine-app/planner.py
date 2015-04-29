@@ -279,6 +279,13 @@ class Planner(object):
 
                     unc_group, merged_groups = candidates[0], candidates[1:]
 
+                    dst_host = unc_group.node_backends[0].node.host.addr
+                    dst_dc = unc_group.node_backends[0].node.host.dc
+                    if dst_dc == src_dc:
+                        logger.debug('dst group {0} is skipped, dst dc is the '
+                            'same as source dc: {1}'.format(
+                                unc_group.group_id, dst_dc))
+
                     unc_group_stat = candidate.stats(unc_group)
 
                     # TODO: check merged groups for files
@@ -286,7 +293,7 @@ class Planner(object):
                     if unc_group_stat.files + unc_group_stat.files_removed > 0:
                         continue
 
-                    dst_host = unc_group.node_backends[0].node.host.addr
+
                     if dst_host in busy_hosts:
                         logger.debug('dst group {0} is skipped, {1} is in busy hosts'.format(
                             unc_group.group_id, dst_host))
@@ -298,9 +305,6 @@ class Planner(object):
                     continue
 
                 new_candidate = candidate.copy()
-
-                dst_dc = unc_group.node_backends[0].node.host.dc
-
                 new_candidate.move_group(src_dc, src_group, dst_dc, unc_group, merged_groups)
 
                 if new_candidate.state_ms_error < base_ms:
