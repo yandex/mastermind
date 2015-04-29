@@ -1286,7 +1286,7 @@ class StorageState(object):
                 obj._stats[group.group_id] = group.get_stat()
                 obj.state[dc].add_group(group)
 
-        for group in cls.__get_uncoupled_groups():
+        for group in get_good_uncoupled_groups(max_node_backends=1):
             dc = group.node_backends[0].node.host.dc
             obj._stats[group.group_id] = group.get_stat()
             obj.state[dc].add_uncoupled_group(group)
@@ -1368,22 +1368,6 @@ class StorageState(object):
                 couples.append(couple)
 
         return couples
-
-    @staticmethod
-    def __get_uncoupled_groups():
-        groups = []
-
-        for group in storage.groups:
-            if group.couple is not None:
-                continue
-            if len(group.node_backends) != 1:
-                continue
-            if group.status != storage.Status.INIT:
-                continue
-
-            groups.append(group)
-
-        return groups
 
     @staticmethod
     def __dcs():
