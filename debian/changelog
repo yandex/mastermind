@@ -1,3 +1,9 @@
+mastermind (2.23.8) lucid; urgency=low
+
+  * Move planner should use default uncoupled groups select function
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 29 Apr 2015 15:22:16 +0300
+
 mastermind (2.23.7) lucid; urgency=low
 
   * Comparing source and destination DCs when planning move jobs
