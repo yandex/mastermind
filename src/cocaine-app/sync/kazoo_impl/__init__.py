@@ -22,7 +22,7 @@ from lock import Lock
 from sync.error import LockError, LockFailedError, LockAlreadyAcquiredError, InconsistentLockError
 
 
-logger = logging.getLogger('mm.sync')
+logger = logging.getLogger('mm')
 
 kazoo_logger = logging.getLogger('kazoo')
 kazoo_logger.propagate = False
@@ -130,7 +130,8 @@ class ZkSyncManager(object):
             retry = self._retry.copy()
             result = retry(self.__inner_get_children_locks, lock_prefix)
         except RetryFailedError:
-            raise LockError
+            raise LockError('Failed to get fetch children locks for {}'.format(
+                lock_prefix))
         return result
 
     def __inner_get_children_locks(self, lock_prefix):
