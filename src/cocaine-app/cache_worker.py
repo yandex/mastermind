@@ -97,10 +97,7 @@ def init_infrastructure(W, n):
 
 def init_cache_worker(W, n, meta_db):
     c = cache.CacheManager(n, meta_db)
-    h.register_handle(W, c.ping)
     h.register_handle(W, c.get_top_keys)
-    h.register_handle(W, c.test_get_groups_list)
-    h.register_handle(W, c.test_distribute)
     h.register_handle(W, c.cache_statistics)
 
     return c

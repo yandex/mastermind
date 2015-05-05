@@ -27,15 +27,9 @@ from timer import periodic_timer
 
 logger = logging.getLogger('mm.cache')
 
-
-
-
-# TODO: add log records
-
-
-
 CACHE_CFG = config.get('cache', {})
 CACHE_GROUP_PATH_PREFIX = CACHE_CFG.get('group_path_prefix')
+
 
 class CacheManager(object):
     def __init__(self, node, db):
@@ -58,23 +52,18 @@ class CacheManager(object):
         self.niu = node_info_updater.NodeInfoUpdater(self.node)
 
         self.top_keys = {}
-        self.__top_keys_lock = threading.Lock()
 
         self.__tq = timed_queue.TimedQueue()
 
         self.nodes_update()
         self.update_cache_groups()
 
-        # self.__tq.add_task_in('monitor_top_stats',
-        #     CACHE_CFG.get('update_period', 10),
-        #     self.monitor_top_stats)
+        self.__tq.add_task_in('monitor_top_stats',
+            CACHE_CFG.get('top_update_period', 1800),
+            self.monitor_top_stats)
 
     def _start_tq(self):
         self.__tq.start()
-
-    @h.concurrent_handler
-    def ping(self, request):
-        return 'pong'
 
     STAT_CATEGORIES = elliptics.monitor_stat_categories.top
 
@@ -102,18 +91,18 @@ class CacheManager(object):
                         '{1}\n{2}'.format(address, e, traceback.format_exc()))
                     continue
 
-            with self.__top_keys_lock:
-                self.top_keys = new_top_keys
+            self.top_keys = new_top_keys
+
+            self.distributor.distribute(self.top_keys)
 
         except Exception as e:
             logger.error('Failed to update monitor top stats: {0}\n{1}'.format(
                 e, traceback.format_exc()))
             pass
         finally:
-            pass
-            # self.__tq.add_task_in('monitor_top_stats',
-            #     CACHE_CFG.get('update_period', 60),
-            #     self.monitor_top_stats)
+            self.__tq.add_task_in('monitor_top_stats',
+                CACHE_CFG.get('top_update_period', 1800),
+                self.monitor_top_stats)
 
     def update_top(self, m_stat, new_top_keys, elapsed_time=None, end_time=None):
 
@@ -155,9 +144,11 @@ class CacheManager(object):
             logger.info('Failed to fetch nodes statictics: {0}\n{1}'.format(e,
                 traceback.format_exc()))
         finally:
-            logger.info('Cluster updating: node statistics collecting finished, time: {0:.3f}'.format(time.time() - start_ts))
+            logger.info('Cluster updating: node statistics collecting '
+                'finished, time: {0:.3f}'.format(time.time() - start_ts))
             reload_period = config.get('nodes_reload_period', 15)
-            self.__tq.add_task_in('node_statistics_update', reload_period, self.nodes_update)
+            self.__tq.add_task_in('node_statistics_update',
+                reload_period, self.nodes_update)
 
     def update_cache_groups(self):
         try:
@@ -179,10 +170,11 @@ class CacheManager(object):
             logger.info('Failed to update groups: {0}\n{1}'.format(
                 e, traceback.format_exc()))
         finally:
-            logger.info('Cluster updating: updating group coupling info finished, time: {0:.3f}'.format(time.time() - start_ts))
-            # TODO: change period
+            logger.info('Cluster updating: updating group coupling info '
+                'finished, time: {0:.3f}'.format(time.time() - start_ts))
             reload_period = config.get('nodes_reload_period', 60)
-            self.__tq.add_task_in('cache_groups_update', reload_period, self.update_cache_groups)
+            self.__tq.add_task_in('cache_groups_update',
+                reload_period, self.update_cache_groups)
 
     def _mark_cache_groups(self):
         if not CACHE_GROUP_PATH_PREFIX:
@@ -220,22 +212,13 @@ class CacheManager(object):
                     group, e, traceback.format_exc()))
                 continue
 
-    def test_get_groups_list(self, request):
-        groups_ids = [group.group_id for group in storage.groups if group.type == storage.Group.TYPE_CACHE]
-        return groups_ids
-
-
-    def test_distribute(self, request):
-        self.monitor_top_stats()
-        self.distributor.distribute(self.top_keys)
-
     @h.concurrent_handler
     def cache_statistics(self, request):
 
         keys = defaultdict(lambda: {
                 'id': None,
                 'top_rate': 0.0,  # rate according to elliptics top statistics
-                'mm_rate': 0.0,  # rate used to distribute key
+                'mm_rate': 0.0,   # rate used to distribute key
                 'cache_groups': [],
             })
         top_keys = self.top_keys
@@ -271,16 +254,15 @@ class CacheDistributor(object):
         wait_timeout = config.get('elliptics', {}).get('wait_timeout', 5)
         self.session.set_timeout(wait_timeout)
 
-        self.min_top_bw = CACHE_CFG['min_key_bandwidth']
-        self.bandwidth_per_copy = CACHE_CFG.get('bandwidth_per_copy', self.min_top_bw)
+        self.bandwidth_per_copy = CACHE_CFG.get('bandwidth_per_copy', 5242880)
 
         self.copies_reduce_factor = CACHE_CFG['copies_reduce_factor']
         assert 0.0 < self.copies_reduce_factor <= 1.0, "Copies reduce factor "\
             "should be in (0.0, 1.0] interval"
 
         self.copies_expand_step = CACHE_CFG['copies_expand_step']
-        assert 0.0 < self.copies_expand_step <= 1.0, "Copies expand step "\
-            "should be >= 0"
+        assert self.copies_expand_step > 0, "Copies expand step "\
+            "should be > 0"
 
         self.keys_db = keys_db
 
@@ -291,6 +273,8 @@ class CacheDistributor(object):
 
         self.node_types = inventory.get_balancer_node_types()
         self.dc_node_type = inventory.get_dc_node_type()
+
+        self.dryrun = CACHE_CFG.get('dryrun', False)
 
     def _get_distributed_keys(self):
         return self.keys_db.find()
@@ -438,8 +422,9 @@ class CacheDistributor(object):
         Creates task for gatling gun on destination group,
         updates key in meta database
         """
-        cache_task_manager.put_task(self._serialize(
-            self._gatlinggun_task(key, group_id, [], 'remove')))
+        if not self.dryrun:
+            cache_task_manager.put_task(self._serialize(
+                self._gatlinggun_task(key, group_id, [], 'remove')))
         key['cache_groups'].remove(group_id)
         if len(key['cache_groups']):
             self.keys_db.update({'id': key['id']}, key)
@@ -615,7 +600,8 @@ class CacheDistributor(object):
         """
         task = self._gatlinggun_task(key, group_id, sgroups, 'add',
                 tx_rate=tx_rate, size=size)
-        cache_task_manager.put_task(self._serialize(task))
+        if not self.dryrun:
+            cache_task_manager.put_task(self._serialize(task))
         key['cache_groups'].append(group_id)
         self.keys_db.update({'id': key['id']}, key, upsert=True)
         return task
@@ -660,7 +646,7 @@ class CacheDistributor(object):
     def _filter_by_bandwidth(self, top):
         filtered_top = {}
         for key, key_stat in top.iteritems():
-            if self._key_bw(key_stat) < self.min_top_bw:
+            if self._key_bw(key_stat) < self.bandwidth_per_copy:
                 continue
             filtered_top[key] = key_stat
         return filtered_top
