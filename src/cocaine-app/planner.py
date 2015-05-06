@@ -13,7 +13,6 @@ import elliptics
 import msgpack
 import pymongo
 
-from balancer import get_good_uncoupled_groups, is_uncoupled_group_good
 from coll import SortedCollection
 from config import config
 from db.mongo.pool import Collection
@@ -252,7 +251,7 @@ class Planner(object):
 
         base_ms = candidate.state_ms_error
 
-        uncoupled_groups = get_good_uncoupled_groups(max_node_backends=1)
+        uncoupled_groups = infrastructure.get_good_uncoupled_groups(max_node_backends=1)
 
         for c in candidate.iteritems():
             src_dc, src_dc_state = c
@@ -875,8 +874,8 @@ class Planner(object):
                         'only groups with 1 node backend can be used'.format(
                             unc_group.group_id, len(unc_group.node_backends)))
 
-                is_uncoupled_group_good(unc_group, locked_hosts, max_node_backends=1)
-                if not is_uncoupled_group_good(unc_group, locked_hosts, max_node_backends=1):
+                is_good = infrastructure.is_uncoupled_group_good(unc_group, locked_hosts, max_node_backends=1)
+                if not is_good:
                     raise ValueError('Uncoupled group {0} is not applicable'.format(
                         unc_group.group_id))
 
@@ -1069,7 +1068,7 @@ class Planner(object):
         old_host_tree = cache.get_host_tree(cache.get_hostname_by_addr(host_addr))
         logger.info('Old host tree: {0}'.format(old_host_tree))
 
-        uncoupled_groups = get_good_uncoupled_groups(max_node_backends=1)
+        uncoupled_groups = infrastructure.get_good_uncoupled_groups(max_node_backends=1)
         groups_by_dc = {}
         for unc_group in uncoupled_groups:
             dc = unc_group.node_backends[0].node.host.dc
@@ -1130,7 +1129,7 @@ class Planner(object):
         infrastructure.account_ns_couples(tree, nodes, ns)
         infrastructure.update_groups_list(tree)
 
-        uncoupled_groups = get_good_uncoupled_groups(max_node_backends=1)
+        uncoupled_groups = infrastructure.get_good_uncoupled_groups(max_node_backends=1)
         candidates = self.get_suitable_uncoupled_groups_list(group, uncoupled_groups)
         logger.debug('Candidate groups for group {0}: {1}'.format(group.group_id,
             [[g.group_id for g in c] for c in candidates]))
@@ -1284,7 +1283,7 @@ class StorageState(object):
                 obj._stats[group.group_id] = group.get_stat()
                 obj.state[dc].add_group(group)
 
-        for group in get_good_uncoupled_groups(max_node_backends=1):
+        for group in infrastructure.get_good_uncoupled_groups(max_node_backends=1):
             dc = group.node_backends[0].node.host.dc
             obj._stats[group.group_id] = group.get_stat()
             obj.state[dc].add_uncoupled_group(group)

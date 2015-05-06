@@ -23,7 +23,6 @@ import helpers as h
 import infrastructure
 import inventory
 import keys
-from manual_locks import manual_locker
 import statistics
 import storage
 from sync import sync_manager
@@ -457,7 +456,7 @@ class Balancer(object):
         suitable_groups = []
         total_spaces = []
 
-        for group in get_good_uncoupled_groups():
+        for group in infrastructure.infrastructure.get_good_uncoupled_groups():
 
             if not len(group.node_backends):
                 logger.info('Group {0} cannot be used, it has '
@@ -1373,37 +1372,3 @@ def make_symm_group(n, couple, namespace, frozen):
         raise
 
     return
-
-
-def get_good_uncoupled_groups(max_node_backends=None):
-    suitable_groups = []
-    locked_hosts = manual_locker.get_locked_hosts()
-    for group in storage.groups.keys():
-        if is_uncoupled_group_good(group,
-                                   locked_hosts,
-                                   max_node_backends=max_node_backends):
-            suitable_groups.append(group)
-
-    return suitable_groups
-
-
-def is_uncoupled_group_good(group, locked_hosts, max_node_backends=None):
-    if group.couple is not None:
-        return False
-
-    if not len(group.node_backends):
-        return False
-
-    if group.status != storage.Status.INIT:
-        return False
-
-    for nb in group.node_backends:
-        if nb.status != storage.Status.OK:
-            return False
-        if nb.node.host in locked_hosts:
-            return False
-
-    if max_node_backends and len(group.node_backends) > max_node_backends:
-        return False
-
-    return True

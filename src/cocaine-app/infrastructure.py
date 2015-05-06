@@ -17,6 +17,7 @@ import indexes
 from infrastructure_cache import cache
 import inventory
 import keys
+from manual_locks import manual_locker
 import storage
 import timed_queue
 
@@ -852,6 +853,40 @@ class Infrastructure(object):
                 units[group.group_id].append(nb_units)
 
         return units
+
+    @staticmethod
+    def get_good_uncoupled_groups(max_node_backends=None, in_service=None):
+        suitable_groups = []
+        locked_hosts = manual_locker.get_locked_hosts()
+        for group in storage.groups.keys():
+            if Infrastructure.is_uncoupled_group_good(group,
+                                       locked_hosts,
+                                       max_node_backends=max_node_backends):
+                suitable_groups.append(group)
+
+        return suitable_groups
+
+    @staticmethod
+    def is_uncoupled_group_good(group, locked_hosts, max_node_backends=None):
+        if group.couple is not None:
+            return False
+
+        if not len(group.node_backends):
+            return False
+
+        if group.status != storage.Status.INIT:
+            return False
+
+        for nb in group.node_backends:
+            if nb.status != storage.Status.OK:
+                return False
+            if nb.node.host in locked_hosts:
+                return False
+
+        if max_node_backends and len(group.node_backends) > max_node_backends:
+            return False
+
+        return True
 
 
 infrastructure = Infrastructure()
