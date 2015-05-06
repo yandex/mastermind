@@ -744,7 +744,11 @@ class Planner(object):
         job_params['src_group'] = src_group.group_id
 
         if use_uncoupled_group:
-            uncoupled_groups = self.find_uncoupled_groups(group)
+            nodes_set = infrastructure.get_group_history(group.group_id)['nodes'][-1]['set']
+            if len(nodes_set) == 1:
+                uncoupled_groups = self.find_uncoupled_groups(group, nodes_set[0][0])
+            else:
+                uncoupled_groups = self.select_uncoupled_groups(group)
             job_params['uncoupled_group'] = uncoupled_groups[0].group_id
             job_params['merged_groups'] = [g.group_id for g in uncoupled_groups[1:]]
 
@@ -1061,13 +1065,7 @@ class Planner(object):
 
         return candidates
 
-    def find_uncoupled_groups(self, group):
-        nodes_set = infrastructure.get_group_history(group.group_id)['nodes'][-1]['set']
-        if len(nodes_set) != 1:
-            raise ValueError('Group {0} does not have 1 backend according '
-                'to history'.format(group.group_id))
-
-        host_addr = nodes_set[0][0]
+    def find_uncoupled_groups(self, group, host_addr):
         old_host_tree = cache.get_host_tree(cache.get_hostname_by_addr(host_addr))
         logger.info('Old host tree: {0}'.format(old_host_tree))
 
@@ -1117,8 +1115,8 @@ class Planner(object):
         return top_candidate
 
     def select_uncoupled_groups(self, group):
-        if len(group.node_backends) != 1:
-            raise ValueError('Group {0} should have exactly 1 backend'.format(group.group.id))
+        if len(group.node_backends) > 1:
+            raise ValueError('Group {0} should have no more than 1 backend'.format(group.group.id))
 
         types = ['root'] + inventory.get_balancer_node_types() + ['hdd']
         tree, nodes = infrastructure.filtered_cluster_tree(types)
