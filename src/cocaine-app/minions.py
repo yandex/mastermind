@@ -3,6 +3,7 @@ import functools
 import json
 import logging
 import random
+import socket
 import threading
 import time
 import traceback
@@ -187,10 +188,13 @@ class Minions(object):
     def _get_response(self, host, response):
         if response.error:
             error = response.error
-            if not isinstance(error, HTTPError):
+            if isinstance(error, socket.error):
+                code = error.errno
+            elif isinstance(error, HTTPError):
+                code = error.code
+            else:
                 raise TypeError('Unexpected http error type "{0}": '
                     '{1}'.format(type(error).__name__, error))
-            code = error.code
             if code == 599:
                 error_msg = ('Failed to connect to minion '
                              'on host {0} ({1})'.format(host, error.message))
