@@ -96,6 +96,14 @@ def init_infrastructure(W, n):
     return infstruct
 
 def init_cache_worker(W, n, meta_db):
+    if not config.get("cache"):
+        logger.error('Cache is not set up in config ("cache" key), '
+            'will not be initialized')
+        return None
+    if not config.get('metadata', {}).get('cache', {}).get('db'):
+        logger.error('Cache metadata db is not set up ("metadata.cache.db" key), '
+            'will not be initialized')
+        return None
     c = cache.CacheManager(n, meta_db)
     h.register_handle(W, c.get_top_keys)
     h.register_handle(W, c.cache_statistics)
@@ -122,7 +130,7 @@ if __name__ == '__main__':
     c = init_cache_worker(W, n, meta_db)
 
     icm._start_tq()
-    c._start_tq()
+    c and c._start_tq()
 
     logger.info("Starting cache worker")
     W.run()
