@@ -74,7 +74,7 @@ class Planner(object):
                 {}).get('max_executing_jobs', 3)
 
             # prechecking for new or pending tasks
-            count = self.job_processor.jobs_count(types=jobs.JobTypes.TYPE_MOVE_JOB,
+            count = self.job_processor.job_finder.jobs_count(types=jobs.JobTypes.TYPE_MOVE_JOB,
                 statuses=[jobs.Job.STATUS_NOT_APPROVED,
                           jobs.Job.STATUS_NEW,
                           jobs.Job.STATUS_EXECUTING,
@@ -95,7 +95,7 @@ class Planner(object):
                 self._move_candidates)
 
     def __busy_hosts(self, job_type):
-        not_finished_jobs = self.job_processor.jobs(types=job_type, statuses=(
+        not_finished_jobs = self.job_processor.job_finder.jobs(types=job_type, statuses=(
             jobs.Job.STATUS_NOT_APPROVED,
             jobs.Job.STATUS_NEW,
             jobs.Job.STATUS_EXECUTING,
@@ -138,7 +138,7 @@ class Planner(object):
                     {}).get('max_executing_jobs', 3)
 
                 # prechecking for new or pending tasks
-                jobs_count = self.job_processor.jobs_count(types=jobs.JobTypes.TYPE_MOVE_JOB,
+                jobs_count = self.job_processor.job_finder.jobs_count(types=jobs.JobTypes.TYPE_MOVE_JOB,
                     statuses=[jobs.Job.STATUS_NOT_APPROVED,
                               jobs.Job.STATUS_NEW,
                               jobs.Job.STATUS_EXECUTING,
@@ -336,7 +336,7 @@ class Planner(object):
             max_recover_jobs = config.get('jobs', {}).get('recover_dc_job',
                 {}).get('max_executing_jobs', 3)
             # prechecking for new or pending tasks
-            count = self.job_processor.jobs_count(
+            count = self.job_processor.job_finder.jobs_count(
                 types=jobs.JobTypes.TYPE_RECOVER_DC_JOB,
                 statuses=[jobs.Job.STATUS_NOT_APPROVED,
                           jobs.Job.STATUS_NEW,
@@ -366,7 +366,7 @@ class Planner(object):
             max_recover_jobs = config.get('jobs', {}).get('recover_dc_job',
                 {}).get('max_executing_jobs', 3)
 
-            jobs_count = self.job_processor.jobs_count(
+            jobs_count = self.job_processor.job_finder.jobs_count(
                 types=jobs.JobTypes.TYPE_RECOVER_DC_JOB,
                 statuses=(jobs.Job.STATUS_NOT_APPROVED,
                           jobs.Job.STATUS_NEW,
@@ -566,7 +566,7 @@ class Planner(object):
             max_defrag_jobs = config.get('jobs', {}).get('couple_defrag_job',
                 {}).get('max_executing_jobs', 3)
             # prechecking for new or pending tasks
-            count = self.job_processor.jobs_count(
+            count = self.job_processor.job_finder.jobs_count(
                 types=jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB,
                 statuses=[jobs.Job.STATUS_NOT_APPROVED,
                           jobs.Job.STATUS_NEW,
@@ -597,7 +597,7 @@ class Planner(object):
             max_defrag_jobs = config.get('jobs', {}).get('couple_defrag_job',
                 {}).get('max_executing_jobs', 3)
 
-            jobs_count = self.job_processor.jobs_count(
+            jobs_count = self.job_processor.job_finder.jobs_count(
                 types=jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB,
                 statuses=[jobs.Job.STATUS_NOT_APPROVED,
                           jobs.Job.STATUS_NEW,
@@ -1140,7 +1140,7 @@ class Planner(object):
         logger.debug('Current ns {0} dc state: {1}'.format(
             ns, ns_current_state[inventory.get_dc_node_type()]))
 
-        active_jobs = self.job_processor.jobs(
+        active_jobs = self.job_processor.job_finder.jobs(
             types=(jobs.JobTypes.TYPE_MOVE_JOB,
                    jobs.JobTypes.TYPE_RESTORE_GROUP_JOB),
             statuses=(jobs.Job.STATUS_NOT_APPROVED,

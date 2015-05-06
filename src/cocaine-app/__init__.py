@@ -179,9 +179,9 @@ def init_infrastructure():
     return infstruct
 
 
-def init_node_info_updater():
+def init_node_info_updater(jf):
     logger.info("trace node info updater %d" % (i.next()))
-    niu = node_info_updater.NodeInfoUpdater(n)
+    niu = node_info_updater.NodeInfoUpdater(n, jf)
     niu.start()
     register_handle(niu.force_nodes_update)
 
@@ -226,15 +226,27 @@ def init_planner(job_processor, niu):
     return planner
 
 
-def init_job_processor(minions, niu):
-    j = jobs.JobProcessor(n, meta_db, niu, minions)
+def init_job_finder():
+    if not config['metadata'].get('jobs', {}).get('db'):
+        logger.error('Job finder metadb is not set up '
+            '("metadata.jobs.db" key), will not be initialized')
+        return None
+    jf = jobs.JobFinder(meta_db)
+    register_handle(jf.get_job_list)
+    register_handle(jf.get_job_status)
+    register_handle(jf.get_jobs_status)
+    return jf
+
+def init_job_processor(jf, minions, niu):
+    if jf is None:
+        logger.error('Job processor will not be initialized because '
+            'job finder is not initialized')
+        return None
+    j = jobs.JobProcessor(jf, n, meta_db, niu, minions)
     register_handle(j.create_job)
     register_handle(j.cancel_job)
     register_handle(j.approve_job)
     register_handle(j.stop_jobs)
-    register_handle(j.get_job_list)
-    register_handle(j.get_job_status)
-    register_handle(j.get_jobs_status)
     register_handle(j.retry_failed_job_task)
     register_handle(j.skip_failed_job_task)
     return j
@@ -247,11 +259,12 @@ def init_manual_locker(manual_locker):
 
 co = init_cache()
 io = init_infrastructure()
-niu = init_node_info_updater()
+jf = init_job_finder()
+niu = init_node_info_updater(jf)
 b.niu = niu
 init_statistics()
 m = init_minions()
-j = init_job_processor(m, niu)
+j = init_job_processor(jf, m, niu)
 po = init_planner(j, niu)
 j.planner = po
 ml = init_manual_locker(manual_locker)
@@ -265,6 +278,8 @@ logger.info('activating timed queues')
 try:
     tq_to_activate = [co, io, b.niu, m, j, po]
     for tqo in tq_to_activate:
+        if tqo is None:
+            continue
         tqo._start_tq()
 except Exception as e:
     logger.error('failed to activate timed queue: {0}'.format(e))
