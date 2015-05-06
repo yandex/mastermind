@@ -1,3 +1,9 @@
+mastermind (2.23.9) lucid; urgency=low
+
+  * If no backends are found in history, planner restores group according to namespace distribution (same as for move group)
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 06 May 2015 19:39:27 +0300
+
 mastermind (2.23.8) lucid; urgency=low
 
   * Move planner should use default uncoupled groups select function
