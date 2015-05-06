@@ -56,6 +56,8 @@ class RestoreGroupJob(Job):
         self.check_node_backends(src_group)
 
         old_group_state = infrastructure.get_group_history(group.group_id)['nodes'][-1]['set']
+        if old_group_state:
+            old_host, old_port, old_family, old_backend_id, old_base_path = old_group_state[0][:5]
 
         if self.uncoupled_group:
             uncoupled_group = storage.groups[self.uncoupled_group]
@@ -71,7 +73,6 @@ class RestoreGroupJob(Job):
                 raise JobBrokenError('History of group {0} lists {1} '
                     'node backends, 1 expected'.format(self.group, len(old_group_state)))
 
-            old_host, old_port, old_family, old_backend_id, old_base_path = old_group_state[0][:5]
             # gettings dst_* from group history
             dst_host, dst_port, dst_backend_id = old_host, old_port, old_backend_id
             # TODO: Fix hardcoded family value
@@ -311,7 +312,7 @@ class RestoreGroupJob(Job):
 
         if self.uncoupled_group:
 
-            if len(old_group_state):
+            if old_group_state:
                 task = HistoryRemoveNodeTask.new(self,
                                                  group=self.group,
                                                  host=old_host,
