@@ -1,3 +1,9 @@
+mastermind (2.23.10) lucid; urgency=low
+
+  * Fix for restore group job creation when history record is unavailable
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 06 May 2015 20:14:19 +0300
+
 mastermind (2.23.9) lucid; urgency=low
 
   * If no backends are found in history, planner restores group according to namespace distribution (same as for move group)
