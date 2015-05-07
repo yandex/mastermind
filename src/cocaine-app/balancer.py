@@ -87,14 +87,19 @@ class Balancer(object):
 
     @h.concurrent_handler
     def get_empty_groups(self, request):
-        logger.info('len(storage.groups) = %d' % (len(storage.groups.elements)))
-        logger.info('groups: %s' % str([(group.group_id, group.couple) for group in storage.groups if group.couple is None]))
-        result = self._empty_group_ids()
+        options = request and request[0] or {}
+
+        result = self._empty_group_ids(
+            in_service=options.get('in_service', False),
+            status=storage.Status.BROKEN if options.get('state') == 'bad' else storage.Status.INIT)
         logger.debug('uncoupled groups: ' + str(result))
         return result
 
-    def _empty_group_ids(self):
-        return [group.group_id for group in storage.groups if group.couple is None]
+    def _empty_group_ids(self, in_service=False, status=storage.Status.INIT):
+        return [group.group_id
+                for group in infrastructure.infrastructure.get_good_uncoupled_groups(
+                    including_in_service=in_service,
+                    status=status)]
 
     STATES = {
         'good': [storage.Status.OK],

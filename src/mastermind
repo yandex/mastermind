@@ -211,11 +211,17 @@ def group_next_number(count, host=None, app=None):
 @groupDispatcher.command(name='list-uncoupled')
 @log_action
 def group_list_uncoupled(by_dc=('', None, 'Group by dc and provide some useful data'),
+                         state=('s', 'good', 'Filter by state (good|bad)'),
+                         in_service=('', False, 'Include uncoupled groups that '
+                            'are in service (participating in jobs, etc.)'),
                          json=('', None, 'Format additional data as json'),
                          host=None, app=None):
     '''Get list of uncoupled groups from balancer'''
     s = service(host, app)
-    res = s.enqueue("get_empty_groups", "").get()
+
+    options = {'in_service': in_service,
+               'state': state}
+    res = s.enqueue("get_empty_groups", msgpack.packb([options])).get()
 
     if not by_dc:
         print res
