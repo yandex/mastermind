@@ -16,6 +16,7 @@ import balancelogicadapter as bla
 from config import config
 import errors
 import helpers as h
+from jobs import Job
 import keys
 import timed_queue
 import storage
@@ -29,9 +30,10 @@ COUPLES_META_UPDATE_TASK_ID = 'couples_meta_update'
 
 class NodeInfoUpdater(object):
 
-    def __init__(self, node):
+    def __init__(self, node, job_finder):
         logger.info("Created NodeInfoUpdater")
         self.__node = node
+        self.job_finder = job_finder
         self.__tq = timed_queue.TimedQueue()
         self.__session = elliptics.Session(self.__node)
         wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or config.get('wait_timeout', 5)
@@ -320,16 +322,27 @@ class NodeInfoUpdater(object):
             return
 
         try:
-            groups = groups or storage.groups.keys()
+            check_groups = groups or storage.groups.keys()
 
             results = {}
-            for group in groups:
+            for group in check_groups:
                 session = self.__session.clone()
                 session.add_groups([group.group_id])
 
                 logger.debug('Request to read {0} for group {1}'.format(
                     keys.SYMMETRIC_GROUPS_KEY.replace('\0', '\\0'), group.group_id))
                 results[group.group_id] = session.read_data(keys.SYMMETRIC_GROUPS_KEY)
+
+            # jobs = {}
+            # if self.job_finder:
+            #     try:
+            #         params = {'statuses': [Job.STATUS_EXECUTING]}
+            #         if groups:
+            #             params['groups'] = [g.group_id for g in groups]
+            #         self.job_finder.jobs(**params)
+            #     except Exception as e:
+            #         logger.exception('Failed to fetch pending jobs: {0}'.format(e))
+            #         pass
 
             while results:
                 if _queue:

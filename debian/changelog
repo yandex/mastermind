@@ -58,6 +58,25 @@ mastermind (2.24.1) lucid; urgency=low
 
  -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 22 Apr 2015 17:04:56 +0300
 
+mastermind (2.23.11) lucid; urgency=low
+
+  * Uncoupled group should be considered broken if it has more than one backend and DHT check is enabled
+  * In-service check for uncoupled group fetching
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 07 May 2015 13:07:37 +0300
+
+mastermind (2.23.10) lucid; urgency=low
+
+  * Fix for restore group job creation when history record is unavailable
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 06 May 2015 20:14:19 +0300
+
+mastermind (2.23.9) lucid; urgency=low
+
+  * If no backends are found in history, planner restores group according to namespace distribution (same as for move group)
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 06 May 2015 19:39:27 +0300
+
 mastermind (2.23.8) lucid; urgency=low
 
   * Move planner should use default uncoupled groups select function
@@ -318,8 +337,6 @@ mastermind (2.19.4) lucid; urgency=low
 
  -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 12 Mar 2015 14:55:52 +0300
 
-=======
->>>>>>> db79f0f444e8cda9ec204ed303fc9918224f1372
 mastermind (2.19.3) lucid; urgency=low
 
   * Recovery planner accounts locked couples

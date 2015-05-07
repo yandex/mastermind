@@ -23,7 +23,6 @@ import helpers as h
 import infrastructure
 import inventory
 import keys
-from manual_locks import manual_locker
 import statistics
 import storage
 from sync import sync_manager
@@ -88,14 +87,19 @@ class Balancer(object):
 
     @h.concurrent_handler
     def get_empty_groups(self, request):
-        logger.info('len(storage.groups) = %d' % (len(storage.groups.elements)))
-        logger.info('groups: %s' % str([(group.group_id, group.couple) for group in storage.groups if group.couple is None]))
-        result = self._empty_group_ids()
+        options = request and request[0] or {}
+
+        result = self._empty_group_ids(
+            in_service=options.get('in_service', False),
+            status=storage.Status.BROKEN if options.get('state') == 'bad' else storage.Status.INIT)
         logger.debug('uncoupled groups: ' + str(result))
         return result
 
-    def _empty_group_ids(self):
-        return [group.group_id for group in get_good_uncoupled_groups()]
+    def _empty_group_ids(self, in_service=False, status=storage.Status.INIT):
+        return [group.group_id
+                for group in infrastructure.infrastructure.get_good_uncoupled_groups(
+                    including_in_service=in_service,
+                    status=status)]
 
     STATES = {
         'good': [storage.Status.OK],
@@ -404,7 +408,7 @@ class Balancer(object):
             port, backend_id = int(port), int(backend_id)
             logger.info('host, port, backend_id: {0}'.format((host, port, backend_id)))
         except (IndexError, ValueError, AttributeError):
-            raise ValueError('Node backend should be of form <host>:<port>:<backend_id>')
+            raise ValueError('Node backend should be of form <host>:<port>/<backend_id>')
 
         if group and node_backend and node_backend in group.node_backends:
             logger.info('Removing node backend {0} from group {1} nodes'.format(node_backend, group))
@@ -457,7 +461,7 @@ class Balancer(object):
         suitable_groups = []
         total_spaces = []
 
-        for group in get_good_uncoupled_groups():
+        for group in infrastructure.infrastructure.get_good_uncoupled_groups():
 
             if not len(group.node_backends):
                 logger.info('Group {0} cannot be used, it has '

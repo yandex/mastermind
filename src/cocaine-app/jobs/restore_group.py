@@ -56,11 +56,8 @@ class RestoreGroupJob(Job):
         self.check_node_backends(src_group)
 
         old_group_state = infrastructure.get_group_history(group.group_id)['nodes'][-1]['set']
-        if len(old_group_state) != 1:
-            raise JobBrokenError('History of group {0} lists {1} '
-                'node backends, 1 expected'.format(self.group, len(old_group_state)))
-
-        old_host, old_port, old_family, old_backend_id, old_base_path = old_group_state[0][:5]
+        if old_group_state:
+            old_host, old_port, old_family, old_backend_id, old_base_path = old_group_state[0][:5]
 
         if self.uncoupled_group:
             uncoupled_group = storage.groups[self.uncoupled_group]
@@ -72,6 +69,10 @@ class RestoreGroupJob(Job):
             dst_base_path = uncoupled_group.node_backends[0].base_path
             dst_backend_id = uncoupled_group.node_backends[0].backend_id
         else:
+            if len(old_group_state) != 1:
+                raise JobBrokenError('History of group {0} lists {1} '
+                    'node backends, 1 expected'.format(self.group, len(old_group_state)))
+
             # gettings dst_* from group history
             dst_host, dst_port, dst_backend_id = old_host, old_port, old_backend_id
             # TODO: Fix hardcoded family value
@@ -222,12 +223,15 @@ class RestoreGroupJob(Job):
             params['remove_path'] = remove_path
 
         task = RsyncBackendTask.new(self,
-                                    host=dst_host,
-                                    src_host=old_host,
-                                    group=self.group,
-                                    cmd=move_cmd,
-                                    node_backend=self.node_backend(old_host, old_port, old_backend_id),
-                                    params=params)
+            host=dst_host,
+            src_host=src_group.node_backends[0].node.host.addr,
+            group=self.group,
+            cmd=move_cmd,
+            node_backend=self.node_backend(
+                src_group.node_backends[0].node.host.addr,
+                src_group.node_backends[0].node.port,
+                src_group.node_backends[0].backend_id),
+            params=params)
         self.tasks.append(task)
 
         additional_files = config.get('restore', {}).get('restore_additional_files', [])
@@ -308,12 +312,13 @@ class RestoreGroupJob(Job):
 
         if self.uncoupled_group:
 
-            task = HistoryRemoveNodeTask.new(self,
-                                             group=self.group,
-                                             host=old_host,
-                                             port=old_port,
-                                             backend_id=old_backend_id)
-            self.tasks.append(task)
+            if old_group_state:
+                task = HistoryRemoveNodeTask.new(self,
+                                                 group=self.group,
+                                                 host=old_host,
+                                                 port=old_port,
+                                                 backend_id=old_backend_id)
+                self.tasks.append(task)
 
             task = HistoryRemoveNodeTask.new(self,
                                  group=self.uncoupled_group,

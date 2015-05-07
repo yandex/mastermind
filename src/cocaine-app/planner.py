@@ -13,7 +13,6 @@ import elliptics
 import msgpack
 import pymongo
 
-from balancer import get_good_uncoupled_groups, is_uncoupled_group_good
 from coll import SortedCollection
 from config import config
 from db.mongo.pool import Collection
@@ -75,7 +74,7 @@ class Planner(object):
                 {}).get('max_executing_jobs', 3)
 
             # prechecking for new or pending tasks
-            count = self.job_processor.jobs_count(types=jobs.JobTypes.TYPE_MOVE_JOB,
+            count = self.job_processor.job_finder.jobs_count(types=jobs.JobTypes.TYPE_MOVE_JOB,
                 statuses=[jobs.Job.STATUS_NOT_APPROVED,
                           jobs.Job.STATUS_NEW,
                           jobs.Job.STATUS_EXECUTING,
@@ -96,7 +95,7 @@ class Planner(object):
                 self._move_candidates)
 
     def __busy_hosts(self, job_type):
-        not_finished_jobs = self.job_processor.jobs(types=job_type, statuses=(
+        not_finished_jobs = self.job_processor.job_finder.jobs(types=job_type, statuses=(
             jobs.Job.STATUS_NOT_APPROVED,
             jobs.Job.STATUS_NEW,
             jobs.Job.STATUS_EXECUTING,
@@ -139,7 +138,7 @@ class Planner(object):
                     {}).get('max_executing_jobs', 3)
 
                 # prechecking for new or pending tasks
-                jobs_count = self.job_processor.jobs_count(types=jobs.JobTypes.TYPE_MOVE_JOB,
+                jobs_count = self.job_processor.job_finder.jobs_count(types=jobs.JobTypes.TYPE_MOVE_JOB,
                     statuses=[jobs.Job.STATUS_NOT_APPROVED,
                               jobs.Job.STATUS_NEW,
                               jobs.Job.STATUS_EXECUTING,
@@ -252,7 +251,7 @@ class Planner(object):
 
         base_ms = candidate.state_ms_error
 
-        uncoupled_groups = get_good_uncoupled_groups(max_node_backends=1)
+        uncoupled_groups = infrastructure.get_good_uncoupled_groups(max_node_backends=1)
 
         for c in candidate.iteritems():
             src_dc, src_dc_state = c
@@ -337,7 +336,7 @@ class Planner(object):
             max_recover_jobs = config.get('jobs', {}).get('recover_dc_job',
                 {}).get('max_executing_jobs', 3)
             # prechecking for new or pending tasks
-            count = self.job_processor.jobs_count(
+            count = self.job_processor.job_finder.jobs_count(
                 types=jobs.JobTypes.TYPE_RECOVER_DC_JOB,
                 statuses=[jobs.Job.STATUS_NOT_APPROVED,
                           jobs.Job.STATUS_NEW,
@@ -367,7 +366,7 @@ class Planner(object):
             max_recover_jobs = config.get('jobs', {}).get('recover_dc_job',
                 {}).get('max_executing_jobs', 3)
 
-            jobs_count = self.job_processor.jobs_count(
+            jobs_count = self.job_processor.job_finder.jobs_count(
                 types=jobs.JobTypes.TYPE_RECOVER_DC_JOB,
                 statuses=(jobs.Job.STATUS_NOT_APPROVED,
                           jobs.Job.STATUS_NEW,
@@ -567,7 +566,7 @@ class Planner(object):
             max_defrag_jobs = config.get('jobs', {}).get('couple_defrag_job',
                 {}).get('max_executing_jobs', 3)
             # prechecking for new or pending tasks
-            count = self.job_processor.jobs_count(
+            count = self.job_processor.job_finder.jobs_count(
                 types=jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB,
                 statuses=[jobs.Job.STATUS_NOT_APPROVED,
                           jobs.Job.STATUS_NEW,
@@ -598,7 +597,7 @@ class Planner(object):
             max_defrag_jobs = config.get('jobs', {}).get('couple_defrag_job',
                 {}).get('max_executing_jobs', 3)
 
-            jobs_count = self.job_processor.jobs_count(
+            jobs_count = self.job_processor.job_finder.jobs_count(
                 types=jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB,
                 statuses=[jobs.Job.STATUS_NOT_APPROVED,
                           jobs.Job.STATUS_NEW,
@@ -744,7 +743,11 @@ class Planner(object):
         job_params['src_group'] = src_group.group_id
 
         if use_uncoupled_group:
-            uncoupled_groups = self.find_uncoupled_groups(group)
+            nodes_set = infrastructure.get_group_history(group.group_id)['nodes'][-1]['set']
+            if len(nodes_set) == 1:
+                uncoupled_groups = self.find_uncoupled_groups(group, nodes_set[0][0])
+            else:
+                uncoupled_groups = self.select_uncoupled_groups(group)
             job_params['uncoupled_group'] = uncoupled_groups[0].group_id
             job_params['merged_groups'] = [g.group_id for g in uncoupled_groups[1:]]
 
@@ -871,8 +874,8 @@ class Planner(object):
                         'only groups with 1 node backend can be used'.format(
                             unc_group.group_id, len(unc_group.node_backends)))
 
-                is_uncoupled_group_good(unc_group, locked_hosts, max_node_backends=1)
-                if not is_uncoupled_group_good(unc_group, locked_hosts, max_node_backends=1):
+                is_good = infrastructure.is_uncoupled_group_good(unc_group, locked_hosts, max_node_backends=1)
+                if not is_good:
                     raise ValueError('Uncoupled group {0} is not applicable'.format(
                         unc_group.group_id))
 
@@ -1061,17 +1064,11 @@ class Planner(object):
 
         return candidates
 
-    def find_uncoupled_groups(self, group):
-        nodes_set = infrastructure.get_group_history(group.group_id)['nodes'][-1]['set']
-        if len(nodes_set) != 1:
-            raise ValueError('Group {0} does not have 1 backend according '
-                'to history'.format(group.group_id))
-
-        host_addr = nodes_set[0][0]
+    def find_uncoupled_groups(self, group, host_addr):
         old_host_tree = cache.get_host_tree(cache.get_hostname_by_addr(host_addr))
         logger.info('Old host tree: {0}'.format(old_host_tree))
 
-        uncoupled_groups = get_good_uncoupled_groups(max_node_backends=1)
+        uncoupled_groups = infrastructure.get_good_uncoupled_groups(max_node_backends=1)
         groups_by_dc = {}
         for unc_group in uncoupled_groups:
             dc = unc_group.node_backends[0].node.host.dc
@@ -1117,8 +1114,8 @@ class Planner(object):
         return top_candidate
 
     def select_uncoupled_groups(self, group):
-        if len(group.node_backends) != 1:
-            raise ValueError('Group {0} should have exactly 1 backend'.format(group.group.id))
+        if len(group.node_backends) > 1:
+            raise ValueError('Group {0} should have no more than 1 backend'.format(group.group.id))
 
         types = ['root'] + inventory.get_balancer_node_types() + ['hdd']
         tree, nodes = infrastructure.filtered_cluster_tree(types)
@@ -1132,7 +1129,7 @@ class Planner(object):
         infrastructure.account_ns_couples(tree, nodes, ns)
         infrastructure.update_groups_list(tree)
 
-        uncoupled_groups = get_good_uncoupled_groups(max_node_backends=1)
+        uncoupled_groups = infrastructure.get_good_uncoupled_groups(max_node_backends=1)
         candidates = self.get_suitable_uncoupled_groups_list(group, uncoupled_groups)
         logger.debug('Candidate groups for group {0}: {1}'.format(group.group_id,
             [[g.group_id for g in c] for c in candidates]))
@@ -1143,7 +1140,7 @@ class Planner(object):
         logger.debug('Current ns {0} dc state: {1}'.format(
             ns, ns_current_state[inventory.get_dc_node_type()]))
 
-        active_jobs = self.job_processor.jobs(
+        active_jobs = self.job_processor.job_finder.jobs(
             types=(jobs.JobTypes.TYPE_MOVE_JOB,
                    jobs.JobTypes.TYPE_RESTORE_GROUP_JOB),
             statuses=(jobs.Job.STATUS_NOT_APPROVED,
@@ -1286,7 +1283,7 @@ class StorageState(object):
                 obj._stats[group.group_id] = group.get_stat()
                 obj.state[dc].add_group(group)
 
-        for group in get_good_uncoupled_groups(max_node_backends=1):
+        for group in infrastructure.get_good_uncoupled_groups(max_node_backends=1):
             dc = group.node_backends[0].node.host.dc
             obj._stats[group.group_id] = group.get_stat()
             obj.state[dc].add_uncoupled_group(group)

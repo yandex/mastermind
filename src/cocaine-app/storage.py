@@ -734,7 +734,14 @@ class Group(object):
                 'no node backends serving this group'.format(self))
             return self.status
 
-        # node backends should have been updated by now
+        if FORBIDDEN_DHT_GROUPS and len(self.node_backends) > 1:
+            self.status = Status.BROKEN
+            self.status_text = ('Group {0} is in BROKEN state because '
+                'is has {1} node backends but only 1 is allowed'.format(
+                    self.group_id, len(self.node_backends)))
+
+        # node statuses should be updated before group status is set
+        # statuses = tuple(nb.update_status() for nb in self.node_backends)
         statuses = tuple(nb.status for nb in self.node_backends)
 
         logger.info('In group {0} meta = {1}'.format(self, str(self.meta)))
@@ -743,12 +750,6 @@ class Group(object):
             self.status_text = ('Group {0} is in INIT state because meta key '
                 'was not read from it'.format(self))
             return self.status
-
-        if FORBIDDEN_DHT_GROUPS and len(self.node_backends) > 1:
-            self.status = Status.BROKEN
-            self.status_text = ('Group {0} is in BROKEN state because '
-                'is has {1} node backends but only 1 is allowed'.format(
-                    self.group_id, len(self.node_backends)))
             return self.status
 
         if Status.BROKEN in statuses:
