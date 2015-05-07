@@ -739,6 +739,7 @@ class Group(object):
             self.status_text = ('Group {0} is in BROKEN state because '
                 'is has {1} node backends but only 1 is allowed'.format(
                     self.group_id, len(self.node_backends)))
+            return self.status
 
         # node statuses should be updated before group status is set
         # statuses = tuple(nb.update_status() for nb in self.node_backends)
@@ -749,7 +750,6 @@ class Group(object):
             self.status = Status.INIT
             self.status_text = ('Group {0} is in INIT state because meta key '
                 'was not read from it'.format(self))
-            return self.status
             return self.status
 
         if Status.BROKEN in statuses:
