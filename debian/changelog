@@ -1,3 +1,9 @@
+mastermind (2.23.12) lucid; urgency=low
+
+  * Misprint fixed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 07 May 2015 15:56:33 +0300
+
 mastermind (2.23.11) lucid; urgency=low
 
   * Uncoupled group should be considered broken if it has more than one backend and DHT check is enabled
