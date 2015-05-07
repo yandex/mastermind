@@ -164,9 +164,9 @@ def register_handle(h):
     return wrapper
 
 
-def init_infrastructure():
+def init_infrastructure(jf):
     infstruct = infrastructure.infrastructure
-    infstruct.init(n)
+    infstruct.init(n, jf)
     register_handle(infstruct.shutdown_node_cmd)
     register_handle(infstruct.start_node_cmd)
     register_handle(infstruct.disable_node_backend_cmd)
@@ -258,8 +258,8 @@ def init_manual_locker(manual_locker):
 
 
 co = init_cache()
-io = init_infrastructure()
 jf = init_job_finder()
+io = init_infrastructure(jf)
 niu = init_node_info_updater(jf)
 b.niu = niu
 init_statistics()

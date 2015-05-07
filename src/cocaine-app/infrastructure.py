@@ -83,8 +83,9 @@ class Infrastructure(object):
         self.__state_lock = threading.Lock()
         self.__tq = timed_queue.TimedQueue()
 
-    def init(self, node):
+    def init(self, node, job_finder):
         self.node = node
+        self.job_finder = job_finder
         self.meta_session = self.node.meta_session
 
         self._sync_state()
@@ -854,27 +855,43 @@ class Infrastructure(object):
 
         return units
 
-    @staticmethod
-    def get_good_uncoupled_groups(max_node_backends=None, in_service=None):
+    def get_good_uncoupled_groups(self,
+        max_node_backends=None,
+        including_in_service=False,
+        status=None):
+
         suitable_groups = []
         locked_hosts = manual_locker.get_locked_hosts()
+        in_service = set()
+        if not including_in_service and self.job_finder:
+            in_service = set(self.job_finder.get_uncoupled_groups_in_service())
+        logger.debug('Groups in service - total {0}: {1}'.format(
+            len(in_service), in_service))
         for group in storage.groups.keys():
             if Infrastructure.is_uncoupled_group_good(group,
-                                       locked_hosts,
-                                       max_node_backends=max_node_backends):
+                    locked_hosts,
+                    max_node_backends=max_node_backends,
+                    in_service=in_service,
+                    status=status):
                 suitable_groups.append(group)
 
         return suitable_groups
 
     @staticmethod
-    def is_uncoupled_group_good(group, locked_hosts, max_node_backends=None):
+    def is_uncoupled_group_good(group, locked_hosts,
+        max_node_backends=None, in_service=None, status=None):
+
         if group.couple is not None:
+            return False
+
+        if in_service and group.group_id in in_service:
             return False
 
         if not len(group.node_backends):
             return False
 
-        if group.status != storage.Status.INIT:
+        status = status or storage.Status.INIT
+        if group.status != status:
             return False
 
         for nb in group.node_backends:
