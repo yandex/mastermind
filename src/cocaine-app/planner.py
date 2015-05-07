@@ -212,7 +212,7 @@ class Planner(object):
             busy_hosts = self.__busy_hosts([jobs.JobTypes.TYPE_MOVE_JOB, jobs.JobTypes.TYPE_RESTORE_GROUP_JOB])
             logger.debug('Busy hosts from executing jobs: {0}'.format(list(busy_hosts)))
         if busy_group_ids is None:
-            busy_group_ids = set(self.job_processor.get_uncoupled_groups_in_service())
+            busy_group_ids = set(self.job_processor.job_finder.get_uncoupled_groups_in_service())
             logger.debug('Busy uncoupled groups from executing jobs: {0}'.format(list(busy_group_ids)))
 
         if step >= min(self.__max_plan_length, max_plan_length):
@@ -1026,7 +1026,7 @@ class Planner(object):
         required_ts = max(st.total_space for st in stats)
         groups_by_fs = {}
 
-        busy_group_ids = busy_group_ids or set(self.job_processor.get_uncoupled_groups_in_service())
+        busy_group_ids = busy_group_ids or set(self.job_processor.job_finder.get_uncoupled_groups_in_service())
 
         logger.info('Busy uncoupled groups: {0}'.format(busy_group_ids))
 
