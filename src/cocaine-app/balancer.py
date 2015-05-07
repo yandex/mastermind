@@ -408,7 +408,7 @@ class Balancer(object):
             port, backend_id = int(port), int(backend_id)
             logger.info('host, port, backend_id: {0}'.format((host, port, backend_id)))
         except (IndexError, ValueError, AttributeError):
-            raise ValueError('Node backend should be of form <host>:<port>:<backend_id>')
+            raise ValueError('Node backend should be of form <host>:<port>/<backend_id>')
 
         if group and node_backend and node_backend in group.node_backends:
             logger.info('Removing node backend {0} from group {1} nodes'.format(node_backend, group))
