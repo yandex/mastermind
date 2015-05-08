@@ -786,7 +786,9 @@ class Planner(object):
             'failed': {},
         }
 
+        logger.debug('Lock acquiring')
         with sync_manager.lock(self.job_processor.JOBS_LOCK, timeout=self.job_processor.JOB_MANUAL_TIMEOUT):
+            logger.debug('Lock acquired')
             for couple in storage.couples.keys():
                 for group in couple.groups:
                     if len(group.node_backends) != 1:
