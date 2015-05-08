@@ -10,6 +10,7 @@ import traceback
 import msgpack
 
 import inventory
+import jobs.job
 from infrastructure import infrastructure
 from infrastructure_cache import cache
 from config import config
@@ -46,6 +47,9 @@ class Status(object):
     FROZEN = 'FROZEN'
 
     MIGRATING = 'MIGRATING'
+
+    SERVICE_ACTIVE = 'SERVICE_ACTIVE'
+    SERVICE_STALLED = 'SERVICE_STALLED'
 
 
 GOOD_STATUSES = set([Status.OK, Status.FULL])
@@ -653,6 +657,7 @@ class Group(object):
         self.couple = None
         self.meta = None
         self.status_text = "Group %s is not inititalized yet" % (self)
+        self.active_job = None
 
         for node_backend in node_backends or []:
             self.add_node_backend(node_backend)
@@ -835,8 +840,20 @@ class Group(object):
             res['couples'] = None
         if self.meta:
             res['namespace'] = self.meta.get('namespace')
+        if self.active_job:
+            res['active_job'] = self.active_job
 
         return res
+
+    def set_active_job(self, job):
+        if job is None:
+            self.active_job = None
+            return
+        self.active_job = {
+            'id': job.id,
+            'type': job.type,
+            'status': job.status,
+        }
 
     @classmethod
     def compose_cache_group_meta(cls):
@@ -888,6 +905,7 @@ class Couple(object):
 
             group.couple = self
         self.status_text = 'Couple {0} is not inititalized yet'.format(str(self))
+        self.active_job = None
 
     def get_stat(self):
         try:
@@ -895,15 +913,35 @@ class Couple(object):
         except TypeError:
             return None
 
+    def account_job_in_status(self):
+        if self.status == Status.BAD:
+            for group in self.groups:
+                if group.active_job:
+                    self.active_job = group.active_job
+                    break
+
+            if self.active_job:
+                if self.active_job['status'] in (jobs.job.Job.STATUS_NEW, jobs.job.Job.STATUS_EXECUTING):
+                    self.status = Status.SERVICE_ACTIVE
+                    self.status_text = 'Couple {} has active job {}'.format(
+                        str(self), self.active_job['id'])
+                else:
+                    self.status = Status.SERVICE_STALLED
+                    self.status_text = 'Couple {} has stalled job {}'.format(
+                        str(self), self.active_job['id'])
+        return self.status
+
     @status_change_log
     def update_status(self):
+        self.active_job = None
+
         statuses = [group.update_status() for group in self.groups]
 
         meta = self.groups[0].meta
         if any([not self.groups[0].equal_meta(group) for group in self.groups[1:]]):
             self.status = Status.BAD
             self.status_text = 'Couple {0} groups has unequal meta data'.format(str(self))
-            return self.status
+            return self.account_job_in_status()
 
         if any([group.meta and group.meta.get('frozen') for group in self.groups]):
             self.status = Status.FROZEN
@@ -967,6 +1005,7 @@ class Couple(object):
             self.status_text = 'Couple {0} has broken groups'.format(str(self))
 
         elif Status.BAD in statuses:
+
             self.status = Status.BAD
             self.status_text = 'Couple {0} has bad groups'.format(str(self))
 
@@ -978,7 +1017,7 @@ class Couple(object):
             self.status = Status.BAD
             self.status_text = 'Couple {0} is bad for some reason'.format(str(self))
 
-        return self.status
+        return self.account_job_in_status()
 
     def check_groups(self, groups):
 

@@ -243,7 +243,6 @@ def init_manual_locker(manual_locker):
     return manual_locker
 
 
-co = init_cache()
 jf = init_job_finder()
 io = init_infrastructure(jf)
 niu = init_node_info_updater(jf)

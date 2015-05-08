@@ -106,7 +106,9 @@ class Balancer(object):
         'full': [storage.Status.FULL],
         'frozen': [storage.Status.FROZEN],
         'bad': [storage.Status.INIT, storage.Status.BAD],
-        'broken': [storage.Status.BROKEN]
+        'broken': [storage.Status.BROKEN],
+        'service-stalled': [storage.Status.SERVICE_STALLED],
+        'service-active': [storage.Status.SERVICE_ACTIVE],
     }
 
     @h.concurrent_handler

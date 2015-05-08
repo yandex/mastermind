@@ -16,7 +16,7 @@ import balancelogicadapter as bla
 from config import config
 import errors
 import helpers as h
-from jobs import Job
+from jobs import Job, JobTypes
 import keys
 import timed_queue
 import storage
@@ -333,16 +333,18 @@ class NodeInfoUpdater(object):
                     keys.SYMMETRIC_GROUPS_KEY.replace('\0', '\\0'), group.group_id))
                 results[group.group_id] = session.read_data(keys.SYMMETRIC_GROUPS_KEY)
 
-            # jobs = {}
-            # if self.job_finder:
-            #     try:
-            #         params = {'statuses': [Job.STATUS_EXECUTING]}
-            #         if groups:
-            #             params['groups'] = [g.group_id for g in groups]
-            #         self.job_finder.jobs(**params)
-            #     except Exception as e:
-            #         logger.exception('Failed to fetch pending jobs: {0}'.format(e))
-            #         pass
+            jobs = {}
+            if self.job_finder:
+                try:
+                    params = {'statuses': Job.ACTIVE_STATUSES,
+                              'types': [JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_RESTORE_GROUP_JOB]}
+                    if groups:
+                        params['groups'] = [g.group_id for g in groups]
+                    for job in self.job_finder.jobs(**params):
+                        jobs[job.group] = job
+                except Exception as e:
+                    logger.exception('Failed to fetch pending jobs: {0}'.format(e))
+                    pass
 
             while results:
                 if _queue:
@@ -367,6 +369,11 @@ class NodeInfoUpdater(object):
                             group_id, e, traceback.format_exc()))
                     group.parse_meta(None)
                 finally:
+                    try:
+                        group.set_active_job(jobs.get(group.group_id))
+                    except Exception as e:
+                        logger.exception('Failed to set group active job: {}'.format(e))
+                        pass
                     try:
                         group.update_status_recursive()
                     except Exception as e:

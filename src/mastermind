@@ -540,7 +540,7 @@ STATES = {
 @coupleDispatcher.command(name='list')
 @log_action
 def couple_list(namespace=('n', '', 'Filter by namespace'),
-                state=('s', '', 'Filter by state (good|full|frozen|bad)'),
+                state=('s', '', 'Filter by state (good|full|frozen|bad|service-stalled|service-active)'),
                 short=('', False, 'Use short format output'),
                 verbose=('v', False, 'Use verbose format output'),
                 by_ns=('', False, 'Output by namespaces'),
