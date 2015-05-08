@@ -280,6 +280,13 @@ class Planner(object):
 
                     dst_host = unc_group.node_backends[0].node.host.addr
                     dst_dc = unc_group.node_backends[0].node.host.dc
+
+                    dst_dc_state = candidate.state[dst_dc]
+                    if src_group.couple in dst_dc_state.couples:
+                        # can't move group to dst_dc because a group
+                        # from the same couple is already located there
+                        continue
+
                     if dst_dc == src_dc:
                         logger.debug('dst group {0} is skipped, dst dc is the '
                             'same as source dc: {1}'.format(
@@ -291,7 +298,6 @@ class Planner(object):
 
                     if unc_group_stat.files + unc_group_stat.files_removed > 0:
                         continue
-
 
                     if dst_host in busy_hosts:
                         logger.debug('dst group {0} is skipped, {1} is in busy hosts'.format(

@@ -448,7 +448,7 @@ class JobProcessor(object):
             except IndexError as e:
                 raise ValueError('Job id is required')
 
-            job = self.job_finder.__get_job(job_id)
+            job = self.job_finder._get_job(job_id)
 
             with job.tasks_lock():
 
@@ -489,7 +489,7 @@ class JobProcessor(object):
             except IndexError as e:
                 raise ValueError('Job id is required')
 
-            job = self.job_finder.__get_job(job_id)
+            job = self.job_finder._get_job(job_id)
 
             with job.tasks_lock():
 
@@ -556,7 +556,7 @@ class JobProcessor(object):
         with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
             logger.debug('Lock acquired')
 
-            job = self.job_finder.__get_job(job_id)
+            job = self.job_finder._get_job(job_id)
             with job.tasks_lock():
                 if job.status not in (Job.STATUS_PENDING, Job.STATUS_BROKEN):
                     raise ValueError('Job {0}: status is "{1}", should have been '
@@ -622,7 +622,7 @@ class JobFinder(object):
         except (TypeError, IndexError):
             raise ValueError('Job id is required')
 
-        return self.__get_job(job_id).human_dump()
+        return self._get_job(job_id).human_dump()
 
     @h.concurrent_handler
     def get_jobs_status(self, request):
@@ -633,7 +633,7 @@ class JobFinder(object):
 
         return [j.human_dump() for j in self.jobs(ids=job_ids)]
 
-    def __get_job(self, job_id):
+    def _get_job(self, job_id):
         jobs_list = Job.list(self.collection,
             id=job_id).limit(1)
         if not jobs_list:

@@ -871,8 +871,8 @@ def status_change_log(f):
         status = self.status
         new_status = f(self, *args, **kwargs)
         if status != new_status:
-            logger.info('Couple {0} status updated from {1} to {2}'.format(
-                self, status, new_status))
+            logger.info('Couple {0} status updated from {1} to {2} ({3})'.format(
+                self, status, new_status, self.status_text))
         return new_status
     return wrapper
 
