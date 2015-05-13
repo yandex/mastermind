@@ -68,6 +68,28 @@ class JobProcessor(object):
     def _start_tq(self):
         self.__tq.start()
 
+    def _ready_jobs(self):
+
+        new_jobs, executing_jobs = [], []
+        type_jobs_count = {}
+
+        for job in self.job_finder.jobs(statuses=Job.STATUS_EXECUTING):
+            type_jobs_count.setdefault(job.type, 0)
+            type_jobs_count[job.type] += 1
+            executing_jobs.append(job)
+        for job in self.job_finder.jobs(statuses=Job.STATUS_NEW):
+            jobs_count = type_jobs_count.setdefault(job.type, 0)
+            if jobs_count >= JOB_CONFIG.get(job.type, {}).get('max_executing_jobs', 3):
+                continue
+            type_jobs_count[job.type] += 1
+            new_jobs.append(job)
+
+        new_jobs.sort(key=lambda j: j.create_ts)
+        ready_jobs = executing_jobs + new_jobs
+        logger.debug('Ready jobs: {0}'.format(len(ready_jobs)))
+
+        return ready_jobs
+
     def _execute_jobs(self):
 
         logger.info('Jobs execution started')
@@ -77,23 +99,7 @@ class JobProcessor(object):
             with sync_manager.lock(self.JOBS_LOCK, blocking=False):
                 logger.debug('Lock acquired')
 
-                new_jobs, executing_jobs = [], []
-                type_jobs_count = {}
-
-                for job in self.job_finder.jobs(statuses=Job.STATUS_EXECUTING):
-                    type_jobs_count.setdefault(job.type, 0)
-                    type_jobs_count[job.type] += 1
-                    executing_jobs.append(job)
-                for job in self.job_finder.jobs(statuses=Job.STATUS_NEW):
-                    jobs_count = type_jobs_count.setdefault(job.type, 0)
-                    if jobs_count >= JOB_CONFIG.get(job.type, {}).get('max_executing_jobs', 3):
-                        continue
-                    type_jobs_count[job.type] += 1
-                    new_jobs.append(job)
-
-                new_jobs.sort(key=lambda j: j.create_ts)
-                ready_jobs = executing_jobs + new_jobs
-                logger.debug('Ready jobs: {0}'.format(len(ready_jobs)))
+                ready_jobs = self._ready_jobs()
 
                 for job in ready_jobs:
                     try:

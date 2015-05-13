@@ -11,6 +11,7 @@ import msgpack
 
 import inventory
 import jobs.job
+from jobs.job_types import JobTypes
 from infrastructure import infrastructure
 from infrastructure_cache import cache
 from config import config
@@ -848,6 +849,8 @@ class Group(object):
     def set_active_job(self, job):
         if job is None:
             self.active_job = None
+            return
+        if job.type not in (JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_RESTORE_GROUP_JOB):
             return
         self.active_job = {
             'id': job.id,
