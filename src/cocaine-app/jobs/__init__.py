@@ -373,7 +373,15 @@ class JobProcessor(object):
             job.save()
         except Exception:
             job.release_locks()
+            job.unmark_groups(self.session)
             raise
+
+        if 'group' in params:
+            group_id = params['group']
+            if group_id in storage.groups:
+                group = storage.groups[group_id]
+                group.set_active_job(job)
+                group.update_status_recursive()
 
         return job
 
