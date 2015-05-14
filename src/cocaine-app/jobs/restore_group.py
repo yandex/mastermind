@@ -25,7 +25,7 @@ class RestoreGroupJob(Job):
     MERGE_GROUP_FILE_DIR_MOVE_SRC_RENAME = config.get('restore', {}).get('merge_group_file_dir_move_src_rename', None)
 
     PARAMS = ('group', 'src_group', 'uncoupled_group', 'uncoupled_group_fsid',
-              'merged_groups')
+              'merged_groups', 'resources')
 
     def __init__(self, **kwargs):
         super(RestoreGroupJob, self).__init__(**kwargs)
@@ -42,6 +42,42 @@ class RestoreGroupJob(Job):
             job.release_locks()
             raise
         return job
+
+    def _set_resources(self):
+        resources = {
+            Job.RESOURCE_HOST_IN: [],
+            Job.RESOURCE_HOST_OUT: [],
+            Job.RESOURCE_FS: [],
+        }
+
+        def add_fs(group):
+            resources[Job.RESOURCE_FS].append(
+                (group.node_backends[0].node.host.addr, str(group.node_backends[0].fs.fsid)))
+
+        src_group = storage.groups[self.src_group]
+        resources[Job.RESOURCE_HOST_OUT].append(src_group.node_backends[0].node.host.addr)
+        add_fs(src_group)
+
+        if self.uncoupled_group:
+            unc_group = storage.groups[self.uncoupled_group]
+            resources[Job.RESOURCE_HOST_IN].append(
+                unc_group.node_backends[0].node.host.addr)
+            for gid in [self.uncoupled_group] + self.merged_groups:
+                add_fs(storage.groups[gid])
+        else:
+            group = storage.groups[self.group]
+            if group.node_backends:
+                resources[Job.RESOURCE_HOST_IN].append(
+                    group.node_backends[0].node.host.addr)
+                add_fs(group)
+            else:
+                old_group_state = infrastructure.get_group_history(
+                    group.group_id)['nodes'][-1]['set']
+                if len(old_group_state):
+                    host = old_group_state[0][0]
+                    resources[Job.RESOURCE_HOST_IN].append(host)
+
+        self.resources = resources
 
     def check_node_backends(self, group):
         if len(group.node_backends) != 1:

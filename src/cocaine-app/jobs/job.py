@@ -52,6 +52,10 @@ class Job(MongoObject):
         STATUS_BROKEN,
     )
 
+    RESOURCE_FS = 'fs'
+    RESOURCE_HOST_IN = 'host_in'
+    RESOURCE_HOST_OUT = 'host_out'
+
     COMMON_PARAMS = ('need_approving',)
 
     GROUP_FILE_MARKER_PATH = RESTORE_CFG.get('group_file_marker', None)
@@ -89,6 +93,13 @@ class Job(MongoObject):
         job.create_ts = ts
         job.update_ts = ts
         job._dirty = True
+
+        try:
+            job._set_resources()
+        except Exception as e:
+            logger.exception('Job {}: failed to set job resources'.format(job.id))
+            raise
+
         try:
             job.perform_locks()
         except LockFailedError as e:
@@ -106,6 +117,10 @@ class Job(MongoObject):
             raise
 
         return job
+
+    def _set_resources(self):
+        raise NotImplemented('_set_resources method for {} should be '
+            'implemented'.format(type(self).__name__))
 
     @classmethod
     def from_data(cls, data):

@@ -24,6 +24,7 @@ logger = logging.getLogger('mm.jobs')
 class RecoverDcJob(Job):
 
     PARAMS = ('group', 'couple',
+              'resources',
               'keys', 'host', 'port', 'family', 'backend_id' # read-only parameters
              )
 
@@ -37,6 +38,7 @@ class RecoverDcJob(Job):
         try:
             couple = storage.couples[kwargs['couple']]
             keys = []
+
             for g in couple.groups:
                 if not g.node_backends:
                     raise JobBrokenError('Group {0} has no active backends, '
@@ -56,6 +58,20 @@ class RecoverDcJob(Job):
             job.release_locks()
             raise
         return job
+
+    def _set_resources(self):
+        resources = {
+            Job.RESOURCE_HOST_IN: [],
+            Job.RESOURCE_HOST_OUT: [],
+            Job.RESOURCE_FS: [],
+        }
+
+        couple = storage.couples[self.couple]
+        for g in couple.groups:
+            resources[Job.RESOURCE_HOST_IN].append(g.node_backends[0].node.host.addr)
+            resources[Job.RESOURCE_HOST_OUT].append(g.node_backends[0].node.host.addr)
+            resources[Job.RESOURCE_FS].append((g.node_backends[0].node.host.addr, str(g.node_backends[0].fs.fsid)))
+        self.resources = resources
 
     def human_dump(self):
         data = super(RecoverDcJob, self).human_dump()

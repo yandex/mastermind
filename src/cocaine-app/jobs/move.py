@@ -34,6 +34,7 @@ class MoveJob(Job):
     MERGE_GROUP_FILE_DIR_MOVE_SRC_RENAME = RESTORE_CFG.get('merge_group_file_dir_move_src_rename', None)
 
     PARAMS = ('group', 'uncoupled_group', 'uncoupled_group_fsid', 'merged_groups',
+              'resources',
               'src_host', 'src_port', 'src_backend_id', 'src_family', 'src_base_path',
               'dst_host', 'dst_port', 'dst_backend_id', 'dst_family', 'dst_base_path')
 
@@ -51,6 +52,21 @@ class MoveJob(Job):
             job.release_locks()
             raise
         return job
+
+    def _set_resources(self):
+        resources = {
+            Job.RESOURCE_HOST_IN: [],
+            Job.RESOURCE_HOST_OUT: [],
+            Job.RESOURCE_FS: [],
+        }
+
+        resources[Job.RESOURCE_HOST_IN].append(self.dst_host)
+        resources[Job.RESOURCE_HOST_OUT].append(self.src_host)
+        for gid in [self.uncoupled_group, self.group] + self.merged_groups:
+            g = storage.groups[gid]
+            resources[Job.RESOURCE_FS].append(
+                (g.node_backends[0].node.host.addr, str(g.node_backends[0].fs.fsid)))
+        self.resources = resources
 
     @property
     def src_node_backend(self):

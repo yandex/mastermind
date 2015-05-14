@@ -14,7 +14,7 @@ logger = logging.getLogger('mm.jobs')
 
 class CoupleDefragJob(Job):
 
-    PARAMS = ('couple', 'fragmentation', 'is_cache_couple')
+    PARAMS = ('couple', 'fragmentation', 'is_cache_couple', 'resources')
 
     def __init__(self, **kwargs):
         super(CoupleDefragJob, self).__init__(**kwargs)
@@ -37,6 +37,16 @@ class CoupleDefragJob(Job):
             job.release_locks()
             raise
         return job
+
+    def _set_resources(self):
+        resources = {Job.RESOURCE_FS: []}
+
+        couple = storage.couples[self.couple]
+
+        for g in couple.groups:
+            resources[Job.RESOURCE_FS].append(
+                (g.node_backends[0].node.host.addr, str(g.node_backends[0].fs.fsid)))
+        self.resources = resources
 
     def create_tasks(self):
         couples = (storage.cache_couples

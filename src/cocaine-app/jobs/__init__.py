@@ -47,6 +47,13 @@ class JobProcessor(object):
 
     JOB_MANUAL_TIMEOUT = 20
 
+    JOB_PRIORITIES = {
+        JobTypes.TYPE_RESTORE_GROUP_JOB: 25,
+        JobTypes.TYPE_MOVE_JOB: 20,
+        JobTypes.TYPE_RECOVER_DC_JOB: 15,
+        JobTypes.TYPE_COUPLE_DEFRAG_JOB: 10,
+    }
+
     def __init__(self, job_finder, node, db, niu, minions):
         logger.info('Starting JobProcessor')
         self.job_finder = job_finder
@@ -68,24 +75,106 @@ class JobProcessor(object):
     def _start_tq(self):
         self.__tq.start()
 
+    @staticmethod
+    def _unfold_resources(d):
+        if d is None:
+            raise StopIteration
+        for res_type, res_val in itertools.chain(*[itertools.product(k, v)
+            for k, v in d.iteritems()]):
+                yield res_type, res_val
+
     def _ready_jobs(self):
 
-        new_jobs, executing_jobs = [], []
+        active_jobs = self.job_finder.jobs(statuses=Job.ACTIVE_STATUSES)
+
+        ready_jobs = []
+        new_jobs = []
+
+        resources = {}
+        default_res_counter = {
+            Job.RESOURCE_FS: {},
+            Job.RESOURCE_HOST_IN: {},
+            Job.RESOURCE_HOST_OUT: {},
+        }
+
+        # global job counter by type, accounts only executing jobs
         type_jobs_count = {}
 
-        for job in self.job_finder.jobs(statuses=Job.STATUS_EXECUTING):
-            type_jobs_count.setdefault(job.type, 0)
-            type_jobs_count[job.type] += 1
-            executing_jobs.append(job)
-        for job in self.job_finder.jobs(statuses=Job.STATUS_NEW):
-            jobs_count = type_jobs_count.setdefault(job.type, 0)
-            if jobs_count >= JOB_CONFIG.get(job.type, {}).get('max_executing_jobs', 3):
+        # counting current resource usage
+        for job in active_jobs:
+            if job.status == Job.STATUS_NOT_APPROVED:
                 continue
-            type_jobs_count[job.type] += 1
-            new_jobs.append(job)
+            if job.status == Job.STATUS_NEW:
+                new_jobs.append(job)
+            else:
+                type_res = resources.setdefault(job.type, default_res_counter)
+                for res_type, res_vals in self._unfold_resources(job.resources):
+                    type_res[res_type].setdefault(res_val, 0)
+                    type_res[res_type][res_val] += 1
+                ready_jobs.append(job)
 
-        new_jobs.sort(key=lambda j: j.create_ts)
-        ready_jobs = executing_jobs + new_jobs
+                if job.status == Job.STATUS_EXECUTING:
+                    type_jobs_count.setdefault(job.type, 0)
+                    type_jobs_count[job.type] += 1
+
+        # selecting jobs to start processing
+        for job in new_jobs:
+            check_types = [t for t, p in self.JOB_PRIORITIES.iteritems()
+                           if p > self.JOB_PRIORITIES[job.type]]
+
+            no_slots = False
+
+            for res_type, res_val in self._unfold_resources(job.resources):
+
+                for job_type in check_types:
+                    if resources[job_type].get(res_type, {}).get(res_val, 0) > 0:
+                        # job of higher priority is using the resource
+                        logger.debug('Job {}: will be skipped, resource {} / {} '
+                            'is occupuied by higher priority job'.format(
+                                job.id, res_type, res_val))
+                        no_slots = True
+                        break
+
+                if no_slots:
+                    break
+
+                cur_usage = resources[job.type].get(res_type, {}).get(res_val, 0)
+                max_usage = JOB_CONFIG.get(job_type, {}).get('resources_limits', {}).get(res_type, float('inf'))
+                if (cur_usage >= max_usage):
+                    logger.debug('Job {}: will be skipped, resource {} / {} '
+                        'counter {} >= {}'.format(
+                            job.id, res_type, res_val, cur_usage, max_usage))
+
+                    no_slots = True
+
+                if no_slots:
+                    break
+
+            if no_slots:
+                continue
+
+            type_cur_usage = type_jobs_count.get(job_type, 0)
+            type_max_usage = JOB_CONFIG.get(job.type, {}).get('max_executing_jobs', 50)
+            if type_cur_usage >= type_max_usage:
+                logger.debug('Job {}: will be skipped, job type {} '
+                    'counter {} >= {}'.format(job.id, job.type,
+                        type_cur_usage, type_max_usage))
+                continue
+
+            # account job resources and add job to queue
+            for res_type, res_val in self._unfold_resources(job.resources):
+                logger.debug('Job {}: will use resource {} / {} '
+                    'counter {} / {}'.format(
+                        job.id, res_type, res_val, cur_usage, max_usage))
+                res_counter = resources.setdefault(job.type, default_res_counter)
+                res_counter.setdefault(res_type, {}).setdefault(res_val, 0)
+                res_counter[res_type][res_val] += 1
+
+            type_jobs_count.setdefault(job_type, 0)
+            type_jobs_count[job.type] += 1
+
+            ready_jobs.append(job)
+
         logger.debug('Ready jobs: {0}'.format(len(ready_jobs)))
 
         return ready_jobs
@@ -368,10 +457,8 @@ class JobProcessor(object):
 
         try:
             job.create_tasks()
-
-            logger.info('Job {0} created: {1}'.format(job.id, job.dump()))
-
             job.save()
+            logger.info('Job {0} created: {1}'.format(job.id, job.dump()))
         except Exception:
             job.release_locks()
             job.unmark_groups(self.session)
