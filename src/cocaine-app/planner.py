@@ -882,7 +882,7 @@ class Planner(object):
                         'only groups with 1 node backend can be used'.format(
                             unc_group.group_id, len(unc_group.node_backends)))
 
-                is_good = infrastructure.is_uncoupled_group_good(unc_group, locked_hosts, max_node_backends=1)
+                is_good = infrastructure.is_uncoupled_group_good(unc_group, locked_hosts, [storage.Group.TYPE_DATA], max_node_backends=1)
                 if not is_good:
                     raise ValueError('Uncoupled group {0} is not applicable'.format(
                         unc_group.group_id))

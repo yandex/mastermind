@@ -858,7 +858,7 @@ class Infrastructure(object):
         max_node_backends=None,
         including_in_service=False,
         status=None,
-        types=(storage.Group.TYPE_DATA,)):
+        types=None):
 
         suitable_groups = []
         locked_hosts = manual_locker.get_locked_hosts()
@@ -870,7 +870,7 @@ class Infrastructure(object):
         for group in storage.groups.keys():
             if Infrastructure.is_uncoupled_group_good(group,
                     locked_hosts,
-                    types,
+                    types or (storage.Group.TYPE_DATA,),
                     max_node_backends=max_node_backends,
                     in_service=in_service,
                     status=status):
