@@ -1,3 +1,9 @@
+mastermind (2.24.12) precise; urgency=low
+
+  * Cache worker initialization fixed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 15 May 2015 15:35:13 +0300
+
 mastermind (2.24.11) precise; urgency=low
 
   * Mark group as migrating right away when job is created
