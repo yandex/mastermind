@@ -92,7 +92,7 @@ def init_infrastructure_cache_manager(W, n):
 
 def init_infrastructure(W, n):
     infstruct = infrastructure.infrastructure
-    infstruct.init(n)
+    infstruct.init(n, None)
     return infstruct
 
 def init_cache_worker(W, n, meta_db):
