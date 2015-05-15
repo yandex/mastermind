@@ -857,7 +857,8 @@ class Infrastructure(object):
     def get_good_uncoupled_groups(self,
         max_node_backends=None,
         including_in_service=False,
-        status=None):
+        status=None,
+        types=(storage.Group.TYPE_DATA,)):
 
         suitable_groups = []
         locked_hosts = manual_locker.get_locked_hosts()
@@ -869,6 +870,7 @@ class Infrastructure(object):
         for group in storage.groups.keys():
             if Infrastructure.is_uncoupled_group_good(group,
                     locked_hosts,
+                    types,
                     max_node_backends=max_node_backends,
                     in_service=in_service,
                     status=status):
@@ -878,7 +880,7 @@ class Infrastructure(object):
 
     @staticmethod
     def is_uncoupled_group_good(group, locked_hosts,
-        max_node_backends=None, in_service=None, status=None):
+        types, max_node_backends=None, in_service=None, status=None):
 
         if group.couple is not None:
             return False
@@ -891,6 +893,9 @@ class Infrastructure(object):
 
         status = status or storage.Status.INIT
         if group.status != status:
+            return False
+
+        if group.type not in types:
             return False
 
         for nb in group.node_backends:

@@ -49,7 +49,7 @@ class CacheManager(object):
         self.keys_db = Collection(db[keys_db_uri], 'keys')
         self.distributor = CacheDistributor(self.node, self.keys_db)
 
-        self.niu = node_info_updater.NodeInfoUpdater(self.node)
+        self.niu = node_info_updater.NodeInfoUpdater(self.node, None)
 
         self.top_keys = {}
 
@@ -181,7 +181,7 @@ class CacheManager(object):
             return
 
         # searching for unmarked cache groups to mark them
-        for group in balancer.get_good_uncoupled_groups(
+        for group in infrastructure.get_good_uncoupled_groups(
             types=[storage.Group.TYPE_UNMARKED]):
 
             if not group.node_backends[0].base_path.startswith(CACHE_GROUP_PATH_PREFIX):
