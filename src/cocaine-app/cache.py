@@ -69,6 +69,8 @@ class CacheManager(object):
 
     def monitor_top_stats(self):
         try:
+            start_ts = time.time()
+            logger.info('Monitor top stats update started')
 
             logger.info('Before calculating routes')
             host_addrs = set(r.address for r in self.session.routes.get_unique_routes())
@@ -100,6 +102,7 @@ class CacheManager(object):
                 e, traceback.format_exc()))
             pass
         finally:
+            logger.info('Monitor top stats update finished, time: {0:.3f}'.format(time.time() - start_ts))
             self.__tq.add_task_in('monitor_top_stats',
                 CACHE_CFG.get('top_update_period', 1800),
                 self.monitor_top_stats)
