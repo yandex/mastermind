@@ -9,6 +9,7 @@ import traceback
 
 import msgpack
 
+from errors import CacheUpstreamError
 import inventory
 import jobs.job
 from jobs.job_types import JobTypes
@@ -319,8 +320,16 @@ class Host(object):
         return cache.get_hostname_by_addr(self.addr)
 
     @property
+    def hostname_or_not(self):
+        return cache.get_hostname_by_addr(self.addr, strict=False)
+
+    @property
     def dc(self):
         return cache.get_dc_by_host(self.addr)
+
+    @property
+    def dc_or_not(self):
+        return cache.get_dc_by_host(self.addr, strict=False)
 
     @property
     def parents(self):
@@ -590,10 +599,10 @@ class NodeBackend(object):
         res['node'] = '{0}:{1}:{2}'.format(self.node.host, self.node.port, self.node.family)
         res['backend_id'] = self.backend_id
         res['addr'] = str(self)
-        res['hostname'] = cache.get_hostname_by_addr(self.node.host.addr)
+        res['hostname'] = self.node.host.hostname_or_not
         res['status'] = self.status
         res['status_text'] = self.status_text
-        res['dc'] = self.node.host.dc
+        res['dc'] = self.node.host.dc_or_not
         res['last_stat_update'] = (self.stat and
             datetime.datetime.fromtimestamp(self.stat.ts).strftime('%Y-%m-%d %H:%M:%S') or
             'unknown')
@@ -955,7 +964,14 @@ class Couple(object):
             # checking if any pair of groups has its node backends in same dc
             groups_dcs = []
             for group in self.groups:
-                group_dcs = set([nb.node.host.dc for nb in group.node_backends])
+                group_dcs = set()
+                for nb in group.node_backends:
+                    try:
+                        group_dcs.add(nb.node.host.dc)
+                    except CacheUpstreamError:
+                        self.status_text = 'Failed to resolve dc for host {}'.format(nb.node.host)
+                        self.status = Status.BAD
+                        return self.status
                 groups_dcs.append(group_dcs)
 
             dc_set = groups_dcs[0]

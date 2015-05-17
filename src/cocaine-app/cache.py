@@ -13,6 +13,7 @@ from cache_transport import cache_task_manager
 from collections import defaultdict
 from config import config
 from db.mongo.pool import Collection
+from errors import CacheUpstreamError
 import helpers as h
 import inventory
 from infrastructure import infrastructure
@@ -548,7 +549,16 @@ class CacheDistributor(object):
                 continue
             node = storage.groups[group_id].node_backends[0].node
             if min_load_dc[1] is None or node.stat.tx_rate < min_load_dc[1]:
-                min_load_dc = node.host.dc, node.stat.tx_rate
+                try:
+                    min_load_dc = node.host.dc, node.stat.tx_rate
+                except CacheUpstreamError:
+                    logger.warn('Skipping {} because of cache failure'.format(node.host))
+                    continue
+
+        if min_load_dc[0] is None:
+            logger.error('Key {}: failed to select minimal load dc for key'.format(
+                key['id']))
+            return
 
         # count group weights among cache groups that are left
         weights = {}

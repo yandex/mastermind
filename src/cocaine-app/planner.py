@@ -16,6 +16,7 @@ import pymongo
 from coll import SortedCollection
 from config import config
 from db.mongo.pool import Collection
+from errors import CacheUpstreamError
 import helpers as h
 from infrastructure import infrastructure
 from infrastructure_cache import cache
@@ -154,24 +155,32 @@ class Planner(object):
 
                     for src_group, src_dc, dst_group, merged_groups, dst_dc in candidate.moved_groups:
 
-                        assert len(src_group.node_backends) == 1, 'Src group {0} should have only 1 node backend'.format(src_group.group_id)
-                        assert len(dst_group.node_backends) == 1, 'Dst group {0} should have only 1 node backend'.format(dst_group.group_id)
-
-                        src_dc_cnt = cache.get_dc_by_host(src_group.node_backends[0].node.host.addr)
-                        dst_dc_cnt = cache.get_dc_by_host(dst_group.node_backends[0].node.host.addr)
-
-                        assert src_dc_cnt == src_dc, \
-                            'Dc for src group {0} has been changed: {1} != {2}'.format(
-                                src_group.group_id, src_dc_cnt, src_dc)
-                        assert dst_dc_cnt == dst_dc, \
-                            'Dc for dst group {0} has been changed: {1} != {2}'.format(
-                                dst_group.group_id, dst_dc_cnt, dst_dc)
-
-                        logger.info('Group {0} ({1}) moves to {2} ({3})'.format(
-                            src_group.group_id, src_dc,
-                            dst_group.group_id, dst_dc))
-
                         try:
+                            assert len(src_group.node_backends) == 1, 'Src group {0} should have only 1 node backend'.format(src_group.group_id)
+                            assert len(dst_group.node_backends) == 1, 'Dst group {0} should have only 1 node backend'.format(dst_group.group_id)
+
+                            dcs = []
+                            for host in (src_group.node_backends[0].node.host,
+                                         dst_group.node_backends[0].node.host):
+                                try:
+                                    dcs.append(host.dc)
+                                except CacheUpstreamError:
+                                    raise RuntimeError('Failed to get dc for host {}'.format(
+                                        host))
+
+                            src_dc_cnt, dst_dc_cnt = dcs
+
+                            assert src_dc_cnt == src_dc, \
+                                'Dc for src group {0} has been changed: {1} != {2}'.format(
+                                    src_group.group_id, src_dc_cnt, src_dc)
+                            assert dst_dc_cnt == dst_dc, \
+                                'Dc for dst group {0} has been changed: {1} != {2}'.format(
+                                    dst_group.group_id, dst_dc_cnt, dst_dc)
+
+                            logger.info('Group {0} ({1}) moves to {2} ({3})'.format(
+                                src_group.group_id, src_dc,
+                                dst_group.group_id, dst_dc))
+
                             job = self.job_processor._create_job(
                                 jobs.JobTypes.TYPE_MOVE_JOB,
                                 {'group': src_group.group_id,
@@ -269,8 +278,13 @@ class Planner(object):
                 if src_host in busy_hosts:
                     continue
 
-                suitable_uncoupled_groups = self.get_suitable_uncoupled_groups_list(
-                    src_group, uncoupled_groups, busy_group_ids=busy_group_ids)
+                try:
+                    suitable_uncoupled_groups = self.get_suitable_uncoupled_groups_list(
+                        src_group, uncoupled_groups, busy_group_ids=busy_group_ids)
+                except RuntimeError:
+                    logger.warn('Skipping group {}, failed to get suitable '
+                        'uncoupled groups'.format(src_group))
+                    continue
 
                 for candidates in suitable_uncoupled_groups:
                     logger.debug('checking src_group {0} against candidate {1}'.format(
@@ -279,7 +293,12 @@ class Planner(object):
                     unc_group, merged_groups = candidates[0], candidates[1:]
 
                     dst_host = unc_group.node_backends[0].node.host.addr
-                    dst_dc = unc_group.node_backends[0].node.host.dc
+                    try:
+                        dst_dc = unc_group.node_backends[0].node.host.dc
+                    except CacheUpstreamError:
+                        logger.warn('Skipping {} because of cache failure'.format(
+                            unc_group.node_backends[0].node.host))
+                        continue
 
                     dst_dc_state = candidate.state[dst_dc]
                     if src_group.couple in dst_dc_state.couples:
@@ -310,7 +329,11 @@ class Planner(object):
                     continue
 
                 new_candidate = candidate.copy()
-                new_candidate.move_group(src_dc, src_group, dst_dc, unc_group, merged_groups)
+                try:
+                    new_candidate.move_group(src_dc, src_group, dst_dc, unc_group, merged_groups)
+                except RuntimeError as e:
+                    logger.warn('Skipping candidate src group {}: {}'.format(src_group, e))
+                    continue
 
                 if new_candidate.state_ms_error < base_ms:
                     logger.debug('good candidate found: {0} group from {1} to {2}, '
@@ -888,9 +911,14 @@ class Planner(object):
                         unc_group.group_id))
 
                 nb = unc_group.node_backends[0]
+                try:
+                    host_dc = nb.node.host.dc
+                except CacheUpstreamError:
+                    raise RuntimeError('Failed to get dc for host {}'.format(
+                        nb.node.host))
                 if not dc:
-                    dc, fsid = nb.node.host.dc, nb.fs.fsid
-                elif dc != nb.node.host.dc or fsid != nb.fs.fsid:
+                    dc, fsid = host_dc, nb.fs.fsid
+                elif dc != host_dc or fsid != nb.fs.fsid:
                     raise ValueError('All uncoupled groups should be located '
                         'on a single hdd on the same host')
 
@@ -907,12 +935,17 @@ class Planner(object):
         if config.get('forbidden_dc_sharing_among_groups', False):
             dcs = set()
             for g in group.coupled_groups:
-                dcs.update(nb.node.host.dc for nb in g.node_backends)
-            if dst_backend.node.host.dc in dcs:
+                dcs.update(h.hosts_dcs(nb.node.host for nb in g.node_backends))
+            try:
+                dst_dc = dst_backend.node.host.dc
+            except CacheUpstreamError:
+                raise RuntimeError('Failed to get dc for host {}'.format(
+                    dst_backend.node.host))
+            if dst_dc in dcs:
                 raise ValueError('Group {0} cannot be moved to uncoupled group {1}, '
                     'couple {2} already has groups in dc {3}'.format(
                         group.group_id, uncoupled_group.group_id,
-                        group.couple, dst_backend.node.host.dc))
+                        group.couple, dst_dc))
 
 
         job_params = {'group': group.group_id,
@@ -998,7 +1031,12 @@ class Planner(object):
                 logger.debug('No node backend for group {0}, job for group {1}'.format(group.group_id, job.group))
                 continue
 
-            cur_node = group.node_backends[0].node.host.parents
+            try:
+                cur_node = group.node_backends[0].node.host.parents
+            except CacheUpstreamError:
+                logger.warn('Skipping {} because of cache failure'.format(
+                    group.node_backends[0].node.host))
+                continue
 
             parts = []
             parent = cur_node
@@ -1040,11 +1078,17 @@ class Planner(object):
 
         forbidden_dcs = set()
         if config.get('forbidden_dc_sharing_among_groups', False):
-            forbidden_dcs = set([nb.node.host.dc for g in group.coupled_groups
-                                                 for nb in g.node_backends])
+            forbidden_dcs = set(h.hosts_dcs(nb.node.host
+                                    for g in group.coupled_groups
+                                    for nb in g.node_backends))
 
         for g in uncoupled_groups:
-            if g.group_id in busy_group_ids or g.node_backends[0].node.host.dc in forbidden_dcs:
+            try:
+                dc = g.node_backends[0].node.host.dc
+            except CacheUpstreamError:
+                raise RuntimeError('Failed to get dc for host {}'.format(
+                    g.node_backends[0].node.host))
+            if g.group_id in busy_group_ids or dc in forbidden_dcs:
                 continue
             fs = g.node_backends[0].fs
             groups_by_fs.setdefault(fs, []).append(g)
@@ -1065,7 +1109,6 @@ class Planner(object):
                     candidate = []
                     ts = 0
 
-
             fs_candidates = sorted(fs_candidates, key=lambda c: (len(c[0]), c[1]))
             if fs_candidates:
                 candidates.append(fs_candidates[0][0])
@@ -1073,13 +1116,21 @@ class Planner(object):
         return candidates
 
     def find_uncoupled_groups(self, group, host_addr):
-        old_host_tree = cache.get_host_tree(cache.get_hostname_by_addr(host_addr))
+        try:
+            old_host_tree = cache.get_host_tree(cache.get_hostname_by_addr(host_addr))
+        except CacheUpstreamError as e:
+            raise RuntimeError('Failed to resolve host {}: {}'.format(host_addr, e))
         logger.info('Old host tree: {0}'.format(old_host_tree))
 
         uncoupled_groups = infrastructure.get_good_uncoupled_groups(max_node_backends=1)
         groups_by_dc = {}
         for unc_group in uncoupled_groups:
-            dc = unc_group.node_backends[0].node.host.dc
+            try:
+                dc = unc_group.node_backends[0].node.host.dc
+            except CacheUpstreamError:
+                logger.warn('Skipping group {} because of cache failure'.format(
+                    unc_group))
+                continue
             groups_by_dc.setdefault(dc, []).append(unc_group)
 
         logger.info('Uncoupled groups by dcs: {0}'.format(
@@ -1090,9 +1141,12 @@ class Planner(object):
 
         candidates = self.get_suitable_uncoupled_groups_list(group, uncoupled_groups)
         for candidate in candidates:
-            host_addr = candidate[0].node_backends[0].node.host.addr
-            host_tree = cache.get_host_tree(
-                cache.get_hostname_by_addr(host_addr))
+            try:
+                host_tree = candidate[0].node_backends[0].node.host.parents
+            except CacheUpstreamError:
+                logger.warn('Skipping {} because of cache failure'.format(
+                    candidate[0]))
+                continue
 
             diff = 0
             dc = None
@@ -1287,12 +1341,22 @@ class StorageState(object):
         obj = cls()
         for couple in cls.__get_full_couples():
             for group in couple.groups:
-                dc = group.node_backends[0].node.host.dc
+                try:
+                    dc = group.node_backends[0].node.host.dc
+                except CacheUpstreamError:
+                    logger.warn('Skipping group {} because of cache failure'.format(
+                        group))
+                    continue
                 obj._stats[group.group_id] = group.get_stat()
                 obj.state[dc].add_group(group)
 
         for group in infrastructure.get_good_uncoupled_groups(max_node_backends=1):
-            dc = group.node_backends[0].node.host.dc
+            try:
+                dc = group.node_backends[0].node.host.dc
+            except CacheUpstreamError:
+                logger.warn('Skipping group {} because of cache failure'.format(
+                    group))
+                continue
             obj._stats[group.group_id] = group.get_stat()
             obj.state[dc].add_uncoupled_group(group)
 
@@ -1302,7 +1366,12 @@ class StorageState(object):
                 if nb.stat is None:
                     continue
                 if not nb.stat.fsid in fsids:
-                    dc = nb.node.host.dc
+                    try:
+                        dc = nb.node.host.dc
+                    except CacheUpstreamError:
+                        logger.warn('Skipping host {} because of cache failure'.format(
+                            nb.node.host))
+                        continue
                     obj.state[dc].apply_stat(nb.stat)
                     fsids.add(nb.stat.fsid)
 
@@ -1379,7 +1448,10 @@ class StorageState(object):
         dcs = set()
         for group in storage.groups:
             for nb in group.node_backends:
-                dcs.add(nb.node.host.dc)
+                try:
+                    dcs.add(nb.node.host.dc)
+                except CacheUpstreamError:
+                    continue
         return dcs
 
 
@@ -1395,7 +1467,12 @@ class StorageState(object):
 
         # do this only in case if no other group from this couple is located in src_dc
         for group in src_group.couple:
-            if group != src_group and group.node_backends[0].node.host.dc == src_dc:
+            try:
+                dc = group.node_backends[0].node.host.dc
+            except CacheUpstreamError:
+                raise RuntimeError('Failed to get dc for host {}'.format(
+                    group.node_backends[0].node.host))
+            if group != src_group and dc == src_dc:
                 break
         else:
             self.state[src_dc].couples.remove(src_group.couple)

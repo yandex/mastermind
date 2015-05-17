@@ -59,7 +59,7 @@ class HistoryRemoveNodeTask(Task):
 
     def human_dump(self):
         data = super(HistoryRemoveNodeTask, self).human_dump()
-        data['hostname'] = cache.get_hostname_by_addr(data['host'])
+        data['hostname'] = cache.get_hostname_by_addr(data['host'], strict=False)
         return data
 
     @property

@@ -1,6 +1,7 @@
 import logging
 import socket
 
+from errors import CacheUpstreamError
 import helpers as h
 import storage
 from sync import sync_manager
@@ -51,8 +52,11 @@ class ManualLocker(object):
         hosts = set()
         logger.debug('hostnames: {0}'.format(hostnames))
         for host in storage.hosts:
-            if host.hostname in hostnames:
-                hosts.add(host)
+            try:
+                if host.hostname in hostnames:
+                    hosts.add(host)
+            except CacheUpstreamError:
+                continue
         return hosts
 
 

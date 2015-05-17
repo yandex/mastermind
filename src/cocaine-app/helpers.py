@@ -8,6 +8,7 @@ import traceback
 import uuid
 
 import elliptics
+from errors import CacheUpstreamError
 from cocaine.futures import chain
 from config import config
 
@@ -155,3 +156,12 @@ def process_elliptics_async_result(result, processor, *args, **kwargs):
     return processor(entry, elapsed_time=result.elapsed_time(),
                      end_time=result.end_time(),
                      *args, **kwargs)
+
+def hosts_dcs(hosts):
+    dcs = []
+    for host in hosts:
+        try:
+            dcs.append(host.dc)
+        except CacheUpstreamError:
+            raise RuntimeError('Failed to get dc for host {}'.format(host))
+    return dcs

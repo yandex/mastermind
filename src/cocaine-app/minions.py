@@ -133,7 +133,7 @@ class Minions(object):
 
         response_data = self._unwrap_response(json.loads(response), addr)
 
-        hostname = storage.hosts[addr].hostname
+        hostname = storage.hosts[addr].hostname_or_not
         logger.debug('Received {0} minion task states '
             'from host {1} ({2})'.format(len(response_data), hostname, addr))
         for uid, state in response_data.iteritems():

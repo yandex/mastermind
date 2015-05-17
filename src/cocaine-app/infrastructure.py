@@ -12,6 +12,7 @@ import elliptics
 import msgpack
 
 from config import config
+from errors import CacheUpstreamError
 import helpers as h
 import indexes
 from infrastructure_cache import cache
@@ -690,7 +691,11 @@ class Infrastructure(object):
             hosts = storage.hosts.keys()
 
         for host in hosts:
-            tree_node = deepcopy(host.parents)
+            try:
+                tree_node = deepcopy(host.parents)
+            except CacheUpstreamError:
+                logger.warn('Skipping {} because of cache failure'.format(host))
+                continue
             new_child = None
             while True:
                 parts = [tree_node['name']]
@@ -752,10 +757,15 @@ class Infrastructure(object):
 
         for nb in storage.node_backends:
 
-            full_path = nb.node.host.full_path
+            try:
+                full_path = nb.node.host.full_path
+            except CacheUpstreamError:
+                logger.warn('Skipping {} because of cache failure'.format(
+                    nb.node.host))
+                continue
 
             if not full_path in nodes['host']:
-                logger.warn('Host {0} is node found in cluster tree'.format(full_path))
+                logger.warn('Host {0} is not found in cluster tree'.format(full_path))
                 continue
             if nb.stat is None:
                 continue
@@ -784,7 +794,16 @@ class Infrastructure(object):
     def account_ns_groups(self, nodes, groups):
         for group in groups:
             for nb in group.node_backends:
-                hdd_path = nb.node.host.full_path + '|' + str(nb.stat.fsid)
+                try:
+                    hdd_path = nb.node.host.full_path + '|' + str(nb.stat.fsid)
+                except CacheUpstreamError:
+                    logger.warn('Skipping {} because of cache failure'.format(
+                        nb.node.host))
+                    continue
+                if not hdd_path in nodes['hdd']:
+                    # when building cluster tree every host resolve operation
+                    # failed for this hdd
+                    continue
                 nodes['hdd'][hdd_path]['groups'].add(group.group_id)
 
     def account_ns_couples(self, tree, nodes, namespace):
@@ -829,10 +848,16 @@ class Infrastructure(object):
             if group.group_id in units:
                 continue
             for nb in group.node_backends:
+
+                try:
+                    parent = nb.node.host.parents
+                except CacheUpstreamError:
+                    logger.warn('Skipping {} because of cache failure'.format(
+                        nb.node.host))
+                    continue
+
                 nb_units = {'root': 'root'}
                 units.setdefault(group.group_id, [])
-
-                parent = nb.node.host.parents
 
                 parts = []
                 cur_node = parent

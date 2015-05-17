@@ -1,5 +1,6 @@
 import logging
 
+from errors import CacheUpstreamError
 from infrastructure import infrastructure
 from infrastructure_cache import cache
 import inventory
@@ -49,9 +50,17 @@ class RsyncBackendTask(MinionCmdTask):
 
         super(RsyncBackendTask, self).execute(processor)
 
+    def __hostnames(self, hosts):
+        hostnames = []
+        for host in hosts:
+            try:
+                hostnames.append(cache.get_hostname_by_addr(host))
+            except CacheUpstreamError:
+                raise RuntimeError('Failed to resolve host {0}'.format(host))
+        return hostnames
+
     def on_exec_start(self, processor):
-        hostnames = set([cache.get_hostname_by_addr(host)
-                         for host in (self.host, self.src_host)])
+        hostnames = set(self.__hostnames([self.host, self.src_host]))
 
         dl = jobs.Job.list(processor.downtimes,
                            host=list(hostnames), type='network_load')
@@ -84,8 +93,7 @@ class RsyncBackendTask(MinionCmdTask):
             raise
 
     def on_exec_stop(self, processor):
-        hostnames = set([cache.get_hostname_by_addr(host)
-                         for host in (self.host, self.src_host)])
+        hostnames = set(self.__hostnames([self.host, self.src_host]))
 
         dl = jobs.Job.list(processor.downtimes,
                            host=list(hostnames), type='network_load')

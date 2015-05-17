@@ -4,6 +4,7 @@ import os.path
 
 from config import config
 from error import JobBrokenError
+from errors import CacheUpstreamError
 from infrastructure import infrastructure
 from infrastructure_cache import cache
 from job import Job, RESTORE_CFG
@@ -64,12 +65,23 @@ class MoveJob(Job):
 
         if storage.FORBIDDEN_DC_SHARING_AMONG_GROUPS:
             uncoupled_group = storage.groups[self.uncoupled_group]
-            ug_dc = uncoupled_group.node_backends[0].node.host.dc
+            try:
+                ug_dc = uncoupled_group.node_backends[0].node.host.dc
+            except CacheUpstreamError:
+                raise RuntimeError('Failed to get dc for host {}'.format(
+                    uncoupled_group.node_backends[0].node.host))
 
             for g in group.couple:
                 if g.group_id == group.group_id:
                     continue
-                dcs = set(nb.node.host.dc for nb in g.node_backends)
+                dcs = set()
+                for nb in g.node_backends:
+                    try:
+                        dcs.add(nb.node.host.dc)
+                    except CacheUpstreamError:
+                        raise RuntimeError('Failed to get dc for host {}'.format(
+                            nb.node.host))
+
                 if ug_dc in dcs:
                     raise JobBrokenError('Cannot move group {0} to uncoupled group '
                         '{1}, because group {2} is already in dc {3}'.format(
@@ -82,20 +94,27 @@ class MoveJob(Job):
 
     def human_dump(self):
         data = super(MoveJob, self).human_dump()
-        data['src_hostname'] = cache.get_hostname_by_addr(data['src_host'])
-        data['dst_hostname'] = cache.get_hostname_by_addr(data['dst_host'])
+        data['src_hostname'] = cache.get_hostname_by_addr(data['src_host'], strict=False)
+        data['dst_hostname'] = cache.get_hostname_by_addr(data['dst_host'], strict=False)
         return data
 
     def marker_format(self, marker):
+        hostnames = []
+        for host in (self.src_host, self.dst_host):
+            try:
+                hostnames.append(cache.get_hostname_by_addr(host))
+            except CacheUpstreamError:
+                raise RuntimeError('Failed to resolve host {0}'.format(host))
+        src_hostname, dst_hostname = hostnames
         return marker.format(
             group_id=str(self.group),
             src_host=self.src_host,
-            src_hostname=cache.get_hostname_by_addr(self.src_host),
+            src_hostname=src_hostname,
             src_backend_id=self.src_backend_id,
             src_port=str(self.src_port),
             src_base_path=self.src_base_path,
             dst_host=self.dst_host,
-            dst_hostname=cache.get_hostname_by_addr(self.dst_host),
+            dst_hostname=dst_hostname,
             dst_port=str(self.dst_port),
             dst_base_path=self.dst_base_path,
             dst_backend_id=self.dst_backend_id)

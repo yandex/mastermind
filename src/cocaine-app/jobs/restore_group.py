@@ -3,6 +3,7 @@ import os.path
 
 from config import config
 from error import JobBrokenError
+from errors import CacheUpstreamError
 from infrastructure import infrastructure
 from infrastructure_cache import cache
 from job import Job
@@ -269,16 +270,23 @@ class RestoreGroupJob(Job):
                                  if self.GROUP_FILE_MARKER_PATH else
                                  '')
 
+            hostnames = []
+            for host in (nb.node.host.addr, dst_host):
+                try:
+                    hostnames.append(cache.get_hostname_by_addr(host))
+                except CacheUpstreamError:
+                    raise RuntimeError('Failed to resolve host {0}'.format(host))
+            src_hostname, dst_hostname = hostnames
+
             group_file_marker_fmt = group_file_marker.format(
                 group_id=str(self.group),
                 src_host=nb.node.host.addr,
-                src_hostname=cache.get_hostname_by_addr(
-                    nb.node.host.addr),
+                src_hostname=src_hostname,
                 src_backend_id=nb.backend_id,
                 src_port=str(nb.node.port),
                 src_base_path=nb.base_path,
                 dst_host=dst_host,
-                dst_hostname=cache.get_hostname_by_addr(dst_host),
+                dst_hostname=dst_hostname,
                 dst_port=str(dst_port),
                 dst_base_path=dst_base_path,
                 dst_backend_id=dst_backend_id)

@@ -194,7 +194,7 @@ class Balancer(object):
                 continue
 
             for node_backend in group.node_backends:
-                dc = node_backend.node.host.dc
+                dc = node_backend.node.host.dc_or_not
                 dc_groups = groups_by_dcs.setdefault(dc, {})
                 dc_groups[group.group_id] = group_data
 
@@ -609,6 +609,7 @@ class Balancer(object):
         comb_groups_count = copy.copy(ns_current_type_state['nodes'])
         for selected_units in comb:
             for unit in selected_units:
+                comb_groups_count.setdefault(unit, 0)
                 comb_groups_count[unit] += 1
         return sum((c - ns_current_type_state['avg']) ** 2
                    for c in comb_groups_count.values())

@@ -59,7 +59,7 @@ class RecoverDcJob(Job):
 
     def human_dump(self):
         data = super(RecoverDcJob, self).human_dump()
-        data['hostname'] = cache.get_hostname_by_addr(data['host'])
+        data['hostname'] = cache.get_hostname_by_addr(data['host'], strict=False)
         return data
 
     def __min_keys_group(self, couple):

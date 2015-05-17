@@ -2,6 +2,7 @@ from collections import defaultdict
 import copy
 import logging
 
+from errors import CacheUpstreamError
 import storage
 from config import config
 import helpers as h
@@ -82,8 +83,12 @@ class Statistics(object):
             ns_stat['effective_space'] += eff_space
             ns_stat['effective_free_space'] += eff_free_space
 
-            dcs = set(nb.node.host.dc for g in couple.groups
-                                      for nb in g.node_backends)
+            try:
+                dcs = set(nb.node.host.dc for g in couple.groups
+                                          for nb in g.node_backends)
+            except CacheUpstreamError:
+                continue
+
             for dc in dcs:
                 by_dc[dc]['effective_space'] += eff_space
                 by_dc[dc]['effective_free_space'] += eff_free_space
@@ -157,7 +162,10 @@ class Statistics(object):
                           if group.couple else
                           str(group.group_id))
 
-                dc = node_backend.node.host.dc
+                try:
+                    dc = node_backend.node.host.dc
+                except CacheUpstreamError:
+                    continue
                 try:
                     ns = group.couple and group.couple.namespace or None
                 except ValueError as e:
@@ -213,7 +221,10 @@ class Statistics(object):
             affected_dcs = set()
             for group in couple.groups:
                 for node_backend in group.node_backends:
-                    affected_dcs.add(node_backend.node.host.dc)
+                    try:
+                        affected_dcs.add(node_backend.node.host.dc)
+                    except CacheUpstreamError:
+                        continue
 
             for dc in affected_dcs:
                 by_dc[dc]['bad_couples'] += 1
@@ -388,7 +399,12 @@ class Statistics(object):
                 logger.warn('Group {0}: no node backends stat available'.format(group.group_id))
                 continue
             for node_backend in group.node_backends:
-                parent = node_backend.node.host.parents
+                try:
+                    parent = node_backend.node.host.parents
+                except CacheUpstreamError:
+                    logger.warn('Skipping {} because of cache failure'.format(
+                        node_backend.node.host))
+                    continue
                 parts = [parent['name']]
                 while 'parent' in parent:
                     parent = parent['parent']

@@ -6,6 +6,7 @@ import traceback
 import msgpack
 
 from config import config
+from errors import CacheUpstreamError
 import indexes
 import inventory
 import keys
@@ -32,14 +33,23 @@ class InfrastructureCache(object):
             keys.MM_HOSTTREE_CACHE_IDX, keys.MM_HOSTTREE_CACHE_HOST, self.__tq)
         self.hosttree_cache._sync_cache()
 
-    def get_dc_by_host(self, host):
-        return self.dc_cache[host]
+    @staticmethod
+    def strictable(cache, key, strict):
+        try:
+            return cache[key]
+        except Exception as e:
+            if not strict:
+                return cache.fallback_value
+            raise CacheUpstreamError(str(e))
 
-    def get_hostname_by_addr(self, addr):
-        return self.hostname_cache[addr]
+    def get_dc_by_host(self, host, strict=True):
+        return self.strictable(self.dc_cache, host, strict)
 
-    def get_host_tree(self, hostname):
-        return self.hosttree_cache[hostname]
+    def get_hostname_by_addr(self, addr, strict=True):
+        return self.strictable(self.hostname_cache, addr, strict)
+
+    def get_host_tree(self, hostname, strict=True):
+        return self.strictable(self.hosttree_cache, hostname, strict)
 
 
 cache = InfrastructureCache()
@@ -85,12 +95,11 @@ class CacheItem(object):
                 except KeyError:
                     pass
 
-            logger.info('{0}finished syncing, time: {1:.3f}'.format(
+            logger.info('{}finished syncing, time: {:.3f}'.format(
                 self.logprefix, time.time() - start_ts))
         except Exception as e:
-            logger.error('{0}failed to sync, time: {1:.3f}, {2}\n{3}'.format(
-                            self.logprefix, time.time() - start_ts,
-                            e, traceback.format_exc()))
+            logger.exception('{}failed to sync, time: {:.3f}'.format(
+                             self.logprefix, time.time() - start_ts))
         finally:
             self.__tq.add_task_in(self.taskname,
                 self.sync_period, self._sync_cache)
@@ -99,43 +108,36 @@ class CacheItem(object):
         cache_item = {'key': key,
                       'val': val,
                       'ts': time.time()}
-        logger.info(self.logprefix + 'Updating item for key %s '
-                                      'to value %s' % (key, val))
-        self.idx[key] = msgpack.packb(cache_item)
-        self.cache[key] = cache_item
+        try:
+            self.idx[key] = msgpack.packb(cache_item)
+            self.cache[key] = cache_item
+        except Exception:
+            logger.exception(self.logprefix + 'Updating cache for key {} '
+                'failed'.format(key))
+            pass
 
     def __getitem__(self, key):
         try:
             cache_item = self.cache[key]
             if cache_item['ts'] + self.key_expire_time < time.time():
-                logger.debug(self.logprefix + 'Item for key %s expired' % (key,))
+                logger.debug(self.logprefix + 'Value for key {} expired'.format(key))
                 raise KeyError
             val = cache_item['val']
         except KeyError:
-            logger.debug(self.logprefix + 'Fetching value for key %s from source' % (key,))
             try:
                 req_start = time.time()
                 val = self.get_value(key)
-                logger.info(self.logprefix + 'Fetched value for key %s from source: %s' %
-                             (key, val))
+                logger.info(self.logprefix + 'Fetched value for key {} '
+                    'from upstream: {}'.format(key, val))
             except Exception as e:
                 req_time = time.time() - req_start
-                logger.error(self.logprefix + 'Failed to fetch value for key {0} (time: {1:.5f}s): {2}\n{3}'.format(
-                    key, req_time, str(e), traceback.format_exc()))
+                logger.exception(self.logprefix + 'Failed to fetch value '
+                    'for key {} from upstream (time: {:.5f}s)'.format(
+                    key, req_time))
                 raise
             self._update_cache_item(key, val)
 
         return val
-
-
-def unknown_host_error(f):
-    def wrapper(self, *args, **kwargs):
-        try:
-            return f(self, *args, **kwargs)
-        except socket.herror as e:
-            # [Errno 1] Unknown host
-            return 'unknown'
-    return wrapper
 
 
 class DcCacheItem(CacheItem):
@@ -146,7 +148,8 @@ class DcCacheItem(CacheItem):
         self.key_expire_time = config.get('infrastructure_dc_cache_valid_time', 604800)
         super(DcCacheItem, self).__init__(*args, **kwargs)
 
-    @unknown_host_error
+        self.fallback_value = 'unknown'
+
     def get_value(self, key):
         return inventory.get_dc_by_host(key)
 
@@ -159,7 +162,8 @@ class HostnameCacheItem(CacheItem):
         self.key_expire_time = config.get('infrastructure_hostname_cache_valid_time', 604800)
         super(HostnameCacheItem, self).__init__(*args, **kwargs)
 
-    @unknown_host_error
+        self.fallback_value = 'unknown'
+
     def get_value(self, key):
         return socket.gethostbyaddr(key)[0]
 
