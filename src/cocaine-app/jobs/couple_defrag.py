@@ -56,7 +56,8 @@ class CoupleDefragJob(Job):
                         node_backend=node_backend,
                         group=group.group_id,
                         params={'group': str(group.group_id),
-                                'node_backend': node_backend.encode('utf-8')})
+                                'node_backend': node_backend.encode('utf-8'),
+                                'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]})
 
                     self.tasks.append(task)
 
