@@ -28,7 +28,6 @@ import balancelogicadapter
 from db.mongo.pool import MongoReplicaSetClient
 import infrastructure
 import jobs
-import cache
 import minions
 import node_info_updater
 from planner import Planner
