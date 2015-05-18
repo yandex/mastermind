@@ -71,13 +71,7 @@ class Job(MongoObject):
         self._finish_ts = None
         self.type = None
         self.tasks = []
-        self.__tasklist_lock = threading.Lock()
         self.error_msg = []
-
-    @contextmanager
-    def tasks_lock(self):
-        with self.__tasklist_lock:
-            yield
 
     @classmethod
     def new(cls, session, **kwargs):
@@ -128,8 +122,7 @@ class Job(MongoObject):
         self.type = data['type']
         self.error_msg = data.get('error_msg', [])
 
-        with self.__tasklist_lock:
-            self.tasks = [TaskFactory.make_task(task_data, self) for task_data in data['tasks']]
+        self.tasks = [TaskFactory.make_task(task_data, self) for task_data in data['tasks']]
 
         for param in self.PARAMS:
             val = data.get(param, None)

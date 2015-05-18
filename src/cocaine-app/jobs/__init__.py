@@ -103,8 +103,7 @@ class JobProcessor(object):
 
                 for job in ready_jobs:
                     try:
-                        with job.tasks_lock():
-                            self.__process_job(job)
+                        self.__process_job(job)
                         job.save()
                     except LockError:
                         pass
@@ -464,19 +463,17 @@ class JobProcessor(object):
 
             job = self.job_finder._get_job(job_id)
 
-            with job.tasks_lock():
+            if job.status not in (Job.STATUS_PENDING,
+                Job.STATUS_NOT_APPROVED, Job.STATUS_BROKEN):
+                raise ValueError('Job {0}: status is "{1}", should have been '
+                    '"{2}|{3}|{4}"'.format(job.id, job.status,
+                        Job.STATUS_PENDING, Job.STATUS_NOT_APPROVED, Job.STATUS_BROKEN))
 
-                if job.status not in (Job.STATUS_PENDING,
-                    Job.STATUS_NOT_APPROVED, Job.STATUS_BROKEN):
-                    raise ValueError('Job {0}: status is "{1}", should have been '
-                        '"{2}|{3}|{4}"'.format(job.id, job.status,
-                            Job.STATUS_PENDING, Job.STATUS_NOT_APPROVED, Job.STATUS_BROKEN))
+            self._cancel_job(job)
 
-                self._cancel_job(job)
+            job.save()
 
-                job.save()
-
-                logger.info('Job {0}: status set to {1}'.format(job.id, job.status))
+            logger.info('Job {0}: status set to {1}'.format(job.id, job.status))
 
         except Exception as e:
             logger.error('Failed to cancel job {0}: {1}\n{2}'.format(
@@ -505,17 +502,15 @@ class JobProcessor(object):
 
             job = self.job_finder._get_job(job_id)
 
-            with job.tasks_lock():
+            if job.status != Job.STATUS_NOT_APPROVED:
+                raise ValueError('Job {0}: status is "{1}", should have been '
+                    '"{2}"'.format(job.id, job.status, Job.STATUS_NOT_APPROVED))
 
-                if job.status != Job.STATUS_NOT_APPROVED:
-                    raise ValueError('Job {0}: status is "{1}", should have been '
-                        '"{2}"'.format(job.id, job.status, Job.STATUS_NOT_APPROVED))
+            job.status = Job.STATUS_NEW
+            job.update_ts = time.time()
+            job._dirty = True
 
-                job.status = Job.STATUS_NEW
-                job.update_ts = time.time()
-                job._dirty = True
-
-                job.save()
+            job.save()
 
         except Exception as e:
             logger.error('Failed to approve job {0}: {1}\n{2}'.format(
@@ -566,38 +561,34 @@ class JobProcessor(object):
 
     def __change_failed_task_status(self, job_id, task_id, status):
 
-        logger.debug('Lock acquiring')
-        with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
-            logger.debug('Lock acquired')
+        job = self.job_finder._get_job(job_id)
 
-            job = self.job_finder._get_job(job_id)
-            with job.tasks_lock():
-                if job.status not in (Job.STATUS_PENDING, Job.STATUS_BROKEN):
-                    raise ValueError('Job {0}: status is "{1}", should have been '
-                        '{2}|{3}'.format(job.id, job.status, Job.STATUS_PENDING, Job.STATUS_BROKEN))
+        if job.status not in (Job.STATUS_PENDING, Job.STATUS_BROKEN):
+            raise ValueError('Job {0}: status is "{1}", should have been '
+                '{2}|{3}'.format(job.id, job.status, Job.STATUS_PENDING, Job.STATUS_BROKEN))
 
-                task = None
-                for t in job.tasks:
-                    if t.id == task_id:
-                        task = t
-                        break
-                else:
-                    raise ValueError('Job {0} does not contain task '
-                        'with id {1}'.format(job_id, task_id))
+        task = None
+        for t in job.tasks:
+            if t.id == task_id:
+                task = t
+                break
+        else:
+            raise ValueError('Job {0} does not contain task '
+                'with id {1}'.format(job_id, task_id))
 
-                if task.status != Task.STATUS_FAILED:
-                    raise ValueError('Job {0}: task {1} has status {2}, should '
-                        'have been failed'.format(job.id, task.id, task.status))
+        if task.status != Task.STATUS_FAILED:
+            raise ValueError('Job {0}: task {1} has status {2}, should '
+                'have been failed'.format(job.id, task.id, task.status))
 
-                task.status = status
-                task.attempts = 0
-                job.status = Job.STATUS_EXECUTING
-                job.update_ts = time.time()
-                job._dirty = True
-                job.save()
-                logger.info('Job {0}: task {1} status was reset to {2}, '
-                    'job status was reset to {3}'.format(
-                        job.id, task.id, task.status, job.status))
+        task.status = status
+        task.attempts = 0
+        job.status = Job.STATUS_EXECUTING
+        job.update_ts = time.time()
+        job._dirty = True
+        job.save()
+        logger.info('Job {0}: task {1} status was reset to {2}, '
+            'job status was reset to {3}'.format(
+                job.id, task.id, task.status, job.status))
 
         return job
 
