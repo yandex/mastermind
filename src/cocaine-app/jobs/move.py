@@ -203,7 +203,8 @@ class MoveJob(Job):
                       '')
 
         params = {'node_backend': self.dst_node_backend.encode('utf-8'),
-                  'group': str(self.uncoupled_group)}
+                  'group': str(self.uncoupled_group),
+                  'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]}
 
         remove_path = ''
 
@@ -232,7 +233,8 @@ class MoveJob(Job):
                                  host=self.src_host,
                                  cmd=make_readonly_cmd,
                                  params={'node_backend': self.src_node_backend.encode('utf-8'),
-                                         'mark_backend': mark_backend})
+                                         'mark_backend': mark_backend,
+                                         'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]})
 
         self.tasks.append(task)
 
