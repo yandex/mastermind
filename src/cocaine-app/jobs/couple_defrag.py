@@ -41,34 +41,37 @@ class CoupleDefragJob(Job):
 
         couple = storage.couples[self.couple]
 
-        def make_defrag_tasks(groups):
-            for group in groups:
-                for nb in group.node_backends:
-                    cmd = infrastructure._defrag_node_backend_cmd(
-                        nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id)
+        def make_defrag_tasks(nb):
+            cmd = infrastructure._defrag_node_backend_cmd(
+                nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id)
 
-                    node_backend = self.node_backend(
-                        nb.node.host.addr, nb.node.port, nb.backend_id)
+            node_backend = self.node_backend(
+                nb.node.host.addr, nb.node.port, nb.backend_id)
 
-                    task = NodeBackendDefragTask.new(self,
-                        host=nb.node.host.addr,
-                        cmd=cmd,
-                        node_backend=node_backend,
-                        group=group.group_id,
-                        params={'group': str(group.group_id),
-                                'node_backend': node_backend.encode('utf-8'),
-                                'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]})
+            task = NodeBackendDefragTask.new(self,
+                host=nb.node.host.addr,
+                cmd=cmd,
+                node_backend=node_backend,
+                group=group.group_id,
+                params={'group': str(group.group_id),
+                        'node_backend': node_backend.encode('utf-8'),
+                        'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]})
 
-                    self.tasks.append(task)
-
-        partition_idx = int(math.ceil(len(couple.groups) / 2.0))
-        partitions = ((couple.groups[:partition_idx], couple.groups[partition_idx:])
-                      if len(couple.groups) > 1 else
-                      (couple.groups,))
-        for groups in partitions:
-            make_defrag_tasks(groups)
-            task = CoupleDefragStateCheckTask.new(self, couple=str(couple))
             self.tasks.append(task)
+
+        defrag_tasks = False
+        for group in couple.groups:
+            for nb in group.node_backends:
+                if nb.stat.want_defrag <= 1:
+                    continue
+                make_defrag_tasks(nb)
+                task = CoupleDefragStateCheckTask.new(self, couple=str(couple))
+                self.tasks.append(task)
+                defrag_tasks = True
+
+        if not defrag_tasks:
+            raise ValueError("Couple's {} backends does not require "
+                             "defragmentation".format(self.couple))
 
     @property
     def _involved_groups(self):

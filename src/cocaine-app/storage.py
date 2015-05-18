@@ -160,6 +160,7 @@ class NodeBackendStat(object):
 
         self.fsid = None
         self.defrag_state = None
+        self.want_defrag = 0
 
         self.blob_size_limit = 0
         self.max_blob_base_size = 0
@@ -197,6 +198,7 @@ class NodeBackendStat(object):
 
         self.fsid = raw_stat['backend']['vfs']['fsid']
         self.defrag_state = raw_stat['status']['defrag_state']
+        self.want_defrag = raw_stat['backend']['summary_stats']['want_defrag']
 
         self.blob_size_limit = raw_stat['backend']['config'].get('blob_size_limit', 0)
         if self.blob_size_limit > 0:
@@ -620,6 +622,7 @@ class NodeBackend(object):
             res['records_removed'] = self.stat.files_removed
             res['fragmentation'] = self.stat.fragmentation
             res['defrag_state'] = self.stat.defrag_state
+            res['want_defrag'] = self.stat.want_defrag
         if self.base_path:
             res['path'] = self.base_path
 

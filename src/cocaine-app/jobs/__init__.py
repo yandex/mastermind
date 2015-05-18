@@ -226,7 +226,7 @@ class JobProcessor(object):
                         raise
 
                     if isinstance(e, RetryError):
-                        logger.error('Job {}, task {} retry error: {}'.format(
+                        logger.error('Job {}, task {}: retry error: {}'.format(
                             job.id, task.id, e))
                         if task.attempts < JOB_CONFIG.get('minions', {}).get('execute_attempts', 3):
                             job._dirty = True

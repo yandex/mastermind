@@ -649,14 +649,20 @@ class Planner(object):
                     continue
 
                 insufficient_space_nb = None
+                want_defrag = False
 
                 for group in couple.groups:
                     for nb in group.node_backends:
                         if nb.stat.free_space < nb.stat.max_blob_base_size * 2:
                             insufficient_space_nb = nb
                             break
+                        if nb.stat.want_defrag > 1:
+                            want_defrag = True
                     if insufficient_space_nb:
                         break
+
+                if not want_defrag:
+                    continue
 
                 if insufficient_space_nb:
                     logger.warn('Couple {0}: node backend {1} has insufficient '
