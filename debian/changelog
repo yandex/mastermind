@@ -1,3 +1,9 @@
+mastermind (2.24.17) precise; urgency=low
+
+  * Do not use cache module in the main worker
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 18 May 2015 18:52:56 +0300
+
 mastermind (2.24.16) precise; urgency=low
 
   * Couple defragmentation should start only when want_defrag > 1
