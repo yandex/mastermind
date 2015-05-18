@@ -21,8 +21,6 @@ case "$1" in
 
     /usr/bin/mastermind_deploy.sh $DEPLOY_DIR $BASE_APP_NAME-cache mastermind-cache.manifest mastermind-cache.profile
 
-    /etc/init.d/cocaine-runtime restart
-
     ;;
     abort-upgrade|abort-remove|abort-deconfigure)
     ;;
