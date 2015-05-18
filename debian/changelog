@@ -1,3 +1,12 @@
+mastermind (2.24.16) precise; urgency=low
+
+  * Couple defragmentation should start only when want_defrag > 1
+  * Move job tweaks: -114 processing when node backend is being disabled, STALLED status for node backend stop task is considered ok
+  * Removed unnecessary locks on task retry and skip
+  * Couple defrag: if dnet_client returns -114 on defrag command, consider task successfully completed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 18 May 2015 18:32:07 +0300
+
 mastermind (2.24.15) precise; urgency=low
 
   * Refactored infrastructure data usage and correspondent cache workflow
