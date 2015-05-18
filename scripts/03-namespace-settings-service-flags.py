@@ -55,7 +55,7 @@ class TagSecondaryIndex(object):
 
     def __setitem__(self, key, val):
         eid = self.meta_session.transform(self.key_tpl % key)
-        self.meta_session.clone().write_data(eid, val)
+        self.meta_session.clone().write_data(eid, val).get()
 
     def __getitem__(self, key):
         eid = self.meta_session.transform(self.key_tpl % key)
@@ -92,6 +92,7 @@ class TagSecondaryIndex(object):
                 q.put((k, s.read_latest(k)))
             else:
                 data = self._fetch_response_data(q.get())
+                q.put((k, s.read_latest(k)))
                 if data:
                     yield data
 
@@ -191,6 +192,8 @@ def process_namespace(ns_settings_idx, namespace, settings):
     if not '__service' in settings:
         settings['__service'] = {}
         ns_settings_idx[namespace] = msgpack.packb(settings)
+        return True
+    return False
 
 
 if __name__ == '__main__':
@@ -205,12 +208,11 @@ if __name__ == '__main__':
         ns_settings_idx = namespace_index(n)
         ns_settings = namespace_settings(ns_settings_idx)
 
-        total_ns = len(ns_settings)
         processed = 0
         for ns, settings in ns_settings.iteritems():
 
-            process_namespace(ns_settings_idx, ns, settings)
-            processed += 1
-            print "Processed namespaces: {0}/{1}\r".format(processed, total_ns),
+            if process_namespace(ns_settings_idx, ns, settings):
+                processed += 1
+                print "Processed namespaces: {0}\r".format(processed),
 
         print
