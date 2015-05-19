@@ -1,3 +1,9 @@
+mastermind (2.24.18) precise; urgency=low
+
+  * Aggregate keys by (key_id, couple) pair
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 19 May 2015 16:42:11 +0300
+
 mastermind (2.24.17) precise; urgency=low
 
   * Do not use cache module in the main worker
