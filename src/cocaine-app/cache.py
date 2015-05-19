@@ -128,8 +128,27 @@ class CacheManager(object):
             if key['id'] == self.service_metakey:
                 continue
 
-            new_top_keys.setdefault(key['id'], self.distributor._new_key_stat(key['id']))
-            top_key = new_top_keys[key['id']]
+            if not key['group'] in storage.groups:
+                logger.error('Key {}: source group {} is not found in storage'.format(
+                    key['id'], key['group']))
+                continue
+
+            group = storage.groups[key['group']]
+            if not group.couple:
+                logger.error('Key {}: source group {} does not belong to any couple'.format(
+                    key['id'], group.group_id))
+                continue
+
+            try:
+                ns = group.couple.ns
+            except ValueError:
+                logger.error('Key {}: couple of source group {} has broken namespaces settings'.format(
+                    key['id'], group.group_id))
+                continue
+
+            new_top_keys.setdefault((key['id'], str(group.couple)),
+                                    self.distributor._new_key_stat(key['id'], group.couple, ns))
+            top_key = new_top_keys[(key['id'], str(group.couple))]
             top_key['groups'].append(key['group'])
             top_key['size'] += key['size']
             top_key['frequency'] += key['frequency']
@@ -228,12 +247,14 @@ class CacheManager(object):
         top_keys = self.top_keys
         for key_stat in self.top_keys.itervalues():
             key_id = key_stat['id']
-            key = keys[key_id]
+            key_couple = key_stat['couple']
+            key = keys[(key_id, key_couple)]
             key['id'] = key_id
             key['top_rate'] = self.distributor._key_bw(key_stat)
         for key_cached in self.distributor._get_distributed_keys():
             key_id = key_cached['id']
-            key = keys[key_id]
+            key_couple = key_cached['couple']
+            key = keys[(key_id, key_couple)]
             key['id'] = key_id
             key['cache_groups'] = key_cached['cache_groups'][:]
             key['mm_rate'] = key_cached['rate']
@@ -289,12 +310,7 @@ class CacheDistributor(object):
 
         data_group = None
         for gid in key_stat['groups']:
-            try:
-                group = storage.groups[gid]
-            except KeyError:
-                logger.error('Key {0}: group {1} not found in storage though '
-                    'returned by top'.format(key['id'], gid))
-                continue
+            group = storage.groups[gid]
             if group.type == storage.Group.TYPE_CACHE:
                 continue
             if group.couple:
@@ -309,28 +325,34 @@ class CacheDistributor(object):
                 'any couple: {1}'.format(key_stat['id'], key_stat['groups']))
         return {
             'id': key_stat['id'],
-            'sgroups': list(data_group.couple.as_tuple()),
+            'couple': key_stat['couple'],
+            'ns': key_stat['ns'],
+            'sgroups': list(storage.couples[key_stat['couple']].as_tuple()),
             'rate': 0,
             'cache_groups': []
         }
 
-    def _new_key_stat(self, key_id):
+    def _new_key_stat(self, key_id, couple_str, ns):
         return {'groups': [],
+                'couple': couple_str,
+                'ns': ns,
                 'id': key_id,
                 'size': 0,
                 'frequency': 0,
                 'period_in_seconds': 1}
 
     def distribute(self, top):
-        """ Distributes top keys across available cache groups.
+        """ Distributes top keys among available cache groups.
         Parameter "top" is a map of key id to key top statistics:
 
-        {'123': {'groups': [42, 69],
-                 'id': 123,
-                 'size': 1024,    # approximate size of key traffic
-                 'frequency': 2,  # approximate number of key events
-                 'period': 1      # statistics collection period
-                }, ...
+        {('123', '42:69'): {'groups': [42, 69],
+                            'couple': '42:69',
+                            'ns': 'magic',
+                            'id': 123,
+                            'size': 1024,    # approximate size of key traffic
+                            'frequency': 2,  # approximate number of key events
+                            'period': 1      # statistics collection period
+                           }, ...
         }"""
 
         self._update_cache_groups()
@@ -339,18 +361,18 @@ class CacheDistributor(object):
         logger.info('Keys after applying bandwidth filter: {0}'.format([elliptics.Id(k.encode('utf-8')) for k in top]))
 
         def process_key(key):
-            if key['id'] not in top:
+            if (key['id'], key['couple']) not in top:
                 copies_diff = -len(key['cache_groups'])
                 key_stat = self._new_key_stat(key['id'])
                 logger.info('Key {0}: not in top anymore, will be removed'.format(key['id']))
             else:
-                key_stat = top[key['id']]
+                key_stat = top[(key['id'], key['couple'])]
                 key_copies_num = self._key_bw(key_stat) / self.bandwidth_per_copy
                 copies_diff = self._key_copies_diff(key, key_copies_num)
 
-                logger.info('Key {0}: bandwidth {1}; total number of copies '
-                    '(including base ones): {2}, additional number of copies: '
-                    '{3}'.format(key['id'], mbit_per_s(self._key_bw(key_stat)),
+                logger.info('Key {}, couple {}: bandwidth {}; total number of copies '
+                    '(including base ones): {}, additional number of copies: '
+                    '{}'.format(key['id'], key['couple'], mbit_per_s(self._key_bw(key_stat)),
                         key_copies_num, copies_diff))
 
             if copies_diff == 0:
@@ -362,15 +384,15 @@ class CacheDistributor(object):
         # update currently distributed keys
         for key in self._get_distributed_keys():
             process_key(key)
-            top.pop(key['id'], None)
+            top.pop((key['id'], key['couple']), None)
 
         # process new keys
-        for key_id, key_stat in top.iteritems():
+        for (key_id, key_couple), key_stat in top.iteritems():
             try:
                 key = self._new_key(key_stat)
             except Exception as e:
-                logger.error('Key {0}: failed to create new key record, {1}: '
-                    '{2}'.format(key_id, e, traceback.format_exc()))
+                logger.exception('Key {}, couple {}: failed to create new key record, '
+                    '{}:'.format(key_id, key_couple, e))
                 continue
             process_key(key)
 
@@ -658,10 +680,10 @@ class CacheDistributor(object):
 
     def _filter_by_bandwidth(self, top):
         filtered_top = {}
-        for key, key_stat in top.iteritems():
+        for key_k, key_stat in top.iteritems():
             if self._key_bw(key_stat) < self.bandwidth_per_copy:
                 continue
-            filtered_top[key] = key_stat
+            filtered_top[key_k] = key_stat
         return filtered_top
 
     def _cache_group_by_group_id(self, group_id):
