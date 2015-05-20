@@ -134,21 +134,45 @@ class CacheManager(object):
                 continue
 
             group = storage.groups[key['group']]
-            if not group.couple:
-                logger.error('Key {}: source group {} does not belong to any couple'.format(
-                    key['id'], group.group_id))
-                continue
+            if group.type == storage.Group.TYPE_CACHE:
+                # this is a cache group, so their is no straightforward way to get
+                # original key couple; the only way is to search metadb for
+                # corresponding key id and cache group, and take couple id and
+                # ns from matching record
+                logger.debug('Key {}: cache group {}, establishing couple '
+                    'and ns'.format(key['id'], group.group_id))
+                keys = list(self.keys_db.find({'id': key['id'],
+                                               'cache_groups': group.group_id}))
+                if len(keys) > 1:
+                    logger.error('Key {}: matched {} keys in metadb by cache '
+                        'group {}'.format(key['id'], len(keys), group.group_id))
+                    continue
 
-            try:
-                ns = group.couple.ns
-            except ValueError:
-                logger.error('Key {}: couple of source group {} has broken namespaces settings'.format(
-                    key['id'], group.group_id))
-                continue
+                if not keys:
+                    logger.warn('Key {}: found on top statistics for cache group {}, '
+                        'not found in metadb'.format(key['id'], group.group_id))
+                    continue
 
-            new_top_keys.setdefault((key['id'], str(group.couple)),
-                                    self.distributor._new_key_stat(key['id'], group.couple, ns))
-            top_key = new_top_keys[(key['id'], str(group.couple))]
+                key_record = keys[0]
+                couple_id, ns = key_record['couple'], key_record['ns']
+
+            else:
+                if not group.couple:
+                    logger.error('Key {}: source group {} does not belong to any couple'.format(
+                        key['id'], group.group_id))
+                    continue
+
+                couple_id = str(group.couple)
+                try:
+                    ns = group.couple.namespace
+                except ValueError:
+                    logger.error('Key {}: couple of source group {} has broken '
+                        'namespaces settings'.format(key['id'], group.group_id))
+                    continue
+
+            new_top_keys.setdefault((key['id'], couple_id),
+                self.distributor._new_key_stat(key['id'], couple_id, ns))
+            top_key = new_top_keys[(key['id'], couple_id)]
             top_key['groups'].append(key['group'])
             top_key['size'] += key['size']
             top_key['frequency'] += key['frequency']
