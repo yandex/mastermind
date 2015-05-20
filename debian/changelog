@@ -1,3 +1,9 @@
+mastermind (2.24.22) precise; urgency=low
+
+  * Fixed new keys processing
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 21 May 2015 00:00:29 +0300
+
 mastermind (2.24.21) precise; urgency=low
 
   * Do not remove unpopular keys on distribution stage
