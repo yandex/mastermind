@@ -1,3 +1,9 @@
+mastermind (2.24.21) precise; urgency=low
+
+  * Do not remove unpopular keys on distribution stage
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 20 May 2015 23:34:15 +0300
+
 mastermind (2.24.20) precise; urgency=low
 
   * Misprint fixed
