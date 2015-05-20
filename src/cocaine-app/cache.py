@@ -383,7 +383,8 @@ class CacheDistributor(object):
         self._update_cache_groups()
 
         top = self._filter_by_bandwidth(top)
-        logger.info('Keys after applying bandwidth filter: {0}'.format([elliptics.Id(k.encode('utf-8')) for k in top]))
+        logger.info('Keys after applying bandwidth filter: {0}'.format(
+            [elliptics.Id(key_k[0].encode('utf-8')) for key_k in top]))
 
         def process_key(key):
             if (key['id'], key['couple']) not in top:
