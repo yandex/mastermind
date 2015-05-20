@@ -407,6 +407,8 @@ class CacheDistributor(object):
                         mbit_per_s(self._key_bw(key_stat)), -copies_diff))
                 continue
 
+            logger.info('Key {}, couple {}: cached, expanding to {} more '
+                'copies'.format(key['id'], key['couple'], copies_diff))
             with self._cache_groups_lock:
                 self._update_key(key, key_stat, copies_diff)
             top.pop((key['id'], key['couple']), None)
@@ -419,7 +421,13 @@ class CacheDistributor(object):
                 logger.exception('Key {}, couple {}: failed to create new key record, '
                     '{}:'.format(key_id, key_couple, e))
                 continue
-            process_key(key)
+            copies_diff, key_stat = self._key_copies_diff(key, top)
+            if copies_diff == 0:
+                continue
+            logger.info('Key {}, couple {}: not cached, expanding to {} '
+                'copies'.format(key['id'], key['couple'], copies_diff))
+            with self._cache_groups_lock:
+                self._update_key(key, key_stat, copies_diff)
 
     def _update_key(self, key, key_stat, copies_diff):
         key['rate'] = self._key_bw(key_stat)
