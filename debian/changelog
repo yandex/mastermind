@@ -1,3 +1,9 @@
+mastermind (2.24.19) precise; urgency=low
+
+  * Top stats aggregation fix: cache groups statistics are accounted properly
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 20 May 2015 16:10:22 +0300
+
 mastermind (2.24.18) precise; urgency=low
 
   * Aggregate keys by (key_id, couple) pair
