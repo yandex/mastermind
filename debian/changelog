@@ -1,3 +1,9 @@
+mastermind (2.24.20) precise; urgency=low
+
+  * Misprint fixed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 20 May 2015 23:07:51 +0300
+
 mastermind (2.24.19) precise; urgency=low
 
   * Top stats aggregation fix: cache groups statistics are accounted properly
