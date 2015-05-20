@@ -366,6 +366,17 @@ class CacheDistributor(object):
                 'frequency': 0,
                 'period_in_seconds': 1}
 
+    def _key_copies_diff(self, key, top):
+        if (key['id'], key['couple']) not in top:
+            copies_diff = -len(key['cache_groups'])
+            key_stat = self._new_key_stat(key['id'], key['couple'], key['ns'])
+        else:
+            key_stat = top[(key['id'], key['couple'])]
+            key_copies_num = self._key_bw(key_stat) / self.bandwidth_per_copy
+            copies_diff = self._count_key_copies_diff(key, key_copies_num)
+
+        return copies_diff, key_stat
+
     def distribute(self, top):
         """ Distributes top keys among available cache groups.
         Parameter "top" is a map of key id to key top statistics:
@@ -386,30 +397,18 @@ class CacheDistributor(object):
         logger.info('Keys after applying bandwidth filter: {0}'.format(
             [elliptics.Id(key_k[0].encode('utf-8')) for key_k in top]))
 
-        def process_key(key):
-            if (key['id'], key['couple']) not in top:
-                copies_diff = -len(key['cache_groups'])
-                key_stat = self._new_key_stat(key['id'])
-                logger.info('Key {0}: not in top anymore, will be removed'.format(key['id']))
-            else:
-                key_stat = top[(key['id'], key['couple'])]
-                key_copies_num = self._key_bw(key_stat) / self.bandwidth_per_copy
-                copies_diff = self._key_copies_diff(key, key_copies_num)
+        # update currently distributed keys
+        for key in self._get_distributed_keys():
+            copies_diff, key_stat = self._key_copies_diff(key, top)
 
-                logger.info('Key {}, couple {}: bandwidth {}; total number of copies '
-                    '(including base ones): {}, additional number of copies: '
-                    '{}'.format(key['id'], key['couple'], mbit_per_s(self._key_bw(key_stat)),
-                        key_copies_num, copies_diff))
-
-            if copies_diff == 0:
-                return
+            if copies_diff <= 0:
+                logger.info('Key {}, couple {}: bandwidth {}; '
+                    'extra copies: {}, skipped'.format(key['id'], key['couple'],
+                        mbit_per_s(self._key_bw(key_stat)), -copies_diff))
+                continue
 
             with self._cache_groups_lock:
                 self._update_key(key, key_stat, copies_diff)
-
-        # update currently distributed keys
-        for key in self._get_distributed_keys():
-            process_key(key)
             top.pop((key['id'], key['couple']), None)
 
         # process new keys
@@ -694,7 +693,7 @@ class CacheDistributor(object):
     def _key_bw(self, key_stat):
         return float(key_stat['size']) / key_stat['period_in_seconds']
 
-    def _key_copies_diff(self, key, req_copies_num):
+    def _count_key_copies_diff(self, key, req_copies_num):
         sgroups_num = len(key['sgroups'])
         copies_num = len(key['cache_groups']) + len(key['sgroups'])
 
@@ -816,5 +815,5 @@ class CacheGroup(object):
 
     @property
     def weight(self):
-        return 2.0 - (self.tx_rate_left / self.MAX_NODE_NETWORK_BANDWIDTH +
+        return 2.0 - (min(1.0, self.tx_rate_left / self.MAX_NODE_NETWORK_BANDWIDTH) +
                       self.effective_free_space / self.stat.total_space)
