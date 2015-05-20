@@ -3,6 +3,7 @@ import copy
 import logging
 import math
 import threading
+import time
 import traceback
 
 import elliptics
@@ -21,7 +22,6 @@ import keys
 from manual_locks import manual_locker
 import node_info_updater
 import storage
-import time
 import timed_queue
 from timer import periodic_timer
 
@@ -353,7 +353,8 @@ class CacheDistributor(object):
             'ns': key_stat['ns'],
             'sgroups': list(storage.couples[key_stat['couple']].as_tuple()),
             'rate': 0,
-            'cache_groups': []
+            'cache_groups': [],
+            'expand_ts': int(time.time())
         }
 
     def _new_key_stat(self, key_id, couple_str, ns):
@@ -662,6 +663,7 @@ class CacheDistributor(object):
         if not self.dryrun:
             cache_task_manager.put_task(self._serialize(task))
         key['cache_groups'].append(group_id)
+        key['expand_ts'] = int(time.time())
         self.keys_db.update({'id': key['id']}, key, upsert=True)
         return task
 
