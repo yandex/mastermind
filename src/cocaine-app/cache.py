@@ -351,7 +351,7 @@ class CacheDistributor(object):
             'id': key_stat['id'],
             'couple': key_stat['couple'],
             'ns': key_stat['ns'],
-            'sgroups': list(storage.couples[key_stat['couple']].as_tuple()),
+            'data_groups': list(storage.couples[key_stat['couple']].as_tuple()),
             'rate': 0,
             'cache_groups': [],
             'expand_ts': int(time.time())
@@ -368,8 +368,8 @@ class CacheDistributor(object):
 
     def _key_copies_diff(self, key, top):
         if (key['id'], key['couple']) not in top:
-            copies_diff = -len(key['cache_groups'])
             key_stat = self._new_key_stat(key['id'], key['couple'], key['ns'])
+            copies_diff = -len(key['cache_groups'])
         else:
             key_stat = top[(key['id'], key['couple'])]
             key_copies_num = self._key_bw(key_stat) / self.bandwidth_per_copy
@@ -505,7 +505,7 @@ class CacheDistributor(object):
         eid = elliptics.Id(key['id'].encode('utf-8'))
 
         lookups = []
-        for group_id in key['sgroups']:  # add other cache groups as a source when key size is fixed
+        for group_id in key['data_groups']:  # add other cache groups as a source when key size is fixed
             s = self.session.clone()
             s.set_exceptions_policy(elliptics.exceptions_policy.no_exceptions)
             s.add_groups([group_id])
@@ -545,7 +545,7 @@ class CacheDistributor(object):
 
     def _increase_copies(self, key, key_stat, count):
         update_groups_ids = [group_id
-                             for group_id in key['cache_groups'] + key['sgroups']
+                             for group_id in key['cache_groups'] + key['data_groups']
                              if group_id not in self.groups_units and
                              group_id in storage.groups]
 
@@ -560,7 +560,7 @@ class CacheDistributor(object):
             return
 
         # filter unsuitable groups by network rate and free space
-        copies_num = len(key['cache_groups']) + len(key['sgroups']) + count
+        copies_num = len(key['cache_groups']) + len(key['data_groups']) + count
         bw_per_copy = float(key_stat['size']) / key_stat['period_in_seconds'] / copies_num
 
         cache_groups = []
@@ -593,7 +593,7 @@ class CacheDistributor(object):
         copies_count_by_dc = defaultdict(int)
         # create map dc -> number of copies, used later for selecting destination
         # cache group
-        for group_id in key['cache_groups'] + key['sgroups']:
+        for group_id in key['cache_groups'] + key['data_groups']:
             if group_id in self.groups_units:
                 dc = self._group_unit(self.groups_units[group_id][0][self.dc_node_type])
                 copies_count_by_dc[dc] += 1
@@ -607,7 +607,7 @@ class CacheDistributor(object):
         # select dc of a group with minimal node network load for the case
         # when there is no available cache groups in key dcs
         min_load_dc = (None, None)
-        for group_id in key['sgroups']:
+        for group_id in key['data_groups']:
             if not group_id in storage.groups:
                 continue
             node = storage.groups[group_id].node_backends[0].node
@@ -669,12 +669,12 @@ class CacheDistributor(object):
         logger.info('Key {0}: cache tasks created for groups {1}'.format(
             key['id'], new_cache_groups))
 
-    def _add_key_to_group(self, key, group_id, sgroups, tx_rate, size):
+    def _add_key_to_group(self, key, group_id, data_groups, tx_rate, size):
         """
         Creates task for gatling gun on destination group,
         updates key in meta database
         """
-        task = self._gatlinggun_task(key, group_id, sgroups, 'add',
+        task = self._gatlinggun_task(key, group_id, data_groups, 'add',
                 tx_rate=tx_rate, size=size)
         if not self.dryrun:
             cache_task_manager.put_task(self._serialize(task))
@@ -693,13 +693,13 @@ class CacheDistributor(object):
     def _unserialize(task):
         return msgpack.unpackb(task)
 
-    def _gatlinggun_task(self, key, group, sgroups, action, tx_rate=None, size=None):
+    def _gatlinggun_task(self, key, group, data_groups, action, tx_rate=None, size=None):
         assert isinstance(group, int), "Group for gatlinggun task should be "\
                 "int, not {0}".format(type(group).__name__)
         task = {
             'key': key['id'],
             'group': group,
-            'sgroups': sgroups,
+            'sgroups': data_groups,
             'action': action,
         }
         if tx_rate:
@@ -712,12 +712,12 @@ class CacheDistributor(object):
         return float(key_stat['size']) / key_stat['period_in_seconds']
 
     def _count_key_copies_diff(self, key, req_copies_num):
-        sgroups_num = len(key['sgroups'])
-        copies_num = len(key['cache_groups']) + len(key['sgroups'])
+        data_groups_num = len(key['data_groups'])
+        copies_num = len(key['cache_groups']) + len(key['data_groups'])
 
         req_copies = int(math.ceil(req_copies_num))
         if req_copies < math.ceil(copies_num * self.copies_reduce_factor):
-            return max(sgroups_num, req_copies) - copies_num
+            return max(data_groups_num, req_copies) - copies_num
         elif req_copies >= copies_num + self.copies_expand_step:
             return req_copies - copies_num
         return 0
