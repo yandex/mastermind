@@ -308,9 +308,12 @@ class Balancer(object):
 
         ns_min_units = self.infrastructure.ns_settings.get(namespace, {}).get(
             'min-units', self.MIN_NS_UNITS)
+        settings = self.infrastructure.ns_settings[namespace]
         if found_couples < ns_min_units:
-            raise ValueError('Namespace {0} has {1} available couples, '
-                '{2} required'.format(namespace, found_couples, ns_min_units))
+            raise ValueError('Namespace {}, {}, has {} available couples, '
+                '{} required'.format(namespace,
+                    'static' if 'static-couple' in settings else 'non-static'
+                    found_couples, ns_min_units))
         return ns_weights
 
     @h.concurrent_handler
