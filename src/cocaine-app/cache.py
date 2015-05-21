@@ -494,9 +494,9 @@ class CacheDistributor(object):
                 self._gatlinggun_task(key, group_id, [], 'remove')))
         key['cache_groups'].remove(group_id)
         if len(key['cache_groups']):
-            self.keys_db.update({'id': key['id']}, key)
+            self.keys_db.update({'id': key['id'], 'couple': key['couple']}, key)
         else:
-            self.keys_db.remove({'id': key['id']})
+            self.keys_db.remove({'id': key['id'], 'couple': key['couple']})
 
     def _group_unit(self, full_path):
         return full_path.rsplit('|', 1)[-1]
@@ -682,7 +682,7 @@ class CacheDistributor(object):
                 'group {}'.format(key['id'], group_id))
         key['cache_groups'].append(group_id)
         key['expand_ts'] = int(time.time())
-        self.keys_db.update({'id': key['id']}, key, upsert=True)
+        self.keys_db.update({'id': key['id'], 'couple': key['couple']}, key, upsert=True)
         return task
 
     @staticmethod
