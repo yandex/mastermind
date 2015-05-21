@@ -398,22 +398,26 @@ class CacheDistributor(object):
             [elliptics.Id(key_k[0].encode('utf-8')) for key_k in top]))
 
         # update currently distributed keys
+        logger.info('Updating already distributed keys')
         for key in self._get_distributed_keys():
             copies_diff, key_stat = self._key_copies_diff(key, top)
 
             if copies_diff <= 0:
-                logger.info('Key {}, couple {}: bandwidth {}; '
-                    'extra copies: {}, skipped'.format(key['id'], key['couple'],
-                        mbit_per_s(self._key_bw(key_stat)), -copies_diff))
+                logger.info('Key {}, couple {}, bandwidth {}; '
+                    'cached, extra copies: {}, skipped'.format(key['id'], key['couple'],
+                        mb_per_s(self._key_bw(key_stat)), -copies_diff))
                 continue
 
-            logger.info('Key {}, couple {}: cached, expanding to {} more '
-                'copies'.format(key['id'], key['couple'], copies_diff))
+            logger.info('Key {}, couple {}, bandwidth {}; '
+                'cached, expanding to {} more '
+                'copies'.format(key['id'], key['couple'],
+                    mb_per_s(self._key_bw(key_stat)), copies_diff))
             with self._cache_groups_lock:
                 self._update_key(key, key_stat, copies_diff)
             top.pop((key['id'], key['couple']), None)
 
         # process new keys
+        logger.info('Distributing new keys')
         for (key_id, key_couple), key_stat in top.iteritems():
             try:
                 key = self._new_key(key_stat)
@@ -423,9 +427,13 @@ class CacheDistributor(object):
                 continue
             copies_diff, key_stat = self._key_copies_diff(key, top)
             if copies_diff == 0:
+                logger.info('Key {}, couple {}, bandwidth {}; not cached, '
+                'does not require cache copies, skipped'.format(key['id'],
+                     key['couple'], mb_per_s(self._key_bw(key_stat))))
                 continue
-            logger.info('Key {}, couple {}: not cached, expanding to {} '
-                'copies'.format(key['id'], key['couple'], copies_diff))
+            logger.info('Key {}, couple {}, bandwidth {}; not cached, '
+                'expanding to {} copies'.format(key['id'], key['couple'],
+                    mb_per_s(self._key_bw(key_stat)), copies_diff))
             with self._cache_groups_lock:
                 self._update_key(key, key_stat, copies_diff)
 
@@ -670,6 +678,8 @@ class CacheDistributor(object):
                 tx_rate=tx_rate, size=size)
         if not self.dryrun:
             cache_task_manager.put_task(self._serialize(task))
+            logger.debug('Key {}, task for gatlinggun created for cache '
+                'group {}'.format(key['id'], group_id))
         key['cache_groups'].append(group_id)
         key['expand_ts'] = int(time.time())
         self.keys_db.update({'id': key['id']}, key, upsert=True)
@@ -770,8 +780,8 @@ class CacheDistributor(object):
             self.executing_tasks = new_executing_tasks
 
 
-def mbit_per_s(bytes_per_s):
-    return '{0:.3f} Mbit/s'.format(bytes_per_s / (1024.0 ** 2))
+def mb_per_s(bytes_per_s):
+    return '{0:.3f} Mb/s'.format(bytes_per_s / (1024.0 ** 2))
 
 
 class CacheGroup(object):
