@@ -100,7 +100,7 @@ class CacheManager(object):
 
             self.distributor.distribute(self.top_keys)
 
-            self.cleaner.clean(self.top_keys)
+            self.distributor.cleaner.clean(self.top_keys)
 
             self.__tq.add_task_in('defrag_cache_groups', 60,
                 self.cleaner.defrag_cache_groups)
