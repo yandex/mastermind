@@ -339,7 +339,7 @@ class CacheDistributor(object):
 
         couple = storage.couples[key_stat['couple']]
         lookups = self._lookup_key(key_stat['id'], couple.as_tuple())
-        key_size = max(l.size for l in lookups)
+        key_size = max(l.size for l in lookups.itervalues())
         return {
             'id': key_stat['id'],
             'couple': key_stat['couple'],
@@ -408,7 +408,12 @@ class CacheDistributor(object):
                 'copies'.format(key['id'], key['couple'],
                     mb_per_s(_key_bw(key_stat)), copies_diff))
             with self._cache_groups_lock:
-                self._update_key(key, key_stat, copies_diff)
+                try:
+                    self._update_key(key, key_stat, copies_diff)
+                except Exception:
+                    logger.exception('Key {}, couple {}: failed to expand'.format(
+                        key['id'], key['couple']))
+                    continue
             top.pop((key['id'], key['couple']), None)
 
         # process new keys
@@ -430,7 +435,12 @@ class CacheDistributor(object):
                 'expanding to {} copies'.format(key['id'], key['couple'],
                     mb_per_s(_key_bw(key_stat)), copies_diff))
             with self._cache_groups_lock:
-                self._update_key(key, key_stat, copies_diff)
+                try:
+                    self._update_key(key, key_stat, copies_diff)
+                except Exception:
+                    logger.exception('Key {}, couple {}: failed to expand'.format(
+                        key['id'], key['couple']))
+                    continue
 
     def _update_key(self, key, key_stat, copies_diff):
         key['rate'] = _key_bw(key_stat)
@@ -517,7 +527,7 @@ class CacheDistributor(object):
                     return
                 else:
                     raise lookup.error
-                lookup_by_group[group_id] = lookup
+            lookup_by_group[group_id] = lookup
 
         logger.debug('Key {} ({}): performing lookups on groups {}'.format(
             key_id, eid, group_ids))
@@ -967,4 +977,4 @@ class CacheGroup(object):
     @property
     def weight(self):
         return 2.0 - (min(1.0, self.tx_rate_left / self.MAX_NODE_NETWORK_BANDWIDTH) +
-                      self.effective_free_space / self.total_space)
+                      self.effective_free_space / self.effective_space)
