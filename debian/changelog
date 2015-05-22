@@ -1,3 +1,10 @@
+mastermind (2.24.24) precise; urgency=low
+
+  * Cache cleaner implemented
+  * Added static/non-static flag to log record for broken namespaces
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 22 May 2015 16:49:00 +0300
+
 mastermind (2.24.23) precise; urgency=low
 
   * Fix for key updated in mongodb: couple is used as a part of primary key
