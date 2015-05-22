@@ -103,7 +103,7 @@ class CacheManager(object):
             self.distributor.cleaner.clean(self.top_keys)
 
             self.__tq.add_task_in('defrag_cache_groups', 60,
-                self.cleaner.defrag_cache_groups)
+                self.distributor.cleaner.defrag_cache_groups)
 
         except Exception as e:
             logger.error('Failed to update monitor top stats: {0}\n{1}'.format(
