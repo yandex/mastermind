@@ -658,6 +658,7 @@ class NodeBackend(object):
 class Group(object):
 
     DEFAULT_NAMESPACE = 'default'
+    CACHE_NAMESPACE = 'storage_cache'
 
     TYPE_DATA = 'data'
     TYPE_CACHE = 'cache'
@@ -870,11 +871,12 @@ class Group(object):
             'status': job.status,
         }
 
-    @classmethod
-    def compose_cache_group_meta(cls):
+    def compose_cache_group_meta(self):
         return {
             'version': 2,
-            'type': cls.TYPE_CACHE,
+            'type': self.TYPE_CACHE,
+            'namespace': self.CACHE_NAMESPACE,
+            'couple': (self.group_id,)
         }
 
     @property
@@ -1186,6 +1188,8 @@ nodes = Repositary(Node)
 node_backends = Repositary(NodeBackend)
 couples = Repositary(Couple)
 fs = Repositary(Fs)
+
+cache_couples = Repositary(Couple)
 
 
 '''

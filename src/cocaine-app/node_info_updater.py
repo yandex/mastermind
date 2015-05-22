@@ -310,15 +310,21 @@ class NodeInfoUpdater(object):
             logger.debug('{0} in storage.couples: {1}'.format(
                 couple_str, couple_str in storage.couples))
 
-            if not couple_str in storage.couples:
-                logger.info('Creating couple {0}'.format(couple_str))
-                for gid in couple:
-                    if not gid in storage.groups:
-                        logger.info("Group {0} doesn't exist in "
-                            "all_groups, add fake data with couple={1}".format(gid, couple))
-                        storage.groups.add(gid)
-                c = storage.couples.add([storage.groups[gid] for gid in couple])
-                logger.info('Created couple {0} {1}'.format(c, repr(c)))
+            if group.type == storage.Group.TYPE_DATA:
+                if not couple_str in storage.couples:
+                    logger.info('Creating couple {0}'.format(couple_str))
+                    for gid in couple:
+                        if not gid in storage.groups:
+                            logger.info("Group {0} doesn't exist in "
+                                "all_groups, add fake data with couple={1}".format(gid, couple))
+                            storage.groups.add(gid)
+                    c = storage.couples.add([storage.groups[gid] for gid in couple])
+                    logger.info('Created couple {0} {1}'.format(c, repr(c)))
+            elif group.type == storage.Group.TYPE_CACHE:
+                if not couple_str in storage.cache_couples:
+                    logger.info('Creating cache couple {0}'.format(couple_str))
+                    c = storage.cache_couples.add([storage.groups[gid] for gid in couple])
+                    logger.info('Created cache couple {0} {1}'.format(c, repr(c)))
             return
 
         try:

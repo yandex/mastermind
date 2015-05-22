@@ -8,6 +8,7 @@ import traceback
 
 import elliptics
 import msgpack
+import pymongo
 
 import balancer
 from cache_transport import cache_task_manager
@@ -29,6 +30,7 @@ from timer import periodic_timer
 logger = logging.getLogger('mm.cache')
 
 CACHE_CFG = config.get('cache', {})
+CACHE_CLEANER_CFG = CACHE_CFG.get('cleaner', {})
 CACHE_GROUP_PATH_PREFIX = CACHE_CFG.get('group_path_prefix')
 
 
@@ -97,6 +99,11 @@ class CacheManager(object):
             self.top_keys = new_top_keys
 
             self.distributor.distribute(self.top_keys)
+
+            self.cleaner.clean(self.top_keys)
+
+            self.__tq.add_task_in('monitor_top_stats', 60
+                self.cleaner)
 
         except Exception as e:
             logger.error('Failed to update monitor top stats: {0}\n{1}'.format(
@@ -201,17 +208,13 @@ class CacheManager(object):
         try:
             start_ts = time.time()
             logger.info('Cluster updating: updating group coupling info started')
-            groups = []
-            for nb in storage.node_backends:
-                # if nb.base_path and nb.base_path.startswith(CACHE_GROUP_PATH_PREFIX) and nb.group:
-                if nb.group and not nb.group.couple:
-                    groups.append(nb.group)
-            self.niu.update_symm_groups_async(groups=groups)
 
             self._mark_cache_groups()
 
+            self.niu.update_symm_groups_async()
+
             logger.info('Detected cache groups: {0}'.format(
-                len([g for g in groups if g.type == storage.Group.TYPE_CACHE])))
+                len(storage.cache_couples)))
 
         except Exception as e:
             logger.info('Failed to update groups: {0}\n{1}'.format(
@@ -274,7 +277,7 @@ class CacheManager(object):
             key_couple = key_stat['couple']
             key = keys[(key_id, key_couple)]
             key['id'] = key_id
-            key['top_rate'] = self.distributor._key_bw(key_stat)
+            key['top_rate'] = _key_bw(key_stat)
         for key_cached in self.distributor._get_distributed_keys():
             key_id = key_cached['id']
             key_couple = key_cached['couple']
@@ -315,6 +318,8 @@ class CacheDistributor(object):
 
         self.keys_db = keys_db
 
+        self.cleaner = CacheCleaner(self)
+
         self.groups_units = {}
         self.cache_groups = {}
         self.executing_tasks = []
@@ -332,25 +337,14 @@ class CacheDistributor(object):
         assert len(key_stat.get('groups', [])), \
                 'Empty groups list for key {0}'.format(key_stat)
 
-        data_group = None
-        for gid in key_stat['groups']:
-            group = storage.groups[gid]
-            if group.type == storage.Group.TYPE_CACHE:
-                continue
-            if group.couple:
-                data_group = group
-                break
-            else:
-                logger.error('Key {0}: group {1} appears to be a data group, '
-                    'but does not belong to any couple'.format(key_stat['id'], group.group_id))
-                continue
-        else:
-            raise ValueError('Key {0}: key groups does not belong to '
-                'any couple: {1}'.format(key_stat['id'], key_stat['groups']))
+        couple = storage.couples[key_stat['couple']]
+        lookups = self._lookup_key(key_stat['id'], couple.as_tuple())
+        key_size = max(l.size for l in lookups)
         return {
             'id': key_stat['id'],
             'couple': key_stat['couple'],
             'ns': key_stat['ns'],
+            'size': key_size,
             'data_groups': list(storage.couples[key_stat['couple']].as_tuple()),
             'rate': 0,
             'cache_groups': [],
@@ -372,7 +366,7 @@ class CacheDistributor(object):
             copies_diff = -len(key['cache_groups'])
         else:
             key_stat = top[(key['id'], key['couple'])]
-            key_copies_num = self._key_bw(key_stat) / self.bandwidth_per_copy
+            key_copies_num = _key_bw(key_stat) / self.bandwidth_per_copy
             copies_diff = self._count_key_copies_diff(key, key_copies_num)
 
         return copies_diff, key_stat
@@ -384,6 +378,7 @@ class CacheDistributor(object):
         {('123', '42:69'): {'groups': [42, 69],
                             'couple': '42:69',
                             'ns': 'magic',
+                            'size': 31415,
                             'id': 123,
                             'size': 1024,    # approximate size of key traffic
                             'frequency': 2,  # approximate number of key events
@@ -405,13 +400,13 @@ class CacheDistributor(object):
             if copies_diff <= 0:
                 logger.info('Key {}, couple {}, bandwidth {}; '
                     'cached, extra copies: {}, skipped'.format(key['id'], key['couple'],
-                        mb_per_s(self._key_bw(key_stat)), -copies_diff))
+                        mb_per_s(_key_bw(key_stat)), -copies_diff))
                 continue
 
             logger.info('Key {}, couple {}, bandwidth {}; '
                 'cached, expanding to {} more '
                 'copies'.format(key['id'], key['couple'],
-                    mb_per_s(self._key_bw(key_stat)), copies_diff))
+                    mb_per_s(_key_bw(key_stat)), copies_diff))
             with self._cache_groups_lock:
                 self._update_key(key, key_stat, copies_diff)
             top.pop((key['id'], key['couple']), None)
@@ -429,16 +424,16 @@ class CacheDistributor(object):
             if copies_diff == 0:
                 logger.info('Key {}, couple {}, bandwidth {}; not cached, '
                 'does not require cache copies, skipped'.format(key['id'],
-                     key['couple'], mb_per_s(self._key_bw(key_stat))))
+                     key['couple'], mb_per_s(_key_bw(key_stat))))
                 continue
             logger.info('Key {}, couple {}, bandwidth {}; not cached, '
                 'expanding to {} copies'.format(key['id'], key['couple'],
-                    mb_per_s(self._key_bw(key_stat)), copies_diff))
+                    mb_per_s(_key_bw(key_stat)), copies_diff))
             with self._cache_groups_lock:
                 self._update_key(key, key_stat, copies_diff)
 
     def _update_key(self, key, key_stat, copies_diff):
-        key['rate'] = self._key_bw(key_stat)
+        key['rate'] = _key_bw(key_stat)
         if copies_diff > 0:
             self._increase_copies(key, key_stat, copies_diff)
         else:
@@ -468,8 +463,7 @@ class CacheDistributor(object):
 
         logger.info('Key {0}: inactive cache groups: {1}'.format(key['id'], queue))
 
-        ok_groups.sort(key=lambda g: g.group.node_backends[0].node.stat.tx_rate,
-            reverse=True)
+        ok_groups.sort(key=lambda cg: cg.effective_free_space / cg.effective_space)
 
         queue.extend([g.group_id for g in ok_groups])
 
@@ -500,6 +494,46 @@ class CacheDistributor(object):
 
     def _group_unit(self, full_path):
         return full_path.rsplit('|', 1)[-1]
+
+    def _lookup_key(self, key_id, group_ids):
+        eid = elliptics.Id(key_id.encode('utf-8'))
+
+        lookups = []
+        for group_id in group_ids:
+            s = self.session.clone()
+            s.set_exceptions_policy(elliptics.exceptions_policy.no_exceptions)
+            s.add_groups([group_id])
+            lookups.append((s.lookup(eid), eid, group_id))
+
+        lookup_by_group = {}
+        not_found_count = 0
+
+        def set_group_lookup(lookup, group_id, elapsed_time=None, end_time=None):
+            if lookup.error.code:
+                if lookup.error.code == -2:
+                    not_found_count += 1
+                    return
+                else:
+                    raise lookup.error
+                lookup_by_group[group_id] = lookup
+
+        for result, eid, group_id in lookups:
+            try:
+                h.process_elliptics_async_result(result,
+                    set_group_lookup, group_id, raise_on_error=False)
+            except Exception as e:
+                logger.error('Failed to lookup key {0} on group {1}: '
+                    '{2}'.format(eid, group_id, e))
+                continue
+
+        if not lookup_by_group:
+            if len(lookups) == not_found_count:
+                raise ValueError('key has already been removed from couple')
+            else:
+                raise RuntimeError('all lookups for key failed')
+
+        return lookup_by_group
+
 
     def _key_by_dc(self, key):
         eid = elliptics.Id(key['id'].encode('utf-8'))
@@ -708,9 +742,6 @@ class CacheDistributor(object):
             task['size'] = size
         return task
 
-    def _key_bw(self, key_stat):
-        return float(key_stat['size']) / key_stat['period_in_seconds']
-
     def _count_key_copies_diff(self, key, req_copies_num):
         data_groups_num = len(key['data_groups'])
         copies_num = len(key['cache_groups']) + len(key['data_groups'])
@@ -725,7 +756,7 @@ class CacheDistributor(object):
     def _filter_by_bandwidth(self, top):
         filtered_top = {}
         for key_k, key_stat in top.iteritems():
-            if self._key_bw(key_stat) < self.bandwidth_per_copy:
+            if _key_bw(key_stat) < self.bandwidth_per_copy:
                 continue
             filtered_top[key_k] = key_stat
         return filtered_top
@@ -780,8 +811,92 @@ class CacheDistributor(object):
             self.executing_tasks = new_executing_tasks
 
 
+class CacheCleaner(object):
+
+    DIRTY_COEF_THRESHOLD = CACHE_CLEANER_CFG.get('dirty_coef_threshold', 0.6)
+
+    def __init__(self, distributor):
+        self.distributor = distributor
+
+    def clean(self, top):
+        start_ts = time.time()
+        logger.info('Cache cleaning started')
+        try:
+            cache_groups = self.distributor.cache_groups
+
+            dirty_cgs = dict((k, cg) for k, cg in cache_groups.iteritems()
+                             if cg.dirty_coef >= self.DIRTY_COEF_THRESHOLD)
+            bad_dirty_cgs = set((k, cg) for k, cg in dirty_cgs.iteritems()
+                                if cg.group.status != storage.Status.COUPLED)
+
+            for key in self._clean_candidates():
+                copies_diff, key_stat = self.distributor._key_copies_diff(key, top)
+                logger.info('Key {}, couple {}, bandwidth {}, cleaning from cache, '
+                    'extra copies {}'.format(key['id'], key['couple'],
+                        mb_per_s(_key_bw(key_stat)), -copies_diff))
+                if copies_diff >= 0:
+                    continue
+
+                cg_candidates = [cgid for cgid in key['cache_groups']
+                                 if cgid in dirty_cgs]
+                if not cg_candidates:
+                    logger.info('Key {}, couple {}, no dirty cache groups candidates')
+                    continue
+                cg_candidates.sort(key=lambda cgid: (cgid in bad_dirty_cgs,
+                                                     dirty_cgs[cgid].dirty_coef),
+                                   reversed=True)
+                target_cg = cg_candidates[:-copies_diff]
+                logger.info('Key {}, couple {}, will be removed from cache groups {}'.format(
+                    key['id'], key['couple'], target_cg))
+
+                for cgid in target_cg:
+                    try:
+                        self.distributor._remove_key_from_group(key, cgid)
+                        dirty_cgs[cgid].account_removed_key(key['size'])
+                    except Exception:
+                        logger.exception('Key {}, couple {}, failed to remove '
+                            'from group {}'.format(key['id'], key['couple'], cg))
+                        continue
+
+        except Exception:
+            logger.exception('Failed to perform cache cleaning')
+            pass
+        finally:
+            logger.info('Cache cleaning finished, time: {0:.3f}'.format(time.time() - start_ts))
+
+    def defrag_cache_groups(self):
+        for cg in self.distributor.cache_groups.itervalues():
+
+            if cg.status != storage.Status.COUPLED:
+                logger.warn('Cache group {} will be skipped, status is {}'.format(
+                    cg.group_id, cg.status))
+                continue
+
+            want_defrag = False
+            for nb in cg.group.node_backends:
+                if nb.stat.want_defrag > 1:
+                    want_defrag = True
+                    break
+            if not want_defrag:
+                continue
+
+            logger.info('Defragmentation job will be created for cache couple '
+                '{}'.format(cg.group.couple))
+            # create job for group defragmentation
+
+    def _clean_candidates(self):
+        keys_db = self.distributor.keys_db
+        expand_threshold = CACHE_CLEANER_CFG.get('expand_threshold', 21600)
+        expand_ts_max = int(time.time()) - expand_threshold
+        return keys_db.find({'expand_ts': {'$lt': expand_ts_max}}).sort(
+            'expand_ts', pymongo.ASCENDING)
+
+
 def mb_per_s(bytes_per_s):
     return '{0:.3f} Mb/s'.format(bytes_per_s / (1024.0 ** 2))
+
+def _key_bw(key_stat):
+    return float(key_stat['size']) / key_stat['period_in_seconds']
 
 
 class CacheGroup(object):
@@ -793,10 +908,23 @@ class CacheGroup(object):
         self.group_id = group.group_id
         self.stat = group.get_stat()
         self.reserved_tx_rate, self.reserved_space = 0.0, 0
+        self.removed_keys_size = 0
 
     @property
     def effective_free_space(self):
         return max(self.group.effective_space - self.stat.used_space - self.reserved_space, 0)
+
+    @property
+    def effective_space(self):
+        return self.group.effective_space
+
+    @property
+    def dirty_coef(self):
+        return 1.0 - min(1.0, (self.effective_free_space + self.stat.files_removed_size +
+                               self.removed_keys_size) / max(self.effective_space, 1))
+
+    def account_removed_key(self, key_size):
+        self.removed_keys_size += key_size
 
     @property
     def tx_rate(self):
@@ -834,4 +962,4 @@ class CacheGroup(object):
     @property
     def weight(self):
         return 2.0 - (min(1.0, self.tx_rate_left / self.MAX_NODE_NETWORK_BANDWIDTH) +
-                      self.effective_free_space / self.stat.total_space)
+                      self.effective_free_space / self.total_space)
