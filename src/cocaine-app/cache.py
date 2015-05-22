@@ -102,8 +102,8 @@ class CacheManager(object):
 
             self.cleaner.clean(self.top_keys)
 
-            self.__tq.add_task_in('monitor_top_stats', 60
-                self.cleaner)
+            self.__tq.add_task_in('defrag_cache_groups', 60,
+                self.cleaner.defrag_cache_groups)
 
         except Exception as e:
             logger.error('Failed to update monitor top stats: {0}\n{1}'.format(
@@ -200,7 +200,7 @@ class CacheManager(object):
         finally:
             logger.info('Cluster updating: node statistics collecting '
                 'finished, time: {0:.3f}'.format(time.time() - start_ts))
-            reload_period = config.get('nodes_reload_period', 15)
+            reload_period = config.get('nodes_reload_period', 60)
             self.__tq.add_task_in('node_statistics_update',
                 reload_period, self.nodes_update)
 

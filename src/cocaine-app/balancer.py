@@ -312,7 +312,7 @@ class Balancer(object):
         if found_couples < ns_min_units:
             raise ValueError('Namespace {}, {}, has {} available couples, '
                 '{} required'.format(namespace,
-                    'static' if 'static-couple' in settings else 'non-static'
+                    'static' if 'static-couple' in settings else 'non-static',
                     found_couples, ns_min_units))
         return ns_weights
 
