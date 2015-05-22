@@ -511,11 +511,16 @@ class CacheDistributor(object):
         def set_group_lookup(lookup, group_id, elapsed_time=None, end_time=None):
             if lookup.error.code:
                 if lookup.error.code == -2:
+                    logger.warn('Key {} ({}): lookup returned -2, group {}/{}'.format(
+                        key_id, eid, lookup.group_id, group_id))
                     not_found_count += 1
                     return
                 else:
                     raise lookup.error
                 lookup_by_group[group_id] = lookup
+
+        logger.debug('Key {} ({}): performing lookups on groups {}'.format(
+            key_id, eid, group_ids))
 
         for result, eid, group_id in lookups:
             try:
