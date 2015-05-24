@@ -859,7 +859,7 @@ class CacheCleaner(object):
                     continue
                 cg_candidates.sort(key=lambda cgid: (cgid in bad_dirty_cgs,
                                                      dirty_cgs[cgid].dirty_coef),
-                                   reversed=True)
+                                   reverse=True)
                 target_cg = cg_candidates[:-copies_diff]
                 logger.info('Key {}, couple {}, will be removed from cache groups {}'.format(
                     key['id'], key['couple'], target_cg))
