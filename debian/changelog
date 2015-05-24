@@ -1,3 +1,9 @@
+mastermind (2.24.30) precise; urgency=low
+
+  * Misprint fixed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sun, 24 May 2015 20:33:13 +0300
+
 mastermind (2.24.29) precise; urgency=low
 
   * Misprints fixed and more logging added
