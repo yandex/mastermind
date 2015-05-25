@@ -27,7 +27,9 @@ except ImportError:
     from cocaine.asio.exceptions import DisconnectionError
 
 
-SERVICE_APP_NAME = 'mastermind2.26'
+SERVICE_BASE_APP_NAME = 'mastermind2.26'
+SERVICE_APP_NAME = SERVICE_BASE_APP_NAME
+SERVICE_CACHE_APP_NAME = SERVICE_BASE_APP_NAME + '-cache'
 SERVICE_DEFAULT_HOST = 'localhost'
 SERVICE_DEFAULT_PORT = 10053
 
@@ -41,6 +43,12 @@ app_param = ('a',
              'app',
              '{app}'.format(app=SERVICE_APP_NAME),
              'Mastermind application name')
+
+
+cache_app_param = ('a',
+                   'app',
+                   '{app}'.format(app=SERVICE_CACHE_APP_NAME),
+                   'Mastermind cache application name')
 
 
 def logger_setup():
@@ -1092,8 +1100,8 @@ unlockDispatcher = Dispatcher(globaloptions=(host_param, app_param))
 @unlockDispatcher.command(name='host')
 @log_action
 def unlock_host(lock_host,
-              json=('', None, 'Format additional data as json'),
-              host=None, app=None):
+                json=('', None, 'Format additional data as json'),
+                host=None, app=None):
     '''Release lock on a host'''
     s = service(host, app)
 
@@ -1106,6 +1114,23 @@ def unlock_host(lock_host,
     result = s.enqueue('host_release_lock', msgpack.packb([hostname])).get()
 
     if 'Error' in result:
+        print result['Error']
+        return 1
+
+    print result
+
+
+# cache commands
+cacheDispatcher = Dispatcher(globaloptions=(host_param, cache_app_param))
+@cacheDispatcher.command(name='clean')
+@log_action
+def cache_clean(host=None, app=None):
+    '''Release lock on a host'''
+    s = service(host, app)
+
+    result = s.enqueue('cache_clean', '').get()
+
+    if isinstance(result, dict) and 'Error' in result:
         print result['Error']
         return 1
 

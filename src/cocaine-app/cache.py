@@ -100,11 +100,6 @@ class CacheManager(object):
 
             self.distributor.distribute(self.top_keys)
 
-            self.distributor.cleaner.clean(self.top_keys)
-
-            self.__tq.add_task_in('defrag_cache_groups', 60,
-                self.distributor.cleaner.defrag_cache_groups)
-
         except Exception as e:
             logger.error('Failed to update monitor top stats: {0}\n{1}'.format(
                 e, traceback.format_exc()))
@@ -297,6 +292,13 @@ class CacheManager(object):
 
         return {'keys': dict(keys),
                 'cache_groups': dict(cache_groups)}
+
+    @h.concurrent_handler
+    def cache_clean(self, request):
+        self.distributor.cleaner.clean(self.top_keys)
+        self.__tq.add_task_in('defrag_cache_groups', 60,
+            self.distributor.cleaner.defrag_cache_groups)
+        return True
 
 
 class CacheDistributor(object):

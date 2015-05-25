@@ -107,6 +107,7 @@ def init_cache_worker(W, n, meta_db):
     c = cache.CacheManager(n, meta_db)
     h.register_handle(W, c.get_top_keys)
     h.register_handle(W, c.cache_statistics)
+    h.register_handle(W, c.cache_clean)
 
     return c
 
