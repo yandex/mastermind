@@ -56,37 +56,43 @@ logger = logger_setup()
 
 
 class ReconnectableService(object):
-    def __init__(self, app_name, host=None, port=None):
+    def __init__(self, app_name, attempts=3, host=None, port=None):
         self.app_name = app_name
         self.host = host
         self.port = port
+        self.attempts = attempts
         self.connect_service()
 
     def connect_service(self):
         self.backend = Service(self.app_name, host=self.host, port=self.port)
 
     def enqueue(self, method, data):
-        return ReconnectableChain(self, method, data)
+        return ReconnectableChain(self, method, data, self.attempts)
 
 
 class ReconnectableChain(object):
-    def __init__(self, service, method, data):
+    def __init__(self, service, method, data, attempts):
         self.service = service
         self.method = method
         self.data = data
+        self.attempts = attempts
         self._create_chain()
 
     def _create_chain(self):
         self.chain = self.service.backend.enqueue(self.method, self.data)
 
-    def get(self):
+    def get(self, attempts=None):
         try:
             return self.chain.get()
         except DisconnectionError:
+            attempts = attempts or self.attempts
+            if attempts <= 1:
+                raise RuntimeError('Failed to perform request "{}" ({} '
+                    'attempts)'.format(self.method, self.attempts))
             sleep(3)
             self.service.connect_service()
             self._create_chain()
-            return self.chain.get()
+            return self.get(attempts=attempts - 1)
 
 
 def service(host, app):
