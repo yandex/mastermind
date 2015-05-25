@@ -372,9 +372,6 @@ class Balancer(object):
         group = int(request)
         logger.info('get_group_info: request: %s' % (str(request),))
 
-        if not group in storage.groups:
-            raise ValueError('Group %d is not found' % group)
-
         logger.info('Group %d: %s' % (group, repr(storage.groups[group])))
 
         return storage.groups[group].info()

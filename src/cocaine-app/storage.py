@@ -58,10 +58,16 @@ GOOD_STATUSES = set([Status.OK, Status.FULL])
 NOT_BAD_STATUSES = set([Status.OK, Status.FULL, Status.FROZEN])
 
 
+class ResourceError(KeyError):
+    def __str__(self):
+        return str(self.args[0])
+
+
 class Repositary(object):
-    def __init__(self, constructor):
+    def __init__(self, constructor, resource_desc=None):
         self.elements = {}
         self.constructor = constructor
+        self.resource_desc = resource_desc or self.constructor.__name__
 
     def add(self, *args, **kwargs):
         e = self.constructor(*args, **kwargs)
@@ -69,7 +75,11 @@ class Repositary(object):
         return e
 
     def get(self, key):
-        return self.elements[key]
+        try:
+            return self.elements[key]
+        except KeyError:
+            raise ResourceError('{} {} is not found'.format(
+                self.resource_desc, key))
 
     def remove(self, key):
         return self.elements.pop(key)
@@ -1185,9 +1195,10 @@ class Couple(object):
 hosts = Repositary(Host)
 groups = Repositary(Group)
 nodes = Repositary(Node)
-node_backends = Repositary(NodeBackend)
+node_backends = Repositary(NodeBackend, 'Node backend')
 couples = Repositary(Couple)
 fs = Repositary(Fs)
+
 
 cache_couples = Repositary(Couple)
 
