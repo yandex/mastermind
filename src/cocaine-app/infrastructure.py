@@ -920,14 +920,14 @@ class Infrastructure(object):
         if group.status != status:
             return False
 
-        if group.type not in types:
-            return False
-
         for nb in group.node_backends:
             if nb.status != storage.Status.OK:
                 return False
             if nb.node.host in locked_hosts:
                 return False
+
+        if group.type not in types:
+            return False
 
         if max_node_backends and len(group.node_backends) > max_node_backends:
             return False
