@@ -1,3 +1,9 @@
+mastermind (2.24.34) precise; urgency=low
+
+  * Cache group defragmentation job creation
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 26 May 2015 23:45:25 +0300
+
 mastermind (2.24.33) precise; urgency=low
 
   * Fix for app start without mongo set up
