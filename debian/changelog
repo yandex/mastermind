@@ -1,3 +1,9 @@
+mastermind (2.24.33) precise; urgency=low
+
+  * Fix for app start without mongo set up
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 26 May 2015 12:15:55 +0300
+
 mastermind (2.24.32) precise; urgency=low
 
   * Cache clean handler added
