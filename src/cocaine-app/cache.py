@@ -19,9 +19,9 @@ from errors import CacheUpstreamError
 import helpers as h
 import inventory
 from infrastructure import infrastructure
+import jobs
 import keys
 from manual_locks import manual_locker
-import node_info_updater
 import storage
 import timed_queue
 from timer import periodic_timer
@@ -35,8 +35,9 @@ CACHE_GROUP_PATH_PREFIX = CACHE_CFG.get('group_path_prefix')
 
 
 class CacheManager(object):
-    def __init__(self, node, db):
+    def __init__(self, node, niu, job_processor, db):
         self.node = node
+        self.niu = niu
         self.session = elliptics.Session(self.node)
         wait_timeout = config.get('elliptics', {}).get('wait_timeout', 5)
         self.session.set_timeout(wait_timeout)
@@ -50,9 +51,7 @@ class CacheManager(object):
             logger.error('Config parameter metadata.cache.db is required for cache manager')
             raise
         self.keys_db = Collection(db[keys_db_uri], 'keys')
-        self.distributor = CacheDistributor(self.node, self.keys_db)
-
-        self.niu = node_info_updater.NodeInfoUpdater(self.node, None)
+        self.distributor = CacheDistributor(self.node, self.keys_db, job_processor)
 
         self.top_keys = {}
 
@@ -300,9 +299,16 @@ class CacheManager(object):
             self.distributor.cleaner.defrag_cache_groups)
         return True
 
+    @h.concurrent_handler
+    def cache_groups(self, request):
+        cache_groups = []
+        for couple in storage.cache_couples:
+            cache_groups.extend(couple.groups)
+        return [cg.group_id for cg in cache_groups]
+
 
 class CacheDistributor(object):
-    def __init__(self, node, keys_db):
+    def __init__(self, node, keys_db, job_processor):
         self.node = node
         self.session = elliptics.Session(self.node)
         wait_timeout = config.get('elliptics', {}).get('wait_timeout', 5)
@@ -320,7 +326,7 @@ class CacheDistributor(object):
 
         self.keys_db = keys_db
 
-        self.cleaner = CacheCleaner(self)
+        self.cleaner = CacheCleaner(self, job_processor)
 
         self.groups_units = {}
         self.cache_groups = {}
@@ -832,8 +838,9 @@ class CacheCleaner(object):
 
     DIRTY_COEF_THRESHOLD = CACHE_CLEANER_CFG.get('dirty_coef_threshold', 0.6)
 
-    def __init__(self, distributor):
+    def __init__(self, distributor, job_processor):
         self.distributor = distributor
+        self.job_processor = job_processor
 
     def clean(self, top):
         start_ts = time.time()
@@ -857,7 +864,8 @@ class CacheCleaner(object):
                 cg_candidates = [cgid for cgid in key['cache_groups']
                                  if cgid in dirty_cgs]
                 if not cg_candidates:
-                    logger.info('Key {}, couple {}, no dirty cache groups candidates')
+                    logger.info('Key {}, couple {}, no dirty cache groups candidates'.format(
+                        key['id'], key['couple']))
                     continue
                 cg_candidates.sort(key=lambda cgid: (cgid in bad_dirty_cgs,
                                                      dirty_cgs[cgid].dirty_coef),
@@ -882,24 +890,43 @@ class CacheCleaner(object):
             logger.info('Cache cleaning finished, time: {0:.3f}'.format(time.time() - start_ts))
 
     def defrag_cache_groups(self):
-        for cg in self.distributor.cache_groups.itervalues():
+        logger.exception('Cache groups defragmentation started')
+        try:
+            start_ts = time.time()
+            for cg in self.distributor.cache_groups.itervalues():
 
-            if cg.status != storage.Status.COUPLED:
-                logger.warn('Cache group {} will be skipped, status is {}'.format(
-                    cg.group_id, cg.status))
-                continue
+                logger.debug('Processing cache group {}'.format(cg.group_id))
 
-            want_defrag = False
-            for nb in cg.group.node_backends:
-                if nb.stat.want_defrag > 1:
-                    want_defrag = True
-                    break
-            if not want_defrag:
-                continue
+                if cg.status != storage.Status.COUPLED:
+                    logger.warn('Cache group {} will be skipped, status is {}'.format(
+                        cg.group_id, cg.status))
+                    continue
 
-            logger.info('Defragmentation job will be created for cache couple '
-                '{}'.format(cg.group.couple))
-            # create job for group defragmentation
+                if not cg.group.want_defrag:
+                    logger.debug('Processing cache group {}'.format(cg.group_id))
+                    continue
+
+                logger.info('Defragmentation job will be created for cache group '
+                    '{}'.format(cg.group_id))
+
+                try:
+                    job = self.job_processor._create_job(
+                        jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB,
+                        {'couple': str(cg.group.couple),
+                         'need_approving': False,
+                         'is_cache_couple': True})
+
+                    logger.info('Successfully created defrag job for cache group {}, '
+                        'job id {}'.format(cg.group_id, job.id))
+                except Exception as e:
+                    logger.exception('Failed to create cache group defrag job: {0}'.format(e))
+                    continue
+        except Exception:
+            logger.exception('Cache groups defragmentation failed')
+            pass
+        finally:
+            logger.info('Cache groups defragmentation finished, time: '
+                '{0:.3f}'.format(time.time() - start_ts))
 
     def _clean_candidates(self):
         keys_db = self.distributor.keys_db

@@ -22,6 +22,8 @@ import cache
 from db.mongo.pool import MongoReplicaSetClient
 import infrastructure
 import infrastructure_cache
+import jobs
+import node_info_updater
 import helpers as h
 
 
@@ -90,12 +92,15 @@ def init_infrastructure_cache_manager(W, n):
     icm = infrastructure_cache.InfrastructureCacheManager(n.meta_session)
     return icm
 
+def init_node_info_updater(n):
+    return node_info_updater.NodeInfoUpdater(n, None)
+
 def init_infrastructure(W, n):
     infstruct = infrastructure.infrastructure
     infstruct.init(n, None)
     return infstruct
 
-def init_cache_worker(W, n, meta_db):
+def init_cache_worker(W, n, niu, j, meta_db):
     if not config.get("cache"):
         logger.error('Cache is not set up in config ("cache" key), '
             'will not be initialized')
@@ -104,12 +109,29 @@ def init_cache_worker(W, n, meta_db):
         logger.error('Cache metadata db is not set up ("metadata.cache.db" key), '
             'will not be initialized')
         return None
-    c = cache.CacheManager(n, meta_db)
+    c = cache.CacheManager(n, niu, j, meta_db)
     h.register_handle(W, c.get_top_keys)
     h.register_handle(W, c.cache_statistics)
     h.register_handle(W, c.cache_clean)
+    h.register_handle(W, c.cache_groups)
 
     return c
+
+def init_job_finder(meta_db):
+    if not config['metadata'].get('jobs', {}).get('db'):
+        logger.error('Job finder metadb is not set up '
+            '("metadata.jobs.db" key), will not be initialized')
+        return None
+    jf = jobs.JobFinder(meta_db)
+    return jf
+
+def init_job_processor(jf, meta_db, niu):
+    if jf is None:
+        logger.error('Job processor will not be initialized because '
+            'job finder is not initialized')
+        return None
+    j = jobs.JobProcessor(jf, n, meta_db, niu, minions=None)
+    return j
 
 
 if __name__ == '__main__':
@@ -128,7 +150,12 @@ if __name__ == '__main__':
 
     i = init_infrastructure(W, n)
     icm = init_infrastructure_cache_manager(W, n)
-    c = init_cache_worker(W, n, meta_db)
+
+    niu = init_node_info_updater(n)
+    jf = init_job_finder(meta_db)
+    j = init_job_processor(jf, meta_db, niu)
+
+    c = init_cache_worker(W, n, niu, j, meta_db)
 
     icm._start_tq()
     c and c._start_tq()

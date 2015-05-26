@@ -697,6 +697,13 @@ class Group(object):
         if node_backend.group is self:
             node_backend.remove_group()
 
+    @property
+    def want_defrag(self):
+        for nb in self.node_backends:
+            if nb.stat and nb.stat.want_defrag > 1:
+                return True
+        return False
+
     def parse_meta(self, meta):
         if meta is None:
             self.meta = None
@@ -1200,7 +1207,7 @@ couples = Repositary(Couple)
 fs = Repositary(Fs)
 
 
-cache_couples = Repositary(Couple)
+cache_couples = Repositary(Couple, 'Cache couple')
 
 
 '''

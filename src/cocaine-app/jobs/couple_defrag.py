@@ -14,7 +14,7 @@ logger = logging.getLogger('mm.jobs')
 
 class CoupleDefragJob(Job):
 
-    PARAMS = ('couple', 'fragmentation')
+    PARAMS = ('couple', 'fragmentation', 'is_cache_couple')
 
     def __init__(self, **kwargs):
         super(CoupleDefragJob, self).__init__(**kwargs)
@@ -24,7 +24,10 @@ class CoupleDefragJob(Job):
     def new(cls, *args, **kwargs):
         job = super(CoupleDefragJob, cls).new(*args, **kwargs)
         try:
-            couple = storage.couples[kwargs['couple']]
+            couples = (storage.cache_couples
+                       if kwargs.get('is_cache_couple', False) else
+                       storage.couples)
+            couple = couples[kwargs['couple']]
             fragmentation = []
             for g in couple.groups:
                 fragmentation.append(g.get_stat().fragmentation)
@@ -36,10 +39,13 @@ class CoupleDefragJob(Job):
         return job
 
     def create_tasks(self):
-        if not self.couple in storage.couples:
+        couples = (storage.cache_couples
+                   if self.is_cache_couple else
+                   storage.couples)
+        if not self.couple in couples:
             raise JobBrokenError('Couple {0} is not found'.format(self.couple))
 
-        couple = storage.couples[self.couple]
+        couple = couples[self.couple]
 
         def make_defrag_tasks(nb):
             cmd = infrastructure._defrag_node_backend_cmd(
@@ -75,7 +81,7 @@ class CoupleDefragJob(Job):
 
     @property
     def _involved_groups(self):
-        return self.couple.split(':')
+        return [int(gid) for gid in self.couple.split(':')]
 
     @property
     def _involved_couples(self):

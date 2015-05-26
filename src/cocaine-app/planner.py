@@ -656,10 +656,9 @@ class Planner(object):
                         if nb.stat.free_space < nb.stat.max_blob_base_size * 2:
                             insufficient_space_nb = nb
                             break
-                        if nb.stat.want_defrag > 1:
-                            want_defrag = True
                     if insufficient_space_nb:
                         break
+                    want_defrag |= group.want_defrag
 
                 if not want_defrag:
                     continue
@@ -689,7 +688,8 @@ class Planner(object):
                     job = self.job_processor._create_job(
                         jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB,
                         {'couple': couple_tuple,
-                         'need_approving': need_approving})
+                         'need_approving': need_approving,
+                         'is_cache_couple': False})
                     logger.info('Created couple defrag job for couple {0}, job id {1}'.format(
                         couple_tuple, job.id))
                     created_jobs += 1

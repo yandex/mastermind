@@ -23,7 +23,11 @@ class CoupleDefragStateCheckTask(Task):
         pass
 
     def execute(self):
-        couple = storage.couples[self.couple]
+        couples = (storage.cache_couples
+                   if self.parent_job.is_cache_couple else
+                   storage.couples)
+
+        couple = couples[self.couple]
 
         if couple.status not in storage.GOOD_STATUSES:
             raise JobBrokenError('Couple {0} has inappropriate status: {1}'.format(self.couple, couple.status))
@@ -45,7 +49,10 @@ class CoupleDefragStateCheckTask(Task):
                 not self.__couple_defraged())
 
     def __couple_defraged(self):
-        couple = storage.couples[self.couple]
+        couples = (storage.cache_couples
+                   if self.parent_job.is_cache_couple else
+                   storage.couples)
+        couple = couples[self.couple]
         stats = []
         for group in couple.groups:
             for nb in group.node_backends:

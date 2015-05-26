@@ -35,7 +35,6 @@ from config import config
 from manual_locks import manual_locker
 
 
-
 i = iter(xrange(100))
 logger.info("trace %d" % (i.next()))
 
