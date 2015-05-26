@@ -249,8 +249,11 @@ b.niu = niu
 init_statistics()
 m = init_minions()
 j = init_job_processor(jf, m, niu)
-po = init_planner(j, niu)
-j.planner = po
+if j:
+    po = init_planner(j, niu)
+    j.planner = po
+else:
+    po = None
 ml = init_manual_locker(manual_locker)
 
 
