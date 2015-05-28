@@ -156,20 +156,25 @@ class Statistics(object):
         ns_dc_couple_map = defaultdict(lambda: defaultdict(set))
 
         for group in sorted(storage.groups, key=lambda g: not bool(g.couple)):
-            for node_backend in group.node_backends:
 
-                couple = (group.couple
-                          if group.couple else
-                          str(group.group_id))
+            couple = (group.couple
+                      if group.couple else
+                      str(group.group_id))
+
+            try:
+                ns = group.couple and group.couple.namespace or None
+            except ValueError as e:
+                ns = None
+
+            if ns == storage.Group.CACHE_NAMESPACE:
+                continue
+
+            for node_backend in group.node_backends:
 
                 try:
                     dc = node_backend.node.host.dc
                 except CacheUpstreamError:
                     continue
-                try:
-                    ns = group.couple and group.couple.namespace or None
-                except ValueError as e:
-                    ns = None
 
                 if not couple in dc_couple_map[dc]:
                     self.account_couples(by_dc[dc], group)
