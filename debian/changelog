@@ -1,3 +1,9 @@
+mastermind (2.24.35) precise; urgency=low
+
+  * Do not account service storage_cache namespace in namespace states
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 28 May 2015 14:10:12 +0300
+
 mastermind (2.24.34) precise; urgency=low
 
   * Cache group defragmentation job creation
