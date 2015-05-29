@@ -432,6 +432,7 @@ class CacheDistributor(object):
         logger.info('Updating already distributed keys')
         for key in self._get_distributed_keys():
             copies_diff, key_stat = self._key_copies_diff(key, top)
+            top.pop((key['id'], key['couple']), None)
 
             if copies_diff <= 0:
                 logger.info(
@@ -455,7 +456,6 @@ class CacheDistributor(object):
                         'Key {}, couple {}: failed to expand'.format(
                             key['id'], key['couple']))
                     continue
-            top.pop((key['id'], key['couple']), None)
 
         # process new keys
         logger.info('Distributing new keys')
@@ -575,16 +575,16 @@ class CacheDistributor(object):
             if lookup.error.code:
                 if lookup.error.code == -2:
                     logger.warn(
-                        'Key {} ({}): lookup returned -2, group {}/{}'.format(
-                            key_id, eid, lookup.group_id, group_id))
+                        'Key {}: lookup returned -2, group {}/{}'.format(
+                            key_id, lookup.group_id, group_id))
                     not_found_count += 1
                     return
                 else:
                     raise lookup.error
             lookup_by_group[group_id] = lookup
 
-        logger.debug('Key {} ({}): performing lookups on groups {}'.format(
-            key_id, eid, group_ids))
+        logger.debug('Key {}: performing lookups on groups {}'.format(
+            key_id, group_ids))
 
         for result, eid, group_id in lookups:
             try:
