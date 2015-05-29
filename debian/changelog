@@ -1,3 +1,9 @@
+mastermind (2.24.36) precise; urgency=low
+
+  * Cache worker: cache groups selection refactored
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 29 May 2015 15:16:56 +0300
+
 mastermind (2.24.35) precise; urgency=low
 
   * Do not account service storage_cache namespace in namespace states
