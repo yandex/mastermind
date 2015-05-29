@@ -1,3 +1,9 @@
+mastermind (2.24.37) precise; urgency=low
+
+  * Fix for existing cache key update
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 29 May 2015 16:01:53 +0300
+
 mastermind (2.24.36) precise; urgency=low
 
   * Cache worker: cache groups selection refactored
