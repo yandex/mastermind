@@ -588,143 +588,125 @@ class CacheDistributor(object):
 
         for result, eid, group_id in lookups:
             try:
-                h.process_elliptics_async_result(result,
-                    set_key_size_by_dc, group_id, raise_on_error=False)
+                h.process_elliptics_async_result(
+                    result, set_key_size_by_dc, group_id, raise_on_error=False)
             except Exception as e:
-                logger.error('Failed to lookup key {0} on group {1}: '
-                    '{2}'.format(eid, group_id, e))
+                logger.error(
+                    'Failed to lookup key {0} on group {1}: {2}'.format(
+                        eid, group_id, e))
                 continue
 
         if len(lookups) == not_found_count:
-            logger.info('Key {0}: has already been removed from couple'.format(key['id']))
+            logger.info('Key {0}: has already been removed from couple'.format(
+                key['id']))
 
         return key_by_dc
 
     def _increase_copies(self, key, key_stat, count):
-        update_groups_ids = [group_id
-                             for group_id in key['cache_groups'] + key['data_groups']
-                             if group_id not in self.groups_units and
-                             group_id in storage.groups]
-
-        self.groups_units.update(infrastructure.groups_units(
-            [storage.groups[group_id] for group_id in update_groups_ids],
-            self.node_types))
-
         key_by_dc = self._key_by_dc(key)
         if not key_by_dc:
-            logger.error('Key {0}: failed to lookup key in any of '
+            logger.error(
+                'Key {0}: failed to lookup key in any of '
                 'couple dcs'.format(key['id']))
             return
+        key_size = max([key_by_dc[dc]['size'] for dc in key_by_dc])
 
-        # filter unsuitable groups by network rate and free space
+        dc_weights = dict((k, 1) for k in key_by_dc.keys())
+        candidates_by_dc = {}
+
+        for dc, weight in dc_weights.iteritems():
+            if dc not in key_by_dc:
+                continue
+            candidates_by_dc[dc] = DcKeyCacheCandidates(
+                dc, weight, key_by_dc[dc]['group'])
+
+        busy_cache_groups = set()
+        # search only by key id because all cache groups
+        # with given key id should be eliminated
+        for cached_key in self.keys_db.find({'id': key['id']}):
+            busy_cache_groups.update(cached_key['cache_groups'])
+            if key['couple'] == cached_key['couple']:
+                for cgid in cached_key['cache_groups']:
+                    if cgid not in self.cache_groups:
+                        continue
+                    cg = self.cache_groups[cgid]
+                    if cg.dc not in candidates_by_dc:
+                        continue
+                    candidates_by_dc[cg.dc].account_key_copy(cg)
+
         copies_num = len(key['cache_groups']) + len(key['data_groups']) + count
-        bw_per_copy = float(key_stat['size']) / key_stat['period_in_seconds'] / copies_num
+        bw_per_copy = (float(key_stat['size']) / key_stat['period_in_seconds'] /
+                       copies_num)
 
-        cache_groups = []
-        logger.info('Total cache groups available: {0}'.format(len(self.cache_groups)))
-        for cache_group in self.cache_groups.itervalues():
-            if cache_group.group_id in key['cache_groups']:
+        for cg in self.cache_groups:
+            if cg in busy_cache_groups:
                 continue
-            if cache_group.tx_rate is None:
-                logger.debug('Key {0}: tx rate for cache group {1} is unavailable '
-                    'at the moment'.format(key['id'], cache_group.group_id))
+            if cg.dc not in candidates_by_dc:
                 continue
-            # TODO: decide on caching keys from different dc
-            # dc = self._group_unit(self.groups_units[cache_group.group_id][0][self.dc_node_type])
-            # if dc not in key_by_dc:
-            #     continue
-            key_max_size = max([key_by_dc[dc]['size'] for dc in key_by_dc])
-            # if cache_group.effective_free_space < key_by_dc[dc]['size']:
-            if cache_group.effective_free_space < key_max_size:
-                logger.debug('Key {0}: not enough free space on cache group '
-                    '{1}: {2} < {3}'.format(key['id'], cache_group.group_id, cache_group.effective_free_space, key_max_size))
+            if cg.tx_rate is None:
+                logger.debug(
+                    'Key {0}: tx rate for cache group {1} is unavailable '
+                    'at the moment'.format(key['id'], cg.group_id))
                 continue
-            if cache_group.tx_rate_left < bw_per_copy:
-                logger.debug('Key {0}: not enough tx rate on cache group '
-                    '{1}: {2} < {3}'.format(key['id'], cache_group.group_id, cache_group.tx_rate_left, bw_per_copy))
+            if cg.effective_free_space < key_size:
+                logger.debug(
+                    'Key {0}: not enough free space on cache group '
+                    '{1}: {2} < {3}'.format(
+                        key['id'], cg.group_id, cg.effective_free_space,
+                        key_size))
                 continue
-            cache_groups.append(cache_group)
-
-        logger.info('Key {0}: appropriate cache groups: {1}'.format(key['id'], cache_groups))
-
-        copies_count_by_dc = defaultdict(int)
-        # create map dc -> number of copies, used later for selecting destination
-        # cache group
-        for group_id in key['cache_groups'] + key['data_groups']:
-            if group_id in self.groups_units:
-                dc = self._group_unit(self.groups_units[group_id][0][self.dc_node_type])
-                copies_count_by_dc[dc] += 1
-
-        def units_diff(u1, u2):
-            diff = 0
-            for k in u1.keys():
-                diff += int(u1[k] != u2[k])
-            return diff
-
-        # select dc of a group with minimal node network load for the case
-        # when there is no available cache groups in key dcs
-        min_load_dc = (None, None)
-        for group_id in key['data_groups']:
-            if not group_id in storage.groups:
+            if cg.tx_rate_left < bw_per_copy:
+                logger.debug(
+                    'Key {0}: not enough tx rate on cache group '
+                    '{1}: {2} < {3}'.format(
+                        key['id'], cg.group_id, cg.tx_rate_left, bw_per_copy))
                 continue
-            node = storage.groups[group_id].node_backends[0].node
-            if min_load_dc[1] is None or node.stat.tx_rate < min_load_dc[1]:
-                try:
-                    min_load_dc = node.host.dc, node.stat.tx_rate
-                except CacheUpstreamError:
-                    logger.warn('Skipping {} because of cache failure'.format(node.host))
-                    continue
+            candidates_by_dc[cg.dc].add_candidate(cg)
 
-        if min_load_dc[0] is None:
-            logger.error('Key {}: failed to select minimal load dc for key'.format(
-                key['id']))
-            return
+        for dc, dc_candidates in candidates_by_dc.iteritems():
+            dc_candidates.sort_candidates()
 
-        # count group weights among cache groups that are left
-        weights = {}
-        for cache_group in cache_groups:
-            dc = self._group_unit(self.groups_units[cache_group.group_id][0][self.dc_node_type])
-            if dc in key_by_dc:
-                sgroup = key_by_dc[dc]['group']
-            elif min_load_dc[0]:
-                sgroup = key_by_dc[min_load_dc[0]]['group']
+        copies = 0
+        for cg in self._best_cache_groups(candidates_by_dc, count):
+            self._add_key_to_group(key, cg.group_id,
+                                   [key_by_dc[cg.dc]['group']], bw_per_copy,
+                                   key_size)
+            copies += 1
+        if copies < count:
+            logger.warn('Key {}, couple {}: added only {}/{} copies'.format(
+                key['id'], key['couple'], copies, count))
+
+    def _best_cache_groups(self, candidates_by_dc, count):
+
+        def vector_normalize(v):
+            length = math.sqrt(sum(x ** 2 for x in v))
+            return [x / length for x in v]
+
+        def weight(weights, counts):
+            norm_c = vector_normalize(counts)
+            norm_w = vector_normalize(weights)
+            deltas = sorted(norm_c[i] - norm_w[i]
+                            for i in xrange(len(weights)))
+            return sum(d ** 2 for d in deltas)
+
+        candidates = candidates_by_dc.values()
+
+        weights = [d.weight for d in candidates]
+        for _ in xrange(count):
+            cand_weights = []
+            dc_counts = [d.key_copies for d in candidates]
+            for idx in xrange(len(dc_counts)):
+                cand = dc_counts[:]
+                cand[idx] += 1
+                cand_weights.append((weight(weights, cand), idx))
+            cand_weights.sort()
+            for _, idx in cand_weights:
+                cg = candidates[idx].pop_candidate()
+                if cg:
+                    yield cg
+                    break
             else:
-                continue
-            weights[cache_group] = (
-                units_diff(self.groups_units[sgroup][0], self.groups_units[cache_group.group_id][0]),
-                copies_count_by_dc[dc],
-                cache_group.weight
-            )
-
-        # select <count> groups
-        new_cache_groups = []
-        while len(new_cache_groups) < count and weights:
-            cache_group_w = sorted(weights.iteritems(), key=lambda w: w[1])[0]
-            logger.info('Key {0}: top 10 cache groups weights: {1}'.format(key['id'], cache_group_w[:10]))
-            cache_group, weight = cache_group_w
-            del weights[cache_group]
-
-            dc = self._group_unit(self.groups_units[cache_group.group_id][0][self.dc_node_type])
-            if dc in key_by_dc:
-                sgroup = key_by_dc[dc]['group']
-            else:
-                dc = min_load_dc[0]
-                sgroup = key_by_dc[min_load_dc[0]]['group']
-
-            try:
-                task = self._add_key_to_group(key, cache_group.group_id, [sgroup],
-                    bw_per_copy, key_by_dc[dc]['size'])
-                cache_group.account_task(task)
-                copies_count_by_dc[dc] += 1
-                new_cache_groups.append(cache_group.group_id)
-            except Exception as e:
-                logger.error('Failed to add key {0} to group {1}: '
-                    '{2}\n{3}'.format(key['id'], cache_group.group_id,
-                        e, traceback.format_exc()))
-                continue
-
-        logger.info('Key {0}: cache tasks created for groups {1}'.format(
-            key['id'], new_cache_groups))
+                raise StopIteration
 
     def _add_key_to_group(self, key, group_id, data_groups, tx_rate, size):
         """
@@ -1005,5 +987,56 @@ class CacheGroup(object):
 
     @property
     def weight(self):
-        return 2.0 - (min(1.0, self.tx_rate_left / self.MAX_NODE_NETWORK_BANDWIDTH) +
+        return 2.0 - (min(1.0,
+                          self.tx_rate_left / self.MAX_NODE_NETWORK_BANDWIDTH) +
                       self.effective_free_space / self.effective_space)
+
+
+class DcKeyCacheCandidates(object):
+    def __init__(self, dc, weight, src_group_id):
+        self.dc = dc
+        self.weight = weight
+        self.src_group_id = src_group_id
+        self.key_copies = 0
+        self.candidates = []
+        self.node_types = inventory.get_balancer_node_types()
+
+    def add_candidate(self, cg):
+        self.candidates.append(cg)
+
+    def account_key_copy(self, cg):
+        self.key_copies += 1
+
+    def pop_candidate(self):
+        return self.candidates and self.candidates.pop(0) or None
+
+    @staticmethod
+    def units_diff(u1, u2):
+            diff = 0
+            for k in u1.keys():
+                diff += int(u1[k] != u2[k])
+            return diff
+
+    def group_units(self):
+        return infrastructure.groups_units(
+            [cg.group for cg in self.candidates] +
+            [storage.groups[self.src_group_id]],
+            self.node_types)
+
+    def sort_candidates(self):
+        weights = {}
+        gu = self.group_units()
+        if self.src_group_id not in gu:
+            raise RuntimeError(
+                'Failed to get parents for source group {}'.format(
+                    self.src_group_id))
+        for cg in self.candidates:
+            if cg.group_id not in gu:
+                continue
+            weights[cg] = (
+                DcKeyCacheCandidates.units_diff(gu[self.src_group_id][0],
+                                                gu[cg.group_id][0]),
+                cg.weight
+            )
+        self.candidates = [w[0] for w in sorted(
+            weights.iteritems(), key=lambda w: w[1])]
