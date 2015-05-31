@@ -26,6 +26,7 @@ import keys
 from manual_locks import manual_locker
 from sync import sync_manager
 from sync.error import LockFailedError
+from timer import periodic_timer
 
 import timed_queue
 
@@ -40,6 +41,9 @@ class Planner(object):
 
     RECOVERY_OP_CHUNK = 200
 
+    COUPLE_DEFRAG_LOCK = 'planner/couple_defrag'
+    RECOVER_DC_LOCK = 'planner/recover_dc'
+
     def __init__(self, meta_session, db, niu, job_processor):
 
         self.params = config.get('planner', config.get('smoother')) or {}
@@ -53,16 +57,30 @@ class Planner(object):
 
         self.node_info_updater = niu
 
+        self.recover_dc_timer = periodic_timer(
+            seconds=self.params.get('recover_dc', {}).get(
+                'recover_dc_period', 60 * 15))
+        self.couple_defrag_timer = periodic_timer(
+            seconds=self.params.get('couple_defrag', {}).get(
+                'couple_defrag_period', 60 * 15))
+
         if config['metadata'].get('planner', {}).get('db'):
             self.collection = Collection(db[config['metadata']['planner']['db']], 'planner')
 
             if (self.params.get('enabled', False)):
-                self.__tq.add_task_in(self.MOVE_CANDIDATES,
-                    10, self._move_candidates)
-                self.__tq.add_task_in(self.RECOVER_DC,
-                    11, self._recover_dc)
-                self.__tq.add_task_in(self.COUPLE_DEFRAG,
-                    12, self._couple_defrag)
+
+                self.__tq.add_task_in(
+                    self.MOVE_CANDIDATES,
+                    10,
+                    self._move_candidates)
+                self.__tq.add_task_at(
+                    self.RECOVER_DC,
+                    self.recover_dc_timer.next(),
+                    self._recover_dc)
+                self.__tq.add_task_at(
+                    self.COUPLE_DEFRAG,
+                    self.couple_defrag_timer.next(),
+                    self._couple_defrag)
 
     def _start_tq(self):
         self.__tq.start()
@@ -358,8 +376,37 @@ class Planner(object):
 
         return _candidates
 
+    COUNTABLE_STATUSES = [jobs.Job.STATUS_NOT_APPROVED,
+                          jobs.Job.STATUS_NEW,
+                          jobs.Job.STATUS_EXECUTING]
+
+    @staticmethod
+    def _jobs_slots(active_jobs, job_type, max_jobs_count):
+        jobs_count = 0
+        for job in active_jobs:
+            if (job.type == job_type and
+                    job.status in Planner.COUNTABLE_STATUSES):
+                jobs_count += 1
+
+        return max_jobs_count - jobs_count
+
+    @staticmethod
+    def _busy_group_ids(active_jobs):
+        busy_group_ids = set()
+        for job in active_jobs:
+            busy_group_ids.update(job._involved_groups)
+        return busy_group_ids
+
+    @staticmethod
+    def _is_locked(couple, busy_group_ids):
+        for group in couple.groups:
+            if group.group_id in busy_group_ids:
+                return True
+        return False
+
     def _recover_dc(self):
         try:
+            start_ts = time.time()
             logger.info('Starting recover dc planner')
 
             max_recover_jobs = config.get('jobs', {}).get('recover_dc_job',
@@ -375,44 +422,51 @@ class Planner(object):
                     '(>= {1})'.format(count, max_recover_jobs))
                 return
 
-            self._do_recover_dc()
+            with sync_manager.lock(Planner.RECOVER_DC_LOCK, blocking=False):
+                self._do_recover_dc()
+
         except LockFailedError:
-            pass
+            logger.info('Recover dc planner is already running')
         except Exception as e:
-            logger.error('{0}: {1}'.format(e, traceback.format_exc()))
+            logger.exception('Recover dc planner failed')
         finally:
-            logger.info('Recover dc planner finished')
-            self.__tq.add_task_in(self.RECOVER_DC,
-                self.params.get('recover_dc', {}).get('recover_dc_period', 60),
-                self._recover_dc)
+            logger.info('Recover dc planner finished, time: {:.3f}'.format(
+                time.time() - start_ts))
+            self.__tq.add_task_at(
+                    self.RECOVER_DC,
+                    self.recover_dc_timer.next(),
+                    self._recover_dc)
 
     def _do_recover_dc(self):
 
+        max_recover_jobs = config.get('jobs', {}).get('recover_dc_job',
+            {}).get('max_executing_jobs', 3)
+
+        active_jobs = self.job_processor.job_finder.jobs(
+            statuses=jobs.Job.ACTIVE_STATUSES
+        )
+
+        slots = self._jobs_slots(active_jobs,
+                                 jobs.JobTypes.TYPE_RECOVER_DC_JOB,
+                                 max_recover_jobs)
+        if slots <= 0:
+            logger.info('Found {0} unfinished recover dc jobs'.format(
+                max_recover_jobs - slots))
+            return
+
+        created_jobs = 0
+        logger.info('Trying to create {0} jobs'.format(slots))
+
+        need_approving = not self.params.get('recover_dc', {}).get('autoapprove', False)
+
+        couple_ids_to_recover = self._recover_top_weight_couples(
+            slots, active_jobs)
+
         logger.debug('Lock acquiring')
-        with sync_manager.lock(self.job_processor.JOBS_LOCK):
+        with sync_manager.lock(self.job_processor.JOBS_LOCK, timeout=60):
             logger.debug('Lock acquired')
 
-            max_recover_jobs = config.get('jobs', {}).get('recover_dc_job',
-                {}).get('max_executing_jobs', 3)
-
-            jobs_count = self.job_processor.job_finder.jobs_count(
-                types=jobs.JobTypes.TYPE_RECOVER_DC_JOB,
-                statuses=(jobs.Job.STATUS_NOT_APPROVED,
-                          jobs.Job.STATUS_NEW,
-                          jobs.Job.STATUS_EXECUTING))
-
-            slots = max_recover_jobs - jobs_count
-            if slots <= 0:
-                logger.info('Found {0} unfinished recover dc jobs'.format(
-                    jobs_count))
-                return
-
-            created_jobs = 0
-            logger.info('Trying to create {0} jobs'.format(slots))
-
-            need_approving = not self.params.get('recover_dc', {}).get('autoapprove', False)
-
-            for couple_id in self._recover_top_weight_couples(slots):
+            for couple_id in couple_ids_to_recover:
 
                 logger.info('Creating recover job for couple {0}'.format(couple_id))
 
@@ -492,17 +546,17 @@ class Planner(object):
                     res['nRemoved'], len(bulk_remove_couples), res))
             offset += res['nRemoved']
 
-    def _recover_top_weight_couples(self, count):
+    def _recover_top_weight_couples(self, count, active_jobs):
         keys_diffs_sorted = []
         keys_diffs = {}
         ts_diffs = {}
 
-        coupled_locks = sync_manager.get_children_locks(jobs.Job.COUPLE_LOCK_PREFIX)
-        locked_couples = set([lock[len(jobs.Job.COUPLE_LOCK_PREFIX):] for lock in coupled_locks])
-        logger.debug('Locked couples: {0}'.format(locked_couples))
+        busy_group_ids = self._busy_group_ids(active_jobs)
 
         for couple in storage.couples.keys():
-            if not _recovery_applicable_couple(couple, locked_couples=locked_couples):
+            if self._is_locked(couple, busy_group_ids):
+                continue
+            if not _recovery_applicable_couple(couple):
                 continue
             c_diff = couple.keys_diff
             keys_diffs_sorted.append((str(couple), c_diff))
@@ -514,29 +568,32 @@ class Planner(object):
 
         cursor = self.collection.find().sort('recover_ts', pymongo.ASCENDING)
         if cursor.count() < len(storage.couples):
-            logger.info('Sync recover data is required: {0} records/{1} couples'.format(
-                cursor.count(), len(storage.couples)))
+            logger.info('Sync recover data is required: {0} records/{1} '
+                'couples'.format(cursor.count(), len(storage.couples)))
             self.sync_recover_data()
-            cursor = self.collection.find().sort('recover_ts', pymongo.ASCENDING)
+            cursor = self.collection.find().sort('recover_ts',
+                                                 pymongo.ASCENDING)
 
         ts = int(time.time())
 
-        def weight(keys_diff, last_ts):
-            return keys_diff * KEYS_CF + (ts - last_ts) * TS_CF
+        def weight(keys_diff, ts_diff):
+            return keys_diff * KEYS_CF + ts_diff * TS_CF
 
         weights = {}
         candidates = []
         for i in xrange(cursor.count() / self.RECOVERY_OP_CHUNK + 1):
-            couples_data = cursor[i * self.RECOVERY_OP_CHUNK:(i + 1) * self.RECOVERY_OP_CHUNK]
-            max_recover_ts = None
+            couples_data = cursor[i * self.RECOVERY_OP_CHUNK:
+                                  (i + 1) * self.RECOVERY_OP_CHUNK]
+            max_recover_ts_diff = None
             for couple_data in couples_data:
                 c = couple_data['couple']
-                ts_diffs[c] = couple_data['recover_ts']
+                ts_diff = ts - couple_data['recover_ts']
+                ts_diffs[c] = ts_diff
                 if not c in keys_diffs:
                     # couple was not applicable for recovery, skip
                     continue
                 weights[c] = weight(keys_diffs[c], ts_diffs[c])
-                max_recover_ts = couple_data['recover_ts']
+                max_recover_ts_diff = ts_diff
 
             cursor.rewind()
 
@@ -548,10 +605,9 @@ class Planner(object):
             # TODO: Optimize this
             candidates = sorted(weights.iteritems(), key=lambda x: x[1])
             min_weight_candidate = candidates[-top_candidates_len]
-            min_keys_diff = 0
-            for candidate in candidates[-top_candidates_len:]:
-                c = candidate[0]
-                min_keys_diff = min(min_keys_diff, keys_diffs[c])
+            min_keys_diff = min(
+                keys_diffs[candidate[0]]
+                for candidate in candidates[-top_candidates_len:])
 
             missed_candidate = None
             idx = len(keys_diffs_sorted) - 1
@@ -560,17 +616,17 @@ class Planner(object):
                 idx -= 1
                 if c in ts_diffs:
                     continue
-                if weight(keys_diff, max_recover_ts) > min_weight_candidate[1]:
+                if weight(keys_diff, max_recover_ts_diff) > min_weight_candidate[1]:
                     # found possible candidate
                     missed_candidate = c
                     break
 
             logger.debug('Current round: {0}, current min weight candidate '
-                '{1}, weight: {2}, possible missed candidate is '
-                'couple {3}, keys diff: {4} (max recover ts = {5}, diff {6})'.format(
+                '{1}, weight: {2}, possible missed candidate is couple '
+                '{3}, keys diff: {4} (max recover ts diff = {5})'.format(
                     i, min_weight_candidate[0], min_weight_candidate[1],
                     missed_candidate, keys_diffs.get(missed_candidate, None),
-                    max_recover_ts, ts - max_recover_ts))
+                    max_recover_ts_diff))
 
             if missed_candidate is None:
                 break
@@ -590,10 +646,11 @@ class Planner(object):
 
     def _couple_defrag(self):
         try:
+            start_ts = time.time()
             logger.info('Starting couple defrag planner')
 
-            max_defrag_jobs = config.get('jobs', {}).get('couple_defrag_job',
-                {}).get('max_executing_jobs', 3)
+            max_defrag_jobs = config.get('jobs', {}).get(
+                'couple_defrag_job', {}).get('max_executing_jobs', 3)
             # prechecking for new or pending tasks
             count = self.job_processor.job_finder.jobs_count(
                 types=jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB,
@@ -603,83 +660,94 @@ class Planner(object):
 
             if count >= max_defrag_jobs:
                 logger.info('Found {0} unfinished couple defrag jobs '
-                    '(>= {1})'.format(count, max_defrag_jobs))
+                            '(>= {1})'.format(count, max_defrag_jobs))
                 return
 
-            self._do_couple_defrag()
+            with sync_manager.lock(Planner.COUPLE_DEFRAG_LOCK, blocking=False):
+                self._do_couple_defrag()
+
         except LockFailedError:
-            pass
+            logger.info('Couple defrag planner is already running')
         except Exception as e:
-            logger.error('{0}: {1}'.format(e, traceback.format_exc()))
+            logger.exception('Couple defrag planner failed')
         finally:
-            logger.info('Couple defrag planner finished')
-            self.__tq.add_task_in(self.COUPLE_DEFRAG,
-                self.params.get('couple_defrag', {}).get('couple_defrag_period', 60),
-                self._couple_defrag)
+            logger.info('Couple defrag planner finished, time: {:.3f}'.format(
+                time.time() - start_ts))
+            self.__tq.add_task_at(
+                    self.COUPLE_DEFRAG,
+                    self.couple_defrag_timer.next(),
+                    self._couple_defrag)
 
     def _do_couple_defrag(self):
 
-        logger.debug('Lock acquiring')
-        with sync_manager.lock(self.job_processor.JOBS_LOCK):
-            logger.debug('Lock acquired')
+        max_defrag_jobs = config.get('jobs', {}).get(
+            'couple_defrag_job', {}).get('max_executing_jobs', 3)
 
-            max_defrag_jobs = config.get('jobs', {}).get('couple_defrag_job',
-                {}).get('max_executing_jobs', 3)
+        active_jobs = self.job_processor.job_finder.jobs(
+            statuses=jobs.Job.ACTIVE_STATUSES
+        )
+        slots = self._jobs_slots(active_jobs,
+                                 jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB,
+                                 max_defrag_jobs)
 
-            jobs_count = self.job_processor.job_finder.jobs_count(
-                types=jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB,
-                statuses=[jobs.Job.STATUS_NOT_APPROVED,
-                          jobs.Job.STATUS_NEW,
-                          jobs.Job.STATUS_EXECUTING])
+        if slots <= 0:
+            logger.info('Found {0} unfinished couple defrag jobs'.format(
+                max_defrag_jobs - slots))
+            return
 
-            slots = max_defrag_jobs - jobs_count
-            if slots <= 0:
-                logger.info('Found {0} unfinished recover dc jobs'.format(
-                    jobs_count))
-                return
+        busy_group_ids = self._busy_group_ids(active_jobs)
 
-            need_approving = not self.params.get('couple_defrag', {}).get('autoapprove', False)
+        couples_to_defrag = []
+        for couple in storage.couples.keys():
+            if self._is_locked(couple, busy_group_ids):
+                continue
+            if couple.status not in storage.GOOD_STATUSES:
+                continue
+            couple_stat = couple.get_stat()
+            if couple_stat.files_removed_size == 0:
+                continue
 
-            couples_to_defrag = []
-            for couple in storage.couples:
-                if couple.status not in storage.GOOD_STATUSES:
-                    continue
-                couple_stat = couple.get_stat()
-                if couple_stat.files_removed_size == 0:
-                    continue
+            insufficient_space_nb = None
+            want_defrag = False
 
-                insufficient_space_nb = None
-                want_defrag = False
-
-                for group in couple.groups:
-                    for nb in group.node_backends:
-                        if nb.stat.free_space < nb.stat.max_blob_base_size * 2:
-                            insufficient_space_nb = nb
-                            break
-                    if insufficient_space_nb:
+            for group in couple.groups:
+                for nb in group.node_backends:
+                    if nb.stat.free_space < nb.stat.max_blob_base_size * 2:
+                        insufficient_space_nb = nb
                         break
-                    want_defrag |= group.want_defrag
-
-                if not want_defrag:
-                    continue
-
                 if insufficient_space_nb:
-                    logger.warn('Couple {0}: node backend {1} has insufficient '
-                        'free space for defragmentation, max_blob_size {2}, '
-                        'free_space {3}'.format(
-                            str(couple), str(nb), nb.stat.max_blob_base_size,
-                            nb.stat.free_space))
-                    continue
+                    break
+                want_defrag |= group.want_defrag
 
-                logger.info('Couple defrag candidate: {0}, max files_removed_size '
-                    'in groups: {1}'.format(str(couple), couple_stat.files_removed_size))
+            if not want_defrag:
+                continue
 
-                couples_to_defrag.append((str(couple), couple_stat.files_removed_size))
+            if insufficient_space_nb:
+                logger.warn('Couple {0}: node backend {1} has insufficient '
+                    'free space for defragmentation, max_blob_size {2}, '
+                    'free_space {3}'.format(
+                        str(couple), str(nb), nb.stat.max_blob_base_size,
+                        nb.stat.free_space))
+                continue
 
-            created_jobs = 0
-            logger.info('Trying to create {0} jobs'.format(slots))
+            logger.info('Couple defrag candidate: {0}, max files_removed_size '
+                'in groups: {1}'.format(str(couple), couple_stat.files_removed_size))
 
-            couples_to_defrag.sort(key=lambda c: c[1])
+            couples_to_defrag.append((str(couple), couple_stat.files_removed_size))
+
+        couples_to_defrag.sort(key=lambda c: c[1])
+        need_approving = not self.params.get('couple_defrag', {}).get('autoapprove', False)
+
+        if not couples_to_defrag:
+            logger.info('No couples to defrag found')
+            return
+
+        created_jobs = 0
+        logger.info('Trying to create {0} jobs'.format(slots))
+
+        logger.debug('Lock acquiring')
+        with sync_manager.lock(self.job_processor.JOBS_LOCK, timeout=60):
+            logger.debug('Lock acquired')
 
             while couples_to_defrag and created_jobs < slots:
                 couple_tuple, fragmentation = couples_to_defrag.pop()
@@ -1268,10 +1336,8 @@ class Planner(object):
 
         return candidates[0]
 
-def _recovery_applicable_couple(couple, locked_couples=None):
+def _recovery_applicable_couple(couple):
     if couple.status not in storage.GOOD_STATUSES:
-        return False
-    if locked_couples and str(couple) in locked_couples:
         return False
     return True
 
