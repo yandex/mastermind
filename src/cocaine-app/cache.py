@@ -22,6 +22,7 @@ import keys
 import storage
 from sync import sync_manager
 from sync.error import LockError, LockFailedError
+from timer import periodic_timer
 import timed_queue
 
 
@@ -35,6 +36,7 @@ CACHE_GROUP_PATH_PREFIX = CACHE_CFG.get('group_path_prefix')
 class CacheManager(object):
 
     DISTRIBUTE_LOCK = 'cache/distribute'
+    MONITOR_TOP_STATS = 'monitor_top_stats'
 
     def __init__(self, node, niu, job_processor, db):
         self.node = node
@@ -63,9 +65,12 @@ class CacheManager(object):
         self.nodes_update()
         self.update_cache_groups()
 
-        self.__tq.add_task_in(
-            'monitor_top_stats',
-            CACHE_CFG.get('top_update_period', 1800),
+        self.top_update_timer = periodic_timer(
+            seconds=CACHE_CFG.get('top_update_period', 1800))
+
+        self.__tq.add_task_at(
+            CacheManager.MONITOR_TOP_STATS,
+            self.top_update_timer.next(),
             self.monitor_top_stats)
 
     def _start_tq(self):
@@ -115,9 +120,9 @@ class CacheManager(object):
             logger.info(
                 'Monitor top stats update finished, time: {0:.3f}'.format(
                     time.time() - start_ts))
-            self.__tq.add_task_in(
-                'monitor_top_stats',
-                CACHE_CFG.get('top_update_period', 1800),
+            self.__tq.add_task_at(
+                CacheManager.MONITOR_TOP_STATS,
+                self.top_update_timer.next(),
                 self.monitor_top_stats)
 
     def _try_distribute_keys(self):
