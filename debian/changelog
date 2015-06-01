@@ -1,3 +1,9 @@
+mastermind (2.24.39) precise; urgency=low
+
+  * Added mastermind2.26-cache application to cocaine runlist
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 01 Jun 2015 16:21:11 +0300
+
 mastermind (2.24.38) precise; urgency=low
 
   * Top update period is set via periodic timer
