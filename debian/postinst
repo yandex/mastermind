@@ -20,6 +20,7 @@ case "$1" in
     cocaine-tool runlist add-app -n default --app $BASE_APP_NAME --profile $BASE_APP_NAME --force
 
     /usr/bin/mastermind_deploy.sh $DEPLOY_DIR $BASE_APP_NAME-cache mastermind-cache.manifest mastermind-cache.profile
+    cocaine-tool runlist add-app -n default --app $BASE_APP_NAME-cache --profile $BASE_APP_NAME-cache --force
 
     ;;
     abort-upgrade|abort-remove|abort-deconfigure)
