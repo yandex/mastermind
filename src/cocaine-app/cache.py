@@ -20,6 +20,8 @@ from infrastructure import infrastructure
 import jobs
 import keys
 import storage
+from sync import sync_manager
+from sync.error import LockError, LockFailedError
 import timed_queue
 
 
@@ -31,6 +33,9 @@ CACHE_GROUP_PATH_PREFIX = CACHE_CFG.get('group_path_prefix')
 
 
 class CacheManager(object):
+
+    DISTRIBUTE_LOCK = 'cache/distribute'
+
     def __init__(self, node, niu, job_processor, db):
         self.node = node
         self.niu = niu
@@ -100,7 +105,7 @@ class CacheManager(object):
 
             self.top_keys = new_top_keys
 
-            self.distributor.distribute(self.top_keys)
+            self._try_distribute_keys()
 
         except Exception as e:
             logger.error('Failed to update monitor top stats: {0}\n{1}'.format(
@@ -114,6 +119,17 @@ class CacheManager(object):
                 'monitor_top_stats',
                 CACHE_CFG.get('top_update_period', 1800),
                 self.monitor_top_stats)
+
+    def _try_distribute_keys(self):
+        try:
+            with sync_manager.lock(CacheManager.DISTRIBUTE_LOCK, blocking=False):
+                self.distributor.distribute(self.top_keys)
+        except LockFailedError:
+            logger.info('Distribute task is already running')
+            pass
+        except LockError:
+            logger.exception('Distribute task failed to acquire lock')
+            pass
 
     def update_top(self, m_stat, new_top_keys,
                    elapsed_time=None, end_time=None):
