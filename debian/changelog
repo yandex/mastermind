@@ -1,3 +1,10 @@
+mastermind (2.24.40) precise; urgency=low
+
+  * Infrastructure: empty group set for tree nodes that has no groups in child
+    nodes
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 02 Jun 2015 12:49:29 +0300
+
 mastermind (2.24.39) precise; urgency=low
 
   * Added mastermind2.26-cache application to cocaine runlist
