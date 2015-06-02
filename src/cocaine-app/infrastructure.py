@@ -785,7 +785,7 @@ class Infrastructure(object):
 
     def update_groups_list(self, root):
         if not 'children' in root:
-            return root['groups']
+            return root.setdefault('groups', set())
         root['groups'] = reduce(operator.or_,
             (self.update_groups_list(child) for child in root.get('children', [])),
             set())
