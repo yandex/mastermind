@@ -1,3 +1,11 @@
+mastermind (2.24.41) precise; urgency=low
+
+  * get_cached_keys handler updated
+  * Namespace statistics fixed, is_full flag added
+  * Ns settings updating fixed - __service key could have been omited on update
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 03 Jun 2015 19:58:59 +0300
+
 mastermind (2.24.40) precise; urgency=low
 
   * Infrastructure: empty group set for tree nodes that has no groups in child
