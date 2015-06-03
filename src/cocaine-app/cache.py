@@ -355,6 +355,19 @@ class CacheManager(object):
             cache_groups.extend(couple.groups)
         return [cg.group_id for cg in cache_groups]
 
+    @h.concurrent_handler
+    def get_cached_keys(self, request):
+        res = {}
+        keys = self.keys_db.find({'cache_groups': {'$ne': []}})
+        for key in keys:
+            by_key = res.setdefault(key['id'], {})
+            couple_id = str(key['data_groups'][0])
+            by_key[couple_id] = {
+                'data_groups': key['data_groups'],
+                'cache_groups': key['cache_groups'],
+            }
+        return res
+
 
 class CacheDistributor(object):
     def __init__(self, node, keys_db, job_processor):
