@@ -340,7 +340,6 @@ class Infrastructure(object):
             namespace, settings))
 
         settings['namespace'] = namespace
-        settings.setdefault('__service', {})
         start = time.time()
 
         self.ns_settings_idx[namespace] = msgpack.packb(settings)

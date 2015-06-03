@@ -985,10 +985,11 @@ class Balancer(object):
     ALLOWED_NS_KEYS = set(['success-copies-num', 'groups-count',
         'static-couple', 'auth-keys', 'signature', 'redirect',
         'min-units', 'features', 'reserved-space-percentage',
-        'check-for-update'])
+        'check-for-update', '__service'])
     ALLOWED_NS_SIGN_KEYS = set(['token', 'path_prefix'])
     ALLOWED_NS_AUTH_KEYS = set(['write', 'read'])
     ALLOWED_REDIRECT_KEYS = set(['content-length-threshold', 'expire-time'])
+    ALLOWED_SERVICE_KEYS = set(['is_deleted'])
 
     def __merge_dict(self, dst, src):
         for k, val in src.iteritems():
@@ -1027,7 +1028,9 @@ class Balancer(object):
         if cur_settings.get('__service', {}).get('is_deleted'):
             logger.info('Namespace {0} is deleted, will not merge old settings '
                 'with new ones'.format(namespace))
-            cur_settings = {}
+            cur_settings = {'__service': cur_settings['__service']}
+
+        cur_settings.setdefault('__service', {})
 
         if options.get('json'):
             try:
@@ -1062,6 +1065,9 @@ class Balancer(object):
             for k in settings.get('redirect', {}).keys():
                 if k not in self.ALLOWED_REDIRECT_KEYS:
                     del settings['redirect'][k]
+            for k in settings['__service'].keys():
+                if k not in self.ALLOWED_SERVICE_KEYS:
+                    del settings['__service'][k]
 
             try:
                 self.__validate_ns_settings(namespace, settings)
