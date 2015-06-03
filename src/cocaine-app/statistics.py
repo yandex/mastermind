@@ -37,97 +37,78 @@ class Statistics(object):
     def account_couples(data, group):
         if group.couple:
             data['total_couples'] += 1
-            if group.couple.status == storage.Status.OK:
+            couple = group.couple
+            if couple.status == storage.Status.OK:
                 data['open_couples'] += 1
-            elif group.couple.status == storage.Status.FULL:
+            elif couple.status == storage.Status.FULL:
                 data['closed_couples'] += 1
-            elif group.couple.status == storage.Status.FROZEN:
+            elif couple.status == storage.Status.FROZEN:
                 data['frozen_couples'] += 1
-            elif group.couple.status == storage.Status.BROKEN:
+            elif couple.status == storage.Status.BROKEN:
                 data['broken_couples'] += 1
             else:
                 data['bad_couples'] += 1
         else:
             data['uncoupled_groups'] += 1
 
-    def account_memory(self, data, group, stat):
+    @staticmethod
+    def account_memory(data, group, stat):
         if group.couple:
             data['free_space'] += stat.free_space
             data['total_space'] += stat.total_space
         else:
             data['uncoupled_space'] += stat.total_space
 
-    def effective_space(self):
-        by_ns = defaultdict(lambda: {'stats': {'effective_space': 0,
-                                              'effective_free_space': 0},
-                                     'dcs': defaultdict(lambda: {'effective_space': 0,
-                                                                 'effective_free_space': 0})})
-        by_dc = defaultdict(lambda: {'effective_space': 0,
-                                     'effective_free_space': 0})
-        for couple in storage.couples.keys():
-            if couple.status not in storage.GOOD_STATUSES:
-                continue
-            try:
-                ns = couple.namespace
-                stat = couple.get_stat()
-                if not stat:
-                    raise ValueError
-            except ValueError:
-                continue
+    @staticmethod
+    def account_effective_memory(data, couple):
+        if couple.status not in storage.GOOD_STATUSES:
+            return
+        try:
+            ns = couple.namespace
+            stat = couple.get_stat()
+        except ValueError:
+            return
+        if not stat:
+            return
 
-            eff_space = couple.effective_space
-            eff_free_space = max(stat.free_space -
-                (stat.total_space - int(eff_space)), 0)
-
-            ns_stat = by_ns[ns]['stats']
-            ns_stat['effective_space'] += eff_space
-            ns_stat['effective_free_space'] += eff_free_space
-
-            try:
-                dcs = set(nb.node.host.dc for g in couple.groups
-                                          for nb in g.node_backends)
-            except CacheUpstreamError:
-                continue
-
-            for dc in dcs:
-                by_dc[dc]['effective_space'] += eff_space
-                by_dc[dc]['effective_free_space'] += eff_free_space
-
-                ns_dc_stat = by_ns[ns]['dcs'][dc]
-                ns_dc_stat['effective_space'] += eff_space
-                ns_dc_stat['effective_free_space'] += eff_free_space
-
-        return h.defaultdict_to_dict(by_dc), h.defaultdict_to_dict(by_ns)
+        data['effective_space'] += couple.effective_space
+        data['effective_free_space'] += couple.effective_free_space
 
     def per_ns_statistics(self):
         ns_stats = {}
         try:
-            _, per_ns_stat = self.per_entity_stat()
+            _, per_ns_stat, _ = self.per_entity_stat()
         except Exception as e:
-            logger.error('Failed to calculate namespace statistics')
+            logger.exception('Failed to calculate namespace statistics')
             return ns_stats
 
-        dc_eff, ns_eff = self.effective_space()
-
         for ns, stats in per_ns_stat.iteritems():
-            try:
-                ns_stats[ns] = self.total_stats(stats)
-            except Exception as e:
-                logger.error('Failed to construct namespace {0} statistics: {1}'.format(ns, e))
-                continue
-            if not ns in ns_eff:
-                logger.error('Failed to update ns {0} statistics '
-                    'with effective data stats'.format(ns))
-                continue
-            ns_stats[ns].update(ns_eff[ns]['stats'])
+            if (stats['closed_couples'] > 0 and
+                    stats['open_couples'] == 0):
+                stats['is_full'] = True
+            else:
+                stats['is_full'] = False
 
-        return ns_stats
+        return per_ns_stat
 
     @staticmethod
-    def account_keys(data, node_backend):
-        stat = node_backend.stat
-        data['total_keys'] += stat.files + stat.files_removed
-        data['removed_keys'] += stat.files_removed
+    def account_keys(data, couple):
+        stats = []
+        for group in couple.groups:
+            try:
+                stats.append(
+                    reduce(lambda res, x: res + x,
+                           [nb.stat for nb in group.node_backends if nb.stat]))
+            except TypeError:
+                continue
+        if not stats:
+            return
+        files_stat = max(
+            stats,
+            key=lambda stat: (stat.files + stat.files_removed,
+                              stat.files_removed))
+        data['total_keys'] += files_stat.files + files_stat.files_removed
+        data['removed_keys'] += files_stat.files_removed
 
     def per_entity_stat(self):
         default = lambda: {
@@ -150,9 +131,11 @@ class Statistics(object):
         }
 
         by_dc = defaultdict(default)
-        by_ns = defaultdict(lambda: defaultdict(default))
+        by_ns = defaultdict(default)
+        by_ns_dc = defaultdict(lambda: defaultdict(default))
 
         dc_couple_map = defaultdict(set)
+        ns_couple_map = defaultdict(set)
         ns_dc_couple_map = defaultdict(lambda: defaultdict(set))
 
         for group in sorted(storage.groups, key=lambda g: not bool(g.couple)):
@@ -178,31 +161,36 @@ class Statistics(object):
 
                 if not couple in dc_couple_map[dc]:
                     self.account_couples(by_dc[dc], group)
+                    if ns:
+                        self.account_keys(by_dc[dc], couple)
+                        self.account_effective_memory(by_dc[dc], couple)
                     dc_couple_map[dc].add(couple)
+                if ns and not couple in ns_couple_map[ns]:
+                    self.account_couples(by_ns[ns], group)
+                    self.account_effective_memory(by_ns[ns], couple)
+                    self.account_keys(by_ns[ns], couple)
+                    ns_couple_map[ns].add(couple)
                 if ns and not couple in ns_dc_couple_map[ns][dc]:
-                    self.account_couples(by_ns[ns][dc], group)
+                    self.account_couples(by_ns_dc[ns][dc], group)
+                    self.account_effective_memory(by_ns_dc[ns][dc], couple)
+                    self.account_keys(by_ns_dc[ns][dc], couple)
                     ns_dc_couple_map[ns][dc].add(couple)
 
                 if not node_backend.stat:
                     logger.debug('No stats available for node %s' % str(node_backend))
                     continue
 
-                try:
-                    self.account_memory(by_dc[dc], group, node_backend.stat)
-                except ValueError:
-                    # namespace for group couple is broken, do not try to account it
-                    continue
+                self.account_memory(by_dc[dc], group, node_backend.stat)
 
                 if ns:
-                    self.account_memory(by_ns[ns][dc], group, node_backend.stat)
+                    self.account_memory(by_ns[ns], group, node_backend.stat)
+                    self.account_memory(by_ns_dc[ns][dc], group, node_backend.stat)
 
-                self.account_keys(by_dc[dc], node_backend)
-                if ns:
-                    self.account_keys(by_ns[ns][dc], node_backend)
+        self.count_outaged_couples(by_dc, by_ns_dc)
 
-        self.count_outaged_couples(by_dc, by_ns)
-
-        return h.defaultdict_to_dict(by_dc), h.defaultdict_to_dict(by_ns)
+        return (h.defaultdict_to_dict(by_dc),
+                h.defaultdict_to_dict(by_ns),
+                h.defaultdict_to_dict(by_ns_dc))
 
     def count_outaged_couples(self, by_dc_stats, by_ns_stats):
         default = lambda: {
@@ -341,22 +329,11 @@ class Statistics(object):
     @h.concurrent_handler
     def get_flow_stats(self, request):
 
-        per_dc_stat, per_ns_stat = self.per_entity_stat()
-
-        dc_eff, ns_eff = self.effective_space()
-
-        self.per_key_update(per_dc_stat, dc_eff)
-        for ns, ns_stats in per_ns_stat.iteritems():
-            if not ns in ns_eff:
-                logger.warn('No effective space statistics for namespace {0}'.format(
-                    ns))
-                continue
-            # logger.info('ns_eff {0}: {1}'.format(ns, ns_eff[ns]))
-            self.per_key_update(ns_stats, ns_eff[ns]['dcs'])
+        per_dc_stat, per_ns_stat, per_ns_dc_stat = self.per_entity_stat()
 
         res = self.total_stats(per_dc_stat)
         res.update({'dc': per_dc_stat,
-                    'namespaces': per_ns_stat})
+                    'namespaces': per_ns_dc_stat})
 
         res.update({'real_data': self.get_data_space()})
         res.update(self.get_couple_stats())

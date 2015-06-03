@@ -595,6 +595,11 @@ class NodeBackend(object):
 
         return max(0, self.stat.total_space - free_space_req_share)
 
+    @property
+    def effective_free_space(self):
+        return int(max(self.stat.free_space -
+                       (self.stat.total_space - self.effective_space), 0))
+
     def is_full(self, reserved_space=0.0):
 
         if self.stat is None:
@@ -624,7 +629,7 @@ class NodeBackend(object):
         if self.stat:
             res['free_space'] = int(self.stat.free_space)
             res['effective_space'] = self.effective_space
-            res['free_effective_space'] = int(max(self.stat.free_space - (self.stat.total_space - self.effective_space), 0))
+            res['free_effective_space'] = self.effective_free_space
             res['used_space'] = int(self.stat.used_space)
             res['total_space'] = int(self.stat.total_space)
             res['total_files'] = self.stat.files + self.stat.files_removed
@@ -1136,7 +1141,15 @@ class Couple(object):
         groups_effective_space = min([g.effective_space for g in self.groups])
 
         reserved_space = infrastructure.ns_settings.get(self.namespace, {}).get(self.RESERVED_SPACE_KEY, 0.0)
-        return math.floor(groups_effective_space * (1.0 - reserved_space))
+        return int(math.floor(groups_effective_space * (1.0 - reserved_space)))
+
+    @property
+    def effective_free_space(self):
+        stat = self.get_stat()
+        if not stat:
+            return 0
+        return int(max(stat.free_space -
+                       (stat.total_space - self.effective_space), 0))
 
     def as_tuple(self):
         return tuple(group.group_id for group in self.groups)
