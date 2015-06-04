@@ -1291,6 +1291,11 @@ class Balancer(object):
         return {'couples': couples_diff,
                 'total_keys_diff': sum(couples_diff.itervalues())}
 
+    def get_cached_keys(self, request):
+        from cocaine.services import Service
+        return Service('mastermind2.26-cache').enqueue(
+            'get_cached_keys', '')
+
 
 def handlers(b):
     handlers = []
