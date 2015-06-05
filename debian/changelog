@@ -1,3 +1,9 @@
+mastermind (2.24.43) precise; urgency=low
+
+  * Add-units settings for namespace implemented
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 05 Jun 2015 17:23:11 +0300
+
 mastermind (2.24.42) precise; urgency=low
 
   * get_cached_key handler proxied to mastermind2.26-cache (no retries for now)
