@@ -38,6 +38,7 @@ class Balancer(object):
 
     DT_FORMAT = '%Y-%m-%d %H:%M:%S'
     MIN_NS_UNITS = config.get('balancer_config', {}).get('min_units', 1)
+    ADD_NS_UNITS = config.get('balancer_config', {}).get('add_units', 1)
 
     CLUSTER_CHANGES_LOCK = 'cluster'
 
@@ -284,12 +285,21 @@ class Balancer(object):
         if isinstance(sizes, set):
             sizes = dict([(size, symm_groups) for size in sizes])
 
+        ns_add_units = self.infrastructure.ns_settings.get(namespace, {}).get(
+            'add-units', self.ADD_NS_UNITS)
+        ns_min_units = self.infrastructure.ns_settings.get(namespace, {}).get(
+            'min-units', self.MIN_NS_UNITS)
+
+        bla_config = bla.getConfig()
+        bla_config['AdditionalUnitsNumber'] = ns_add_units
+        bla_config['MinimumUnitsWithPositiveWeight'] = ns_min_units
+
         for size, symm_groups in sizes.iteritems():
             try:
                 logger.info('Namespace {0}, size {1}: calculating '
                     'cluster info'.format(namespace, size))
                 (group_weights, info) = balancelogic.rawBalance(
-                    symm_groups, bla.getConfig(),
+                    symm_groups, bla_config,
                     bla._and(bla.GroupSizeEquals(size),
                              bla.GroupNamespaceEquals(namespace)))
                 ns_size_weights = \
@@ -306,8 +316,6 @@ class Balancer(object):
                 logger.error('Namespace {0}, size {1}: error {2}'.format(namespace, size, e))
                 continue
 
-        ns_min_units = self.infrastructure.ns_settings.get(namespace, {}).get(
-            'min-units', self.MIN_NS_UNITS)
         settings = self.infrastructure.ns_settings[namespace]
         if found_couples < ns_min_units:
             raise ValueError('Namespace {}, {}, has {} available couples, '
@@ -893,6 +901,15 @@ class Balancer(object):
             raise ValueError('min-units should be positive integer')
 
         try:
+            add_units = settings['add-units'] = int(settings['add-units'])
+            if not add_units > 0:
+                raise ValueError
+        except KeyError:
+            pass
+        except ValueError:
+            raise ValueError('add-units should be positive integer')
+
+        try:
             settings['check-for-update'] = bool(settings['check-for-update'])
         except KeyError:
             pass
@@ -984,7 +1001,7 @@ class Balancer(object):
 
     ALLOWED_NS_KEYS = set(['success-copies-num', 'groups-count',
         'static-couple', 'auth-keys', 'signature', 'redirect',
-        'min-units', 'features', 'reserved-space-percentage',
+        'min-units', 'add-units', 'features', 'reserved-space-percentage',
         'check-for-update', '__service'])
     ALLOWED_NS_SIGN_KEYS = set(['token', 'path_prefix'])
     ALLOWED_NS_AUTH_KEYS = set(['write', 'read'])
