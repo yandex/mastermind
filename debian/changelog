@@ -1,3 +1,9 @@
+mastermind (2.24.44) precise; urgency=low
+
+  * Ids file for rsync tasks
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 09 Jun 2015 17:55:04 +0300
+
 mastermind (2.24.43) precise; urgency=low
 
   * Add-units settings for namespace implemented
