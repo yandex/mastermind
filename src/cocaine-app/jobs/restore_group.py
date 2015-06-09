@@ -81,10 +81,9 @@ class RestoreGroupJob(Job):
 
         dst_node_backend = self.node_backend(dst_host, dst_port, dst_backend_id)
 
-        group_file = (os.path.join(dst_base_path,
-                          self.GROUP_FILE_PATH)
-              if self.GROUP_FILE_PATH else
-              '')
+        group_file = (os.path.join(dst_base_path, self.GROUP_FILE_PATH)
+                      if self.GROUP_FILE_PATH else
+                      '')
 
         remove_path = ''
 
@@ -217,8 +216,13 @@ class RestoreGroupJob(Job):
             src_family=src_group.node_backends[0].node.family,
             dst_path=dst_base_path)
 
+        ids_file = (os.path.join(dst_base_path, self.IDS_FILE_PATH)
+                    if self.IDS_FILE_PATH else
+                    '')
+
         params = {'group': str(self.group),
-                  'group_file': group_file}
+                  'group_file': group_file,
+                  'ids': ids_file}
 
         if remove_path and self.uncoupled_group:
             params['remove_path'] = remove_path

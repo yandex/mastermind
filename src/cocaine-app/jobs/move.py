@@ -248,13 +248,17 @@ class MoveJob(Job):
                       if self.GROUP_FILE_PATH else
                       '')
 
+        ids_file = (os.path.join(self.dst_base_path, self.IDS_FILE_PATH)
+                    if self.IDS_FILE_PATH else
+                    '')
+
         params = {'group': str(self.group),
-                  'group_file': group_file}
+                  'group_file': group_file,
+                  'ids': ids_file}
 
         if remove_path:
             params['remove_path'] = remove_path
 
-        # TODO: think about changing MinionCmdTask to RsyncBackendTask
         task = RsyncBackendTask.new(self,
                                     host=self.dst_host,
                                     src_host=self.src_host,
