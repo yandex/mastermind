@@ -19,7 +19,7 @@ import inventory
 import jobs
 from manual_locks import manual_locker
 from sync import sync_manager
-from sync.error import LockFailedError
+from sync.error import LockFailedError, LockAlreadyAcquiredError
 from timer import periodic_timer
 
 import timed_queue
@@ -217,7 +217,7 @@ class Planner(object):
                                  },
                                 force=True)
                             logger.info('Job successfully created: {0}'.format(job.id))
-                        except jobs.LockFailedError as e:
+                        except LockFailedError as e:
                             logger.error(
                                 'Failed to create move job for moving '
                                 'group {0} ({1}) to {2} ({3}): {4}'.format(
@@ -875,6 +875,8 @@ class Planner(object):
 
         return job.dump()
 
+    MOVE_GROUP_ATTEMPTS = 3
+
     @h.concurrent_handler
     def move_groups_from_host(self, request):
         try:
@@ -897,27 +899,41 @@ class Planner(object):
             'failed': {},
         }
 
-        logger.debug('Lock acquiring')
-        with sync_manager.lock(self.job_processor.JOBS_LOCK, timeout=self.job_processor.JOB_MANUAL_TIMEOUT):
-            logger.debug('Lock acquired')
-            for couple in storage.couples.keys():
-                for group in couple.groups:
-                    if len(group.node_backends) != 1:
-                        # skip group if more than one backend
-                        continue
+        for couple in storage.couples.keys():
+            for group in couple.groups:
+                if len(group.node_backends) != 1:
+                    # skip group if more than one backend
+                    continue
 
-                    if group.node_backends[0].node.host.addr in ips:
+                if group.node_backends[0].node.host.addr in ips:
+                    attempts = self.MOVE_GROUP_ATTEMPTS
+                    while attempts > 0:
                         try:
                             job_params = self._get_move_group_params(group)
                             job = self.job_processor._create_job(
                                 jobs.JobTypes.TYPE_MOVE_JOB,
                                 job_params, force=True)
                             res['jobs'].append(job.dump())
-                        except Exception as e:
-                            logger.error('Failed to create move job for group {0}: {1}\n{2}'.format(
-                                group.group_id, e, traceback.format_exc()))
+                        except LockAlreadyAcquiredError:
+                            logger.error(
+                                'Failed to create move job for group {}, attempt {}/{}'.format(
+                                    group.group_id,
+                                    self.MOVE_GROUP_ATTEMPTS - attempts + 1,
+                                    self.MOVE_GROUP_ATTEMPTS))
                             res['failed'][group.group_id] = str(e)
                             pass
+                        except Exception as e:
+                            logger.exception(
+                                'Failed to create move job for group {}, attempt {}/{}'.format(
+                                    group.group_id,
+                                    self.MOVE_GROUP_ATTEMPTS - attempts + 1,
+                                    self.MOVE_GROUP_ATTEMPTS))
+                            res['failed'][group.group_id] = str(e)
+                            pass
+                        else:
+                            break
+                        finally:
+                            attempts -= 1
 
         return res
 
