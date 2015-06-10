@@ -12,7 +12,7 @@ import sys
 import time
 import traceback
 
-from cocaine.worker import Worker
+from cocaine.exceptions import ConnectionError
 import elliptics
 import msgpack
 
@@ -26,7 +26,6 @@ import keys
 import statistics
 import storage
 from sync import sync_manager
-from sync.error import LockFailedError
 
 
 logger = logging.getLogger('mm.balancer')
@@ -1310,8 +1309,15 @@ class Balancer(object):
 
     def get_cached_keys(self, request):
         from cocaine.services import Service
-        return Service('mastermind2.26-cache').enqueue(
-            'get_cached_keys', '')
+        try:
+            return Service('mastermind2.26-cache').enqueue(
+                'get_cached_keys', '')
+        except ConnectionError as e:
+            logger.error('mastermind2.26-cache connection error: {}'.format(e))
+            return {}
+        except Exception:
+            logger.exception('Unexpected mastermind2.26-cache error')
+            raise
 
 
 def handlers(b):
