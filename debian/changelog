@@ -1,3 +1,11 @@
+mastermind (2.25.1) precise; urgency=low
+
+  * Cached keys handler should be tolerant to cocaine connection errors
+  * Do not take global jobs lock on moving all groups from host
+  * Planner tasks should not take jobs lock unless they are actually creating jobs
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 10 Jun 2015 17:10:47 +0300
+
 mastermind (2.24.45) precise; urgency=low
 
   * Config parameter name fixed
