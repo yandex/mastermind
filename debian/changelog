@@ -1,3 +1,9 @@
+mastermind (2.24.45) precise; urgency=low
+
+  * Config parameter name fixed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 10 Jun 2015 13:52:06 +0300
+
 mastermind (2.24.44) precise; urgency=low
 
   * Ids file for rsync tasks
