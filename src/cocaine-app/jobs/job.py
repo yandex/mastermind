@@ -57,7 +57,7 @@ class Job(MongoObject):
     GROUP_FILE_MARKER_PATH = RESTORE_CFG.get('group_file_marker', None)
     GROUP_FILE_DIR_MOVE_SRC_RENAME = RESTORE_CFG.get('group_file_dir_move_src_rename', None)
     BACKEND_DOWN_MARKER = RESTORE_CFG.get('backend_down_marker', None)
-    IDS_FILE_PATH = RESTORE_CFG.get('ids', None)
+    IDS_FILE_PATH = RESTORE_CFG.get('ids_file', None)
 
     DNET_CLIENT_ALREADY_IN_PROGRESS = -114
 
