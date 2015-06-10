@@ -1,16 +1,11 @@
 from copy import copy, deepcopy
-import itertools
 import heapq
 from logging import getLogger
-import msgpack
 import socket
 import storage
-import threading
 import time
 import traceback
 
-import elliptics
-import msgpack
 import pymongo
 
 from coll import SortedCollection
@@ -22,7 +17,6 @@ from infrastructure import infrastructure
 from infrastructure_cache import cache
 import inventory
 import jobs
-import keys
 from manual_locks import manual_locker
 from sync import sync_manager
 from sync.error import LockFailedError
@@ -89,19 +83,18 @@ class Planner(object):
         try:
             logger.info('Starting move candidates planner')
 
-            max_move_jobs = config.get('jobs', {}).get('move_job',
-                {}).get('max_executing_jobs', 3)
+            max_move_jobs = config.get('jobs', {}).get('move_job', {}).get('max_executing_jobs', 3)
 
             # prechecking for new or pending tasks
-            count = self.job_processor.job_finder.jobs_count(types=jobs.JobTypes.TYPE_MOVE_JOB,
+            count = self.job_processor.job_finder.jobs_count(
+                types=jobs.JobTypes.TYPE_MOVE_JOB,
                 statuses=[jobs.Job.STATUS_NOT_APPROVED,
                           jobs.Job.STATUS_NEW,
                           jobs.Job.STATUS_EXECUTING,
                           jobs.Job.STATUS_PENDING])
 
             if count >= max_move_jobs:
-                logger.info('Found {0} unfinished move jobs '
-                    '(>= {1})'.format(count, max_move_jobs))
+                logger.info('Found {0} unfinished move jobs (>= {1})'.format(count, max_move_jobs))
                 return
 
             self._do_move_candidates(max_move_jobs - count)
@@ -109,7 +102,8 @@ class Planner(object):
             logger.error('{0}: {1}'.format(e, traceback.format_exc()))
         finally:
             logger.info('Move candidates planner finished')
-            self.__tq.add_task_in(self.MOVE_CANDIDATES,
+            self.__tq.add_task_in(
+                self.MOVE_CANDIDATES,
                 self.params.get('generate_plan_period', 1800),
                 self._move_candidates)
 
@@ -153,11 +147,12 @@ class Planner(object):
             with sync_manager.lock(self.job_processor.JOBS_LOCK):
                 logger.debug('Lock acquired')
 
-                max_move_jobs = config.get('jobs', {}).get('move_job',
-                    {}).get('max_executing_jobs', 3)
+                max_move_jobs = config.get('jobs', {}).get(
+                    'move_job', {}).get('max_executing_jobs', 3)
 
                 # prechecking for new or pending tasks
-                jobs_count = self.job_processor.job_finder.jobs_count(types=jobs.JobTypes.TYPE_MOVE_JOB,
+                jobs_count = self.job_processor.job_finder.jobs_count(
+                    types=jobs.JobTypes.TYPE_MOVE_JOB,
                     statuses=[jobs.Job.STATUS_NOT_APPROVED,
                               jobs.Job.STATUS_NEW,
                               jobs.Job.STATUS_EXECUTING,
@@ -171,11 +166,16 @@ class Planner(object):
                     logger.info('Candidate {0}: data {1}, ms_error delta {2}:'.format(
                         i, gb(candidate.delta.data_move_size), candidate.delta.ms_error_delta))
 
-                    for src_group, src_dc, dst_group, merged_groups, dst_dc in candidate.moved_groups:
+                    for src_group, src_dc, dst_group, merged_groups, dst_dc in \
+                            candidate.moved_groups:
 
                         try:
-                            assert len(src_group.node_backends) == 1, 'Src group {0} should have only 1 node backend'.format(src_group.group_id)
-                            assert len(dst_group.node_backends) == 1, 'Dst group {0} should have only 1 node backend'.format(dst_group.group_id)
+                            assert len(src_group.node_backends) == 1, \
+                                'Src group {0} should have only 1 node backend'.format(
+                                    src_group.group_id)
+                            assert len(dst_group.node_backends) == 1, \
+                                'Dst group {0} should have only 1 node backend'.format(
+                                    dst_group.group_id)
 
                             dcs = []
                             for host in (src_group.node_backends[0].node.host,
@@ -215,15 +215,17 @@ class Planner(object):
                                  'dst_backend_id': dst_group.node_backends[0].backend_id,
                                  'dst_base_path': dst_group.node_backends[0].base_path,
                                  },
-                                 force=True)
+                                force=True)
                             logger.info('Job successfully created: {0}'.format(job.id))
                         except jobs.LockFailedError as e:
-                            logger.error('Failed to create move job for moving '
+                            logger.error(
+                                'Failed to create move job for moving '
                                 'group {0} ({1}) to {2} ({3}): {4}'.format(
                                     src_group.group_id, src_dc,
                                     dst_group.group_id, dst_dc, e))
                         except Exception as e:
-                            logger.error('Failed to create move job for moving '
+                            logger.error(
+                                'Failed to create move job for moving '
                                 'group {0} ({1}) to {2} ({3}): {4}\n{5}'.format(
                                     src_group.group_id, src_dc,
                                     dst_group.group_id, dst_dc,
@@ -236,11 +238,13 @@ class Planner(object):
         if step == 0:
             self.candidates = [[StorageState.current()]]
         if busy_hosts is None:
-            busy_hosts = self.__busy_hosts([jobs.JobTypes.TYPE_MOVE_JOB, jobs.JobTypes.TYPE_RESTORE_GROUP_JOB])
+            busy_hosts = self.__busy_hosts([jobs.JobTypes.TYPE_MOVE_JOB,
+                                            jobs.JobTypes.TYPE_RESTORE_GROUP_JOB])
             logger.debug('Busy hosts from executing jobs: {0}'.format(list(busy_hosts)))
         if busy_group_ids is None:
             busy_group_ids = set(self.job_processor.job_finder.get_uncoupled_groups_in_service())
-            logger.debug('Busy uncoupled groups from executing jobs: {0}'.format(list(busy_group_ids)))
+            logger.debug('Busy uncoupled groups from executing jobs: {0}'.format(
+                list(busy_group_ids)))
 
         if step >= min(self.__max_plan_length, max_plan_length):
             self.__apply_plan()
@@ -248,7 +252,8 @@ class Planner(object):
 
         logger.info('Candidates: {0}, step {1}'.format(len(self.candidates[-1]), step))
 
-        tmp_candidates = self._generate_candidates(self.candidates[-1][0], busy_hosts, busy_group_ids)
+        tmp_candidates = self._generate_candidates(
+            self.candidates[-1][0], busy_hosts, busy_group_ids)
 
         if not tmp_candidates:
             self.__apply_plan()
@@ -260,16 +265,18 @@ class Planner(object):
         logger.info('Max error candidate: {0}'.format(max_error_candidate))
         logger.info('Max error candidate moved groups: {0}'.format([
             (src_group, src_dc, dst_group, uncoupled_groups, dst_dc)
-            for src_group, src_dc, dst_group, uncoupled_groups, dst_dc in max_error_candidate.moved_groups]))
-        for src_group, src_dc, dst_group, uncoupled_groups, dst_dc in max_error_candidate.moved_groups:
+            for src_group, src_dc, dst_group, uncoupled_groups, dst_dc
+            in max_error_candidate.moved_groups]))
+        for src_group, src_dc, dst_group, uncoupled_groups, dst_dc in \
+                max_error_candidate.moved_groups:
             busy_hosts.add(src_group.node_backends[0].node.host.addr)
             busy_hosts.add(dst_group.node_backends[0].node.host.addr)
 
-        self._do_move_candidates(max_plan_length,
+        self._do_move_candidates(
+            max_plan_length,
             step=step + 1,
             busy_hosts=busy_hosts,
             busy_group_ids=busy_group_ids)
-
 
     def _generate_candidates(self, candidate, busy_hosts, busy_group_ids):
         _candidates = []
@@ -290,8 +297,6 @@ class Planner(object):
 
             for src_group in src_dc_state.groups:
 
-                src_group_stat = candidate.stats(src_group)
-
                 src_host = src_group.node_backends[0].node.host.addr
                 if src_host in busy_hosts:
                     continue
@@ -300,8 +305,8 @@ class Planner(object):
                     suitable_uncoupled_groups = self.get_suitable_uncoupled_groups_list(
                         src_group, uncoupled_groups, busy_group_ids=busy_group_ids)
                 except RuntimeError:
-                    logger.warn('Skipping group {}, failed to get suitable '
-                        'uncoupled groups'.format(src_group))
+                    logger.warn('Skipping group {}, failed to get suitable uncoupled groups'.format(
+                        src_group))
                     continue
 
                 for candidates in suitable_uncoupled_groups:
@@ -325,8 +330,8 @@ class Planner(object):
                         continue
 
                     if dst_dc == src_dc:
-                        logger.debug('dst group {0} is skipped, dst dc is the '
-                            'same as source dc: {1}'.format(
+                        logger.debug(
+                            'dst group {0} is skipped, dst dc is the same as source dc: {1}'.format(
                                 unc_group.group_id, dst_dc))
 
                     unc_group_stat = candidate.stats(unc_group)
@@ -354,7 +359,8 @@ class Planner(object):
                     continue
 
                 if new_candidate.state_ms_error < base_ms:
-                    logger.debug('good candidate found: {0} group from {1} to {2}, '
+                    logger.debug(
+                        'good candidate found: {0} group from {1} to {2}, '
                         'deviation changed from {3} to {4} (weight: {5}, lost space {6}) '
                         '(swap with group {7})'.format(
                             src_group.group_id, src_dc, dst_dc, base_ms,
@@ -362,7 +368,8 @@ class Planner(object):
                             gb(new_candidate.delta.lost_space), unc_group.group_id))
                     _candidates.append(new_candidate)
                 else:
-                    logger.debug('bad candidate: {0} group from {1} to {2}, '
+                    logger.debug(
+                        'bad candidate: {0} group from {1} to {2}, '
                         'deviation changed from {3} to {4} (swap with group {5})'.format(
                             src_group.group_id, src_dc, dst_dc, base_ms,
                             new_candidate.state_ms_error, unc_group.group_id))
@@ -409,8 +416,8 @@ class Planner(object):
             start_ts = time.time()
             logger.info('Starting recover dc planner')
 
-            max_recover_jobs = config.get('jobs', {}).get('recover_dc_job',
-                {}).get('max_executing_jobs', 3)
+            max_recover_jobs = config.get('jobs', {}).get('recover_dc_job', {}).get(
+                'max_executing_jobs', 3)
             # prechecking for new or pending tasks
             count = self.job_processor.job_finder.jobs_count(
                 types=jobs.JobTypes.TYPE_RECOVER_DC_JOB,
@@ -418,8 +425,8 @@ class Planner(object):
                           jobs.Job.STATUS_NEW,
                           jobs.Job.STATUS_EXECUTING])
             if count >= max_recover_jobs:
-                logger.info('Found {0} unfinished recover dc jobs '
-                    '(>= {1})'.format(count, max_recover_jobs))
+                logger.info('Found {0} unfinished recover dc jobs (>= {1})'.format(
+                    count, max_recover_jobs))
                 return
 
             with sync_manager.lock(Planner.RECOVER_DC_LOCK, blocking=False):
@@ -427,20 +434,20 @@ class Planner(object):
 
         except LockFailedError:
             logger.info('Recover dc planner is already running')
-        except Exception as e:
+        except Exception:
             logger.exception('Recover dc planner failed')
         finally:
             logger.info('Recover dc planner finished, time: {:.3f}'.format(
                 time.time() - start_ts))
             self.__tq.add_task_at(
-                    self.RECOVER_DC,
-                    self.recover_dc_timer.next(),
-                    self._recover_dc)
+                self.RECOVER_DC,
+                self.recover_dc_timer.next(),
+                self._recover_dc)
 
     def _do_recover_dc(self):
 
-        max_recover_jobs = config.get('jobs', {}).get('recover_dc_job',
-            {}).get('max_executing_jobs', 3)
+        max_recover_jobs = config.get('jobs', {}).get('recover_dc_job', {}).get(
+            'max_executing_jobs', 3)
 
         active_jobs = self.job_processor.job_finder.jobs(
             statuses=jobs.Job.ACTIVE_STATUSES
@@ -473,7 +480,8 @@ class Planner(object):
                 couple = storage.couples[couple_id]
 
                 if not _recovery_applicable_couple(couple):
-                    logger.info('Couple {0} is no more applicable for recovery job'.format(couple_id))
+                    logger.info('Couple {0} is no more applicable for recovery job'.format(
+                        couple_id))
                     continue
 
                 try:
@@ -481,12 +489,12 @@ class Planner(object):
                         jobs.JobTypes.TYPE_RECOVER_DC_JOB,
                         {'couple': couple_id,
                          'need_approving': need_approving})
-                    logger.info('Created recover dc job for couple {0}, '
-                        'job id {1}'.format(couple, job.id))
+                    logger.info('Created recover dc job for couple {0}, job id {1}'.format(
+                        couple, job.id))
                     created_jobs += 1
                 except Exception as e:
-                    logger.error('Failed to create recover dc job for '
-                        'couple {0}: {1}'.format(couple_id, e))
+                    logger.error('Failed to create recover dc job for couple {0}: {1}'.format(
+                        couple_id, e))
                     continue
 
             logger.info('Successfully created {0} recover dc jobs'.format(created_jobs))
@@ -497,9 +505,10 @@ class Planner(object):
 
         offset = 0
         while True:
-            cursor = (self.collection.find(fields=['couple'],
+            cursor = self.collection.find(
+                fields=['couple'],
                 sort=[('couple', pymongo.ASCENDING)],
-                skip=offset, limit=self.RECOVERY_OP_CHUNK))
+                skip=offset, limit=self.RECOVERY_OP_CHUNK)
             count = 0
             for rdc in cursor:
                 recover_data_couples.add(rdc['couple'])
@@ -568,8 +577,8 @@ class Planner(object):
 
         cursor = self.collection.find().sort('recover_ts', pymongo.ASCENDING)
         if cursor.count() < len(storage.couples):
-            logger.info('Sync recover data is required: {0} records/{1} '
-                'couples'.format(cursor.count(), len(storage.couples)))
+            logger.info('Sync recover data is required: {0} records/{1} couples'.format(
+                cursor.count(), len(storage.couples)))
             self.sync_recover_data()
             cursor = self.collection.find().sort('recover_ts',
                                                  pymongo.ASCENDING)
@@ -589,7 +598,7 @@ class Planner(object):
                 c = couple_data['couple']
                 ts_diff = ts - couple_data['recover_ts']
                 ts_diffs[c] = ts_diff
-                if not c in keys_diffs:
+                if c not in keys_diffs:
                     # couple was not applicable for recovery, skip
                     continue
                 weights[c] = weight(keys_diffs[c], ts_diffs[c])
@@ -621,7 +630,8 @@ class Planner(object):
                     missed_candidate = c
                     break
 
-            logger.debug('Current round: {0}, current min weight candidate '
+            logger.debug(
+                'Current round: {0}, current min weight candidate '
                 '{1}, weight: {2}, possible missed candidate is couple '
                 '{3}, keys diff: {4} (max recover ts diff = {5})'.format(
                     i, min_weight_candidate[0], min_weight_candidate[1],
@@ -637,7 +647,8 @@ class Planner(object):
 
     def update_recover_ts(self, couple_id, ts):
         ts = int(ts)
-        res = self.collection.update({'couple': couple_id},
+        res = self.collection.update(
+            {'couple': couple_id},
             {'couple': couple_id, 'recover_ts': ts},
             upsert=True)
         if res['ok'] != 1:
@@ -668,15 +679,15 @@ class Planner(object):
 
         except LockFailedError:
             logger.info('Couple defrag planner is already running')
-        except Exception as e:
+        except Exception:
             logger.exception('Couple defrag planner failed')
         finally:
             logger.info('Couple defrag planner finished, time: {:.3f}'.format(
                 time.time() - start_ts))
             self.__tq.add_task_at(
-                    self.COUPLE_DEFRAG,
-                    self.couple_defrag_timer.next(),
-                    self._couple_defrag)
+                self.COUPLE_DEFRAG,
+                self.couple_defrag_timer.next(),
+                self._couple_defrag)
 
     def _do_couple_defrag(self):
 
@@ -723,15 +734,14 @@ class Planner(object):
                 continue
 
             if insufficient_space_nb:
-                logger.warn('Couple {0}: node backend {1} has insufficient '
-                    'free space for defragmentation, max_blob_size {2}, '
-                    'free_space {3}'.format(
-                        str(couple), str(nb), nb.stat.max_blob_base_size,
-                        nb.stat.free_space))
+                logger.warn(
+                    'Couple {0}: node backend {1} has insufficient '
+                    'free space for defragmentation, max_blob_size {2}, free_space {3}'.format(
+                        str(couple), str(nb), nb.stat.max_blob_base_size, nb.stat.free_space))
                 continue
 
-            logger.info('Couple defrag candidate: {0}, max files_removed_size '
-                'in groups: {1}'.format(str(couple), couple_stat.files_removed_size))
+            logger.info('Couple defrag candidate: {}, max files_removed_size in groups: {}'.format(
+                str(couple), couple_stat.files_removed_size))
 
             couples_to_defrag.append((str(couple), couple_stat.files_removed_size))
 
@@ -777,7 +787,7 @@ class Planner(object):
 
         try:
             group_id = int(request[0])
-            if not group_id in storage.groups:
+            if group_id not in storage.groups:
                 raise ValueError
         except (TypeError, ValueError):
             raise ValueError('Group {0} is not found'.format(request[0]))
@@ -814,7 +824,8 @@ class Planner(object):
 
         if (group.node_backends and group.node_backends[0].status not in (
                 storage.Status.STALLED, storage.Status.INIT, storage.Status.RO)):
-            raise ValueError('Group {0} has node backend {1} in status {2}, '
+            raise ValueError(
+                'Group {0} has node backend {1} in status {2}, '
                 'should have STALLED or INIT status'.format(
                     group.group_id, str(group.node_backends[0]), group.node_backends[0].status))
 
@@ -831,8 +842,9 @@ class Planner(object):
                 candidates.append(g)
 
             if not candidates:
-                raise ValueError('Group {0} cannot be restored, no suitable coupled '
-                    'groups are found'.format(group.group_id))
+                raise ValueError(
+                    'Group {0} cannot be restored, no suitable coupled groups are found'.format(
+                        group.group_id))
 
             candidates.sort(key=lambda g: g.get_stat().files, reverse=True)
             src_group = candidates[0]
@@ -840,7 +852,8 @@ class Planner(object):
         else:
             src_group = storage.groups[int(options['src_group'])]
             if src_group not in group.couple.groups:
-                raise ValueError('Group {0} cannot be restored from group {1}, '
+                raise ValueError(
+                    'Group {0} cannot be restored from group {1}, '
                     'it is not member of a couple'.format(group.group_id, src_group.group_id))
 
         job_params['src_group'] = src_group.group_id
@@ -854,7 +867,8 @@ class Planner(object):
             job_params['uncoupled_group'] = uncoupled_groups[0].group_id
             job_params['merged_groups'] = [g.group_id for g in uncoupled_groups[1:]]
 
-        with sync_manager.lock(self.job_processor.JOBS_LOCK, timeout=self.job_processor.JOB_MANUAL_TIMEOUT):
+        with sync_manager.lock(self.job_processor.JOBS_LOCK,
+                               timeout=self.job_processor.JOB_MANUAL_TIMEOUT):
             job = self.job_processor._create_job(
                 jobs.JobTypes.TYPE_RESTORE_GROUP_JOB,
                 job_params, force=force)
@@ -917,7 +931,7 @@ class Planner(object):
 
         try:
             group_id = int(request[0])
-            if not group_id in storage.groups:
+            if group_id not in storage.groups:
                 raise ValueError
         except (TypeError, ValueError):
             raise ValueError('Group {0} is not found'.format(request[0]))
@@ -936,21 +950,21 @@ class Planner(object):
 
         uncoupled_groups = []
         for gid in options.get('uncoupled_groups') or []:
-            if not gid in storage.groups:
+            if gid not in storage.groups:
                 raise ValueError('Uncoupled group {0} is not found'.format(gid))
             uncoupled_groups.append(storage.groups[gid])
 
         job_params = self._get_move_group_params(group, uncoupled_groups=uncoupled_groups)
 
         logger.debug('Lock acquiring')
-        with sync_manager.lock(self.job_processor.JOBS_LOCK, timeout=self.job_processor.JOB_MANUAL_TIMEOUT):
+        with sync_manager.lock(self.job_processor.JOBS_LOCK,
+                               timeout=self.job_processor.JOB_MANUAL_TIMEOUT):
             logger.debug('Lock acquired')
             job = self.job_processor._create_job(
                 jobs.JobTypes.TYPE_MOVE_JOB,
                 job_params, force=force)
 
         return job.dump()
-
 
     def _get_move_group_params(self, group, uncoupled_groups=None):
 
@@ -959,7 +973,8 @@ class Planner(object):
         self.node_info_updater.update_status(involved_groups)
 
         if len(group.node_backends) != 1:
-            raise ValueError('Group {0} has {1} node backends, currently '
+            raise ValueError(
+                'Group {0} has {1} node backends, currently '
                 'only groups with 1 node backend can be used'.format(
                     group.group_id, len(group.node_backends)))
 
@@ -975,11 +990,13 @@ class Planner(object):
             locked_hosts = manual_locker.get_locked_hosts()
             for unc_group in uncoupled_groups:
                 if len(unc_group.node_backends) != 1:
-                    raise ValueError('Group {0} has {1} node backends, currently '
+                    raise ValueError(
+                        'Group {0} has {1} node backends, currently '
                         'only groups with 1 node backend can be used'.format(
                             unc_group.group_id, len(unc_group.node_backends)))
 
-                is_good = infrastructure.is_uncoupled_group_good(unc_group, locked_hosts, [storage.Group.TYPE_DATA], max_node_backends=1)
+                is_good = infrastructure.is_uncoupled_group_good(
+                    unc_group, locked_hosts, [storage.Group.TYPE_DATA], max_node_backends=1)
                 if not is_good:
                     raise ValueError('Uncoupled group {0} is not applicable'.format(
                         unc_group.group_id))
@@ -993,8 +1010,8 @@ class Planner(object):
                 if not dc:
                     dc, fsid = host_dc, nb.fs.fsid
                 elif dc != host_dc or fsid != nb.fs.fsid:
-                    raise ValueError('All uncoupled groups should be located '
-                        'on a single hdd on the same host')
+                    raise ValueError(
+                        'All uncoupled groups should be located on a single hdd on the same host')
 
                 if unc_group.couple or unc_group.status != storage.Status.INIT:
                     raise ValueError('Group {0} is not uncoupled'.format(unc_group.group_id))
@@ -1016,11 +1033,11 @@ class Planner(object):
                 raise RuntimeError('Failed to get dc for host {}'.format(
                     dst_backend.node.host))
             if dst_dc in dcs:
-                raise ValueError('Group {0} cannot be moved to uncoupled group {1}, '
+                raise ValueError(
+                    'Group {0} cannot be moved to uncoupled group {1}, '
                     'couple {2} already has groups in dc {3}'.format(
                         group.group_id, uncoupled_group.group_id,
                         group.couple, dst_dc))
-
 
         job_params = {'group': group.group_id,
                       'uncoupled_group': uncoupled_group.group_id,
@@ -1062,19 +1079,20 @@ class Planner(object):
             try:
                 uncoupled_group = storage.groups[job.uncoupled_group]
             except KeyError:
-                logger.warn('Uncoupled group {0} is not found in storage '
-                    '(job {1})'.format(job.uncoupled_group, job.id))
+                logger.warn('Uncoupled group {0} is not found in storage (job {1})'.format(
+                    job.uncoupled_group, job.id))
                 pass
             else:
                 uncoupled_group_fsid = job.uncoupled_group_fsid
                 if uncoupled_group_fsid is None:
-                    uncoupled_group_fsid = (uncoupled_group.node_backends and
+                    uncoupled_group_fsid = (
+                        uncoupled_group.node_backends and
                         uncoupled_group.node_backends[0].fs.fsid or None)
                 if uncoupled_group_fsid:
                     add_groups.append((uncoupled_group, uncoupled_group_fsid))
                 else:
-                    logger.warn('Uncoupled group {0} has empty backend list '
-                        '(job {1})'.format(job.uncoupled_group, job.id))
+                    logger.warn('Uncoupled group {0} has empty backend list (job {1})'.format(
+                        job.uncoupled_group, job.id))
 
         # GOOD_STATUSES includes FULL status, but ns_current_state only accounts OK couples!
         # Change behaviour
@@ -1087,22 +1105,24 @@ class Planner(object):
             remove_groups.append((group, group.node_backends[0].fs.fsid))
 
         if (job.type == jobs.JobTypes.TYPE_RESTORE_GROUP_JOB and
-            not uncoupled_group_in_job and
-            group.couple.status not in storage.GOOD_STATUSES):
+                not uncoupled_group_in_job and
+                group.couple.status not in storage.GOOD_STATUSES):
 
             # try to add restoring group backend if mastermind knows about it
             if group.node_backends:
                 add_groups.append((group, group.node_backends[0].fs.fsid))
 
         # applying accounting
-        dc_node_type = inventory.get_dc_node_type()
-        for (group, fsid), diff in zip(remove_groups + add_groups,
-            [-1] * len(remove_groups) + [1] * len(add_groups)):
+        for (group, fsid), diff in zip(
+                remove_groups + add_groups,
+                [-1] * len(remove_groups) + [1] * len(add_groups)):
 
-            logger.debug('Accounting group {0}, fsid {1}, diff {2}'.format(group.group_id, fsid, diff))
+            logger.debug('Accounting group {0}, fsid {1}, diff {2}'.format(
+                group.group_id, fsid, diff))
 
             if not group.node_backends:
-                logger.debug('No node backend for group {0}, job for group {1}'.format(group.group_id, job.group))
+                logger.debug('No node backend for group {0}, job for group {1}'.format(
+                    group.group_id, job.group))
                 continue
 
             try:
@@ -1123,20 +1143,21 @@ class Planner(object):
                     ns_current_type_state = ns_current_state[cur_node['type']]
                     full_path = '|'.join(parts)
                     ns_current_type_state['nodes'][full_path] += diff
-                    ns_current_type_state['avg'] += float(diff) / len(ns_current_type_state['nodes'])
+                    ns_current_type_state['avg'] += float(diff) / len(
+                        ns_current_type_state['nodes'])
 
                     if cur_node['type'] == 'host' and 'hdd' in types:
                         hdd_path = full_path + '|' + str(fsid)
                         ns_hdd_type_state = ns_current_state['hdd']
                         if hdd_path in ns_hdd_type_state['nodes']:
                             ns_hdd_type_state['nodes'][hdd_path] += diff
-                            ns_hdd_type_state['avg'] += float(diff) / len(ns_hdd_type_state['nodes'])
+                            ns_hdd_type_state['avg'] += float(diff) / len(
+                                ns_hdd_type_state['nodes'])
                         else:
                             logger.warn('Hdd path {0} is not found under host {1}'.format(
                                 hdd_path, full_path))
                 parts.pop()
                 cur_node = cur_node.get('parent')
-
 
     def get_suitable_uncoupled_groups_list(self, group, uncoupled_groups, busy_group_ids=None):
         logger.debug('{0}, {1}'.format(group.group_id, [g.group_id for g in group.coupled_groups]))
@@ -1146,15 +1167,16 @@ class Planner(object):
         required_ts = max(st.total_space for st in stats)
         groups_by_fs = {}
 
-        busy_group_ids = busy_group_ids or set(self.job_processor.job_finder.get_uncoupled_groups_in_service())
+        busy_group_ids = busy_group_ids or set(
+            self.job_processor.job_finder.get_uncoupled_groups_in_service())
 
         logger.info('Busy uncoupled groups: {0}'.format(busy_group_ids))
 
         forbidden_dcs = set()
         if config.get('forbidden_dc_sharing_among_groups', False):
             forbidden_dcs = set(h.hosts_dcs(nb.node.host
-                                    for g in group.coupled_groups
-                                    for nb in g.node_backends))
+                                            for g in group.coupled_groups
+                                            for nb in g.node_backends))
 
         for g in uncoupled_groups:
             try:
@@ -1208,7 +1230,7 @@ class Planner(object):
             groups_by_dc.setdefault(dc, []).append(unc_group)
 
         logger.info('Uncoupled groups by dcs: {0}'.format(
-            [(dc, len(groups)) for dc, groups in groups_by_dc.iteritems()]))
+            [(g_dc, len(groups)) for g_dc, groups in groups_by_dc.iteritems()]))
 
         dc_node_type = inventory.get_dc_node_type()
         weights = {}
@@ -1267,7 +1289,8 @@ class Planner(object):
 
         uncoupled_groups = infrastructure.get_good_uncoupled_groups(max_node_backends=1)
         candidates = self.get_suitable_uncoupled_groups_list(group, uncoupled_groups)
-        logger.debug('Candidate groups for group {0}: {1}'.format(group.group_id,
+        logger.debug('Candidate groups for group {0}: {1}'.format(
+            group.group_id,
             [[g.group_id for g in c] for c in candidates]))
 
         units = infrastructure.groups_units(uncoupled_groups, types)
@@ -1295,10 +1318,9 @@ class Planner(object):
         for job in active_jobs:
             cmp_ns_current_state = deepcopy(ns_current_state)
             self.account_job(ns_current_state, types, job, ns)
-            log_ns_current_state_diff(cmp_ns_current_state, ns_current_state,
+            log_ns_current_state_diff(
+                cmp_ns_current_state, ns_current_state,
                 'Applying job {0}, path {{0}}, old value: {{1}}, new value: {{2}}'.format(job.id))
-
-        cur_node = tree
 
         if not candidates:
             raise RuntimeError('No suitable uncoupled groups found')
@@ -1330,11 +1352,12 @@ class Planner(object):
                 selected_candidates.append(c[1])
 
             logger.debug('Level {0}, ns {1}, min weight candidates: {2}'.format(
-                level_type, ns, [[g.group_id for g in c] for c in selected_candidates]))
+                level_type, ns, [[g.group_id for g in c_] for c_ in selected_candidates]))
 
             candidates = selected_candidates
 
         return candidates[0]
+
 
 def _recovery_applicable_couple(couple):
     if couple.status not in storage.GOOD_STATUSES:
@@ -1390,7 +1413,9 @@ class DcState(object):
         obj.groups = copy(self.groups)
         obj.total_space, obj.uncoupled_space = self.total_space, self.uncoupled_space
         obj.couples = copy(self.couples)
-        obj.uncoupled_groups = SortedCollection(iterable=self.uncoupled_groups._items, key=lambda x: storage_state.stats(x).total_space)
+        obj.uncoupled_groups = SortedCollection(
+            iterable=self.uncoupled_groups._items,
+            key=lambda x: storage_state.stats(x).total_space)
         return obj
 
     def apply_stat(self, stat):
@@ -1437,7 +1462,7 @@ class StorageState(object):
             for nb in group.node_backends:
                 if nb.stat is None:
                     continue
-                if not nb.stat.fsid in fsids:
+                if nb.stat.fsid not in fsids:
                     try:
                         dc = nb.node.host.dc
                     except CacheUpstreamError:
@@ -1467,20 +1492,16 @@ class StorageState(object):
 
     @property
     def mean_unc_percentage(self):
-        unc_space = sum([dc_state.uncoupled_space
-            for dc_state in self.state.itervalues()])
-        total_space = sum([dc_state.total_space
-            for dc_state in self.state.itervalues()])
+        unc_space = sum([dc_state.uncoupled_space for dc_state in self.state.itervalues()])
+        total_space = sum([dc_state.total_space for dc_state in self.state.itervalues()])
 
         return float(unc_space) / total_space
-
 
     def _debug(self):
         logger.debug('mean percentage: {0}'.format(self.mean_unc_percentage))
         for dc, dc_state in self.state.iteritems():
-            logger.debug('dc: {0}, unc_percentage {1}, unc_space {2} '
-                'total_space {3}'.format(dc, dc_state.unc_percentage,
-                    dc_state.uncoupled_space, dc_state.total_space))
+            logger.debug('dc: {0}, unc_percentage {1}, unc_space {2} total_space {3}'.format(
+                dc, dc_state.unc_percentage, dc_state.uncoupled_space, dc_state.total_space))
 
     def stats(self, group):
         return self._stats[group.group_id]
@@ -1526,7 +1547,6 @@ class StorageState(object):
                     continue
         return dcs
 
-
     def move_group(self, src_dc, src_group, dst_dc, dst_group, merged_groups):
 
         old_ms_error = self.state_ms_error
@@ -1571,4 +1591,3 @@ class StorageState(object):
 
 def gb(bytes):
     return (bytes / (1024.0 * 1024.0 * 1024))
-

@@ -1,5 +1,3 @@
-import json
-
 from config import config
 from importer import import_object
 

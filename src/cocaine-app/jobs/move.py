@@ -2,7 +2,6 @@ import copy
 import logging
 import os.path
 
-from config import config
 from error import JobBrokenError
 from errors import CacheUpstreamError
 from infrastructure import infrastructure
@@ -11,13 +10,6 @@ from job import Job, RESTORE_CFG
 from job_types import JobTypes
 from tasks import NodeStopTask, RsyncBackendTask, MinionCmdTask, HistoryRemoveNodeTask
 import storage
-from sync.error import (
-    LockError,
-    LockFailedError,
-    LockAlreadyAcquiredError,
-    InconsistentLockError,
-    API_ERROR_CODE
-)
 
 
 logger = logging.getLogger('mm.jobs')
@@ -31,7 +23,8 @@ class MoveJob(Job):
     # used to mark source node that content has been moved away from it
     GROUP_FILE_DIR_MOVE_DST_RENAME = RESTORE_CFG.get('group_file_dir_move_dst_rename', None)
     MERGE_GROUP_FILE_MARKER_PATH = RESTORE_CFG.get('merge_group_file_marker', None)
-    MERGE_GROUP_FILE_DIR_MOVE_SRC_RENAME = RESTORE_CFG.get('merge_group_file_dir_move_src_rename', None)
+    MERGE_GROUP_FILE_DIR_MOVE_SRC_RENAME = RESTORE_CFG.get(
+        'merge_group_file_dir_move_src_rename', None)
 
     PARAMS = ('group', 'uncoupled_group', 'uncoupled_group_fsid', 'merged_groups',
               'resources',
@@ -99,7 +92,8 @@ class MoveJob(Job):
                             nb.node.host))
 
                 if ug_dc in dcs:
-                    raise JobBrokenError('Cannot move group {0} to uncoupled group '
+                    raise JobBrokenError(
+                        'Cannot move group {0} to uncoupled group '
                         '{1}, because group {2} is already in dc {3}'.format(
                             self.group, self.uncoupled_group, g.group_id, ug_dc))
 
@@ -142,9 +136,9 @@ class MoveJob(Job):
             merged_nb = merged_group.node_backends[0]
 
             merged_group_file = (os.path.join(merged_nb.base_path,
-                                 self.GROUP_FILE_PATH)
-                  if self.GROUP_FILE_PATH else
-                  '')
+                                              self.GROUP_FILE_PATH)
+                                 if self.GROUP_FILE_PATH else
+                                 '')
 
             merged_path = ''
             if self.MERGE_GROUP_FILE_DIR_MOVE_SRC_RENAME and merged_group_file:
@@ -156,10 +150,9 @@ class MoveJob(Job):
                                                  merged_nb.backend_id)
 
             merged_group_file_marker = (os.path.join(merged_nb.base_path,
-                                        self.MERGE_GROUP_FILE_MARKER_PATH)
-                         if self.MERGE_GROUP_FILE_MARKER_PATH else
-                         '')
-
+                                                     self.MERGE_GROUP_FILE_MARKER_PATH)
+                                        if self.MERGE_GROUP_FILE_MARKER_PATH else
+                                        '')
 
             shutdown_cmd = infrastructure._disable_node_backend_cmd(
                 merged_nb.node.host.addr,
@@ -182,11 +175,11 @@ class MoveJob(Job):
                 params['move_dst'] = merged_path
 
             task = NodeStopTask.new(self,
-                        group=group_id,
-                        uncoupled=True,
-                        host=merged_nb.node.host.addr,
-                        cmd=shutdown_cmd,
-                        params=params)
+                                    group=group_id,
+                                    uncoupled=True,
+                                    host=merged_nb.node.host.addr,
+                                    cmd=shutdown_cmd,
+                                    params=params)
 
             self.tasks.append(task)
 
@@ -196,19 +189,18 @@ class MoveJob(Job):
                 merged_nb.node.family)
 
             task = MinionCmdTask.new(self,
-                host=merged_nb.node.host.addr,
-                cmd=reconfigure_cmd,
-                params={'node_backend': node_backend_str.encode('utf-8')})
+                                     host=merged_nb.node.host.addr,
+                                     cmd=reconfigure_cmd,
+                                     params={'node_backend': node_backend_str.encode('utf-8')})
 
             self.tasks.append(task)
 
             task = HistoryRemoveNodeTask.new(self,
-                             group=group_id,
-                             host=merged_nb.node.host.addr,
-                             port=merged_nb.node.port,
-                             backend_id=merged_nb.backend_id)
+                                             group=group_id,
+                                             host=merged_nb.node.host.addr,
+                                             port=merged_nb.node.port,
+                                             backend_id=merged_nb.backend_id)
             self.tasks.append(task)
-
 
         shutdown_cmd = infrastructure._disable_node_backend_cmd(
             self.dst_host, self.dst_port, self.dst_family, self.dst_backend_id)
@@ -253,7 +245,6 @@ class MoveJob(Job):
                                          'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]})
 
         self.tasks.append(task)
-
 
         move_cmd = infrastructure.move_group_cmd(
             src_host=self.src_host,
@@ -301,7 +292,6 @@ class MoveJob(Job):
                                      params=params)
             self.tasks.append(task)
 
-
         shutdown_cmd = infrastructure._disable_node_backend_cmd(
             self.src_host, self.src_port, self.src_family, self.src_backend_id)
 
@@ -332,7 +322,6 @@ class MoveJob(Job):
                                 cmd=shutdown_cmd,
                                 params=params)
         self.tasks.append(task)
-
 
         reconfigure_cmd = infrastructure._reconfigure_node_cmd(
             self.src_host, self.src_port, self.src_family)
@@ -409,7 +398,7 @@ class MoveJob(Job):
         yield group.group_id, updated_meta
 
     def _group_unmarks(self):
-        if not self.group in storage.groups:
+        if self.group not in storage.groups:
             raise RuntimeError('Group {0} is not found'.format(self.group))
         group = storage.groups[self.group]
         if not group.meta:
