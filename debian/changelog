@@ -1,3 +1,9 @@
+mastermind (2.25.2) precise; urgency=low
+
+  * Job processing tweaks
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 11 Jun 2015 12:40:16 +0300
+
 mastermind (2.25.1) precise; urgency=low
 
   * Cached keys handler should be tolerant to cocaine connection errors
