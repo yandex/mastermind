@@ -1,3 +1,4 @@
+from collections import defaultdict
 import itertools
 import logging
 import time
@@ -89,12 +90,12 @@ class JobProcessor(object):
         ready_jobs = []
         new_jobs = []
 
-        resources = {}
-        default_res_counter = {
+        default_res_counter = lambda: {
             Job.RESOURCE_FS: {},
             Job.RESOURCE_HOST_IN: {},
             Job.RESOURCE_HOST_OUT: {},
         }
+        resources = defaultdict(default_res_counter)
 
         # global job counter by type, accounts only executing jobs
         type_jobs_count = {}
@@ -106,7 +107,7 @@ class JobProcessor(object):
             if job.status == Job.STATUS_NEW:
                 new_jobs.append(job)
             else:
-                type_res = resources.setdefault(job.type, default_res_counter)
+                type_res = resources[job.type]
                 for res_type, res_val in self._unfold_resources(job.resources):
                     type_res[res_type].setdefault(res_val, 0)
                     type_res[res_type][res_val] += 1
@@ -116,7 +117,7 @@ class JobProcessor(object):
                     type_jobs_count.setdefault(job.type, 0)
                     type_jobs_count[job.type] += 1
 
-        logger.debug('Resource usage: {}; by type {}'.format(resources, type_jobs_count))
+        logger.debug('Resources usage: {}; by type {}'.format(dict(resources), type_jobs_count))
 
         # selecting jobs to start processing
         for job in new_jobs:
@@ -131,7 +132,7 @@ class JobProcessor(object):
             for res_type, res_val in self._unfold_resources(job.resources):
 
                 for job_type in check_types:
-                    if resources[job_type].get(res_type, {}).get(res_val, 0) > 0:
+                    if resources[job_type][res_type].get(res_val, 0) > 0:
                         # job of higher priority is using the resource
                         logger.debug(
                             'Job {}: will be skipped, resource {} / {} '
@@ -143,7 +144,7 @@ class JobProcessor(object):
                 if no_slots:
                     break
 
-                cur_usage = resources[job.type].get(res_type, {}).get(res_val, 0)
+                cur_usage = resources[job.type][res_type].get(res_val, 0)
                 max_usage = JOB_CONFIG.get(job.type, {}).get(
                     'resources_limits', {}).get(res_type, float('inf'))
                 if cur_usage >= max_usage:
@@ -172,9 +173,8 @@ class JobProcessor(object):
                 logger.debug(
                     'Job {}: will use resource {} / {} counter {} / {}'.format(
                         job.id, res_type, res_val, cur_usage, max_usage))
-                res_counter = resources.setdefault(job.type, default_res_counter)
-                res_counter.setdefault(res_type, {}).setdefault(res_val, 0)
-                res_counter[res_type][res_val] += 1
+                resources[job.type][res_type].setdefault(res_val, 0)
+                resources[job.type][res_type][res_val] += 1
 
             type_jobs_count.setdefault(job.type, 0)
             type_jobs_count[job.type] += 1
