@@ -154,7 +154,7 @@ class JobProcessor(object):
             if no_slots:
                 continue
 
-            type_cur_usage = type_jobs_count.get(job_type, 0)
+            type_cur_usage = type_jobs_count.get(job.type, 0)
             type_max_usage = JOB_CONFIG.get(job.type, {}).get('max_executing_jobs', 50)
             if type_cur_usage >= type_max_usage:
                 logger.debug(
@@ -171,7 +171,7 @@ class JobProcessor(object):
                 res_counter.setdefault(res_type, {}).setdefault(res_val, 0)
                 res_counter[res_type][res_val] += 1
 
-            type_jobs_count.setdefault(job_type, 0)
+            type_jobs_count.setdefault(job.type, 0)
             type_jobs_count[job.type] += 1
 
             ready_jobs.append(job)
