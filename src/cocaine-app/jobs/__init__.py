@@ -76,7 +76,7 @@ class JobProcessor(object):
     def _unfold_resources(d):
         if d is None:
             raise StopIteration
-        for res_type, res_val in itertools.chain(*[itertools.product(k, v)
+        for res_type, res_val in itertools.chain(*[itertools.product([k], v)
                                                    for k, v in d.iteritems()]):
             if isinstance(res_val, list):
                 res_val = tuple(res_val)
