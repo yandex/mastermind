@@ -78,6 +78,8 @@ class JobProcessor(object):
             raise StopIteration
         for res_type, res_val in itertools.chain(*[itertools.product(k, v)
                                                    for k, v in d.iteritems()]):
+            if isinstance(res_val, list):
+                res_val = tuple(res_val)
             yield res_type, res_val
 
     def _ready_jobs(self):
