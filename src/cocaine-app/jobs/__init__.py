@@ -1,5 +1,4 @@
-import datetime
-import json
+import itertools
 import logging
 import time
 import traceback
@@ -8,18 +7,15 @@ import elliptics
 
 from config import config
 from db.mongo.pool import Collection
-import errors
 from error import JobBrokenError, RetryError
 import helpers as h
-from job_types import JobTypes, TaskTypes
+from job_types import JobTypes
 from job import Job
 from couple_defrag import CoupleDefragJob
 from move import MoveJob
 from recover_dc import RecoverDcJob
 from job_factory import JobFactory
 from restore_group import RestoreGroupJob
-import indexes
-import keys
 from tasks import Task, MinionCmdTask
 import timed_queue
 import storage
@@ -28,8 +24,6 @@ from sync.error import (
     LockError,
     LockFailedError,
     LockAlreadyAcquiredError,
-    InconsistentLockError,
-    API_ERROR_CODE
 )
 from timer import periodic_timer
 
@@ -58,7 +52,8 @@ class JobProcessor(object):
         logger.info('Starting JobProcessor')
         self.job_finder = job_finder
         self.session = elliptics.Session(node)
-        wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or config.get('wait_timeout', 5)
+        wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or \
+            config.get('wait_timeout', 5)
         self.session.set_timeout(wait_timeout)
         self.meta_session = node.meta_session
         self.minions = minions
@@ -69,8 +64,10 @@ class JobProcessor(object):
 
         self.jobs_timer = periodic_timer(seconds=JOB_CONFIG.get('execute_period', 60))
         self.downtimes = Collection(db[config['metadata']['jobs']['db']], 'downtimes')
-        self.__tq.add_task_at(self.JOBS_EXECUTE,
-            self.jobs_timer.next(), self._execute_jobs)
+        self.__tq.add_task_at(
+            self.JOBS_EXECUTE,
+            self.jobs_timer.next(),
+            self._execute_jobs)
 
     def _start_tq(self):
         self.__tq.start()
@@ -80,8 +77,8 @@ class JobProcessor(object):
         if d is None:
             raise StopIteration
         for res_type, res_val in itertools.chain(*[itertools.product(k, v)
-            for k, v in d.iteritems()]):
-                yield res_type, res_val
+                                                   for k, v in d.iteritems()]):
+            yield res_type, res_val
 
     def _ready_jobs(self):
 
@@ -108,7 +105,7 @@ class JobProcessor(object):
                 new_jobs.append(job)
             else:
                 type_res = resources.setdefault(job.type, default_res_counter)
-                for res_type, res_vals in self._unfold_resources(job.resources):
+                for res_type, res_val in self._unfold_resources(job.resources):
                     type_res[res_type].setdefault(res_val, 0)
                     type_res[res_type][res_val] += 1
                 ready_jobs.append(job)
@@ -129,7 +126,8 @@ class JobProcessor(object):
                 for job_type in check_types:
                     if resources[job_type].get(res_type, {}).get(res_val, 0) > 0:
                         # job of higher priority is using the resource
-                        logger.debug('Job {}: will be skipped, resource {} / {} '
+                        logger.debug(
+                            'Job {}: will be skipped, resource {} / {} '
                             'is occupuied by higher priority job'.format(
                                 job.id, res_type, res_val))
                         no_slots = True
@@ -139,10 +137,11 @@ class JobProcessor(object):
                     break
 
                 cur_usage = resources[job.type].get(res_type, {}).get(res_val, 0)
-                max_usage = JOB_CONFIG.get(job_type, {}).get('resources_limits', {}).get(res_type, float('inf'))
-                if (cur_usage >= max_usage):
-                    logger.debug('Job {}: will be skipped, resource {} / {} '
-                        'counter {} >= {}'.format(
+                max_usage = JOB_CONFIG.get(job_type, {}).get(
+                    'resources_limits', {}).get(res_type, float('inf'))
+                if cur_usage >= max_usage:
+                    logger.debug(
+                        'Job {}: will be skipped, resource {} / {} counter {} >= {}'.format(
                             job.id, res_type, res_val, cur_usage, max_usage))
 
                     no_slots = True
@@ -156,15 +155,15 @@ class JobProcessor(object):
             type_cur_usage = type_jobs_count.get(job_type, 0)
             type_max_usage = JOB_CONFIG.get(job.type, {}).get('max_executing_jobs', 50)
             if type_cur_usage >= type_max_usage:
-                logger.debug('Job {}: will be skipped, job type {} '
-                    'counter {} >= {}'.format(job.id, job.type,
-                        type_cur_usage, type_max_usage))
+                logger.debug(
+                    'Job {}: will be skipped, job type {} counter {} >= {}'.format(
+                        job.id, job.type, type_cur_usage, type_max_usage))
                 continue
 
             # account job resources and add job to queue
             for res_type, res_val in self._unfold_resources(job.resources):
-                logger.debug('Job {}: will use resource {} / {} '
-                    'counter {} / {}'.format(
+                logger.debug(
+                    'Job {}: will use resource {} / {} counter {} / {}'.format(
                         job.id, res_type, res_val, cur_usage, max_usage))
                 res_counter = resources.setdefault(job.type, default_res_counter)
                 res_counter.setdefault(res_type, {}).setdefault(res_val, 0)
@@ -184,7 +183,6 @@ class JobProcessor(object):
         logger.info('Jobs execution started')
         try:
             logger.debug('Lock acquiring')
-
             with sync_manager.lock(self.JOBS_LOCK, blocking=False):
                 logger.debug('Lock acquired')
 
