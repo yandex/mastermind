@@ -1,3 +1,9 @@
+mastermind (2.25.5) precise; urgency=low
+
+  * Jobs: fix for resource unfolding
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 11 Jun 2015 15:48:11 +0300
+
 mastermind (2.25.4) precise; urgency=low
 
   * Minor bug fix
