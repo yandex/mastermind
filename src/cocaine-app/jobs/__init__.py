@@ -116,10 +116,15 @@ class JobProcessor(object):
                     type_jobs_count.setdefault(job.type, 0)
                     type_jobs_count[job.type] += 1
 
+        logger.debug('Resource usage: {}; by type {}'.format(resources, type_jobs_count))
+
         # selecting jobs to start processing
         for job in new_jobs:
+
             check_types = [t for t, p in self.JOB_PRIORITIES.iteritems()
                            if p > self.JOB_PRIORITIES[job.type]]
+            logger.debug('Job {}: checking higher priority job types: {}'.format(
+                job.id, check_types))
 
             no_slots = False
 
@@ -130,8 +135,8 @@ class JobProcessor(object):
                         # job of higher priority is using the resource
                         logger.debug(
                             'Job {}: will be skipped, resource {} / {} '
-                            'is occupuied by higher priority job'.format(
-                                job.id, res_type, res_val))
+                            'is occupuied by higher priority job of type {}'.format(
+                                job.id, res_type, res_val, job_type))
                         no_slots = True
                         break
 
