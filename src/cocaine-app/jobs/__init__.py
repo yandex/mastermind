@@ -139,7 +139,7 @@ class JobProcessor(object):
                     break
 
                 cur_usage = resources[job.type].get(res_type, {}).get(res_val, 0)
-                max_usage = JOB_CONFIG.get(job_type, {}).get(
+                max_usage = JOB_CONFIG.get(job.type, {}).get(
                     'resources_limits', {}).get(res_type, float('inf'))
                 if cur_usage >= max_usage:
                     logger.debug(
