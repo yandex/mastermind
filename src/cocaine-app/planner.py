@@ -755,27 +755,23 @@ class Planner(object):
         created_jobs = 0
         logger.info('Trying to create {0} jobs'.format(slots))
 
-        logger.debug('Lock acquiring')
-        with sync_manager.lock(self.job_processor.JOBS_LOCK, timeout=60):
-            logger.debug('Lock acquired')
+        while couples_to_defrag and created_jobs < slots:
+            couple_tuple, fragmentation = couples_to_defrag.pop()
 
-            while couples_to_defrag and created_jobs < slots:
-                couple_tuple, fragmentation = couples_to_defrag.pop()
+            try:
+                job = self.job_processor._create_job(
+                    jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB,
+                    {'couple': couple_tuple,
+                     'need_approving': need_approving,
+                     'is_cache_couple': False})
+                logger.info('Created couple defrag job for couple {0}, job id {1}'.format(
+                    couple_tuple, job.id))
+                created_jobs += 1
+            except Exception as e:
+                logger.error('Failed to create couple defrag job: {0}'.format(e))
+                continue
 
-                try:
-                    job = self.job_processor._create_job(
-                        jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB,
-                        {'couple': couple_tuple,
-                         'need_approving': need_approving,
-                         'is_cache_couple': False})
-                    logger.info('Created couple defrag job for couple {0}, job id {1}'.format(
-                        couple_tuple, job.id))
-                    created_jobs += 1
-                except Exception as e:
-                    logger.error('Failed to create couple defrag job: {0}'.format(e))
-                    continue
-
-            logger.info('Successfully created {0} couple defrag jobs'.format(created_jobs))
+        logger.info('Successfully created {0} couple defrag jobs'.format(created_jobs))
 
     @h.concurrent_handler
     def restore_group(self, request):
