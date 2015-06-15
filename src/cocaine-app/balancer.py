@@ -2,19 +2,18 @@
 from collections import defaultdict
 import copy
 from datetime import datetime
+import functools
 import itertools
 import json
 import logging
 import operator
-import random
 import re
-import sys
-import time
 import traceback
 
-from cocaine.exceptions import ConnectionError
+from cocaine.futures import chain
 import elliptics
 import msgpack
+from mastermind.service import ReconnectableService
 
 import balancelogicadapter as bla
 import balancelogic
@@ -1307,18 +1306,12 @@ class Balancer(object):
         return {'couples': couples_diff,
                 'total_keys_diff': sum(couples_diff.itervalues())}
 
+    @h.source
     def get_cached_keys(self, request):
-        from cocaine.services import Service
-        try:
-            return Service('mastermind2.26-cache').enqueue(
-                'get_cached_keys', '')
-        except ConnectionError as e:
-            logger.error('mastermind2.26-cache connection error: {}'.format(e))
-            return {}
-        except Exception:
-            logger.exception('Unexpected mastermind2.26-cache error')
-            raise
-
+        mc = ReconnectableService(
+            '{base_name}-cache'.format(base_name=config.get('app_name', 'mastermind')),
+            attempts=3, timeout=10)
+        yield mc.enqueue('get_cached_keys', '')
 
 def handlers(b):
     handlers = []

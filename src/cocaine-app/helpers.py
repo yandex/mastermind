@@ -28,6 +28,15 @@ def handler(f):
     return wrapper
 
 
+def source(func):
+    """Marks function or method as source of engine context.
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return chain.Chain([lambda: func(*args, **kwargs)])
+    return wrapper
+
+
 def concurrent_handler(f):
 
     def sync_wrapper(*args, **kwargs):
@@ -38,7 +47,7 @@ def concurrent_handler(f):
             return {'Error': str(e)}
 
     @wraps(f)
-    @chain.source
+    @source
     def wrapper(*args, **kwargs):
         yield chain.concurrent(sync_wrapper)(*args, **kwargs)
 
