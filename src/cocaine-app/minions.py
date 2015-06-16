@@ -267,6 +267,9 @@ class Minions(object):
 
         io_loop = IOLoop()
         client = SimpleAsyncHTTPClient(io_loop)
+        logger.debug(
+            'ioloop for single async http request for host {} started: {}'.format(
+                host, command))
         response = io_loop.run_sync(functools.partial(
             client.fetch, url, method='POST',
                                headers=self.minion_headers,
@@ -274,8 +277,15 @@ class Minions(object):
                                request_timeout=MINIONS_CFG.get('request_timeout', 5.0),
                                allow_ipv6=True,
                                use_gzip=True))
+        logger.debug(
+            'ioloop for single async http request for host {} finished: {}'.format(
+                host, command))
 
-        data = self._process_state(host, self._get_response(host, response), sync=True)
+        try:
+            data = self._process_state(host, self._get_response(host, response), sync=True)
+        except HTTPError:
+            logger.exception('Execute cmd raised http error')
+            raise
         return data
 
     @h.concurrent_handler
