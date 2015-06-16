@@ -10,13 +10,13 @@ XS-Python-Version: >= 2.6
 
 Package: mastermind
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, cocaine-framework-python (<< 0.12), python-balancelogic (>= 0.4), python-tornado, cocaine-tools (<< 0.12), python-pymongo, cocaine-runtime (<< 0.12), python-mastermind
+Depends: ${shlibs:Depends}, ${misc:Depends}, cocaine-framework-python (<< 0.12), python-balancelogic (>= 0.4), python-tornado, cocaine-tools (<< 0.12), python-pymongo, cocaine-runtime (<< 0.12), python-mastermind (= ${binary:Version})
 Recommends: python-kazoo
 Description: Metabalancer for elliptics storage
 
 Package: mastermind-utils
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, python-opster (>= 4.0), cocaine-framework-python (<< 0.12), python-msgpack | msgpack-python, python-tornado, python-mastermind
+Depends: ${shlibs:Depends}, ${misc:Depends}, python-opster (>= 4.0), cocaine-framework-python (<< 0.12), python-msgpack | msgpack-python, python-tornado, python-mastermind (= ${binary:Version})
 Description: Metabalancer CLI for elliptics storage
 
 Package: python-mastermind
