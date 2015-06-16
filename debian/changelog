@@ -1,3 +1,9 @@
+mastermind (2.25.13) precise; urgency=low
+
+  * Reconnectable service should log detailed information on unexpected errors
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 16 Jun 2015 14:45:41 +0300
+
 mastermind (2.25.12) precise; urgency=low
 
   * Binary version dependency
