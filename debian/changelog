@@ -1,3 +1,10 @@
+mastermind (2.25.11) precise; urgency=low
+
+  * Python-mastermind common dependency
+  * Logging added
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 16 Jun 2015 13:00:54 +0300
+
 mastermind (2.25.10) precise; urgency=low
 
   * Common mastermind utils in a separate python package
