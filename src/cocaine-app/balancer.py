@@ -1307,6 +1307,7 @@ class Balancer(object):
                 'total_keys_diff': sum(couples_diff.itervalues())}
 
     @h.source
+    @h.handler_wne
     def get_cached_keys(self, request):
         mc = ReconnectableService(
             '{base_name}-cache'.format(base_name=config.get('app_name', 'mastermind')),
@@ -1324,7 +1325,7 @@ def handlers(b):
                 attr_name.startswith('__') or
                 attr_name.startswith(private_prefix)):
                     continue
-            logger.info('adding handler: attr_name: {0}, attr.__name__ {1}'.format(attr_name, attr.__name__))
+            logger.debug('adding handler: attr_name: {0}, attr.__name__ {1}'.format(attr_name, attr.__name__))
             handlers.append(attr)
     except Exception as e:
         logger.error('handler exception: {0}'.format(e))

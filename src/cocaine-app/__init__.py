@@ -10,6 +10,7 @@ import uuid
 
 from cocaine.worker import Worker
 from cocaine.futures import chain
+from mastermind import errors
 
 sys.path.append('/usr/lib')
 
@@ -162,6 +163,40 @@ def register_handle(h):
     return wrapper
 
 
+def register_handle_wne(h):
+    """
+    Registers handler that uses native cocaine exceptions to inform client of an error.
+    * wne = with native exceptions
+    """
+    @wraps(h)
+    def wrapper(request, response):
+        start_ts = time()
+        req_uid = uuid.uuid4().hex
+        try:
+            data = yield request.read()
+            data = msgpack.unpackb(data)
+            logger.info(':{req_uid}: Running handler for event {0}, data={1}'.format(
+                h.__name__, str(data), req_uid=req_uid))
+            res = yield h(data)
+            response.write(res)
+            response.close()
+        except Exception as e:
+            code, error_msg = ((e.code, e.message)
+                               if isinstance(e, errors.MastermindError) else
+                               (errors.GENERAL_ERROR_CODE, str(e)))
+            logger.exception(
+                ':{req_uid}: handler for event {}, data={}, error: code {}, {}'.format(
+                    h.__name__, str(data), code, error_msg, req_uid=req_uid))
+            response.error(code, error_msg)
+        finally:
+            logger.info(':{req_uid}: Finished handler for event {0}, '
+                'time: {1:.3f}'.format(h.__name__, time() - start_ts, req_uid=req_uid))
+
+    W.on(h.__name__, wrapper)
+    logger.info("Registering handler for event {}".format(h.__name__))
+    return wrapper
+
+
 def init_infrastructure(jf):
     infstruct = infrastructure.infrastructure
     infstruct.init(n, jf)
@@ -258,7 +293,10 @@ ml = init_manual_locker(manual_locker)
 
 for handler in balancer.handlers(b):
     logger.info("registering bounded function %s" % handler)
-    register_handle(handler)
+    if getattr(handler, '__wne', False):
+        register_handle_wne(handler)
+    else:
+        register_handle(handler)
 
 logger.info('activating timed queues')
 try:

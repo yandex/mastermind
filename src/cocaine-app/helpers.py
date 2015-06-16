@@ -37,6 +37,13 @@ def source(func):
     return wrapper
 
 
+def handler_wne(func):
+    """Marks handler as supporting native cocaine exceptions.
+    """
+    func.__wne = True
+    return func
+
+
 def concurrent_handler(f):
 
     def sync_wrapper(*args, **kwargs):
