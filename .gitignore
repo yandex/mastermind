@@ -1,1 +1,7 @@
 *.pyc
+debian/*
+build/*
+mastermind.egg-info
+
+# in case someone uses fuse for development
+.fuse*
