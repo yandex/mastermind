@@ -1,3 +1,3 @@
-from service import ReconnectableService
+from mastermind.service import ReconnectableService
 
 __all__ = [ReconnectableService]
