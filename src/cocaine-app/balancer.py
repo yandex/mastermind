@@ -1310,7 +1310,7 @@ class Balancer(object):
     def get_cached_keys(self, request):
         mc = ReconnectableService(
             '{base_name}-cache'.format(base_name=config.get('app_name', 'mastermind')),
-            attempts=3, timeout=10)
+            attempts=3, timeout=10, logger=logger)
         yield mc.enqueue('get_cached_keys', '')
 
 def handlers(b):
