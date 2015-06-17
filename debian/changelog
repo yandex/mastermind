@@ -1,3 +1,10 @@
+mastermind (2.25.14) precise; urgency=low
+
+  * Job execution fixed
+  * Separate register handler wrapper for handlers with native cocaine exceptions support
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 17 Jun 2015 13:03:30 +0300
+
 mastermind (2.25.13) precise; urgency=low
 
   * Reconnectable service should log detailed information on unexpected errors
