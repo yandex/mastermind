@@ -111,9 +111,9 @@ class JobProcessor(object):
                 for res_type, res_val in self._unfold_resources(job.resources):
                     type_res[res_type].setdefault(res_val, 0)
                     type_res[res_type][res_val] += 1
-                ready_jobs.append(job)
 
                 if job.status == Job.STATUS_EXECUTING:
+                    ready_jobs.append(job)
                     type_jobs_count.setdefault(job.type, 0)
                     type_jobs_count[job.type] += 1
 
@@ -349,6 +349,9 @@ class JobProcessor(object):
                 task.status = Task.STATUS_EXECUTING
                 job.status = Job.STATUS_EXECUTING
                 job._dirty = True
+                break
+
+            elif task.status == Task.STATUS_FAILED:
                 break
 
         if all([task.status in (Task.STATUS_COMPLETED, Task.STATUS_SKIPPED)
