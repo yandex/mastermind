@@ -8,6 +8,7 @@ import json
 import logging
 import operator
 import re
+import time
 import traceback
 
 from cocaine.futures import chain
@@ -24,6 +25,8 @@ import inventory
 import keys
 import statistics
 import storage
+import timed_queue
+from timer import periodic_timer
 from sync import sync_manager
 
 
@@ -45,6 +48,18 @@ class Balancer(object):
         self.infrastructure = None
         self.statistics = statistics.Statistics(self)
         self.niu = None
+
+        self._namespaces_states = {}
+        self.ns_states_timer = periodic_timer(seconds=config.get('nodes_reload_period', 60))
+
+        self.__tq = timed_queue.TimedQueue()
+
+    def start(self):
+        assert self.niu
+        self._update_namespaces_states()
+
+    def _start_tq(self):
+        self.__tq.start()
 
     def _set_infrastructure(self, infrastructure):
         self.infrastructure = infrastructure
@@ -1229,66 +1244,82 @@ class Balancer(object):
     def get_namespaces(self, request):
         return self.infrastructure.ns_settings.keys()
 
-    @h.concurrent_handler
-    def get_namespaces_states(self, request):
-        default = lambda: {
-            'settings': {},
-            'couples': [],
-            'weights': {},
-            'statistics': {},
-        }
+    def _update_namespaces_states(self):
+        logger.info('Namespaces states updating: started')
+        try:
+            start_ts = time.time()
+            default = lambda: {
+                'settings': {},
+                'couples': [],
+                'weights': {},
+                'statistics': {},
+            }
 
-        res = defaultdict(default)
+            res = defaultdict(default)
 
-        # settings
-        ns_settings = self.infrastructure.ns_settings
-        for ns, settings in ns_settings.items():
-            res[ns]['settings'] = settings
+            # settings
+            ns_settings = self.infrastructure.ns_settings
+            for ns, settings in ns_settings.items():
+                res[ns]['settings'] = settings
 
-        # couples
-        symm_groups = {}
-        for couple in storage.couples:
-            try:
+            # couples
+            symm_groups = {}
+            for couple in storage.couples:
                 try:
-                    ns = couple.namespace
-                except ValueError:
+                    try:
+                        ns = couple.namespace
+                    except ValueError:
+                        continue
+                    info = couple.info()
+                    info['groups'] = [g.info() for g in couple]
+                    # couples
+                    res[ns]['couples'].append(info)
+
+                    symm_groups.setdefault(couple.namespace, {})
+                    symm_groups[couple.namespace].setdefault(len(couple), [])
+
+                    if couple.status not in storage.GOOD_STATUSES:
+                        continue
+
+                    symm_groups[couple.namespace][len(couple)].append(bla.SymmGroup(couple))
+                except Exception as e:
+                    logger.error('Failed to include couple {0} in namespace states: {1}'.format(
+                        str(couple), e))
                     continue
-                info = couple.info()
-                info['groups'] = [g.info() for g in couple]
-                # couples
-                res[ns]['couples'].append(info)
 
-                symm_groups.setdefault(couple.namespace, {})
-                symm_groups[couple.namespace].setdefault(len(couple), [])
-
-                if couple.status not in storage.GOOD_STATUSES:
+            # weights
+            for ns, sizes in symm_groups.iteritems():
+                try:
+                    # TODO: convert size inside of __namespaces_weights function
+                    # when get_groups_weights handle is gone
+                    res[ns]['weights'] = dict(
+                        (str(k), v) for k, v in self.__namespaces_weights(ns, sizes).iteritems())
+                except ValueError as e:
+                    logger.error(e)
+                    continue
+                except Exception as e:
+                    logger.error('Failed to construct namespace {0} weights: {1}'.format(ns, e))
                     continue
 
-                symm_groups[couple.namespace][len(couple)].append(bla.SymmGroup(couple))
-            except Exception as e:
-                logger.error('Failed to include couple {0} in namespace '
-                    'states: {1}'.format(str(couple), e))
-                continue
+            # statistics
+            for ns, stats in self.statistics.per_ns_statistics().iteritems():
+                res[ns]['statistics'] = stats
 
-        # weights
-        for ns, sizes in symm_groups.iteritems():
-            try:
-                # TODO: convert size inside of __namespaces_weights function
-                # when get_groups_weights handle is gone
-                res[ns]['weights'] = dict((str(k), v)
-                    for k, v in self.__namespaces_weights(ns, sizes).iteritems())
-            except ValueError as e:
-                logger.error(e)
-                continue
-            except Exception as e:
-                logger.error('Failed to construct namespace {0} weights: {1}'.format(ns, e))
-                continue
+            self._namespaces_states = dict(res)
 
-        # statistics
-        for ns, stats in self.statistics.per_ns_statistics().iteritems():
-            res[ns]['statistics'] = stats
+        except Exception as e:
+            logger.exception('Namespaces states updating: failed: {}'.format(e))
+        finally:
+            logger.info('Namespaces states updating: finished, time: {0:.3f}'.format(
+                time.time() - start_ts))
+            self.__tq.add_task_at(
+                'ns_states_update',
+                self.ns_states_timer.next(),
+                self._update_namespaces_states)
 
-        return dict(res)
+    # @h.concurrent_handler
+    def get_namespaces_states(self, request):
+        return self._namespaces_states
 
     @h.concurrent_handler
     def storage_keys_diff(self, request):

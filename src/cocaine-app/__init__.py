@@ -280,6 +280,7 @@ jf = init_job_finder()
 io = init_infrastructure(jf)
 niu = init_node_info_updater(jf)
 b.niu = niu
+b.start()
 init_statistics()
 m = init_minions()
 j = init_job_processor(jf, m, niu)
@@ -300,7 +301,7 @@ for handler in balancer.handlers(b):
 
 logger.info('activating timed queues')
 try:
-    tq_to_activate = [io, b.niu, m, j, po]
+    tq_to_activate = [io, b.niu, m, j, po, b]
     for tqo in tq_to_activate:
         if tqo is None:
             continue

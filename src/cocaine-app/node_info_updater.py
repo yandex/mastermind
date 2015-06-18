@@ -76,7 +76,7 @@ class NodeInfoUpdater(object):
                         keys.MASTERMIND_MAX_GROUP_KEY, str(curr_max_group)).get()
 
         except Exception as e:
-            logger.info('Failed to fetch node statistics: {0}\n{1}'.format(e, traceback.format_exc()))
+            logger.error('Failed to fetch node statistics: {0}\n{1}'.format(e, traceback.format_exc()))
         finally:
             logger.info('Cluster updating: node statistics collecting finished, time: {0:.3f}'.format(time.time() - start_ts))
             reload_period = config.get('nodes_reload_period', 60)
