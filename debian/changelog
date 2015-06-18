@@ -1,3 +1,9 @@
+mastermind (2.25.15) precise; urgency=low
+
+  * Caching of namespaces states
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 18 Jun 2015 15:11:28 +0300
+
 mastermind (2.25.14) precise; urgency=low
 
   * Job execution fixed
