@@ -1,11 +1,25 @@
+import msgpack
+
+from mastermind.query import groups
 from mastermind.service import ReconnectableService
 
 
 class MastermindClient(object):
     """Provides python binding to mastermind cocaine application.
     """
-    def __init__(self):
-        pass
+
+    DEFAULT_APP_NAME = 'mastermind2.26'
+
+    def __init__(self, app_name=None, **kwargs):
+        self.service = ReconnectableService(app_name=app_name or self.DEFAULT_APP_NAME,
+                                            **kwargs)
+
+    def request(self, handle, data):
+        return self.service.enqueue(handle, msgpack.packb(data)).get()
+
+    @property
+    def groups(self):
+        return groups.GroupsQuery(self)
 
     def group_info(self, group_id):
         """
