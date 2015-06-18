@@ -161,21 +161,20 @@ class Balancer(object):
         key = request[1] or keys.SYMMETRIC_GROUPS_KEY
         unpack = request[2]
 
-        if not gid in storage.groups:
-            raise ValueError('Group %d is not found' % group)
-
         group = storage.groups[gid]
 
         logger.info('Creating elliptics session')
 
         s = elliptics.Session(self.node)
-        wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or config.get('wait_timeout', 5)
+        wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or \
+            config.get('wait_timeout', 5)
         s.set_timeout(wait_timeout)
         s.add_groups([group.group_id])
 
         data = s.read_data(key).get()[0]
 
-        logger.info('Read key {0} from group {1}: {2}'.format(key.replace('\0', r'\0'), group, data.data))
+        logger.info('Read key {0} from group {1}: {2}'.format(
+            key.replace('\0', r'\0'), group, data.data))
 
         return {'id': repr(data.id),
                 'full_id': str(data.id),
