@@ -1,3 +1,9 @@
+mastermind (2.25.16) precise; urgency=low
+
+  * Do not store old namespaces states if failed to construct a new one
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 18 Jun 2015 16:54:36 +0300
+
 mastermind (2.25.15) precise; urgency=low
 
   * Caching of namespaces states
