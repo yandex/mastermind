@@ -1305,10 +1305,13 @@ class Balancer(object):
             for ns, stats in self.statistics.per_ns_statistics().iteritems():
                 res[ns]['statistics'] = stats
 
+            if isinstance(self._namespaces_states, Exception):
+                logger.info('Namespaces states updating: recovered')
             self._namespaces_states = dict(res)
 
         except Exception as e:
             logger.exception('Namespaces states updating: failed: {}'.format(e))
+            self._namespaces_states = e
         finally:
             logger.info('Namespaces states updating: finished, time: {0:.3f}'.format(
                 time.time() - start_ts))
@@ -1318,7 +1321,10 @@ class Balancer(object):
                 self._update_namespaces_states)
 
     # @h.concurrent_handler
+    @h.handler_wne
     def get_namespaces_states(self, request):
+        if isinstance(self._namespaces_states, Exception):
+            raise self._namespaces_states
         return self._namespaces_states
 
     @h.concurrent_handler
