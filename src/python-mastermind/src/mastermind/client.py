@@ -1,6 +1,6 @@
 import msgpack
 
-from mastermind.query import groups
+from mastermind.query import groups, namespaces, couples
 from mastermind.service import ReconnectableService
 
 
@@ -20,6 +20,14 @@ class MastermindClient(object):
     @property
     def groups(self):
         return groups.GroupsQuery(self)
+
+    @property
+    def namespaces(self):
+        return namespaces.NamespacesQuery(self)
+
+    @property
+    def couples(self):
+        return couples.CouplesQuery(self)
 
     def group_info(self, group_id):
         """
@@ -50,30 +58,6 @@ class MastermindClient(object):
 
     COUPLE_INIT_COUPLED_STATE = 'coupled'
     COUPLE_INIT_FROZEN_STATE = 'frozen'
-
-    def couple_build(self, couple_size, namespace, state,
-                     couples=1, groups=None, ignore_space=False, dry_run=False):
-        """
-        Builds a number of couples to extend a namespace.
-
-        Args:
-          couple_size: a number of groups to couple together.
-          namespace: all created couples will belong to provided namespace.
-          state: couple init state (should take one of COUPLE_INIT_*_STATE values).
-          couples: number of couples that mastermind will try to create.
-          groups: iterable of sets of mandatory groups that should be coupled together:
-            Example: ((42, 69), # groups 42 and 69 will be included in the first created couple,
-                      (128))    # group 128 will be included in the second one, and so on.
-          ignore_space: if this flag is set to True mastermind will couple only the groups
-            having equal total space
-          dry_run: build couple in dry-run mode.
-            Mastermind will not write corresponding metakeys to selected groups,
-            which effectively means that couples will not be created.
-
-        Returns:
-          List of created couples' ids.
-        """
-        raise NotImplemented
 
     UNCOUPLED_GROUP_BAD_STATE = 'bad'
     UNCOUPLED_GROUP_GOOD_STATE = 'good'
@@ -161,7 +145,7 @@ class MastermindClient(object):
           custom_expiration_time: allows namespace to use expire-time argument
             for signing url
 
-          Returns:
-            True
+        Returns:
+          True
         """
         raise NotImplemented

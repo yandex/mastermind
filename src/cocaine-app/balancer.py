@@ -161,6 +161,17 @@ class Balancer(object):
         return data
 
     @h.concurrent_handler
+    def get_groups_list(self, request):
+        options = request[0]
+        return self._get_groups_list(options)
+
+    def _get_groups_list(self, options):
+        data = []
+        for group in storage.groups.keys():
+            data.append(group.info())
+        return data
+
+    @h.concurrent_handler
     def get_group_meta(self, request):
         gid = request[0]
         key = request[1] or keys.SYMMETRIC_GROUPS_KEY
@@ -475,6 +486,16 @@ class Balancer(object):
 
         return res
 
+    @h.concurrent_handler
+    def get_couple_info_by_coupleid(self, request):
+        couple_id = str(request)
+        couple = storage.couples[couple_id]
+
+        res = couple.info()
+        res['groups'] = [g.info() for g in couple]
+
+        return res
+
     VALID_COUPLE_INIT_STATES = (storage.Status.COUPLED, storage.Status.FROZEN)
 
     def __update_cluster_state(self, namespace=None):
@@ -546,8 +567,8 @@ class Balancer(object):
 
     def __couple_groups(self, size, couples, options, ns, groups_by_total_space):
 
+        res = []
         created_couples = []
-        error = None
 
         try:
             tree, nodes = self.infrastructure.filtered_cluster_tree(self.NODE_TYPES)
@@ -559,27 +580,36 @@ class Balancer(object):
                     for group_id in group_ids],
                 self.NODE_TYPES)
 
-            for _, mandatory_groups in itertools.izip_longest(
-                    xrange(couples), options['mandatory_groups'][:couples]):
+        except Exception as e:
+            logger.exception('Failed to build couples')
+            res.extend([str(e)] * (couples - len(res)))
+            return res
 
+        for _, mandatory_groups in itertools.izip_longest(
+                xrange(couples), options['mandatory_groups'][:couples]):
+
+            try:
                 mandatory_groups = mandatory_groups or []
 
                 if len(mandatory_groups) > size:
-                    raise ValueError("Mandatory groups list's {0} length "
-                        "is greater than couple size {1}".format(mandatory_groups, size))
+                    raise ValueError(
+                        "Mandatory groups list's {} length is greater than couple "
+                        "size {}".format(mandatory_groups, size))
 
                 for m_group in mandatory_groups:
                     if m_group not in units:
-                        raise ValueError('Mandatory group {0} is either not found '
-                            'in cluster, is not uncoupled, '
-                            'is located on a locked host or '
+                        raise ValueError(
+                            'Mandatory group {0} is either not found '
+                            'in cluster, is not uncoupled, is located on a locked host or '
                             'is unsuitable in some other way'.format(m_group))
 
                 if mandatory_groups:
-                    self.infrastructure.account_ns_groups(nodes, [storage.groups[g] for g in mandatory_groups])
+                    self.infrastructure.account_ns_groups(
+                        nodes, [storage.groups[g] for g in mandatory_groups])
                     self.infrastructure.update_groups_list(tree)
 
-                ns_current_state = self.infrastructure.ns_current_state(nodes, self.NODE_TYPES[1:])
+                ns_current_state = self.infrastructure.ns_current_state(
+                    nodes, self.NODE_TYPES[1:])
                 groups_to_couple = self.__choose_groups_to_couple(
                     ns_current_state, units, size, groups_by_total_space, mandatory_groups)
                 if not groups_to_couple:
@@ -589,15 +619,6 @@ class Balancer(object):
 
                 couple = storage.couples.add([storage.groups[g]
                                               for g in groups_to_couple])
-                if not options['dry_run']:
-                    try:
-                        make_symm_group(self.node, couple, options['namespace'],
-                            options['init_state'] == storage.Status.FROZEN)
-                    except Exception as e:
-                        error = e
-                        couple.destroy()
-                        break
-                    couple.update_status()
 
                 for ts, group_ids in groups_by_total_space.iteritems():
                     if couple.groups[0].group_id in group_ids:
@@ -605,26 +626,39 @@ class Balancer(object):
                             group_ids.remove(group.group_id)
                         break
 
+                if not options['dry_run']:
+                    try:
+                        make_symm_group(
+                            self.node, couple, options['namespace'],
+                            options['init_state'] == storage.Status.FROZEN)
+                    except Exception as e:
+                        couple.destroy()
+                        res.append(str(e))
+                        continue
+                    couple.update_status()
+
                 self.infrastructure.account_ns_groups(nodes, couple.groups)
                 self.infrastructure.update_groups_list(tree)
 
                 created_couples.append(couple)
-        except Exception as e:
-            logger.error('Failed to build couples: {0}\n{1}'.format(
-                e, traceback.format_exc()))
-            error = e
-            if options['dry_run']:
-                for couple in created_couples:
-                    couple.destroy()
-            raise
 
-        res = [c.as_tuple() for c in created_couples]
+                data = couple.info()
+                data['groups'] = [g.info() for g in couple]
+
+                res.append(data)
+            except Exception as e:
+                logger.exception('Failed to build couple')
+                res.append(str(e))
+                continue
+
+        res.extend(['Not enough valid dcs and/or groups of appropriate'
+                    'total space for remaining couples creation'] * (couples - len(res)))
 
         if options['dry_run']:
             for couple in created_couples:
                 couple.destroy()
 
-        return res, error
+        return res
 
     NODE_TYPES = ['root'] + inventory.get_balancer_node_types() + ['hdd']
     DC_NODE_TYPE = inventory.get_dc_node_type()
@@ -660,12 +694,12 @@ class Balancer(object):
         logger.info('Selecting {0} groups on level {1} among groups {2}'.format(
             count, node_type, group_ids))
 
-        if count == 0:
-            return []
-
         if len(group_ids) < count:
             logger.warn('Not enough groups for choosing on level {0}: '
                 '{1} uncoupled, {2} needed'.format(node_type, len(group_ids), count))
+            return []
+
+        if count == 0:
             return []
 
         groups_by_level_units = {}
@@ -757,7 +791,7 @@ class Balancer(object):
                 ns_current_state, units, count - len(mandatory_groups),
                 free_group_ids, self.NODE_TYPES, mandatory_groups)
             candidate += mandatory_groups
-            if candidate:
+            if len(candidate) == count:
                 candidates.append(candidate)
 
         if not candidates:
@@ -783,7 +817,8 @@ class Balancer(object):
 
         try:
             options = request[2]
-            options['mandatory_groups'] = [[int(g) for g in mg]
+            options['mandatory_groups'] = [
+                [int(g) for g in mg]
                 for mg in options.get('mandatory_groups', [])]
         except IndexError:
             options = {}
@@ -814,9 +849,9 @@ class Balancer(object):
 
             logger.info('groups by total space: {0}'.format(groups_by_total_space))
 
-            res, error = self.__couple_groups(size, couples, options, ns, groups_by_total_space)
+            res = self.__couple_groups(size, couples, options, ns, groups_by_total_space)
 
-        return (res, str(error) if error else None)
+        return res
 
     @h.concurrent_handler
     def break_couple(self, request):
@@ -1113,7 +1148,7 @@ class Balancer(object):
 
         logger.info('Namespace {0}, settings set to {1}'.format(namespace, settings))
 
-        return True
+        return self.infrastructure.ns_settings[namespace]
 
     def __check_namespace(self, namespace):
         if not namespace in self.infrastructure.ns_settings:
@@ -1247,6 +1282,16 @@ class Balancer(object):
     @h.concurrent_handler
     def get_namespaces(self, request):
         return self.infrastructure.ns_settings.keys()
+
+    @h.concurrent_handler
+    def get_namespaces_list(self, request):
+        res = []
+        for ns, settings in self.infrastructure.ns_settings.items():
+            s = copy.deepcopy(settings)
+            s['namespace'] = ns
+            res.append(s)
+
+        return res
 
     def _update_namespaces_states(self):
         logger.info('Namespaces states updating: started')

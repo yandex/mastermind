@@ -65,7 +65,7 @@ class ReconnectableService(object):
                                           'will reconnect on next attempt')
                         self.upstream = None
                 else:
-                    self.logger.exception(error_str)
+                    self.logger.error(error_str)
                 if attempt >= self.attempts:
                     self._reset()
                     raise

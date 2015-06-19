@@ -735,18 +735,25 @@ def couple_build(size, groups=('i', [], 'Use these groups in couple (example: -i
         print res
         return 1
 
-    good_couples, error = res
+    good_couples = []
+    errors = []
+    for r in res:
+        if isinstance(r, dict):
+            good_couples.append(r)
+        else:
+            errors.append(r)
 
-    if couples > 1:
-        print highlight('Successfully created {0} out of {1} couples:'.format(len(good_couples), couples))
+    if good_couples > 1:
+        print highlight('Successfully created {0} out of {1} couples:'.format(
+            len(good_couples), couples))
     for c in good_couples:
-        print c
+        print c['tuple']
 
-    if error:
-        print warn("Exception occured: {0}".format(error))
-    elif len(good_couples) < couples:
-        print warn('Not enough valid dcs and/or groups of appropriate '
-            'total space for remaining couples creation')
+    if errors:
+        print warn('Exceptions occured:')
+
+    for error in errors:
+        print error
 
     if not len(good_couples):
         return 1
