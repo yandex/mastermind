@@ -11,6 +11,15 @@ class Query(object):
             return object_or_id
         return cls(client, object_or_id)
 
+    @staticmethod
+    def not_idempotent(method):
+        @functools.wraps(method)
+        def wrapper(self, *args, **kwargs):
+            if 'attempts' not in kwargs:
+                kwargs['attempts'] = 1
+            return method(self, *args, **kwargs)
+        return wrapper
+
 
 class LazyDataObject(object):
 

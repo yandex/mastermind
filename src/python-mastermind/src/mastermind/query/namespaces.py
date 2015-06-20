@@ -259,20 +259,24 @@ class NamespaceQuery(Query):
         super(NamespaceQuery, self).__init__(client)
         self.id = id
 
+    @Query.not_idempotent
     def build_couples(self, couple_size, init_state,
-                      couples=1, groups=None, ignore_space=False, dry_run=False):
+                      couples=1, groups=None, ignore_space=False, dry_run=False,
+                      attempts=None, timeout=None):
         """
         Builds a number of couples to extend a namespace.
 
         Args:
           couple_size:
             a number of groups to couple together.
-          namespace:
-            all created couples will belong to provided namespace.
           init_state:
             couple init state (should take one of COUPLE_INIT_*_STATE values).
+
+        KwArgs:
           couples:
             number of couples that mastermind will try to create.
+          namespace:
+            all created couples will belong to provided namespace.
           groups:
             iterable of sets of mandatory groups that should be coupled together:
             Example: ((42, 69), # groups 42 and 69 will be included in the first created couple,
@@ -295,7 +299,8 @@ class NamespaceQuery(Query):
                                          'dry_run': dry_run,
                                          'mandatory_groups': groups or []}]
         created_couples = []
-        for couple_data in self.client.request('build_couples', params):
+        for couple_data in self.client.request('build_couples', params,
+                                               attempts=attempts, timeout=timeout):
             if isinstance(couple_data, basestring):
                 # TODO: make error object
                 continue
