@@ -135,26 +135,29 @@ class Balancer(object):
         options = request[0]
         return self._get_couples_list(options)
 
-    def _get_couples_list(self, options):
+    def _get_couples_list(self, _filter):
         couples = storage.couples.keys()
+        if _filter.get('state', None) is not None and _filter['state'] not in self.STATES:
+            raise ValueError('Invalid state: {0}'.format(_filter['state']))
 
-        if options.get('namespace', None):
-
-            def f(c):
+        def filtered_out(couple):
+            if _filter.get('namespace', None):
                 try:
-                    return c.namespace == options['namespace']
+                    if c.namespace != _filter['namespace']:
+                        return True
                 except ValueError:
-                    return False
+                    return True
 
-            couples = filter(f, couples)
+            if _filter.get('state', None):
+                if couple.status not in self.STATES[_filter['state']]:
+                    return True
 
-        if options.get('state', None):
-            if options['state'] not in self.STATES:
-                raise ValueError('Invalid state: {0}'.format(options['state']))
-            couples = filter(lambda c: c.status in self.STATES[options['state']], couples)
+            return False
 
         data = []
         for c in couples:
+            if filtered_out(c):
+                continue
             info = c.info()
             info['groups'] = [g.info() for g in c]
             data.append(info)
@@ -1291,7 +1294,7 @@ class Balancer(object):
             _filter = {}
 
         def filtered_out(ns, settings):
-            if 'deleted' in _filter and _filter['deleted'] is not None:
+            if _filter.get('deleted', None) is not None:
                 is_deleted = settings['__service'].get('is_deleted', False)
                 if _filter['deleted'] != is_deleted:
                     return True

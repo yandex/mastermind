@@ -28,9 +28,14 @@ class MastermindClient(object):
           handle: API handle name.
           data: request data that will be serialized and sent.
         """
-        return self.service.enqueue(
+        data = self.service.enqueue(
             handle, msgpack.packb(data),
             attempts=attempts, timeout=timeout).get()
+        if 'Error' in data:
+            raise RuntimeError(data['Error'])
+        if 'Balancer error' in data:
+            raise RuntimeError(data['Balancer error'])
+        return data
 
     @property
     def groups(self):

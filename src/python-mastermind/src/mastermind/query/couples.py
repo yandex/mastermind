@@ -1,32 +1,59 @@
+import copy
+
+from mastermind import query
 from mastermind.query import Query, LazyDataObject
 from mastermind.query.groups import Group
 
 
 class CouplesQuery(Query):
-    def __init__(self, client):
+    def __init__(self, client, filter=None):
         super(CouplesQuery, self).__init__(client)
-        self._filter = {}
+        self._filter = filter or {}
 
     def __getitem__(self, key):
         return Couple(self.client, key)
 
-    # def next_group_ids(self, count=1):
-    #     """Fetch some free group ids.
-
-    #     Elliptics groups are identified by integer group ids. Mastermind provides
-    #     a sequence of increasing group ids for assigning to new groups added to storage.
-
-    #     Args:
-    #       count: number of group ids to fetch.
-    #     """
-    #     return self.client.request('get_next_group_number', count)
-
     def __iter__(self):
-        groups = self.client.request('get_couples_list', [self._filter])
-        for c_data in groups:
+        couples = self.client.request('get_couples_list', [self._filter])
+        for c_data in couples:
             cq = Couple(self.client, CoupleDataObject._raw_id(c_data))
             cq._set_raw_data(c_data)
             yield cq
+
+    def __contains__(self, key):
+        ns = Couple(self.client, key)
+        try:
+            # TODO: explicitely perform upstream query
+            return bool(ns.status)
+        except RuntimeError:
+            return False
+
+    def filter(self, **kwargs):
+        """Filter couples list.
+
+        Keyword args:
+          namespace: get couples belonging to a certain namespace.
+          state: mostly the same as couple status, but one state can actually
+            combine several statuses. Represents couple state from admin's point of view.
+            States to couple statuses:
+            good: OK
+            full: FULL
+            frozen: FROZEN
+            bad: INIT, BAD
+            broken: BROKEN
+            service-active: SERVICE_ACTIVE
+            service-stalled: SERVICE_STALLED
+
+        Returns:
+          New couples query object with selected filter parameters.
+        """
+        updated_filter = copy.copy(self._filter)
+        if 'namespace' in kwargs:
+            updated_filter['namespace'] = query.namespaces.Namespace._object(
+                self.client, kwargs['namespace']).id
+        if 'state' in kwargs:
+            updated_filter['state'] = kwargs['state']
+        return CouplesQuery(self.client, filter=updated_filter)
 
 
 class CoupleDataObject(LazyDataObject):
@@ -93,15 +120,6 @@ class CoupleQuery(Query):
         super(CoupleQuery, self).__init__(client)
         self.id = id
 
-    # @property
-    # def meta(self):
-    #     """Reads metakey for group.
-
-    #     Returns:
-    #       Group metakey, already unpacked.
-    #     """
-    #     return self.client.request('get_group_meta', [self.id, None, True])['data']
-
     # def move(self, uncoupled_groups=None, force=False):
     #     """Create group move job.
 
@@ -124,4 +142,5 @@ class CoupleQuery(Query):
 
 
 class Couple(CoupleQuery, CoupleDataObject):
-    pass
+    def __repr__(self):
+        return '<Couple {}: status {} ({})>'.format(self.id, self.status, self.status_text)

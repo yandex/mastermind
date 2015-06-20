@@ -1,7 +1,7 @@
 import copy
 
 from mastermind.query import Query, LazyDataObject
-from mastermind.query.couples import Couple
+from mastermind.query.couples import CouplesQuery, Couple
 
 
 class NamespacesQuery(Query):
@@ -30,7 +30,7 @@ class NamespacesQuery(Query):
     def __delitem__(self, namespace):
         self.client.request('namespace_delete', [namespace])
 
-    def filter(self, deleted=None):
+    def filter(self, **kwargs):
         """Filter namespaces list.
 
         Args:
@@ -41,7 +41,8 @@ class NamespacesQuery(Query):
           New namespaces query object with selected filter parameters.
         """
         updated_filter = copy.copy(self._filter)
-        updated_filter['deleted'] = deleted
+        if 'deleted' in kwargs:
+            updated_filter['deleted'] = kwargs['deleted']
         return NamespacesQuery(self.client, filter=updated_filter)
 
     def setup(self,
@@ -309,6 +310,10 @@ class NamespaceQuery(Query):
             created_couples.append(c)
 
         return created_couples
+
+    @property
+    def couples(self):
+        return CouplesQuery(self.client).filter(namespace=self)
 
 
 class Namespace(NamespaceQuery, NamespaceDataObject):

@@ -33,10 +33,6 @@ class LazyDataObject(object):
         return wrapper
 
     def _set_raw_data(self, data):
-        if 'Error' in data:
-            raise RuntimeError(data['Error'])
-        if 'Balancer error' in data:
-            raise RuntimeError(data['Balancer error'])
         data = self._preprocess_raw_data(data)
         self._data = data
 
