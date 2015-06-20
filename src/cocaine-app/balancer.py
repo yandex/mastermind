@@ -1285,8 +1285,22 @@ class Balancer(object):
 
     @h.concurrent_handler
     def get_namespaces_list(self, request):
+        try:
+            _filter = request[0]
+        except IndexError:
+            _filter = {}
+
+        def filtered_out(ns, settings):
+            if 'deleted' in _filter and _filter['deleted'] is not None:
+                is_deleted = settings['__service'].get('is_deleted', False)
+                if _filter['deleted'] != is_deleted:
+                    return True
+            return False
+
         res = []
         for ns, settings in self.infrastructure.ns_settings.items():
+            if filtered_out(ns, settings):
+                continue
             s = copy.deepcopy(settings)
             s['namespace'] = ns
             res.append(s)

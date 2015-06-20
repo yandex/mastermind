@@ -1,11 +1,13 @@
+import copy
+
 from mastermind.query import Query, LazyDataObject
 from mastermind.query.couples import Couple
 
 
 class NamespacesQuery(Query):
-    def __init__(self, client):
+    def __init__(self, client, filter=None):
         super(NamespacesQuery, self).__init__(client)
-        self._filter = {}
+        self._filter = filter or {}
 
     def __getitem__(self, key):
         return Namespace(self.client, key)
@@ -22,11 +24,25 @@ class NamespacesQuery(Query):
         ns = Namespace(self.client, key)
         try:
             return bool(ns.settings)
-        except Exception:
+        except RuntimeError:
             return False
 
     def __delitem__(self, namespace):
         self.client.request('namespace_delete', [namespace])
+
+    def filter(self, deleted=None):
+        """Filter namespaces list.
+
+        Args:
+          deleted: get all namespaces (None), alive namespaces (False) or
+            deleted ones (True).
+
+        Returns:
+          New namespaces query object with selected filter parameters.
+        """
+        updated_filter = copy.copy(self._filter)
+        updated_filter['deleted'] = deleted
+        return NamespacesQuery(self.client, filter=updated_filter)
 
     def setup(self,
               namespace,
@@ -164,9 +180,6 @@ class NamespaceDataObject(LazyDataObject):
             self._settings = settings
             self._levels = levels or []
 
-        def __contains__(self, key):
-            return key in self._settings
-
         def __getitem__(self, key):
             return NamespaceDataObject.Settings(
                 self._client, self._namespace, self._settings[key], levels=self._levels + [key])
@@ -183,6 +196,38 @@ class NamespaceDataObject(LazyDataObject):
 
         def __str__(self):
             return str(self._settings)
+
+        def __contains__(self, key):
+            return key in self._settings
+
+        def __len__(self):
+            return len(self._settings)
+
+        def keys(self):
+            return self._settings.keys()
+
+        def values(self):
+            return [v for _, v in self.items()]
+
+        def items(self):
+            return [(k,
+                     NamespaceDataObject.Settings(
+                         self._client, self._namespace, v,
+                         levels=self._levels + [k]))
+                    for k, v in self._settings.iteritems()]
+
+        def iterkeys(self):
+            return self._settings.iterkeys()
+
+        def itervalues(self):
+            for _, v in self.iteritems():
+                yield v
+
+        def iteritems(self):
+            for k, v in self._settings.iteritems():
+                yield k, NamespaceDataObject.Settings(
+                    self._client, self._namespace, v,
+                    levels=self._levels + [k])
 
     def _fetch_data(self):
         return self.client.request('get_namespace_settings', [self.id])
