@@ -15,11 +15,13 @@ class ReconnectableService(object):
     DEFAULT_ADDRESS = '{host}:{port}'.format(host=DEFAULT_HOST,
                                              port=DEFAULT_PORT)
 
-    def __init__(self, app_name, attempts=3,
+    def __init__(self,
+                 app_name,
+                 addresses=None,
+                 attempts=3,
                  delay=0.1, max_delay=60.0, delay_exp=2.0,
                  connect_timeout=None,
                  timeout=None,
-                 addresses=None,
                  logger=None):
         self.delay = delay
         self.max_delay = max_delay
@@ -47,17 +49,18 @@ class ReconnectableService(object):
         self._cur_delay = self.delay
 
     @chain.source
-    def enqueue(self, handler, data):
+    def enqueue(self, handler, data, attempts=None, timeout=None):
         attempt = 1
+        request_attempts = attempts or self.attempts
         while True:
             try:
                 yield self._reconnect_if_needed()
-                yield self.upstream.enqueue(handler, data, timeout=self.timeout)
+                yield self.upstream.enqueue(handler, data, timeout=timeout or self.timeout)
                 self._reset()
                 break
             except Exception as e:
                 error_str = 'Upstream service request failed (attempt {}/{}): {}'.format(
-                    attempt, self.attempts, e)
+                    attempt, request_attempts, e)
                 if isinstance(e, CommunicationError):
                     self.logger.error(error_str)
                     if isinstance(e, DisconnectionError):
@@ -66,7 +69,7 @@ class ReconnectableService(object):
                         self.upstream = None
                 else:
                     self.logger.error(error_str)
-                if attempt >= self.attempts:
+                if attempt >= request_attempts:
                     self._reset()
                     raise
                 attempt += 1
