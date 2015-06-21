@@ -1,14 +1,11 @@
 from copy import deepcopy
 import logging
 import operator
-import os.path
 import re
-import socket
 import threading
 import time
 import traceback
 
-import elliptics
 import msgpack
 
 from config import config
@@ -17,6 +14,7 @@ import helpers as h
 import indexes
 from infrastructure_cache import cache
 import inventory
+import jobs
 import keys
 from manual_locks import manual_locker
 import storage
@@ -877,6 +875,14 @@ class Infrastructure(object):
                 units[group.group_id].append(nb_units)
 
         return units
+
+    def get_group_ids_in_service(self):
+        group_ids_in_service = []
+        if not self.job_finder:
+            return group_ids_in_service
+        for job in self.job_finder.jobs(statuses=jobs.Job.ACTIVE_STATUSES):
+            group_ids_in_service.extend(job._involved_groups)
+        return group_ids_in_service
 
     def get_good_uncoupled_groups(self,
         max_node_backends=None,

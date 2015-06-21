@@ -178,13 +178,13 @@ class NodeInfoUpdater(object):
 
         try:
             host_addr = m_stat.address.host
-            if not host_addr in storage.hosts:
+            if host_addr not in storage.hosts:
                 logger.debug('Adding host {0}'.format(host_addr))
                 host = storage.hosts.add(host_addr)
             else:
                 host = storage.hosts[host_addr]
 
-            if not node_addr in storage.nodes:
+            if node_addr not in storage.nodes:
                 node = storage.nodes.add(host, m_stat.address.port, m_stat.address.family)
             else:
                 node = storage.nodes[node_addr]
@@ -199,7 +199,7 @@ class NodeInfoUpdater(object):
                 backend_id = b_stat['backend_id']
 
                 node_backend_addr = '{0}/{1}'.format(node_addr, backend_id)
-                if not node_backend_addr in storage.node_backends:
+                if node_backend_addr not in storage.node_backends:
                     node_backend = storage.node_backends.add(node, backend_id)
                 else:
                     node_backend = storage.node_backends[node_backend_addr]
@@ -214,73 +214,77 @@ class NodeInfoUpdater(object):
                     # skip zero group ids
                     continue
 
-                if not gid in storage.groups:
+                if b_stat['status']['state'] != 1:
+                    logger.info('Node backend {0} is not enabled: state {1}'.format(
+                        str(node_backend), b_stat['status']['state']))
+                    node_backend.disable()
+                    continue
+
+                if gid not in storage.groups:
                     logger.debug('Adding group {0}'.format(gid))
                     group = storage.groups.add(gid)
                 else:
                     group = storage.groups[gid]
 
-                if b_stat['status']['state'] != 1:
-                    logger.info('Node backend {0} is not enabled: state {1}'.format(
-                        str(node_backend), b_stat['status']['state']))
-                    node_backend.disable()
+                if 'vfs' not in b_stat['backend']:
+                    logger.error(
+                        'Failed to parse statistics for node backend {0}, '
+                        'vfs key not found: {1}'.format(node_backend, b_stat))
+                    continue
+
+                fsid = b_stat['backend']['vfs']['fsid']
+                fsid_key = '{addr}:{fsid}'.format(addr=host_addr, fsid=fsid)
+
+                if fsid_key not in storage.fs:
+                    logger.debug('Adding fs {0}'.format(fsid_key))
+                    fs = storage.fs.add(host, fsid)
                 else:
+                    fs = storage.fs[fsid_key]
 
-                    if not 'vfs' in b_stat['backend']:
-                        logger.error('Failed to parse statistics for node backend {0}, '
-                            'vfs key not found: {1}'.format(node_backend, b_stat))
-                        continue
+                if node_backend not in fs.node_backends:
+                    fs.add_node_backend(node_backend)
+                fs.update_statistics(b_stat['backend']['vfs'], collect_ts)
 
-                    fsid = b_stat['backend']['vfs']['fsid']
-                    fsid_key = '{addr}:{fsid}'.format(addr=host_addr, fsid=fsid)
+                node_backend.enable()
+                node_backend.dstat_error_code = b_stat.get('backend', {}).get(
+                    'dstat', {}).get('error', 0)
+                if node_backend.dstat_error_code != 0:
+                    logger.info('Node backend {0} dstat returned error code {1}'.format(
+                        str(node_backend), b_stat['backend']['dstat']['error']))
 
-                    if fsid_key not in storage.fs:
-                        logger.debug('Adding fs {0}'.format(fsid_key))
-                        fs = storage.fs.add(host, fsid)
-                    else:
-                        fs = storage.fs[fsid_key]
+                if node_backend.dstat_error_code == 0:
+                    logger.info('Updating statistics for node backend %s' % (str(node_backend)))
+                    if 'backend' not in b_stat:
+                        logger.warn('No backend in b_stat: {0}'.format(b_stat))
+                    elif 'dstat' not in b_stat['backend']:
+                        logger.warn('No dstat in backend: {0}'.format(b_stat['backend']))
+                    try:
+                        node_backend.update_statistics(b_stat, collect_ts)
+                    except KeyError as e:
+                        logger.warn('Bad stat for node backend {0} ({1}): {2}'.format(
+                            node_backend, e, b_stat))
+                        pass
 
-                    if not node_backend in fs.node_backends:
-                        fs.add_node_backend(node_backend)
-                    fs.update_statistics(b_stat['backend']['vfs'], collect_ts)
+                node_backend.stat_file_error = b_stat.get('backend', {}).get(
+                    'global_stats', {}).get('stat_file_error', 0)
+                if node_backend.stat_file_error != 0:
+                    node_backend.last_stat_file_error_text = \
+                        b_stat['backend']['global_stats']['string_stat_file_error']
 
-                    node_backend.enable()
-                    node_backend.dstat_error_code = b_stat.get('backend', {}).get('dstat', {}).get('error', 0)
-                    if node_backend.dstat_error_code != 0:
-                        logger.info('Node backend {0} dstat returned error code {1}'.format(
-                            str(node_backend), b_stat['backend']['dstat']['error']))
+                if b_stat['status']['read_only']:
+                    node_backend.make_read_only()
+                else:
+                    node_backend.make_writable()
 
-                    if node_backend.dstat_error_code == 0:
-                        logger.info('Updating statistics for node backend %s' % (str(node_backend)))
-                        if not 'backend' in b_stat:
-                            logger.warn('No backend in b_stat: {0}'.format(b_stat))
-                        elif not 'dstat' in b_stat['backend']:
-                            logger.warn('No dstat in backend: {0}'.format(b_stat['backend']))
-                        try:
-                            node_backend.update_statistics(b_stat, collect_ts)
-                        except KeyError as e:
-                            logger.warn('Bad stat for node backend {0} ({1}): {2}'.format(node_backend, e, b_stat))
-                            pass
-
-                    node_backend.stat_file_error = b_stat.get('backend', {}).get('global_stats', {}).get('stat_file_error', 0)
-                    if node_backend.stat_file_error != 0:
-                        node_backend.last_stat_file_error_text = b_stat['backend']['global_stats']['string_stat_file_error']
-
-                    if b_stat['status']['read_only']:
-                        node_backend.make_read_only()
-                    else:
-                        node_backend.make_writable()
-
-                    if not node_backend.group is group:
-                        logger.debug('Adding node backend {0} to group {1}{2}'.format(
-                            node_backend, group.group_id,
-                            ' (moved from group {0})'.format(node_backend.group.group_id)
-                                if node_backend.group else ''))
-                        group.add_node_backend(node_backend)
+                if node_backend.group is not group:
+                    logger.debug('Adding node backend {0} to group {1}{2}'.format(
+                        node_backend, group.group_id,
+                        ' (moved from group {0})'.format(node_backend.group.group_id)
+                        if node_backend.group else ''))
+                    group.add_node_backend(node_backend)
 
         except Exception as e:
-            logger.error('Unable to process statictics for node {0}: '
-                '{1}\n{2}'.format(node_addr, e, traceback.format_exc()))
+            logger.exception('Unable to process statictics for node {}'.format(node_addr))
 
     def update_symm_groups_async(self, groups=None):
 

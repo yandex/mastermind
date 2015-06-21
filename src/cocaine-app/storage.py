@@ -841,7 +841,7 @@ class Group(object):
         if not self.couple and self.meta['couple']:
             self.status = Status.BAD
             self.status_text = ('Group {0} is in Bad state because '
-                'couple did not created'.format(self))
+                'couple was not created'.format(self))
             return self.status
 
         if not self.couple.check_groups(self.meta['couple']):

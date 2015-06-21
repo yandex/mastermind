@@ -1,10 +1,12 @@
+import copy
+
 from mastermind.query import Query, LazyDataObject
 
 
 class GroupsQuery(Query):
-    def __init__(self, client):
+    def __init__(self, client, filter=None):
         super(GroupsQuery, self).__init__(client)
-        self._filter = {}
+        self._filter = filter or {}
 
     def __getitem__(self, key):
         return Group(self.client, key)
@@ -26,6 +28,37 @@ class GroupsQuery(Query):
             gq = Group(self.client, GroupDataObject._raw_id(g_data))
             gq._set_raw_data(g_data)
             yield gq
+
+    def filter(self, **kwargs):
+        """Filter groups list.
+
+        Keyword args:
+          uncoupled:
+            get groups that are not assigned to any couple.
+          in_jobs:
+            get groups that are participating in any active jobs.
+          state:
+            mostly the same as group status, but one state can actually
+            combine several statuses. Represents group state from admin's point of view.
+            States to group statuses:
+            init: INIT
+            good: COUPLED
+            bad: INIT, BAD
+            broken: BROKEN
+            ro: RO
+            migrating: MIGRATING
+
+        Returns:
+          New groups query object with selected filter parameters.
+        """
+        updated_filter = copy.copy(self._filter)
+        if 'uncoupled' in kwargs:
+            updated_filter['uncoupled'] = kwargs['uncoupled']
+        if 'in_jobs' in kwargs:
+            updated_filter['in_jobs'] = kwargs['in_jobs']
+        if 'state' in kwargs:
+            updated_filter['state'] = kwargs['state']
+        return GroupsQuery(self.client, filter=updated_filter)
 
 
 class GroupDataObject(LazyDataObject):
@@ -83,4 +116,5 @@ class GroupQuery(Query):
 
 
 class Group(GroupQuery, GroupDataObject):
-    pass
+    def __repr__(self):
+        return '<Group {}: status {} ({})>'.format(self.id, self.status, self.status_text)

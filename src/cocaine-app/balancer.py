@@ -120,7 +120,7 @@ class Balancer(object):
             pass
         return []
 
-    STATES = {
+    COUPLE_STATES = {
         'good': [storage.Status.OK],
         'full': [storage.Status.FULL],
         'frozen': [storage.Status.FROZEN],
@@ -137,7 +137,7 @@ class Balancer(object):
 
     def _get_couples_list(self, _filter):
         couples = storage.couples.keys()
-        if _filter.get('state', None) is not None and _filter['state'] not in self.STATES:
+        if _filter.get('state', None) is not None and _filter['state'] not in self.COUPLE_STATES:
             raise ValueError('Invalid state: {0}'.format(_filter['state']))
 
         def filtered_out(couple):
@@ -149,7 +149,7 @@ class Balancer(object):
                     return True
 
             if _filter.get('state', None):
-                if couple.status not in self.STATES[_filter['state']]:
+                if couple.status not in self.COUPLE_STATES[_filter['state']]:
                     return True
 
             return False
@@ -163,14 +163,48 @@ class Balancer(object):
             data.append(info)
         return data
 
+    GROUP_STATES = {
+        'init': [storage.Status.INIT],
+        'good': [storage.Status.COUPLED],
+        'bad': [storage.Status.INIT, storage.Status.BAD],
+        'broken': [storage.Status.BROKEN],
+        'ro': [storage.Status.RO],
+        'migrating': [storage.Status.MIGRATING],
+    }
+
     @h.concurrent_handler
     def get_groups_list(self, request):
         options = request[0]
         return self._get_groups_list(options)
 
-    def _get_groups_list(self, options):
+    def _get_groups_list(self, _filter):
         data = []
+        if _filter.get('state', None) is not None and _filter['state'] not in self.GROUP_STATES:
+            raise ValueError('Invalid state: {0}'.format(_filter['state']))
+
+        in_service_group_ids = set()
+        if _filter.get('in_jobs', None) is not None and self.infrastructure:
+            in_service_group_ids = set(self.infrastructure.get_group_ids_in_service())
+
+        def filtered_out(group):
+
+            if _filter.get('state', None):
+                if group.status not in self.GROUP_STATES[_filter['state']]:
+                    return True
+
+            if _filter.get('uncoupled', None) is not None:
+                if bool(group.couple) != (not _filter['uncoupled']):
+                    return True
+
+            if _filter.get('in_jobs', None) is not None:
+                if (group.group_id in in_service_group_ids) != _filter['in_jobs']:
+                    return True
+
+            return False
+
         for group in storage.groups.keys():
+            if filtered_out(group):
+                continue
             data.append(group.info())
         return data
 

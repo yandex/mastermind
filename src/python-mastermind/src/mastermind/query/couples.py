@@ -120,26 +120,6 @@ class CoupleQuery(Query):
         super(CoupleQuery, self).__init__(client)
         self.id = id
 
-    # def move(self, uncoupled_groups=None, force=False):
-    #     """Create group move job.
-
-    #     Job will move group's node backend to uncoupled group's node backend.
-    #     Uncoupled group will be replaces, source group node backend will be disabled.
-
-    #     Args:
-    #       uncoupled_groups: list of uncoupled group that should be merged together
-    #         and replaced by source group.
-    #       force: cancel all pending jobs of low priority (e.g. recover-dc and defragmentation).
-
-    #     Returns:
-    #       A json of created job (or a dict with a single error key and value).
-    #     """
-    #     uncoupled_groups = [GroupQuery._object(self.client, g) for g in uncoupled_groups or []]
-    #     return self.client.request('move_group',
-    #                                [self.id,
-    #                                 {'uncoupled_groups': [g.id for g in uncoupled_groups]},
-    #                                 force])
-
 
 class Couple(CoupleQuery, CoupleDataObject):
     def __repr__(self):
