@@ -13,5 +13,5 @@ setup(
         "mastermind",
     ],
     package_dir={'mastermind': 'src/python-mastermind/src/mastermind'},
-    install_requires=["cocaine_framework_python", "tornado >= 3.0"],
+    install_requires=["tornado >= 3.0"],
 )
