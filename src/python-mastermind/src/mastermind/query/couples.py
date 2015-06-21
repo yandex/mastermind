@@ -11,17 +11,17 @@ class CouplesQuery(Query):
         self._filter = filter or {}
 
     def __getitem__(self, key):
-        return Couple(self.client, key)
+        return Couple(key, self.client)
 
     def __iter__(self):
         couples = self.client.request('get_couples_list', [self._filter])
         for c_data in couples:
-            cq = Couple(self.client, CoupleDataObject._raw_id(c_data))
+            cq = Couple(CoupleDataObject._raw_id(c_data), self.client)
             cq._set_raw_data(c_data)
             yield cq
 
     def __contains__(self, key):
-        ns = Couple(self.client, key)
+        ns = Couple(key, self.client)
         try:
             # TODO: explicitely perform upstream query
             return bool(ns.status)
@@ -50,7 +50,7 @@ class CouplesQuery(Query):
         updated_filter = copy.copy(self._filter)
         if 'namespace' in kwargs:
             updated_filter['namespace'] = query.namespaces.Namespace._object(
-                self.client, kwargs['namespace']).id
+                kwargs['namespace'], self.client).id
         if 'state' in kwargs:
             updated_filter['state'] = kwargs['state']
         return CouplesQuery(self.client, filter=updated_filter)
@@ -110,17 +110,25 @@ class CoupleDataObject(LazyDataObject):
     def _preprocess_raw_data(self, data):
         groups = []
         for g_data in data['groups'][:]:
-            groups.append(Group(self.client, Group._raw_id(g_data)))
+            groups.append(Group.from_data(g_data, self.client))
+        data['groups'] = groups
+        return data
+
+    def serialize(self):
+        data = super(CoupleDataObject, self).serialize()
+        groups = [group.serialize() for group in data['groups']]
         data['groups'] = groups
         return data
 
 
 class CoupleQuery(Query):
-    def __init__(self, client, id):
-        super(CoupleQuery, self).__init__(client)
-        self.id = id
+    pass
 
 
 class Couple(CoupleQuery, CoupleDataObject):
+    def __init__(self, id, client=None):
+        super(Couple, self).__init__(client)
+        self.id = id
+
     def __repr__(self):
         return '<Couple {}: status {} ({})>'.format(self.id, self.status, self.status_text)

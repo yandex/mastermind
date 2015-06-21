@@ -10,18 +10,18 @@ class NamespacesQuery(Query):
         self._filter = filter or {}
 
     def __getitem__(self, key):
-        return Namespace(self.client, key)
+        return Namespace(key, self.client)
 
     def __iter__(self):
         groups = self.client.request('get_namespaces_list', [self._filter])
         for g_data in groups:
-            gq = Namespace(self.client, NamespaceDataObject._raw_id(g_data))
+            gq = Namespace(NamespaceDataObject._raw_id(g_data), self.client)
             del g_data['namespace']
             gq._set_raw_data(g_data)
             yield gq
 
     def __contains__(self, key):
-        ns = Namespace(self.client, key)
+        ns = Namespace(key, self.client)
         try:
             return bool(ns.settings)
         except RuntimeError:
@@ -167,7 +167,7 @@ class NamespacesQuery(Query):
 
         ns_data = self.client.request('namespace_setup', [namespace, True, settings, {}])
 
-        ns = Namespace(self.client, namespace)
+        ns = Namespace(namespace, self.client)
         ns._set_raw_data(ns_data)
 
         return ns
@@ -256,10 +256,6 @@ class NamespaceDataObject(LazyDataObject):
 
 
 class NamespaceQuery(Query):
-    def __init__(self, client, id):
-        super(NamespaceQuery, self).__init__(client)
-        self.id = id
-
     @Query.not_idempotent
     def build_couples(self, couple_size, init_state,
                       couples=1, groups=None, ignore_space=False, dry_run=False,
@@ -317,5 +313,9 @@ class NamespaceQuery(Query):
 
 
 class Namespace(NamespaceQuery, NamespaceDataObject):
+    def __init__(self, id, client=None):
+        super(Namespace, self).__init__(client)
+        self.id = id
+
     def __repr__(self):
         return '<Namespace {}{}>'.format(self.id, ' [DELETED]' if self.deleted else '')

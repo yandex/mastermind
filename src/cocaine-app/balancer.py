@@ -158,9 +158,7 @@ class Balancer(object):
         for c in couples:
             if filtered_out(c):
                 continue
-            info = c.info()
-            info['groups'] = [g.info() for g in c]
-            data.append(info)
+            data.append(c.info().serialize())
         return data
 
     GROUP_STATES = {
@@ -205,7 +203,7 @@ class Balancer(object):
         for group in storage.groups.keys():
             if filtered_out(group):
                 continue
-            data.append(group.info())
+            data.append(group.info().serialize())
         return data
 
     @h.concurrent_handler
@@ -447,7 +445,7 @@ class Balancer(object):
 
         logger.info('Group %d: %s' % (group, repr(storage.groups[group])))
 
-        return storage.groups[group].info()
+        return storage.groups[group].info().serialize()
 
     @h.concurrent_handler
     def get_group_history(self, request):
@@ -518,20 +516,14 @@ class Balancer(object):
         logger.info('Group %s: %s' % (group, repr(group)))
         logger.info('Couple %s: %s' % (couple, repr(couple)))
 
-        res = couple.info()
-        res['groups'] = [g.info() for g in couple]
-
-        return res
+        return couple.info().serialize()
 
     @h.concurrent_handler
     def get_couple_info_by_coupleid(self, request):
         couple_id = str(request)
         couple = storage.couples[couple_id]
 
-        res = couple.info()
-        res['groups'] = [g.info() for g in couple]
-
-        return res
+        return couple.info().serialize()
 
     VALID_COUPLE_INIT_STATES = (storage.Status.COUPLED, storage.Status.FROZEN)
 
@@ -679,10 +671,7 @@ class Balancer(object):
 
                 created_couples.append(couple)
 
-                data = couple.info()
-                data['groups'] = [g.info() for g in couple]
-
-                res.append(data)
+                res.append(couple.info().serialize())
             except Exception as e:
                 logger.exception('Failed to build couple')
                 res.append(str(e))
@@ -1370,8 +1359,7 @@ class Balancer(object):
                         ns = couple.namespace
                     except ValueError:
                         continue
-                    info = couple.info()
-                    info['groups'] = [g.info() for g in couple]
+                    info = couple.info().serialize()
                     # couples
                     res[ns]['couples'].append(info)
 

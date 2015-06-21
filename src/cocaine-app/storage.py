@@ -5,18 +5,17 @@ import logging
 import math
 import os.path
 import time
-import traceback
 
 import msgpack
 
 from errors import CacheUpstreamError
-import inventory
 import jobs.job
 from jobs.job_types import JobTypes
 from infrastructure import infrastructure
 from infrastructure_cache import cache
 from config import config
-
+from mastermind.query.couples import Couple as CoupleInfo
+from mastermind.query.groups import Group as GroupInfo
 
 logger = logging.getLogger('mm.storage')
 
@@ -862,24 +861,20 @@ class Group(object):
                 'its group id is missing from coupling info'.format(self))
             return self.status
 
-
     def info(self):
-        res = {}
-
-        res['id'] = self.group_id
-        res['status'] = self.status
-        res['status_text'] = self.status_text
-        res['node_backends'] = [nb.info() for nb in self.node_backends]
-        if self.couple:
-            res['couples'] = self.couple.as_tuple()
-        else:
-            res['couples'] = None
+        g = GroupInfo(self.group_id)
+        data = {'id': self.group_id,
+                'status': self.status,
+                'status_text': self.status_text,
+                'node_backends': [nb.info() for nb in self.node_backends],
+                'couple': str(self.couple) if self.couple else None}
         if self.meta:
-            res['namespace'] = self.meta.get('namespace')
+            data['namespace'] = self.meta.get('namespace')
         if self.active_job:
-            res['active_job'] = self.active_job
+            data['active_job'] = self.active_job
 
-        return res
+        g._set_raw_data(data)
+        return g
 
     def set_active_job(self, job):
         if job is None:
@@ -1155,24 +1150,25 @@ class Couple(object):
         return tuple(group.group_id for group in self.groups)
 
     def info(self):
-        res = {'couple_status': self.status,
-               'couple_status_text': self.status_text,
-               'id': str(self),
-               'tuple': self.as_tuple()}
+        c = CoupleInfo(str(self))
+        data = {'id': str(self),
+                'couple_status': self.status,
+                'couple_status_text': self.status_text,
+                'tuple': self.as_tuple()}
         try:
-            res['namespace'] = self.namespace
+            data['namespace'] = self.namespace
         except ValueError:
             pass
         stat = self.get_stat()
         if stat:
-            res['free_space'] = int(stat.free_space)
-            try:
-                res['effective_space'] = self.effective_space
-                res['free_effective_space'] = int(max(stat.free_space - (stat.total_space - self.effective_space), 0))
-            except ValueError:
-                res['free_effective_space'] = 0
-            res['used_space'] = int(stat.used_space)
-        return res
+            data['free_space'] = int(stat.free_space)
+            data['effective_space'] = self.effective_space
+            data['free_effective_space'] = self.effective_free_space
+            data['used_space'] = int(stat.used_space)
+
+        data['groups'] = [g.info().serialize() for g in self.groups]
+        c._set_raw_data(data)
+        return c
 
     @property
     def keys_diff(self):

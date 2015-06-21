@@ -9,7 +9,7 @@ class GroupsQuery(Query):
         self._filter = filter or {}
 
     def __getitem__(self, key):
-        return Group(self.client, key)
+        return Group(key, self.client)
 
     def next_group_ids(self, count=1):
         """Fetch some free group ids.
@@ -25,7 +25,7 @@ class GroupsQuery(Query):
     def __iter__(self):
         groups = self.client.request('get_groups_list', [self._filter])
         for g_data in groups:
-            gq = Group(self.client, GroupDataObject._raw_id(g_data))
+            gq = Group(GroupDataObject._raw_id(g_data), self.client)
             gq._set_raw_data(g_data)
             yield gq
 
@@ -41,6 +41,7 @@ class GroupsQuery(Query):
             mostly the same as group status, but one state can actually
             combine several statuses. Represents group state from admin's point of view.
             States to group statuses:
+
             init: INIT
             good: COUPLED
             bad: INIT, BAD
@@ -81,10 +82,6 @@ class GroupDataObject(LazyDataObject):
 
 
 class GroupQuery(Query):
-    def __init__(self, client, id):
-        super(GroupQuery, self).__init__(client)
-        self.id = id
-
     @property
     def meta(self):
         """Reads metakey for group.
@@ -116,5 +113,9 @@ class GroupQuery(Query):
 
 
 class Group(GroupQuery, GroupDataObject):
+    def __init__(self, id, client=None):
+        super(Group, self).__init__(client)
+        self.id = id
+
     def __repr__(self):
         return '<Group {}: status {} ({})>'.format(self.id, self.status, self.status_text)

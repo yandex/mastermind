@@ -48,3 +48,8 @@ class MastermindClient(object):
     @property
     def couples(self):
         return couples.CouplesQuery(self)
+
+
+class DummyClient(object):
+    def __getattribute__(self, attr):
+        raise RuntimeError('Mastermind client should be bound to query object')

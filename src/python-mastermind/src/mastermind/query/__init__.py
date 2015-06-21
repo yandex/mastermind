@@ -1,15 +1,17 @@
 import functools
 
+import mastermind.client
+
 
 class Query(object):
     def __init__(self, client):
-        self.client = client
+        self.client = client or mastermind.client.DummyClient()
 
     @classmethod
-    def _object(cls, client, object_or_id):
+    def _object(cls, object_or_id, client):
         if isinstance(object_or_id, cls):
             return object_or_id
-        return cls(client, object_or_id)
+        return cls(object_or_id, client)
 
     @staticmethod
     def not_idempotent(method):
@@ -19,6 +21,12 @@ class Query(object):
                 kwargs['attempts'] = 1
             return method(self, *args, **kwargs)
         return wrapper
+
+    @classmethod
+    def from_data(cls, data, client):
+        obj = cls(cls._raw_id(data), client)
+        obj._set_raw_data(data)
+        return obj
 
 
 class LazyDataObject(object):
@@ -48,3 +56,6 @@ class LazyDataObject(object):
 
     def _preprocess_raw_data(self, data):
         return data
+
+    def serialize(self):
+        return self._data

@@ -422,7 +422,7 @@ class Statistics(object):
     def get_couple_statistics(self, request):
         group_id = int(request[0])
 
-        if not group_id in storage.groups:
+        if group_id not in storage.groups:
             raise ValueError('Group %d is not found' % group_id)
 
         group = storage.groups[group_id]
@@ -430,23 +430,25 @@ class Statistics(object):
         res = {}
 
         if group.couple:
-            res = group.couple.info()
+            res = group.couple.info().serialize()
             res['status'] = res['couple_status']
-            res['stats'] = self.__stats_to_dict(group.couple.get_stat(), group.couple.effective_space)
+            res['stats'] = self.__stats_to_dict(
+                group.couple.get_stat(), group.couple.effective_space)
             groups = group.couple.groups
         else:
             groups = [group]
 
         res['groups'] = []
         for group in groups:
-            g = group.info()
+            g = group.info().serialize()
             try:
                 group_stat = group.get_stat()
             except TypeError:
                 group_stat = None
             g['stats'] = self.__stats_to_dict(group_stat, group.effective_space)
             for nb in g['node_backends']:
-                nb['stats'] = self.__stats_to_dict(storage.node_backends[nb['addr']].stat,
+                nb['stats'] = self.__stats_to_dict(
+                    storage.node_backends[nb['addr']].stat,
                     storage.node_backends[nb['addr']].effective_space)
             res['groups'].append(g)
 
