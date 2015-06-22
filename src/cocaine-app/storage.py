@@ -1162,9 +1162,13 @@ class Couple(object):
         stat = self.get_stat()
         if stat:
             data['free_space'] = int(stat.free_space)
-            data['effective_space'] = self.effective_space
-            data['free_effective_space'] = self.effective_free_space
             data['used_space'] = int(stat.used_space)
+            try:
+                data['effective_space'] = self.effective_space
+                data['free_effective_space'] = self.effective_free_space
+            except ValueError:
+                # failed to determine couple's namespace
+                data['effective_space'], data['free_effective_space'] = 0, 0
 
         data['groups'] = [g.info().serialize() for g in self.groups]
         c._set_raw_data(data)

@@ -1027,10 +1027,14 @@ class Balancer(object):
 
         if 'auth-keys' in settings:
             auth_keys_settings = settings['auth-keys']
-            if not 'read' in auth_keys_settings:
+            if 'read' not in auth_keys_settings:
                 auth_keys_settings['read'] = ''
-            if not 'write' in auth_keys_settings:
+            elif auth_keys_settings['read'] is True:
+                auth_keys_settings['read'] = h.random_hex_string(16)
+            if 'write' not in auth_keys_settings:
                 auth_keys_settings['write'] = ''
+            elif auth_keys_settings['write'] is True:
+                auth_keys_settings['write'] = h.random_hex_string(16)
 
         keys = (settings.get('redirect', {}).get('expire-time'),
                 settings.get('signature', {}).get('token'),
@@ -1135,8 +1139,15 @@ class Balancer(object):
                 logger.error('Namespace {0}, invalid json settings: {1}'.format(namespace, e))
                 raise ValueError('Invalid json settings')
 
-        logger.info('Namespace {0}, old settings found: {1}, '
-            'updating with {2}'.format(namespace, cur_settings, settings))
+        logger.info('Namespace {0}, old settings found: {1}, updating with {2}'.format(
+            namespace, cur_settings, settings))
+
+        for auth_key_type in ('read', 'write'):
+            if (not overwrite and
+                cur_settings.get('auth-keys', {}).get(auth_key_type) and
+                    settings.get('auth-keys', {}).get(auth_key_type)):
+
+                raise ValueError('{} auth key is already set'.format(auth_key_type))
 
         self.__merge_dict(cur_settings, settings)
 
@@ -1228,17 +1239,19 @@ class Balancer(object):
         except Exception:
             raise ValueError('Invalid parameters')
 
-        try:
-            options = request[1]
-        except IndexError:
-            options = {}
+        # try:
+        #     options = request[1]
+        # except IndexError:
+        #     options = {}
 
-        try:
-            self.__check_namespace(namespace)
-        except ValueError:
-            if (namespace not in self.infrastructure.ns_settings or
-                not options.get('deleted')):
-                    raise
+        # try:
+        #     self.__check_namespace(namespace)
+        # except ValueError:
+        #     if (namespace not in self.infrastructure.ns_settings or
+        #             not options.get('deleted')):
+        #         raise
+
+        logger.info("namespace 11111 {}, {}".format(namespace, self.infrastructure.ns_settings[namespace]))
 
         return self.infrastructure.ns_settings[namespace]
 

@@ -2,6 +2,7 @@ from collections import defaultdict
 from functools import wraps
 import logging
 import msgpack
+import random
 import socket
 from time import time
 import traceback
@@ -173,6 +174,7 @@ def process_elliptics_async_result(result, processor, *args, **kwargs):
                      end_time=result.end_time(),
                      *args, **kwargs)
 
+
 def hosts_dcs(hosts):
     dcs = []
     for host in hosts:
@@ -181,3 +183,8 @@ def hosts_dcs(hosts):
         except CacheUpstreamError:
             raise RuntimeError('Failed to get dc for host {}'.format(host))
     return dcs
+
+
+def random_hex_string(bytes):
+    format_str = '{{:0={hexdigits}x}}'.format(hexdigits=bytes * 2)
+    return format_str.format(random.getrandbits(bytes * 8))

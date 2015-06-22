@@ -1,7 +1,7 @@
 #!/usr/bin/env python
+import copy
 from datetime import datetime
 import inspect
-import json
 from json import dumps
 import logging
 from logging.handlers import SysLogHandler
@@ -10,7 +10,6 @@ import os.path
 from pprint import pprint
 import re
 import socket
-import subprocess
 import sys
 from time import sleep
 from functools import wraps
@@ -22,6 +21,7 @@ from cocaine.exceptions import ServiceError
 from cocaine.services import Service
 
 from mastermind import MastermindClient
+from mastermind.query.couples import Couple
 
 try:
     from cocaine.exceptions import DisconnectionError
@@ -97,8 +97,8 @@ class ReconnectableChain(object):
         except DisconnectionError:
             attempts = attempts or self.attempts
             if attempts <= 1:
-                raise RuntimeError('Failed to perform request "{}" ({} '
-                    'attempts)'.format(self.method, self.attempts))
+                raise RuntimeError('Failed to perform request "{}" ({} attempts)'.format(
+                    self.method, self.attempts))
             sleep(3)
             self.service.connect_service()
             self._create_chain()
@@ -156,8 +156,10 @@ def ts_to_dt(ts):
 # group commands
 groupDispatcher = Dispatcher(globaloptions=(host_param, app_param))
 
+
 def to_gb(bytes):
     return bytes / (1024.0 * 1024.0 * 1024.0)
+
 
 def convert_stats(d):
     for k in ('free_space', 'free_effective_space', 'used_space', 'total_space'):
@@ -180,7 +182,7 @@ def group_info(group, history=('l', False, 'History of group nodes'), host=None,
     if history:
 
         group_history = s.enqueue('get_group_history', msgpack.packb([group])).get()
-        if isinstance(group_history, dict) and not 'nodes' in group_history:
+        if isinstance(group_history, dict) and 'nodes' not in group_history:
             # exception returned
             print group_history
         else:
@@ -205,54 +207,42 @@ def group_info(group, history=('l', False, 'History of group nodes'), host=None,
 
 @groupDispatcher.command(name='meta')
 @log_action
-def group_meta(group, key=('k', '', 'Read data from arbitrary key'),
-               unpack=('u', False, 'Unpack key with msgpack'), host=None, app=None):
+def group_meta(group, host=None, app=None):
     '''Read group metadata'''
-    s = service(host, app)
-    group = int(group)
-
-    params = [group, key, unpack]
-
-    res = s.enqueue('get_group_meta', msgpack.packb(params)).get()
-    pprint(res)
+    cl = client(host, app)
+    pprint(cl.groups[int(group)].meta)
 
 
 @groupDispatcher.command(name='next-number')
 @log_action
 def group_next_number(count, host=None, app=None):
     '''Get unused group numbers, number of groups is an argument'''
-    s = service(host, app)
-    count = int(count)
 
-    res = s.enqueue("get_next_group_number", msgpack.packb(count)).get()
-    print res
+    cl = client(host, app)
+    count = int(count)
+    print cl.groups.next_group_ids(count)
 
 
 @groupDispatcher.command(name='list-uncoupled')
 @log_action
-def group_list_uncoupled(by_dc=('', None, 'Group by dc and provide some useful data'),
-                         state=('s', 'good', 'Filter by state (good|bad)'),
-                         in_service=('', False, 'Include uncoupled groups that '
-                            'are in service (participating in jobs, etc.)'),
+def group_list_uncoupled(state=('s', 'init', 'Filter by state (init|broken)'),
+                         in_jobs=('', False, 'Include uncoupled groups that '
+                                  'are in service (participating in jobs, etc.)'),
                          json=('', None, 'Format additional data as json'),
                          host=None, app=None):
     '''Get list of uncoupled groups from balancer'''
-    s = service(host, app)
+    cl = client(host, app)
 
-    options = {'in_service': in_service,
+    options = {'uncoupled': True,
+               'in_jobs': in_jobs,
                'state': state}
-    res = s.enqueue("get_empty_groups", msgpack.packb([options])).get()
+    res = tuple([group.id
+                 for group in cl.groups.filter(**options)])
 
-    if not by_dc:
-        if json:
-            print dumps(res)
-        else:
-            print res
-
-    if by_dc:
-        groups_by_dcs = s.enqueue('groups_by_dc',
-            msgpack.packb((res,))).get()
-        print_by_dcs(groups_by_dcs, json)
+    if json:
+        print dumps(res)
+    else:
+        print res
 
 
 @groupDispatcher.command(name='detach-node')
@@ -287,7 +277,10 @@ def group_force_update(host=None, app=None):
 
 @groupDispatcher.command(name='move')
 @log_action
-def group_move(group, uncoupled_groups=('u', '', 'Use certain destination uncoupled groups '
+def group_move(group,
+               uncoupled_groups=(
+                   'u', '',
+                   'Use certain destination uncoupled groups '
                    '(use comma-separated list if you want to merge several uncoupled groups '
                    'into one)'),
                force=('f', False, 'Cancel all pending jobs of low priority '
@@ -305,8 +298,8 @@ def group_move(group, uncoupled_groups=('u', '', 'Use certain destination uncoup
     else:
         uncoupled_groups = None
 
-    job_data = s.enqueue('move_group', msgpack.packb([group,
-        {'uncoupled_groups': uncoupled_groups}, force])).get()
+    job_data = s.enqueue('move_group', msgpack.packb([
+        group, {'uncoupled_groups': uncoupled_groups}, force])).get()
 
     print job_data
 
@@ -316,7 +309,9 @@ def group_move(group, uncoupled_groups=('u', '', 'Use certain destination uncoup
 def group_restore(group, uncoupled_group=('u', False, 'Use uncoupled group as '
                   'a restoration point instead of previous group location'),
                   src_group=('s', '', 'Use selected group as a source group to copy data from'),
-                  force=('f', False, 'Cancel all pending jobs of low priority '
+                  force=(
+                      'f', False,
+                      'Cancel all pending jobs of low priority '
                       '(e.g. recover-dc and defragmenation)'),
                   host=None, app=None):
     '''Create job to restore group's node backend from a coupled group.
@@ -346,8 +341,8 @@ def group_recover_dc(group,
 
     couple_data = retry(s, 'get_couple_info', group)
 
-    job_data = s.enqueue('create_job', msgpack.packb(['recover_dc_job',
-        {'couple': couple_data['id']}])).get()
+    job_data = s.enqueue('create_job', msgpack.packb([
+        'recover_dc_job', {'couple': couple_data['id']}])).get()
 
     print job_data
 
@@ -403,119 +398,6 @@ def group_search_by_path(group_host, group_path,
 coupleDispatcher = Dispatcher(globaloptions=(host_param, app_param))
 
 
-def deprecated(state, by_ns=None, by_dc=None, json=None):
-    options = []
-    if by_ns:
-        options.append('--by-ns')
-    elif by_dc:
-        options.append('--by-dc')
-    if not json:
-        options.append('--short')
-
-    print (warn('DEPRECATED: ') + 'use command "mastermind couple list --state {0}'
-        '{1}"'.format(state, ' ' + ' '.join(options) if options else ''))
-
-
-@coupleDispatcher.command(name='list-bad')
-@log_action
-def couple_list_bad(by_dc=('', None, 'Group by dc and provide some useful data'),
-                    by_ns=('', None, 'Group by namespaces'),
-                    json=('', None, 'Format additional data as json'),
-                    host=None, app=None):
-    '''Get list of broken couples from balancer'''
-    deprecated('bad', by_ns=by_ns, by_dc=by_dc, json=json)
-
-    s = service(host, app)
-    res = s.enqueue('get_bad_groups', '').get()
-
-    if not by_dc and not by_ns:
-        print res
-
-    if by_dc:
-        groups_by_dcs = s.enqueue('groups_by_dc',
-            msgpack.packb(([g for c in res for g in c],))).get()
-        print_by_dcs(groups_by_dcs, json)
-    if by_ns:
-        couples_by_nss = s.enqueue('couples_by_namespace',
-            msgpack.packb((res,))).get()
-        print_by_namespaces(couples_by_nss, json)
-
-
-@coupleDispatcher.command(name='list-symmetric')
-@log_action
-def couple_list_symmetric(by_dc=('', None, 'Group by dc and provide some useful data'),
-                          by_ns=('', None, 'Group by namespaces'),
-                          json=('', None, 'Format additional data as json'),
-                          host=None, app=None):
-    '''Get list of good couples from balancer'''
-    deprecated('good', by_ns=by_ns, by_dc=by_dc, json=json)
-
-    s = service(host, app)
-    res = s.enqueue("get_symmetric_groups", "").get()
-
-    if not by_dc and not by_ns:
-        print res
-
-    if by_dc:
-        groups_by_dcs = s.enqueue('groups_by_dc',
-            msgpack.packb(([g for c in res for g in c],))).get()
-        print_by_dcs(groups_by_dcs, json)
-    if by_ns:
-        couples_by_nss = s.enqueue('couples_by_namespace',
-            msgpack.packb((res,))).get()
-        print_by_namespaces(couples_by_nss, json)
-
-
-@coupleDispatcher.command(name='list-frozen')
-@log_action
-def couple_list_frozen(by_dc=('', None, 'Group by dc and provide some useful data'),
-                       by_ns=('', None, 'Group by namespaces'),
-                       json=('', None, 'Format additional data as json'),
-                       host=None, app=None):
-    '''Get list of frozen couples from balancer'''
-    deprecated('frozen', by_ns=by_ns, by_dc=by_dc, json=json)
-
-    s = service(host, app)
-    res = s.enqueue("get_frozen_groups", "").get()
-
-    if not by_dc and not by_ns:
-        print res
-
-    if by_dc:
-        groups_by_dcs = s.enqueue('groups_by_dc',
-            msgpack.packb(([g for c in res for g in c],))).get()
-        print_by_dcs(groups_by_dcs, json)
-    if by_ns:
-        couples_by_nss = s.enqueue('couples_by_namespace',
-            msgpack.packb((res,))).get()
-        print_by_namespaces(couples_by_nss, json)
-
-
-@coupleDispatcher.command(name='list-closed')
-@log_action
-def couple_list_closed(by_dc=('', None, 'Group by dc and provide some useful data'),
-                       by_ns=('', None, 'Group by namespaces'),
-                       json=('', None, 'Format additional data as json'),
-                       host=None, app=None):
-    '''Get list of couples closed to balancer'''
-    deprecated('full', by_ns=by_ns, by_dc=by_dc, json=json)
-
-    s = service(host, app)
-    res = s.enqueue('get_closed_groups', '').get()
-
-    if not by_dc and not by_ns:
-        print res
-
-    if by_dc:
-        groups_by_dcs = s.enqueue('groups_by_dc',
-            msgpack.packb(([g for c in res for g in c],))).get()
-        print_by_dcs(groups_by_dcs, json)
-    if by_ns:
-        couples_by_nss = s.enqueue('couples_by_namespace',
-            msgpack.packb((res,))).get()
-        print_by_namespaces(couples_by_nss, json)
-
-
 @coupleDispatcher.command(name='info')
 @log_action
 def couple_info(group, host=None, app=None):
@@ -541,7 +423,8 @@ def couple_info(group, host=None, app=None):
     print color('Couple info', YELLOW)
     res['group_statuses'] = []
     for g in res['groups']:
-        res['group_statuses'].append({'group_id': g['id'],
+        res['group_statuses'].append({
+            'group_id': g['id'],
             'status': g['status'],
             'status_text': g['status_text']})
     del res['groups']
@@ -560,38 +443,22 @@ STATES = {
 @coupleDispatcher.command(name='list')
 @log_action
 def couple_list(namespace=('n', '', 'Filter by namespace'),
-                state=('s', '', 'Filter by state (good|full|frozen|bad|service-stalled|service-active)'),
+                state=('s', '',
+                       'Filter by state (good|full|frozen|bad|service-stalled|service-active)'),
                 short=('', False, 'Use short format output'),
-                verbose=('v', False, 'Use verbose format output'),
-                by_ns=('', False, 'Output by namespaces'),
-                by_dc=('', False, 'Output by dc'),
-                by_state=('', False, 'Output by state'),
-                json=('', False, 'Output in json format (overrided by --short and --verbose options)'),
+                json=('', False,
+                      'Output in json format (overrided by --short and --verbose options)'),
                 host=None, app=None):
-    '''List couples with various view options. Default format is json,
-    use '--short' or '--verbose' option for human readable formats.'''
-    s = service(host, app)
+    '''List couples with various view options.'''
+    cl = client(host, app)
 
     options = {'namespace': namespace,
-               'state': state}
-    couples = s.enqueue('get_couples_list', msgpack.packb([options])).get()
+               'state': state or None}
+    couples = cl.couples.filter(**options)
 
-    viewer = view_couples
-    data = couples
+    data = [c.serialize() for c in couples]
 
-    grouped = by_ns or by_dc or by_state
-    key_mapper = lambda k: k
-    if grouped:
-        if by_dc:
-            viewer = view_groups
-            data = group_by_dc(couples)
-        elif by_ns:
-            data = group_by_ns(couples)
-        elif by_state:
-            data = group_by_state(couples)
-            key_mapper = lambda k: STATES.get(k, k)
-
-    if not short and not verbose:
+    if not short:
 
         # convert stats
         def convert_entities_stats(entities):
@@ -610,67 +477,14 @@ def couple_list(namespace=('n', '', 'Filter by namespace'),
                     # entity is group
                     convert_group_stats(entity)
 
-        if grouped:
-            for key, entities in data.iteritems():
-                convert_entities_stats(entities)
-        else:
-            convert_entities_stats(data)
-
-        if json:
-            print dumps(data)
-        else:
-            pprint(data)
-        return
-
-    viewer(data, grouped, key_mapper, short=short, verbose=verbose)
-
-
-def group_by_ns(couples):
-    res = {}
-    for c in couples:
-        res.setdefault(c['namespace'], []).append(c)
-    return res
-
-
-def group_by_state(couples):
-    res = {}
-    for c in couples:
-        res.setdefault(c['couple_status'], []).append(c)
-    return res
-
-
-def group_by_dc(couples):
-    res = {}
-    for c in couples:
-        for g in c['groups']:
-            dcs = set()
-            for node in g['node_backends']:
-                dcs.add(node['dc'])
-            if not dcs:
-                dcs.add('unknown')
-            for dc in dcs:
-                res.setdefault(dc, []).append(g)
-    return res
-
-
-def view_couples(data, grouped, key_mapper, short=False, verbose=False):
-
-    def output(couples, short=False, verbose=False):
-        if short:
-            print tuple([c['tuple'] for c in couples])
-        elif verbose:
-            print '-' * 30
-            for c in sorted(couples,
-                            key=lambda x: (len(x['id'].split(':')), x['id'])):
-                print_couple(c)
-
-    if grouped:
-        for k, couples in data.iteritems():
-            print color(key_mapper(k), YELLOW)
-            output(couples, short=short, verbose=verbose)
-            print
+        convert_entities_stats(data)
     else:
-        output(data, short=short, verbose=verbose)
+        data = tuple([c['tuple'] for c in data])
+
+    if json:
+        print dumps(data)
+    else:
+        pprint(data)
 
 
 def view_groups(data, grouped, key_mapper, short=False, verbose=False):
@@ -695,16 +509,21 @@ def view_groups(data, grouped, key_mapper, short=False, verbose=False):
 
 ALLOWED_COUPLE_STATES = ('frozen', 'coupled')
 
+
 @coupleDispatcher.command(name='build')
 @log_action
-def couple_build(size, groups=('i', [], 'Use these groups in couple (example: -i 1:2). '
-                    'This option can be used multiple times, each successive groups '
-                    'will be included in a separate couple'),
-                 couples=('c', 1, 'Number of couples to create. Mastermind will try '
-                    'to build couples using groups from different sets of dcs '
-                    'to prevent all couples falling out when a dc gets disconnected'),
-                 ignore_space=('s', False, 'Ignore checking of groups total space '
-                    'matching'),
+def couple_build(size,
+                 groups=(
+                     'i', [],
+                     'Use these groups in couple (example: -i 1:2). '
+                     'This option can be used multiple times, each successive groups '
+                     'will be included in a separate couple'),
+                 couples=(
+                     'c', 1, 'Number of couples to create. Mastermind will try '
+                     'to build couples using groups from different sets of dcs '
+                     'to prevent all couples falling out when a dc gets disconnected'),
+                 ignore_space=(
+                     's', False, 'Ignore checking of groups total space matching'),
                  namespace=('n', '', 'Set custom namespace for couple'),
                  dry_run=('d', False, 'Dry-run mode'),
                  state=('', '', 'Set couple initial state (coupled|frozen)'), host=None, app=None):
@@ -713,7 +532,8 @@ def couple_build(size, groups=('i', [], 'Use these groups in couple (example: -i
     This behaviour can be turned off by --ignore-space option.
     Options --couples and --groups are mutually exclusive.
     The required argument for the command is the size of a couple (number of groups).'''
-    s = service(host, app)
+    cl = client(host, app)
+
     size = int(size)
 
     if groups:
@@ -725,35 +545,35 @@ def couple_build(size, groups=('i', [], 'Use these groups in couple (example: -i
         print warn('Namespace should be set (--namespace | -n)')
         return 1
 
-    if not state or not state.lower() in ALLOWED_COUPLE_STATES:
+    state = state.lower()
+    if state not in ALLOWED_COUPLE_STATES:
         print warn('Initial couple state is required (--state): coupled | frozen')
         return 1
 
-    params = [size, couples, {'namespace': namespace,
-                              'match_group_space': not ignore_space,
-                              'init_state': state,
-                              'dry_run': dry_run,
-                              'mandatory_groups': groups}]
+    res = cl.namespaces[namespace].build_couples(size,
+                                                 state,
+                                                 couples=couples,
+                                                 groups=groups,
+                                                 ignore_space=ignore_space,
+                                                 dry_run=dry_run)
 
-    res = s.enqueue('build_couples', msgpack.packb(params)).get()
-
-    if not isinstance(res,  tuple):
+    if isinstance(res, dict):
         print res
         return 1
 
     good_couples = []
     errors = []
     for r in res:
-        if isinstance(r, dict):
+        if isinstance(r, Couple):
             good_couples.append(r)
         else:
             errors.append(r)
 
-    if good_couples > 1:
+    if len(good_couples) > 1:
         print highlight('Successfully created {0} out of {1} couples:'.format(
             len(good_couples), couples))
     for c in good_couples:
-        print c['tuple']
+        print c.as_tuple
 
     if errors:
         print warn('Exceptions occured:')
@@ -763,6 +583,7 @@ def couple_build(size, groups=('i', [], 'Use these groups in couple (example: -i
 
     if not len(good_couples):
         return 1
+
 
 @coupleDispatcher.command(name='break')
 @log_action
@@ -779,9 +600,11 @@ def couple_break(couple, confirm=None,
 
 @coupleDispatcher.command(name='weights')
 @log_action
-def couple_get_weights(namespace=('n', '', 'Use namespace for couple if there are '
-                                      'no neighbour groups to fetch definite namespace'),
-                       host=None, app=None):
+def couple_get_weights(
+        namespace=(
+            'n', '', 'Use namespace for couple if there are '
+            'no neighbour groups to fetch definite namespace'),
+        host=None, app=None):
     '''Get weights for symmetric groups'''
     s = service(host, app)
     params = []
@@ -836,7 +659,7 @@ def job_move_groups(src_host,
 
     res = s.enqueue('move_groups_from_host', msgpack.packb([src_host])).get()
 
-    if not 'jobs' in res:
+    if 'jobs' not in res:
         print res
         return 1
 
@@ -856,14 +679,16 @@ def job_move_groups(src_host,
 # namespace commands
 nsDispatcher = Dispatcher(globaloptions=(host_param, app_param))
 
+
 @nsDispatcher.command(name='setup')
 @log_action
 def ns_setup(namespace,
-             overwrite=('o', False, 'Flag to setup namespace from scratch'),
+             new=('', False, 'Flag to setup non-existing namespace from scratch'),
+             overwrite=('o', False, 'Flag to setup existing namespace from scratch'),
              groups_count=('g', '', 'Set number of groups per couple'),
              success_copies=('s', '', 'Success copy politics (any|quorum|all)'),
-             auth_key_write=('', '', 'Proxy auth-key for writing'),
-             auth_key_read=('', '', 'Proxy auth-key for reading'),
+             auth_key_write=('', False, 'Set proxy auth-key for writing'),
+             auth_key_read=('', False, 'Set proxy auth-key for reading'),
              sign_token=('', '', 'Signature token'),
              sign_path_prefix=('', '', 'Signature path prefix'),
              min_units=('u', '', 'Minimal number of units available for write operations '
@@ -887,23 +712,50 @@ def ns_setup(namespace,
              check_for_update=('', '', 'Insert the key only of does not exist already (1|0)'),
              custom_expiration_time=('', '', 'Allows namespace to use expire-time '
                 'argument for signing url (1|0)'),
-             json_input=('j', False, 'Namespace settings will be imported without '
-                'validation from --input-source source (default /dev/stdin)'),
-             input_source=('i', '/dev/stdin', 'Input file for namespace settings'),
+             json=('', None, 'Format output as json'),
              host=None, app=None):
+
+    # json_input=('j', False, 'Namespace settings will be imported without '
+    #    'validation from --input-source source (default /dev/stdin)'),
+    # input_source=('i', '/dev/stdin', 'Input file for namespace settings'),
     '''Namespace setup.
     Updates settings by default with given keys.
     Use --overwrite to completely overwrite namespace settings.'''
-    s = service(host, app)
+    cl = client(host, app)
 
-    settings = {}
-    options = {}
+    if new:
+        ns = cl.namespaces.setup(
+            namespace,
+            groups_count=groups_count,
+            static_couple=couple,
+            success_copies=success_copies,
+            auth_key_write=auth_key_write,
+            auth_key_read=auth_key_read,
+            sign_token=sign_token,
+            sign_path_prefix=sign_path_prefix,
+            min_units=min_units,
+            add_units=add_units,
+            redirect_content_length_threshold=redirect_content_length_threshold,
+            redirect_expire_time=redirect_expire_time,
+            multipart_content_length_threshold=multipart_content_length_threshold,
+            select_couple_to_upload=select_couple_to_upload,
+            reserved_space_percentage=reserved_space_percentage,
+            check_for_update=check_for_update,
+            custom_expiration_time=custom_expiration_time)
 
-    if json_input:
-        settings = open(input_source, 'rb').read()
-        options['json'] = True
-        options['skip_validation'] = True
     else:
+        ns = cl.namespaces[namespace]
+
+        # constructing new or updated settings
+        settings = {}
+
+        # options = {}
+        #
+        # if json_input:
+        #     settings = open(input_source, 'rb').read()
+        #     options['json'] = True
+        #     options['skip_validation'] = True
+        # else:
         try:
             groups_count = int(groups_count)
         except ValueError:
@@ -911,19 +763,16 @@ def ns_setup(namespace,
 
         if not success_copies and overwrite:
             print warn('--success-copies is required parameter')
-            return
+            return 1
 
         if success_copies:
             settings['success-copies-num'] = success_copies
 
-        if couple:
-            couple = [int(g) for g in couple.split(':')]
-        else:
-            couple = None
+        couple = [int(g) for g in couple.split(':')] if couple else None
 
         if (not couple and not groups_count) and overwrite:
             print warn('either --groups-count or --couple is required')
-            return
+            return 1
 
         if couple:
             settings['static-couple'] = couple
@@ -974,8 +823,15 @@ def ns_setup(namespace,
         if check_for_update:
             settings['check-for-update'] = check_for_update != '0'
 
-    res = s.enqueue('namespace_setup', msgpack.packb([namespace, overwrite, settings, options])).get()
-    print res
+        if overwrite:
+            ns.settings = settings
+        else:
+            ns.update(settings)
+
+    if json:
+        print dumps(ns.settings.dict())
+    else:
+        pprint(ns.settings.dict())
 
 
 @nsDispatcher.command(name='settings')
@@ -983,37 +839,56 @@ def ns_setup(namespace,
 def ns_settings(namespace,
                 service_key=('s', False, 'Include namespace service information'),
                 deleted=('d', False, 'Show namespace settings even if namespace '
-                    'has been deleted'),
+                                     'has been deleted'),
+                json=('', None, 'Format output as json'),
                 host=None, app=None):
     '''Get namespace settings'''
-    s = service(host, app)
+    cl = client(host, app)
 
-    options = {'deleted': deleted}
-    res = s.enqueue('get_namespace_settings', msgpack.packb([
-        namespace, options])).get()
+    ns = cl.namespaces[namespace]
+
+    if ns.deleted and not deleted:
+        raise ValueError('Namespace "{}" is deleted'.format(ns.id))
+
+    settings = copy.deepcopy(ns.settings.dict())
+
     if not service_key:
-        res.pop('__service', None)
+        settings.pop('__service', None)
 
-    print res
+    if json:
+        print dumps(settings)
+    else:
+        pprint(settings)
 
 
 @nsDispatcher.command(name='list')
 @log_action
-def ns_list(host=None, app=None):
+def ns_list(deleted=('d', '', 'Show namespace even if it has been deleted (0|1)'),
+            json=('', None, 'Format output as json'),
+            host=None, app=None):
     '''List all couple namespaces'''
-    s = service(host, app)
-    res = s.enqueue('get_namespaces', '').get()
-    print res
+    cl = client(host, app)
+    options = {}
+    if deleted == '0':
+        options['deleted'] = False
+    elif deleted == '1':
+        options['deleted'] = True
+
+    namespaces = cl.namespaces.filter(**options)
+
+    if json:
+        print dumps([ns.id for ns in namespaces])
+    else:
+        for ns in namespaces:
+            print ns.id
 
 
 @nsDispatcher.command(name='delete')
 @log_action
 def ns_delete(namespace, host=None, app=None):
     '''Delete namespace'''
-    s = service(host, app)
-
-    res = s.enqueue('namespace_delete', msgpack.packb([namespace])).get()
-    print res
+    cl = client(host, app)
+    del cl.namespaces[namespace]
 
 
 # cache commands
@@ -1038,6 +913,7 @@ def cache_keys_by_group(group, host=None, app=None):
     group = int(group)
 
     res = s.enqueue('get_cached_keys_by_group', msgpack.packb(group)).get()
+    print res
 
 
 @coupleDispatcher.command(name='freeze')
@@ -1079,14 +955,15 @@ def couple_defrag(couple,
             couple, couple_data['couple_status'], ['FULL', 'OK']))
         return
 
-    job_data = s.enqueue('create_job', msgpack.packb(['couple_defrag_job',
-        {'couple': couple_data['id']}])).get()
+    job_data = s.enqueue('create_job', msgpack.packb([
+        'couple_defrag_job', {'couple': couple_data['id']}])).get()
 
     print job_data
 
 
 # lock commands
 lockDispatcher = Dispatcher(globaloptions=(host_param, app_param))
+
 
 @lockDispatcher.command(name='host')
 @log_action
@@ -1114,6 +991,7 @@ def lock_host(lock_host,
 # unlock commands
 unlockDispatcher = Dispatcher(globaloptions=(host_param, app_param))
 
+
 @unlockDispatcher.command(name='host')
 @log_action
 def unlock_host(lock_host,
@@ -1139,6 +1017,8 @@ def unlock_host(lock_host,
 
 # cache commands
 cacheDispatcher = Dispatcher(globaloptions=(host_param, cache_app_param))
+
+
 @cacheDispatcher.command(name='clean')
 @log_action
 def cache_clean(host=None, app=None):
@@ -1154,7 +1034,6 @@ def cache_clean(host=None, app=None):
     print result
 
 
-
 DEFAULT = '\033[0m'
 DEFAULT_BOLD = '\033[1m'
 RED = '\033[1;31m'
@@ -1162,15 +1041,19 @@ GREEN = '\033[1;32m'
 YELLOW = '\033[1;33m'
 BLUE = '\033[1;34m'
 
+
 def warn(s):
     return color(s, RED)
+
 
 def highlight(s):
     return color(s, GREEN)
 
+
 def color(s, color):
     return '{color}{text}{coloroff}'.format(color=color,
                                             text=s, coloroff=DEFAULT)
+
 
 def box(text, caption=None):
     print
@@ -1270,132 +1153,10 @@ def retry(session, method, *params, **kwargs):
             continue
 
 
-# display-me-pretty formatters
-
-def print_by_dcs(groups_by_dc, as_json):
-
-    for dc in groups_by_dc:
-        # print groups_by_dc[dc]
-        groups_by_dc[dc] = groups_by_dc[dc].values()
-
-    if as_json:
-        print json.dumps(groups_by_dc, indent=4)
-        return
-
-    field_order = dict((y, x) for x, y in enumerate(['group', 'node_backends', 'couple']))
-
-    for dc, groups in sorted(groups_by_dc.iteritems(), key=lambda x: '' if x[0] == 'unknown' else x[0]):
-        print '\n' + '=' * 30
-        print 'DC: {0}'.format(color(dc, YELLOW))
-        print '=' * 30
-
-        for group in groups:
-
-            couple_status = group.get('couple_status', 'NOT IN COUPLE')
-            group['couple'] = '{0}, status {1}'.format(group.get('couple'),
-                couple_status if couple_status == 'OK' else warn(couple_status))
-
-            nodes = []
-            for nb in sorted(group['node_backends'], key=lambda x: x['addr']):
-                node_status = (nb['status']
-                               if nb['status'] == 'OK' else
-                               warn(nb['status']))
-                nodes.append('{0}, status {1}, path {2} ({3})'.format(
-                             nb['addr'], node_status, nb.get('path', 'unknown'),
-                             nb['last_stat_update']))
-            group['node_backends'] = nodes
-
-            for k, v in sorted(group.iteritems(),
-                               key=lambda x: field_order.get(x[0], x[0])):
-                if not k in field_order:
-                    continue
-
-                if k == 'node_backends':
-                    for node in v[:1]:
-                        print '{0:15}: {1}'.format(k, node)
-                    for node in v[1:]:
-                        print '{0:15}  {1}'.format('', node)
-                    continue
-
-                print '{0:15}: {1}'.format(k, v)
-
-            print '-' * 30
-
-
-def print_by_namespaces(couples_by_nss, as_json):
-
-    if as_json:
-        print json.dumps(couples_by_nss, indent=4)
-        return
-
-    field_order = dict((y, x) for x, y in enumerate(['couple', 'node_backends']))
-
-    for ns, couples in sorted(couples_by_nss.iteritems(), key=lambda x: '' if x[0] == None else x[0]):
-        print '\n' + '=' * 30
-        print 'Namespace: {0}'.format(color(ns, YELLOW))
-        print '=' * 30
-
-        for couple in sorted(couples,
-                        key=lambda x: (len(x['couple'].split(':')), x['couple'])):
-
-            couple_status = couple['couple_status']
-            couple['couple'] = '{0}, status {1}'.format(couple.get('couple'),
-                couple_status if couple_status == 'OK' else warn(couple_status))
-
-            nodes = []
-            for nb in sorted(couple['node_backends'], key=lambda x: x['addr']):
-                node_status = (nb['status']
-                               if nb['status'] == 'OK' else
-                               warn(nb['status']))
-                nodes.append('{0}, status {1}, dc {2}, updated {3}'.format(
-                             nb['addr'], node_status,
-                             color(nb['dc'], DEFAULT_BOLD),
-                             nb['last_stat_update']))
-            couple['nodes'] = nodes
-
-            for k, v in sorted(couple.iteritems()):
-                if not k in field_order:
-                    continue
-
-                if k == 'node_backends':
-                    for node in v[:1]:
-                        print '{0:15}: {1}'.format(k, node)
-                    for node in v[1:]:
-                        print '{0:15}  {1}'.format('', node)
-                    continue
-
-                print '{0:15}: {1}'.format(k, v)
-
-            print '-' * 30
-
-
-def print_couple(couple):
-    couple_status = couple['couple_status']
-    couple_s = '{0}, status {1}'.format(couple['id'],
-        couple_status if couple_status == 'OK' else warn(couple_status))
-
-    print '{0:15}: {1}'.format('couple', couple_s)
-    for group in couple['groups']:
-        group_status = group['status']
-        group_s = '{0}, status {1}'.format(group['id'],
-            group_status if group_status == 'COUPLED' else warn(group_status))
-
-        print '  {0:13}: {1}'.format('group', group_s)
-
-        for i, nb in enumerate(group['node_backends']):
-            node_status = nb['status']
-            print '    {0:11}: {1}, status {2}, dc {3} ({4})'.format(
-                'nodes' if i == 0 else '', nb['addr'], node_status,
-                color(nb['dc'], DEFAULT_BOLD),
-                nb['last_stat_update'])
-
-    print '-' * 30
-
-
 def print_group(group):
     group_status = group['status']
-    group_s = '{0}, status {1}'.format(group['id'],
-        group_status if group_status == 'COUPLED' else warn(group_status))
+    group_s = '{0}, status {1}'.format(
+        group['id'], group_status if group_status == 'COUPLED' else warn(group_status))
     print '{0:15}: {1}'.format('group', group_s)
 
     for i, nb in enumerate(group['node_backends']):

@@ -48,7 +48,6 @@ class NamespacesQuery(Query):
     def setup(self,
               namespace,
               static_couple=None,
-              overwrite=None,
               groups_count=None,
               success_copies=None,
               auth_key_write=None, auth_key_read=None,
@@ -128,10 +127,6 @@ class NamespacesQuery(Query):
             settings.setdefault('auth-keys', {})['read'] = auth_key_read
         if auth_key_write:
             settings.setdefault('auth-keys', {})['write'] = auth_key_write
-        if auth_key_read or auth_key_write:
-            # set empty read or write key if not specified
-            settings['auth-keys'].setdefault('read', '')
-            settings['auth-keys'].setdefault('write', '')
 
         if min_units:
             settings['min-units'] = min_units
@@ -230,6 +225,9 @@ class NamespaceDataObject(LazyDataObject):
                     self._client, self._namespace, v,
                     levels=self._levels + [k])
 
+        def dict(self):
+            return self._settings
+
     def _fetch_data(self):
         return self.client.request('get_namespace_settings', [self.id])
 
@@ -245,6 +243,10 @@ class NamespaceDataObject(LazyDataObject):
     @settings.setter
     def settings(self, new_settings):
         self.client.request('namespace_setup', [self.id, True, new_settings, {}])
+        self._expire()
+
+    def update(self, new_settings):
+        self.client.request('namespace_setup', [self.id, False, new_settings, {}])
         self._expire()
 
     @property
@@ -299,9 +301,9 @@ class NamespaceQuery(Query):
         for couple_data in self.client.request('build_couples', params,
                                                attempts=attempts, timeout=timeout):
             if isinstance(couple_data, basestring):
-                # TODO: make error object
+                created_couples.append(couple_data)
                 continue
-            c = Couple(self.client, Couple._raw_id(couple_data))
+            c = Couple(Couple._raw_id(couple_data), self.client)
             c._set_raw_data(couple_data)
             created_couples.append(c)
 
