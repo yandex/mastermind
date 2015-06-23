@@ -910,7 +910,7 @@ class Planner(object):
                                 jobs.JobTypes.TYPE_MOVE_JOB,
                                 job_params, force=True)
                             res['jobs'].append(job.dump())
-                        except LockAlreadyAcquiredError:
+                        except LockAlreadyAcquiredError as e:
                             logger.error(
                                 'Failed to create move job for group {}, attempt {}/{}'.format(
                                     group.group_id,
