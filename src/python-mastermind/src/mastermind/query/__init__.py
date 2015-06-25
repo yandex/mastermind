@@ -35,10 +35,13 @@ class LazyDataObject(object):
     def _lazy_load(method):
         @functools.wraps(method)
         def wrapper(self, *args, **kwargs):
-            if not hasattr(self, '_data'):
-                self._set_raw_data(self._fetch_data())
+            self._fetch_and_set_raw_data()
             return method(self, *args, **kwargs)
         return wrapper
+
+    def _fetch_and_set_raw_data(self):
+        if not hasattr(self, '_data'):
+            self._set_raw_data(self._fetch_data())
 
     def _set_raw_data(self, data):
         data = self._preprocess_raw_data(data)
@@ -58,4 +61,5 @@ class LazyDataObject(object):
         return data
 
     def serialize(self):
+        self._fetch_and_set_raw_data()
         return self._data

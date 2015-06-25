@@ -171,15 +171,16 @@ def convert_stats(d):
 @log_action
 def group_info(group, history=('l', False, 'History of group nodes'), host=None, app=None):
     '''Get group info'''
-    s = service(host, app)
+    cl = client(host, app)
     group = int(group)
 
-    res = s.enqueue("get_group_info", msgpack.packb(group)).get()
-    for node in res.get('node_backends', []):
+    group_info = cl.groups[group].serialize()
+    for node in group_info.get('node_backends', []):
         convert_stats(node)
-    pprint(res)
+    pprint(group_info)
 
     if history:
+        s = service(host, app)
 
         group_history = s.enqueue('get_group_history', msgpack.packb([group])).get()
         if isinstance(group_history, dict) and 'nodes' not in group_history:
