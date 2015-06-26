@@ -31,10 +31,11 @@ class MastermindClient(object):
         data = self.service.enqueue(
             handle, msgpack.packb(data),
             attempts=attempts, timeout=timeout).get()
-        if 'Error' in data:
-            raise RuntimeError(data['Error'])
-        if 'Balancer error' in data:
-            raise RuntimeError(data['Balancer error'])
+        if isinstance(data, dict):
+            if 'Error' in data:
+                raise RuntimeError(data['Error'])
+            if 'Balancer error' in data:
+                raise RuntimeError(data['Balancer error'])
         return data
 
     @property
