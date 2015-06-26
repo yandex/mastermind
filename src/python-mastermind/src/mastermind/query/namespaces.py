@@ -99,7 +99,7 @@ class NamespacesQuery(Query):
         Returns:
           Namespace object representing created namespace.
         """
-        if namespace in self:
+        if namespace in self and not self[namespace].deleted:
             raise ValueError('Namespace {} already exists'.format(namespace))
 
         settings = {}

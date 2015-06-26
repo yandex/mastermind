@@ -20,6 +20,9 @@ class CouplesQuery(Query):
             cq._set_raw_data(c_data)
             yield cq
 
+    def __len__(self):
+        return len(list(self.__iter__()))
+
     def __contains__(self, key):
         ns = Couple(key, self.client)
         try:
@@ -54,6 +57,9 @@ class CouplesQuery(Query):
         if 'state' in kwargs:
             updated_filter['state'] = kwargs['state']
         return CouplesQuery(self.client, filter=updated_filter)
+
+    def __delitem__(self, key):
+        return Couple._object(key, self.client).remove()
 
 
 class CoupleDataObject(LazyDataObject):
@@ -121,8 +127,15 @@ class CoupleDataObject(LazyDataObject):
         return data
 
 
+GOOD_STATUSES = set(['OK', 'FULL', 'FROZEN'])
+
+
 class CoupleQuery(Query):
-    pass
+    def remove(self):
+        confirm_phrase = 'Yes, I want to break {} couple {}'.format(
+            'good' if self.status in GOOD_STATUSES else 'bad',
+            self.id)
+        return self.client.request('break_couple', [self.as_tuple, confirm_phrase])
 
 
 class Couple(CoupleQuery, CoupleDataObject):

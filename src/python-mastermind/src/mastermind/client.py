@@ -50,6 +50,10 @@ class MastermindClient(object):
     def couples(self):
         return couples.CouplesQuery(self)
 
+    @property
+    def remotes(self):
+        return self.service.enqueue('get_config_remotes', '')
+
 
 class DummyClient(object):
     def __getattribute__(self, attr):
