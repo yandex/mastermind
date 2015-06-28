@@ -453,11 +453,7 @@ class Balancer(object):
         group_history = {}
 
         if self.infrastructure:
-            for key, data in self.infrastructure.get_group_history(group).iteritems():
-                for nodes_data in data:
-                    dt = datetime.fromtimestamp(nodes_data['timestamp'])
-                    nodes_data['timestamp'] = dt.strftime(self.DT_FORMAT)
-                group_history[key] = data
+            group_history = self.infrastructure.get_group_history(group)
 
         return group_history
 

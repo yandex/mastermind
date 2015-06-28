@@ -180,30 +180,21 @@ def group_info(group, history=('l', False, 'History of group nodes'), host=None,
     pprint(group_info)
 
     if history:
-        s = service(host, app)
-
-        group_history = s.enqueue('get_group_history', msgpack.packb([group])).get()
-        if isinstance(group_history, dict) and 'nodes' not in group_history:
-            # exception returned
-            print group_history
-        else:
-            if group_history['couples']:
-                print
-                print color('Couples history:', YELLOW)
-                for entry in group_history['couples']:
-                    record = '[{timestamp}] {couple}'.format(**entry)
-                    print record
+        group_history = cl.groups[group].history
+        if group_history.couples:
             print
-            print color('Nodes history:', YELLOW)
-            for entry in group_history['nodes']:
-                record = '[{timestamp}] {set}'.format(**entry)
-                if entry['type'] == 'manual':
-                    record += ', MANUAL'
-                    record = color(record, YELLOW)
-                elif entry['type'] == 'job':
-                    record += ', JOB'
-                    record = color(record, BLUE)
-                print record
+            print color('Couples history:', YELLOW)
+            for entry in group_history.couples:
+                print entry
+        print
+        print color('Nodes history:', YELLOW)
+        for entry in group_history.nodes:
+            record = entry
+            if entry.type == 'manual':
+                record = color(entry, YELLOW)
+            elif entry.type == 'job':
+                record = color(entry, BLUE)
+            print record
 
 
 @groupDispatcher.command(name='meta')

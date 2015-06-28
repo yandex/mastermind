@@ -1,6 +1,7 @@
 import copy
 
 from mastermind.query import Query, LazyDataObject
+from mastermind.query.history import GroupHistory
 
 
 class GroupsQuery(Query):
@@ -110,6 +111,12 @@ class GroupQuery(Query):
                                    [self.id,
                                     {'uncoupled_groups': [g.id for g in uncoupled_groups]},
                                     force])
+
+    @property
+    def history(self):
+        history_data = self.client.request('get_group_history', [self.id])
+        return GroupHistory(couples=history_data['couples'],
+                            nodes=history_data['nodes'])
 
 
 class Group(GroupQuery, GroupDataObject):
