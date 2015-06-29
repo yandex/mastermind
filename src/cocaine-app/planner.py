@@ -723,7 +723,7 @@ class Planner(object):
 
             for group in couple.groups:
                 for nb in group.node_backends:
-                    if nb.stat.free_space < nb.stat.max_blob_base_size * 2:
+                    if nb.stat.vfs_free_space < nb.stat.max_blob_base_size * 2:
                         insufficient_space_nb = nb
                         break
                 if insufficient_space_nb:
@@ -736,8 +736,8 @@ class Planner(object):
             if insufficient_space_nb:
                 logger.warn(
                     'Couple {0}: node backend {1} has insufficient '
-                    'free space for defragmentation, max_blob_size {2}, free_space {3}'.format(
-                        str(couple), str(nb), nb.stat.max_blob_base_size, nb.stat.free_space))
+                    'free space for defragmentation, max_blob_size {2}, vfs free_space {3}'.format(
+                        str(couple), str(nb), nb.stat.max_blob_base_size, nb.stat.vfs_free_space))
                 continue
 
             logger.info('Couple defrag candidate: {}, max files_removed_size in groups: {}'.format(
