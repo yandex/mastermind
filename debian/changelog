@@ -1,3 +1,9 @@
+mastermind (2.25.18) precise; urgency=low
+
+  * Checking backends on restore group creation
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 30 Jun 2015 17:23:42 +0300
+
 mastermind (2.25.17) precise; urgency=low
 
   * Mastermind client implemented
