@@ -11,7 +11,9 @@ setup(
     license="LGPLv3+",
     packages=[
         "mastermind",
+        "mastermind.query",
     ],
-    package_dir={'mastermind': 'src/python-mastermind/src/mastermind'},
-    install_requires=["tornado >= 3.0"],
+    package_dir={'mastermind': 'src/python-mastermind/src/mastermind',
+                 'mastermind.query': 'src/python-mastermind/src/mastermind/query'},
+    install_requires=["tornado >= 3.0", "cocaine < 0.12"],
 )
