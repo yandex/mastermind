@@ -110,10 +110,15 @@ class Balancer(object):
         return result
 
     def _empty_group_ids(self, in_service=False, status=storage.Status.INIT):
-        return [group.group_id
-                for group in infrastructure.infrastructure.get_good_uncoupled_groups(
-                    including_in_service=in_service,
-                    status=status)]
+        try:
+            return [group.group_id
+                    for group in infrastructure.infrastructure.get_good_uncoupled_groups(
+                        including_in_service=in_service,
+                        status=status)]
+        except Exception:
+            logger.exception('Failed to fetch uncoupled groups list')
+            pass
+        return []
 
     STATES = {
         'good': [storage.Status.OK],
