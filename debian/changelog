@@ -1,3 +1,13 @@
+mastermind (2.25.17) precise; urgency=low
+
+  * Mastermind client implemented
+  * Python package dependencies fixed
+  * Statistics should not fail if uncoupled groups list cannot be composed
+  * Defrag planner uses vfs free space to see if a couple can be defragged
+  * Minor changes: pepify and obsolete code removed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 30 Jun 2015 13:12:47 +0300
+
 mastermind (2.25.16) precise; urgency=low
 
   * Do not store old namespaces states if failed to construct a new one
