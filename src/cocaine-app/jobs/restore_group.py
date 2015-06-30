@@ -55,11 +55,13 @@ class RestoreGroupJob(Job):
                 (group.node_backends[0].node.host.addr, str(group.node_backends[0].fs.fsid)))
 
         src_group = storage.groups[self.src_group]
+        self.check_node_backends(src_group)
         resources[Job.RESOURCE_HOST_OUT].append(src_group.node_backends[0].node.host.addr)
         add_fs(src_group)
 
         if self.uncoupled_group:
             unc_group = storage.groups[self.uncoupled_group]
+            self.check_node_backends(unc_group)
             resources[Job.RESOURCE_HOST_IN].append(
                 unc_group.node_backends[0].node.host.addr)
             for gid in [self.uncoupled_group] + self.merged_groups:
