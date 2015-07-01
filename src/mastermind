@@ -740,16 +740,12 @@ def ns_setup(namespace,
     else:
         ns = cl.namespaces[namespace]
 
+        if namespace not in cl.namespaces or ns.deleted:
+            raise ValueError('Namespace {} does not exist, use --new flag'.format(namespace))
+
         # constructing new or updated settings
         settings = {}
 
-        # options = {}
-        #
-        # if json_input:
-        #     settings = open(input_source, 'rb').read()
-        #     options['json'] = True
-        #     options['skip_validation'] = True
-        # else:
         try:
             groups_count = int(groups_count)
         except ValueError:

@@ -1235,19 +1235,8 @@ class Balancer(object):
         except Exception:
             raise ValueError('Invalid parameters')
 
-        # try:
-        #     options = request[1]
-        # except IndexError:
-        #     options = {}
-
-        # try:
-        #     self.__check_namespace(namespace)
-        # except ValueError:
-        #     if (namespace not in self.infrastructure.ns_settings or
-        #             not options.get('deleted')):
-        #         raise
-
-        logger.info("namespace 11111 {}, {}".format(namespace, self.infrastructure.ns_settings[namespace]))
+        if namespace not in self.infrastructure.ns_settings:
+            raise ValueError('Namespace "{}" is not found'.format(namespace))
 
         return self.infrastructure.ns_settings[namespace]
 
