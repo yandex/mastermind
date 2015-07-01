@@ -1,3 +1,10 @@
+mastermind (2.25.19) trusty; urgency=medium
+
+  * Use elliptics stats for decision on backend writability
+  * Fragmentation in mm util is now formatted with fixed precision
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 01 Jul 2015 18:16:14 +0300
+
 mastermind (2.25.18) precise; urgency=low
 
   * Checking backends on restore group creation
