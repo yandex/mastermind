@@ -1,3 +1,9 @@
+mastermind (2.25.21) trusty; urgency=medium
+
+  * fix to trusty++;
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 01 Jul 2015 19:01:17 +0300
+
 mastermind (2.25.20) trusty; urgency=medium
 
   * debian/rules fixed for trusty
