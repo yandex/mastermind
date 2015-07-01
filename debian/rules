@@ -17,3 +17,6 @@ pre-build::
 
 install/mastermind-utils::
 	dh_bash-completion
+
+override_dh_builddeb:
+	dh_builddeb -- -Zgzip
