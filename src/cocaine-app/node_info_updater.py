@@ -3,6 +3,7 @@ from contextlib import contextmanager
 import functools
 import json
 import logging
+import re
 import sys
 import threading
 import time
@@ -116,7 +117,8 @@ class NodeInfoUpdater(object):
             raise
 
     MONITOR_STAT_CATEGORIES = (elliptics.monitor_stat_categories.procfs |
-                               elliptics.monitor_stat_categories.backend)
+                               elliptics.monitor_stat_categories.backend |
+                               elliptics.monitor_stat_categories.stats)
 
     def update_status(self, groups):
         self.monitor_stats(groups=groups)
@@ -164,6 +166,31 @@ class NodeInfoUpdater(object):
             logger.info('Updating status for group {0}'.format(group.group_id))
             group.update_status()
 
+    STAT_COMMIT_RE = re.compile('^eblob\.(\d+)\.disk.stat_commit.errors\.(.*)')
+
+    @staticmethod
+    def _parsed_stats(stats):
+        parsed_stats = {}
+
+        for key, vals in stats.iteritems():
+            m = NodeInfoUpdater.STAT_COMMIT_RE.match(key)
+            if m is None:
+                continue
+
+            try:
+                backend_id, err = m.groups()
+                backend_id = int(backend_id)
+                if err.isdigit():
+                    err = int(err)
+            except ValueError:
+                continue
+            backend_stats = parsed_stats.setdefault(backend_id, {})
+            sc_stats = backend_stats.setdefault('stat_commit', {})
+            sc_errors = sc_stats.setdefault('errors', {})
+            sc_errors[err] = vals['count']
+
+        return parsed_stats
+
     @staticmethod
     def update_statistics(m_stat, elapsed_time=None, end_time=None):
 
@@ -195,8 +222,11 @@ class NodeInfoUpdater(object):
                 logger.warn('Bad procfs stat for node {0} ({1}): {2}'.format(node_addr, e, stat))
                 pass
 
+            backend_stats = NodeInfoUpdater._parsed_stats(stat['stats'])
+
             for b_stat in stat['backends'].itervalues():
                 backend_id = b_stat['backend_id']
+                b_stat['stats'] = backend_stats.get(backend_id, {})
 
                 node_backend_addr = '{0}/{1}'.format(node_addr, backend_id)
                 if node_backend_addr not in storage.node_backends:
@@ -265,16 +295,18 @@ class NodeInfoUpdater(object):
                             node_backend, e, b_stat))
                         pass
 
+                if b_stat['status']['last_start']['tv_sec'] > node_backend.start_ts:
+                    node_backend.start_ts = b_stat['status']['last_start']['tv_sec']
+                    node_backend.reset_stat_commit_errors()
+                    node_backend.make_writable()
+                elif node_backend.stat_commit_errors > 0:
+                    node_backend.make_read_only()
+
                 node_backend.stat_file_error = b_stat.get('backend', {}).get(
                     'global_stats', {}).get('stat_file_error', 0)
                 if node_backend.stat_file_error != 0:
                     node_backend.last_stat_file_error_text = \
                         b_stat['backend']['global_stats']['string_stat_file_error']
-
-                if b_stat['status']['read_only']:
-                    node_backend.make_read_only()
-                else:
-                    node_backend.make_writable()
 
                 if node_backend.group is not group:
                     logger.debug('Adding node backend {0} to group {1}{2}'.format(

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import datetime
+import errno
 import functools
 import logging
 import math
@@ -175,6 +176,9 @@ class NodeBackendStat(object):
         self.max_blob_base_size = 0
         self.blob_size = 0
 
+        self.start_stat_file_err = 0
+        self.cur_stat_file_err = 0
+
     def update(self, raw_stat, collect_ts):
 
         if self.ts:
@@ -192,6 +196,9 @@ class NodeBackendStat(object):
 
             self.last_read = last_read
             self.last_write = last_write
+        else:
+            self.start_stat_file_err = raw_stat['stats'].get(
+                'stat_commit', {}).get('errors', {}).get(errno.EROFS, 0)
 
         self.ts = collect_ts
 
@@ -230,6 +237,8 @@ class NodeBackendStat(object):
             self.max_blob_base_size = 0
 
         self.blob_size = raw_stat['backend']['config']['blob_size']
+        self.cur_stat_file_err = raw_stat['stats'].get(
+            'stat_commit', {}).get('errors', {}).get(errno.EROFS, 0)
 
     def max_rps(self, rps, load_avg, variant=RPS_FORMULA_VARIANT):
 
@@ -503,6 +512,7 @@ class NodeBackend(object):
         self.destroyed = False
         self.read_only = False
         self.disabled = False
+        self.start_ts = 0
         self.dstat_error_code = 0
         self.stat_file_error = 0
         self.last_stat_file_error_text = ''
@@ -611,6 +621,18 @@ class NodeBackend(object):
 
         if self.stat.used_space >= self.effective_space * (1.0 - reserved_space):
             return True
+
+    @property
+    def stat_commit_errors(self):
+        if self.stat.cur_stat_file_err < self.stat.start_stat_file_err:
+            self.reset_stat_commit_errors()
+        return (self.stat and
+                self.stat.cur_stat_file_err - self.stat.start_stat_file_err or
+                0)
+
+    def reset_stat_commit_errors(self):
+        if self.stat:
+            self.stat.start_stat_file_err = self.stat.cur_stat_file_err
 
     def info(self):
         res = {}
