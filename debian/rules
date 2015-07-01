@@ -1,6 +1,8 @@
 #!/usr/bin/make -f
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
+override_dh_builddeb:
+	dh_builddeb -- -Zgzip
 
 DEB_PYTHON_SYSTEM=pycentral
 
@@ -17,6 +19,3 @@ pre-build::
 
 install/mastermind-utils::
 	dh_bash-completion
-
-override_dh_builddeb:
-	dh_builddeb -- -Zgzip
