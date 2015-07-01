@@ -195,15 +195,17 @@ class NodeBackendStat(object):
 
         self.ts = collect_ts
 
-        self.vfs_total_space = raw_stat['backend']['vfs']['blocks'] * raw_stat['backend']['vfs']['bsize']
-        self.vfs_free_space = raw_stat['backend']['vfs']['bavail'] * raw_stat['backend']['vfs']['bsize']
+        self.vfs_total_space = raw_stat['backend']['vfs']['blocks'] * \
+            raw_stat['backend']['vfs']['bsize']
+        self.vfs_free_space = raw_stat['backend']['vfs']['bavail'] * \
+            raw_stat['backend']['vfs']['bsize']
         self.vfs_used_space = self.vfs_total_space - self.vfs_free_space
 
-        self.files = raw_stat['backend']['summary_stats']['records_total'] - raw_stat['backend']['summary_stats']['records_removed']
+        self.files = raw_stat['backend']['summary_stats']['records_total'] - \
+            raw_stat['backend']['summary_stats']['records_removed']
         self.files_removed = raw_stat['backend']['summary_stats']['records_removed']
         self.files_removed_size = raw_stat['backend']['summary_stats']['records_removed_size']
-        self.fragmentation = (float(self.files_removed) /
-                                 ((self.files + self.files_removed) or 1))
+        self.fragmentation = float(self.files_removed) / ((self.files + self.files_removed) or 1)
 
         self.fsid = raw_stat['backend']['vfs']['fsid']
         self.defrag_state = raw_stat['status']['defrag_state']
@@ -221,8 +223,9 @@ class NodeBackendStat(object):
             self.used_space = self.vfs_used_space
 
         if len(raw_stat['backend'].get('base_stats', {})):
-            self.max_blob_base_size = max([blob_stat['base_size']
-                for blob_stat in raw_stat['backend']['base_stats'].values()])
+            self.max_blob_base_size = max(
+                [blob_stat['base_size']
+                    for blob_stat in raw_stat['backend']['base_stats'].values()])
         else:
             self.max_blob_base_size = 0
 
