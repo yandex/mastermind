@@ -258,7 +258,7 @@ class Infrastructure(object):
                                        group_state['nodes'][-1]
                                        or {'set': []})
 
-                    state_nodes = tuple(nbs
+                    state_nodes = tuple(tuple(nbs)
                                         for nbs in cur_group_state['set'])
                     state_nodes_set = set(state_nodes)
 
