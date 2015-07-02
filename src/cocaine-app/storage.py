@@ -176,8 +176,10 @@ class NodeBackendStat(object):
         self.max_blob_base_size = 0
         self.blob_size = 0
 
-        self.start_stat_file_err = 0
-        self.cur_stat_file_err = 0
+        self.start_stat_commit_err_count = 0
+        self.cur_stat_commit_err_count = 0
+
+        self.backend_start_ts = 0
 
     def update(self, raw_stat, collect_ts):
 
@@ -196,9 +198,6 @@ class NodeBackendStat(object):
 
             self.last_read = last_read
             self.last_write = last_write
-        else:
-            self.start_stat_file_err = raw_stat['stats'].get(
-                'stat_commit', {}).get('errors', {}).get(errno.EROFS, 0)
 
         self.ts = collect_ts
 
@@ -237,8 +236,21 @@ class NodeBackendStat(object):
             self.max_blob_base_size = 0
 
         self.blob_size = raw_stat['backend']['config']['blob_size']
-        self.cur_stat_file_err = raw_stat['stats'].get(
+        self.cur_stat_commit_err_count = raw_stat['stats'].get(
             'stat_commit', {}).get('errors', {}).get(errno.EROFS, 0)
+
+        if self.backend_start_ts < raw_stat['status']['last_start']['tv_sec']:
+            self.backend_start_ts = raw_stat['status']['last_start']['tv_sec']
+            self._reset_stat_commit_errors()
+
+    def _reset_stat_commit_errors(self):
+        self.start_stat_commit_err_count = self.cur_stat_commit_err_count
+
+    @property
+    def stat_commit_errors(self):
+        if self.cur_stat_commit_err_count < self.start_stat_commit_err_count:
+            self._reset_stat_commit_errors()
+        return self.cur_stat_commit_err_count - self.start_stat_commit_err_count
 
     def max_rps(self, rps, load_avg, variant=RPS_FORMULA_VARIANT):
 
@@ -514,8 +526,6 @@ class NodeBackend(object):
         self.disabled = False
         self.start_ts = 0
         self.dstat_error_code = 0
-        self.stat_file_error = 0
-        self.last_stat_file_error_text = ''
         self.status = Status.INIT
         self.status_text = "Node %s is not inititalized yet" % (self.__str__())
 
@@ -564,10 +574,6 @@ class NodeBackend(object):
         elif self.disabled:
             self.status = Status.STALLED
             self.status_text = 'Node backend {0} has been disabled'.format(str(self))
-
-        elif self.stat_file_error:
-            self.status = Status.STALLED
-            self.status_text = 'Node backend {0} is {1}'.format(str(self), self.last_stat_file_error_text)
 
         elif self.stalled:
             self.status = Status.STALLED
@@ -624,15 +630,9 @@ class NodeBackend(object):
 
     @property
     def stat_commit_errors(self):
-        if self.stat.cur_stat_file_err < self.stat.start_stat_file_err:
-            self.reset_stat_commit_errors()
         return (self.stat and
-                self.stat.cur_stat_file_err - self.stat.start_stat_file_err or
+                self.stat.stat_commit_errors or
                 0)
-
-    def reset_stat_commit_errors(self):
-        if self.stat:
-            self.stat.start_stat_file_err = self.stat.cur_stat_file_err
 
     def info(self):
         res = {}

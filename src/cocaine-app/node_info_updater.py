@@ -295,18 +295,10 @@ class NodeInfoUpdater(object):
                             node_backend, e, b_stat))
                         pass
 
-                if b_stat['status']['last_start']['tv_sec'] > node_backend.start_ts:
-                    node_backend.start_ts = b_stat['status']['last_start']['tv_sec']
-                    node_backend.reset_stat_commit_errors()
-                    node_backend.make_writable()
-                elif node_backend.stat_commit_errors > 0:
+                if node_backend.stat_commit_errors > 0:
                     node_backend.make_read_only()
-
-                node_backend.stat_file_error = b_stat.get('backend', {}).get(
-                    'global_stats', {}).get('stat_file_error', 0)
-                if node_backend.stat_file_error != 0:
-                    node_backend.last_stat_file_error_text = \
-                        b_stat['backend']['global_stats']['string_stat_file_error']
+                else:
+                    node_backend.make_writable()
 
                 if node_backend.group is not group:
                     logger.debug('Adding node backend {0} to group {1}{2}'.format(
