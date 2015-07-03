@@ -627,8 +627,6 @@ class JobProcessor(object):
 
             job = self.__change_failed_task_status(job_id, task_id, Task.STATUS_QUEUED)
 
-        except LockFailedError as e:
-            raise
         except Exception as e:
             logger.error('Failed to retry job task, job {0}, task {1}: '
                 '{2}\n{3}'.format(job_id, task_id, e, traceback.format_exc()))
@@ -647,8 +645,6 @@ class JobProcessor(object):
 
             job = self.__change_failed_task_status(job_id, task_id, Task.STATUS_SKIPPED)
 
-        except LockFailedError as e:
-            raise
         except Exception as e:
             logger.error('Failed to skip job task, job {0}, task {1}: '
                 '{2}\n{3}'.format(job_id, task_id, e, traceback.format_exc()))
@@ -687,6 +683,44 @@ class JobProcessor(object):
             'job status was reset to {3}'.format(
                 job.id, task.id, task.status, job.status))
 
+        return job
+
+    @h.concurrent_handler
+    def restart_failed_to_start_job(self, request):
+        job_id = None
+        try:
+            try:
+                job_id = request[:1]
+            except ValueError:
+                raise ValueError('Job id is required')
+
+            job = self.__change_not_started_job_status(job_id, Job.STATUS_NEW)
+
+        except Exception:
+            logger.exception('Job {}: failed to restart job'.format(
+                job_id))
+            raise
+
+        return job.dump()
+
+    def __change_not_started_job_status(self, job_id, status):
+        job = self.job_finder._get_job(job_id)
+
+        if job.status not in (Job.STATUS_PENDING, Job.STATUS_BROKEN):
+            raise ValueError('Job {0}: status is "{1}", should have been {2}|{3}'.format(
+                job.id, job.status, Job.STATUS_PENDING, Job.STATUS_BROKEN))
+
+        for t in job.tasks:
+            if t.status != Task.STATUS_QUEUED:
+                raise ValueError('Job {}: task {} has status {}, expected {}'.format(
+                    job.id, t.id, t.status, Task.STATUS_QUEUED))
+
+        job.status = status
+        job.update_ts = time.time()
+        job._dirty = True
+        job.save()
+        logger.info('Job {}: job status was reset to {}'.format(
+            job.id, job.status))
         return job
 
 
