@@ -268,6 +268,7 @@ def init_job_processor(jf, minions, niu):
     register_handle(j.stop_jobs)
     register_handle(j.retry_failed_job_task)
     register_handle(j.skip_failed_job_task)
+    register_handle(j.restart_failed_to_start_job)
     return j
 
 def init_manual_locker(manual_locker):
