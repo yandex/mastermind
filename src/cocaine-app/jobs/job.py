@@ -1,14 +1,13 @@
-from contextlib import contextmanager
 import logging
 import msgpack
 import os.path
-import threading
 import time
 import uuid
 
 from config import config
 from db.mongo import MongoObject
 from db.mongo.job import JobView
+from error import JobBrokenError
 import helpers as h
 import keys
 from sync import sync_manager
@@ -300,6 +299,13 @@ class Job(MongoObject):
                  for group in self._involved_groups] +
                 ['{0}{1}'.format(self.COUPLE_LOCK_PREFIX, couple)
                  for couple in self._involved_couples])
+
+    def check_node_backends(self, group, node_backends_count=1):
+        if len(group.node_backends) != node_backends_count:
+            raise JobBrokenError('Group {0} cannot be used for job, '
+                                 'it has {1} node backends, 1 expected'.format(
+                                     group.group_id, len(group.node_backends)))
+
 
     def complete(self, processor):
         if self.status == self.STATUS_COMPLETED:

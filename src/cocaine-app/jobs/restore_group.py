@@ -81,12 +81,6 @@ class RestoreGroupJob(Job):
 
         self.resources = resources
 
-    def check_node_backends(self, group):
-        if len(group.node_backends) != 1:
-            raise JobBrokenError('Group {0} cannot be used for job, '
-                'it has {1} node backends, 1 expected'.format(
-                    group.group_id, len(group.node_backends)))
-
     def create_tasks(self):
 
         group = storage.groups[self.group]
