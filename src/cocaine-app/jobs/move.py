@@ -71,9 +71,11 @@ class MoveJob(Job):
 
     def on_start(self):
         group = storage.groups[self.group]
+        self.check_node_backends(group)
 
         if storage.FORBIDDEN_DC_SHARING_AMONG_GROUPS:
             uncoupled_group = storage.groups[self.uncoupled_group]
+            self.check_node_backends(uncoupled_group)
             try:
                 ug_dc = uncoupled_group.node_backends[0].node.host.dc
             except CacheUpstreamError:
