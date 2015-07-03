@@ -306,7 +306,6 @@ class Job(MongoObject):
                                  'it has {1} node backends, 1 expected'.format(
                                      group.group_id, len(group.node_backends)))
 
-
     def complete(self, processor):
         if self.status == self.STATUS_COMPLETED:
             self.on_complete(processor)
@@ -314,7 +313,7 @@ class Job(MongoObject):
             self.unmark_groups(processor.session)
         except Exception as e:
             logger.error('Job {0}: failed to unmark required groups: {1}'.format(
-                job.id, e))
+                self.id, e))
             raise
         ts = time.time()
         if not self.start_ts:
