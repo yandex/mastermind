@@ -73,6 +73,10 @@ class MoveJob(Job):
         group = storage.groups[self.group]
         self.check_node_backends(group)
 
+        if group.couple is None:
+            raise JobBrokenError('Group {} is uncoupled, cannot be moved'.format(
+                group.group_id))
+
         if storage.FORBIDDEN_DC_SHARING_AMONG_GROUPS:
             uncoupled_group = storage.groups[self.uncoupled_group]
             self.check_node_backends(uncoupled_group)
