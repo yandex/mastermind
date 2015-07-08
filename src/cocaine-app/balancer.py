@@ -1432,10 +1432,13 @@ class Balancer(object):
     @h.source
     @h.handler_wne
     def get_cached_keys(self, request):
+        if not config.get("cache") or not config.get('metadata', {}).get('cache', {}):
+            yield {}
+            raise StopIteration
         mc = ReconnectableService(
             '{base_name}-cache'.format(base_name=config.get('app_name', 'mastermind')),
             attempts=3, timeout=10, logger=logger)
-        yield mc.enqueue('get_cached_keys', '')
+        yield mc.enqueue('get_cached_keys', msgpack.packb(None))
 
 def handlers(b):
     handlers = []
