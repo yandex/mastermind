@@ -717,6 +717,10 @@ def ns_setup(namespace,
     Use --overwrite to completely overwrite namespace settings.'''
     cl = client(host, app)
 
+    # TODO: backward compatibility, remove in the near future
+    if not new and (namespace not in cl.namespaces or ns.deleted):
+        new = True
+
     if new:
         ns = cl.namespaces.setup(
             namespace,
