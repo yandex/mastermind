@@ -1,13 +1,10 @@
 from contextlib import contextmanager
 import logging
 import os.path
-import threading
-from time import sleep
 import traceback
 
 from kazoo.client import KazooClient
 from kazoo.exceptions import (
-    SessionExpiredError,
     LockTimeout,
     NodeExistsError,
     NoNodeError,
@@ -15,8 +12,9 @@ from kazoo.exceptions import (
     ZookeeperError,
 )
 from kazoo.retry import KazooRetry, RetryFailedError
+from mastermind.utils.queue import LockingQueue
+import msgpack
 
-from queue import FilteredLockingQueue
 # from errors import ConnectionError, InvalidDataError
 from lock import Lock
 from sync.error import LockError, LockFailedError, LockAlreadyAcquiredError, InconsistentLockError
@@ -37,8 +35,8 @@ class ZkSyncManager(object):
 
     def __init__(self, host='127.0.0.1:2181', lock_path_prefix='/mastermind/locks/'):
         self.client = KazooClient(host, timeout=3)
-        logger.info('Connecting to zookeeper host {0}, '
-            'lock_path_prefix: {1}'.format(host, lock_path_prefix))
+        logger.info('Connecting to zookeeper host {}, lock_path_prefix: {}'.format(
+            host, lock_path_prefix))
         try:
             self.client.start()
         except Exception as e:
@@ -59,8 +57,8 @@ class ZkSyncManager(object):
                 raise LockFailedError(lock_id=lockid)
             yield
         except LockTimeout:
-            logger.info('Failed to acquire lock {0} due to timeout '
-                '({1} seconds)'.format(lockid, timeout))
+            logger.info('Failed to acquire lock {} due to timeout ({} seconds)'.format(
+                lockid, timeout))
             raise LockFailedError(lock_id=lockid)
         except LockFailedError:
             raise
@@ -158,8 +156,8 @@ class ZkSyncManager(object):
                 if check:
                     data = self.client.get(self.lock_path_prefix + lockid)
                     if data[0] != check:
-                        logger.error('Lock {0} has inconsistent data: {1}, '
-                            'expected {2}'.format(lockid, data[0], check))
+                        logger.error('Lock {0} has inconsistent data: {}, expected {}'.format(
+                            lockid, data[0], check))
                         raise InconsistentLockError(lock_id=lockid, holder_id=data[0])
                 self.client.delete(self.lock_path_prefix + lockid)
             except NoNodeError:
@@ -174,8 +172,8 @@ class ZkCacheTaskManager(object):
 
     def __init__(self, host='127.0.0.1:2181', lock_path_prefix='/mastermind/cache/'):
         self.client = KazooClient(host, timeout=3)
-        logger.info('Connecting to zookeeper host {0}, '
-            'lock_path_prefix: {1}'.format(host, lock_path_prefix))
+        logger.info('Connecting to zookeeper host {}, lock_path_prefix: {}'.format(
+            host, lock_path_prefix))
         try:
             self.client.start()
         except Exception as e:
@@ -183,13 +181,25 @@ class ZkCacheTaskManager(object):
             raise
 
         self.lock_path_prefix = lock_path_prefix
-        self.queue = FilteredLockingQueue(self.client, lock_path_prefix, None)
 
     def put_task(self, task):
-        return self.queue.put(task)
+        group_id = task['group']
+        q = LockingQueue(self.client, self.lock_path_prefix, group_id)
+        return q.put(self._serialize(task))
 
     def put_all(self, tasks):
-        return self.queue.put_all(tasks)
+        for task in tasks:
+            self.put_task(task)
 
     def list(self):
-        return self.queue.list()
+        for group_id in self.client.retry(self.client.get_children, self.lock_path_prefix):
+            for item in LockingQueue(self.client, self.lock_path_prefix, group_id).list():
+                yield self._unserialize(item)
+
+    @staticmethod
+    def _serialize(task):
+        return msgpack.packb(task)
+
+    @staticmethod
+    def _unserialize(task):
+        return msgpack.unpackb(task)

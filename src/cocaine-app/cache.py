@@ -579,8 +579,8 @@ class CacheDistributor(object):
         updates key in meta database
         """
         if not self.dryrun:
-            cache_task_manager.put_task(self._serialize(
-                self._gatlinggun_task(key, group_id, [], 'remove')))
+            cache_task_manager.put_task(
+                self._gatlinggun_task(key, group_id, [], 'remove'))
         key['cache_groups'].remove(group_id)
         if len(key['cache_groups']):
             self.keys_db.update({'id': key['id'], 'couple': key['couple']}, key)
@@ -799,7 +799,7 @@ class CacheDistributor(object):
         task = self._gatlinggun_task(key, group_id, data_groups, 'add',
                                      tx_rate=tx_rate, size=size)
         if not self.dryrun:
-            cache_task_manager.put_task(self._serialize(task))
+            cache_task_manager.put_task(task)
             logger.debug('Key {}, task for gatlinggun created for cache '
                          'group {}'.format(key['id'], group_id))
         key['cache_groups'].append(group_id)
@@ -807,14 +807,6 @@ class CacheDistributor(object):
         self.keys_db.update({'id': key['id'], 'couple': key['couple']},
                             key, upsert=True)
         return task
-
-    @staticmethod
-    def _serialize(task):
-        return msgpack.packb(task)
-
-    @staticmethod
-    def _unserialize(task):
-        return msgpack.unpackb(task)
 
     def _gatlinggun_task(self, key, group, data_groups, action,
                          tx_rate=None, size=None):
@@ -878,8 +870,7 @@ class CacheDistributor(object):
                                                        self.node_types)
 
         new_executing_tasks = cache_task_manager.list()
-        for packed_task in new_executing_tasks:
-            task = self._unserialize(packed_task)
+        for task in new_executing_tasks:
             group_id = task['group']
             if group_id not in new_cache_groups:
                 logger.warn('Task destination group {0} is not found among '
