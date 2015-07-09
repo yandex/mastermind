@@ -1,3 +1,13 @@
+mastermind (2.25.25) trusty; urgency=medium
+
+  * Read-only node backend status check fixed
+  * Using common mastermind queue for gatlinggun tasks
+  * Mastermind returns empty cache keys when cache worker is not set up
+  * Backward compatibility for ns setup mastermind util command (credits go to shindo@)
+  * Checking group couple on move job start
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 09 Jul 2015 18:42:09 +0300
+
 mastermind (2.25.24) trusty; urgency=medium
 
   * Checking if couple is participating in job before trying to move it from
