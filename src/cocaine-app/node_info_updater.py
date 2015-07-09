@@ -295,7 +295,7 @@ class NodeInfoUpdater(object):
                             node_backend, e, b_stat))
                         pass
 
-                if node_backend.stat_commit_errors > 0:
+                if b_stat['status']['read_only'] or node_backend.stat_commit_errors > 0:
                     node_backend.make_read_only()
                 else:
                     node_backend.make_writable()
