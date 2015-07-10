@@ -718,7 +718,7 @@ def ns_setup(namespace,
     cl = client(host, app)
 
     # TODO: backward compatibility, remove in the near future
-    if not new and (namespace not in cl.namespaces or ns.deleted):
+    if not new and (namespace not in cl.namespaces or cl.namespaces[namespace].deleted):
         new = True
 
     if new:
