@@ -1,3 +1,10 @@
+mastermind (2.25.26) trusty; urgency=medium
+
+  * Mark group as bad if migrating job id from meta does not match active job
+    id
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 10 Jul 2015 14:08:06 +0300
+
 mastermind (2.25.25) trusty; urgency=medium
 
   * Read-only node backend status check fixed
