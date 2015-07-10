@@ -39,8 +39,9 @@ def init_elliptics_node():
     node_config.net_thread_num = config.get('net_thread_num', 1)
 
     logger.info('Node config: io_thread_num {0}, nonblocking_io_thread_num {1}, '
-        'net_thread_num {2}'.format(node_config.io_thread_num, node_config.nonblocking_io_thread_num,
-            node_config.net_thread_num))
+                'net_thread_num {2}'.format(
+                    node_config.io_thread_num, node_config.nonblocking_io_thread_num,
+                    node_config.net_thread_num))
 
     n = elliptics.Node(log, node_config)
 
@@ -94,6 +95,7 @@ def init_elliptics_node():
 
     return n
 
+
 def init_meta_db():
     meta_db = None
 
@@ -103,26 +105,30 @@ def init_meta_db():
         meta_db = MongoReplicaSetClient(config['metadata']['url'], **mrsc_options)
     return meta_db
 
+
 def init_infrastructure_cache_manager(W, n):
     icm = infrastructure_cache.InfrastructureCacheManager(n.meta_session)
     return icm
 
+
 def init_node_info_updater(n):
     return node_info_updater.NodeInfoUpdater(n, None)
+
 
 def init_infrastructure(W, n):
     infstruct = infrastructure.infrastructure
     infstruct.init(n, None)
     return infstruct
 
+
 def init_cache_worker(W, n, niu, j, meta_db):
     if not config.get("cache"):
         logger.error('Cache is not set up in config ("cache" key), '
-            'will not be initialized')
+                     'will not be initialized')
         return None
     if not config.get('metadata', {}).get('cache', {}).get('db'):
         logger.error('Cache metadata db is not set up ("metadata.cache.db" key), '
-            'will not be initialized')
+                     'will not be initialized')
         return None
     c = cache.CacheManager(n, niu, j, meta_db)
     h.register_handle(W, c.get_top_keys)
@@ -133,18 +139,20 @@ def init_cache_worker(W, n, niu, j, meta_db):
 
     return c
 
+
 def init_job_finder(meta_db):
     if not config['metadata'].get('jobs', {}).get('db'):
         logger.error('Job finder metadb is not set up '
-            '("metadata.jobs.db" key), will not be initialized')
+                     '("metadata.jobs.db" key), will not be initialized')
         return None
     jf = jobs.JobFinder(meta_db)
     return jf
 
+
 def init_job_processor(jf, meta_db, niu):
     if jf is None:
         logger.error('Job processor will not be initialized because '
-            'job finder is not initialized')
+                     'job finder is not initialized')
         return None
     j = jobs.JobProcessor(jf, n, meta_db, niu, minions=None)
     return j
