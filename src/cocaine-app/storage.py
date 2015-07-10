@@ -838,9 +838,15 @@ class Group(object):
 
             service_status = self.meta.get('service', {}).get('status')
             if service_status == Status.MIGRATING:
-                self.status = Status.MIGRATING
-                self.status_text = ('Group {0} is migrating, job id is {1}'.format(
-                    self, self.meta['service']['job_id']))
+                if self.active_job and self.meta['service']['job_id'] == self.active_job['id']:
+                    self.status = Status.MIGRATING
+                    self.status_text = ('Group {0} is migrating, job id is {1}'.format(
+                        self, self.meta['service']['job_id']))
+                else:
+                    self.status = Status.BAD
+                    self.status_text = ('Group {0} has no active job, but marked as '
+                                        'migrating by job id {1}'.format(
+                                            self, self.meta['service']['job_id']))
 
             return self.status
 
