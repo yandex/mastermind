@@ -1411,7 +1411,19 @@ class Balancer(object):
     def get_namespaces_states(self, request):
         if isinstance(self._namespaces_states, Exception):
             raise self._namespaces_states
-        return self._namespaces_states
+
+        try:
+            namespaces = request[0]
+        except (IndexError, TypeError):
+            namespaces = []
+
+        res = {}
+        for ns in namespaces or self._namespaces_states:
+            if ns not in self._namespaces_states:
+                continue
+            res[ns] = self._namespaces_states[ns]
+
+        return res
 
     @h.concurrent_handler
     def storage_keys_diff(self, request):
