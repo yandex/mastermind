@@ -911,8 +911,6 @@ class Group(object):
         if job is None:
             self.active_job = None
             return
-        if job.type not in (JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_RESTORE_GROUP_JOB):
-            return
         self.active_job = {
             'id': job.id,
             'type': job.type,
@@ -985,8 +983,10 @@ class Couple(object):
                     self.active_job = group.active_job
                     break
 
-            if self.active_job:
-                if self.active_job['status'] in (jobs.job.Job.STATUS_NEW, jobs.job.Job.STATUS_EXECUTING):
+            if self.active_job and self.active_job['type'] in (JobTypes.TYPE_MOVE_JOB,
+                                                               JobTypes.TYPE_RESTORE_GROUP_JOB):
+                if self.active_job['status'] in (jobs.job.Job.STATUS_NEW,
+                                                 jobs.job.Job.STATUS_EXECUTING):
                     self.status = Status.SERVICE_ACTIVE
                     self.status_text = 'Couple {} has active job {}'.format(
                         str(self), self.active_job['id'])
