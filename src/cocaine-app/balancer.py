@@ -1421,6 +1421,8 @@ class Balancer(object):
             for group in couple.groups:
                 if not len(group.node_backends):
                     continue
+                if not all(nb.stat for nb in group.node_backends):
+                    continue
                 group_keys.append(group.get_stat().files)
             if not group_keys:
                 continue
