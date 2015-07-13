@@ -1,3 +1,11 @@
+mastermind (2.25.28) trusty; urgency=medium
+
+  * Any type of job is now set as an active_job for a couple
+  * get_namespaces_states now can accept namespaces list
+  * Fix for storage_keys_diff handler when there are backends without fetched stats
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 13 Jul 2015 15:44:19 +0300
+
 mastermind (2.25.27) trusty; urgency=medium
 
   * Misprint fixed
