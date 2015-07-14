@@ -1,3 +1,9 @@
+mastermind (2.25.31) trusty; urgency=medium
+
+  * Fix for couple defrag group representation
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 14 Jul 2015 14:52:13 +0300
+
 mastermind (2.25.30) trusty; urgency=medium
 
   * Fix for group active job setting
