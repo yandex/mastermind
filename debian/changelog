@@ -1,3 +1,9 @@
+mastermind (2.25.29) trusty; urgency=medium
+
+  * Mastermind util error wrapping
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 14 Jul 2015 12:38:07 +0300
+
 mastermind (2.25.28) trusty; urgency=medium
 
   * Any type of job is now set as an active_job for a couple
