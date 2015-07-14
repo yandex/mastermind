@@ -370,8 +370,7 @@ class NodeInfoUpdater(object):
             jobs = {}
             if self.job_finder:
                 try:
-                    params = {'statuses': Job.ACTIVE_STATUSES,
-                              'types': [JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_RESTORE_GROUP_JOB]}
+                    params = {'statuses': Job.ACTIVE_STATUSES}
                     if groups:
                         params['groups'] = [g.group_id for g in groups]
                     for job in self.job_finder.jobs(**params):
