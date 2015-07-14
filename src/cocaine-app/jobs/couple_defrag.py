@@ -5,7 +5,7 @@ from error import JobBrokenError
 from infrastructure import infrastructure
 from job import Job
 from job_types import JobTypes
-from tasks import NodeBackendDefragTask, CoupleDefragStateCheckTask
+from tasks import Task, NodeBackendDefragTask, CoupleDefragStateCheckTask
 import storage
 
 
@@ -88,6 +88,17 @@ class CoupleDefragJob(Job):
         if not defrag_tasks:
             raise ValueError("Couple's {} backends does not require "
                              "defragmentation".format(self.couple))
+
+    @property
+    def group(self):
+        group = self._involved_groups[0]
+        for task in self.tasks:
+            if task.type != 'node_backend_defrag_task':
+                continue
+            if task.status == Task.STATUS_QUEUED:
+                break
+            group = task.group
+        return group
 
     @property
     def _involved_groups(self):
