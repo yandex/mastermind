@@ -176,10 +176,14 @@ def group_info(group, history=('l', False, 'History of group nodes'), host=None,
     cl = client(host, app)
     group = int(group)
 
-    group_info = cl.groups[group].serialize()
-    for node in group_info.get('node_backends', []):
-        convert_stats(node)
-    pprint(group_info)
+    try:
+        group_info = cl.groups[group].serialize()
+        for node in group_info.get('node_backends', []):
+            convert_stats(node)
+        pprint(group_info)
+    except RuntimeError as e:
+        print_error(e)
+        pass
 
     if history:
         group_history = cl.groups[group].history
@@ -1193,10 +1197,19 @@ def command_helper(argv):
         cmdtable = command.cmdtable
 
 
+def print_error(e):
+    print '{0} {1}'.format(warn('Error:'), e)
+
+
 if __name__ == '__main__':
 
     if '--commands' in sys.argv:
         command_helper(sys.argv)
         sys.exit(0)
 
-    sys.exit(d.dispatch())
+    try:
+        res = d.dispatch()
+    except RuntimeError as e:
+        print_error(e)
+        res = 1
+    sys.exit(res)
