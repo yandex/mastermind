@@ -360,16 +360,15 @@ class Host(object):
 
     @property
     def dc(self):
-        return cache.get_dc_by_host(self.addr)
+        return cache.get_dc_by_host(self.hostname)
 
     @property
     def dc_or_not(self):
-        return cache.get_dc_by_host(self.addr, strict=False)
+        return cache.get_dc_by_host(self.hostname, strict=False)
 
     @property
     def parents(self):
-        return cache.get_host_tree(
-            cache.get_hostname_by_addr(self.addr))
+        return cache.get_host_tree(self.hostname)
 
     @property
     def full_path(self):
