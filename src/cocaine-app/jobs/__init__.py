@@ -440,12 +440,23 @@ class JobProcessor(object):
                 raise
 
             jobs = self.job_finder.jobs(ids=job_ids)
-            for job in jobs:
-                if job.type not in STOP_ALLOWED_TYPES:
-                    raise RuntimeError('Cannot stop job {0}, type is {1}'.format(job.id, job.type))
+            for existing_job in jobs:
+                if self.JOB_PRIORITIES[existing_job.type] >= self.JOB_PRIORITIES[job_type]:
+                    raise RuntimeError('Cannot stop job {0}, type is {1} '
+                                       'and has equal or higher priority'.format(
+                                           existing_job.id, existing_job.type))
+
+                if existing_job.status in (Job.STATUS_NOT_APPROVED, Job.STATUS_NEW):
+                    continue
+                elif existing_job.type not in STOP_ALLOWED_TYPES:
+                    raise RuntimeError('Cannot stop job {0}, type is {1}'.format(
+                        existing_job.id, existing_job.type))
 
             logger.info('Stopping jobs: {0}'.format(job_ids))
-            self._stop_jobs(jobs)
+            logger.debug('Lock acquiring')
+            with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
+                logger.debug('Lock acquired')
+                self._stop_jobs(jobs)
 
             logger.info('Retrying job creation')
             job = JobType.new(self.session, **params)
