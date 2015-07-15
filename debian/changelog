@@ -1,3 +1,9 @@
+mastermind (2.25.32) trusty; urgency=medium
+
+  * get_dc_by_host inventory function should accept hostname, not ip
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 15 Jul 2015 15:09:27 +0300
+
 mastermind (2.25.31) trusty; urgency=medium
 
   * Fix for couple defrag group representation
