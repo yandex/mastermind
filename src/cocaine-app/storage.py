@@ -121,7 +121,7 @@ class NodeStat(object):
             lambda if_: if_[1].get('transmit', {}).get('bytes', 0.0) if if_[0] != 'lo' else 0.0,
             interfaces.items()))
 
-        if self.ts is not None:
+        if self.ts is not None and collect_ts > self.ts:
             # conditions are checked for the case of *x_bytes counter overflow
             if new_tx_bytes >= self.tx_bytes:
                 self.tx_rate = float(new_tx_bytes - self.tx_bytes) / (collect_ts - self.ts)
