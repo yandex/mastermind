@@ -143,93 +143,89 @@ class Planner(object):
 
         try:
 
-            logger.debug('Lock acquiring')
-            with sync_manager.lock(self.job_processor.JOBS_LOCK):
-                logger.debug('Lock acquired')
+            max_move_jobs = config.get('jobs', {}).get(
+                'move_job', {}).get('max_executing_jobs', 3)
 
-                max_move_jobs = config.get('jobs', {}).get(
-                    'move_job', {}).get('max_executing_jobs', 3)
+            # prechecking for new or pending tasks
+            jobs_count = self.job_processor.job_finder.jobs_count(
+                types=jobs.JobTypes.TYPE_MOVE_JOB,
+                statuses=[jobs.Job.STATUS_NOT_APPROVED,
+                          jobs.Job.STATUS_NEW,
+                          jobs.Job.STATUS_EXECUTING,
+                          jobs.Job.STATUS_PENDING])
 
-                # prechecking for new or pending tasks
-                jobs_count = self.job_processor.job_finder.jobs_count(
-                    types=jobs.JobTypes.TYPE_MOVE_JOB,
-                    statuses=[jobs.Job.STATUS_NOT_APPROVED,
-                              jobs.Job.STATUS_NEW,
-                              jobs.Job.STATUS_EXECUTING,
-                              jobs.Job.STATUS_PENDING])
+            if jobs_count >= max_move_jobs:
+                raise ValueError('Found {0} unfinished move jobs'.format(
+                    jobs_count))
 
-                if jobs_count >= max_move_jobs:
-                    raise ValueError('Found {0} unfinished move jobs'.format(
-                        jobs_count))
+            for i, candidate in enumerate(candidates):
+                logger.info('Candidate {0}: data {1}, ms_error delta {2}:'.format(
+                    i, gb(candidate.delta.data_move_size), candidate.delta.ms_error_delta))
 
-                for i, candidate in enumerate(candidates):
-                    logger.info('Candidate {0}: data {1}, ms_error delta {2}:'.format(
-                        i, gb(candidate.delta.data_move_size), candidate.delta.ms_error_delta))
+                for src_group, src_dc, dst_group, merged_groups, dst_dc in \
+                        candidate.moved_groups:
 
-                    for src_group, src_dc, dst_group, merged_groups, dst_dc in \
-                            candidate.moved_groups:
+                    try:
+                        assert len(src_group.node_backends) == 1, \
+                            'Src group {0} should have only 1 node backend'.format(
+                                src_group.group_id)
+                        assert len(dst_group.node_backends) == 1, \
+                            'Dst group {0} should have only 1 node backend'.format(
+                                dst_group.group_id)
 
-                        try:
-                            assert len(src_group.node_backends) == 1, \
-                                'Src group {0} should have only 1 node backend'.format(
-                                    src_group.group_id)
-                            assert len(dst_group.node_backends) == 1, \
-                                'Dst group {0} should have only 1 node backend'.format(
-                                    dst_group.group_id)
+                        dcs = []
+                        for host in (src_group.node_backends[0].node.host,
+                                     dst_group.node_backends[0].node.host):
+                            try:
+                                dcs.append(host.dc)
+                            except CacheUpstreamError:
+                                raise RuntimeError('Failed to get dc for host {}'.format(
+                                    host))
 
-                            dcs = []
-                            for host in (src_group.node_backends[0].node.host,
-                                         dst_group.node_backends[0].node.host):
-                                try:
-                                    dcs.append(host.dc)
-                                except CacheUpstreamError:
-                                    raise RuntimeError('Failed to get dc for host {}'.format(
-                                        host))
+                        src_dc_cnt, dst_dc_cnt = dcs
 
-                            src_dc_cnt, dst_dc_cnt = dcs
+                        assert src_dc_cnt == src_dc, \
+                            'Dc for src group {0} has been changed: {1} != {2}'.format(
+                                src_group.group_id, src_dc_cnt, src_dc)
+                        assert dst_dc_cnt == dst_dc, \
+                            'Dc for dst group {0} has been changed: {1} != {2}'.format(
+                                dst_group.group_id, dst_dc_cnt, dst_dc)
 
-                            assert src_dc_cnt == src_dc, \
-                                'Dc for src group {0} has been changed: {1} != {2}'.format(
-                                    src_group.group_id, src_dc_cnt, src_dc)
-                            assert dst_dc_cnt == dst_dc, \
-                                'Dc for dst group {0} has been changed: {1} != {2}'.format(
-                                    dst_group.group_id, dst_dc_cnt, dst_dc)
+                        logger.info('Group {0} ({1}) moves to {2} ({3})'.format(
+                            src_group.group_id, src_dc,
+                            dst_group.group_id, dst_dc))
 
-                            logger.info('Group {0} ({1}) moves to {2} ({3})'.format(
+                        job = self.job_processor._create_job(
+                            jobs.JobTypes.TYPE_MOVE_JOB,
+                            {'group': src_group.group_id,
+                             'uncoupled_group': dst_group.group_id,
+                             'merged_groups': [mg.group_id for mg in merged_groups],
+                             'src_host': src_group.node_backends[0].node.host.addr,
+                             'src_port': src_group.node_backends[0].node.port,
+                             'src_family': src_group.node_backends[0].node.family,
+                             'src_backend_id': src_group.node_backends[0].backend_id,
+                             'src_base_path': src_group.node_backends[0].base_path,
+                             'dst_host': dst_group.node_backends[0].node.host.addr,
+                             'dst_port': dst_group.node_backends[0].node.port,
+                             'dst_family': dst_group.node_backends[0].node.family,
+                             'dst_backend_id': dst_group.node_backends[0].backend_id,
+                             'dst_base_path': dst_group.node_backends[0].base_path,
+                             },
+                            force=True)
+                        logger.info('Job successfully created: {0}'.format(job.id))
+                    except LockFailedError as e:
+                        logger.error(
+                            'Failed to create move job for moving '
+                            'group {0} ({1}) to {2} ({3}): {4}'.format(
                                 src_group.group_id, src_dc,
-                                dst_group.group_id, dst_dc))
-
-                            job = self.job_processor._create_job(
-                                jobs.JobTypes.TYPE_MOVE_JOB,
-                                {'group': src_group.group_id,
-                                 'uncoupled_group': dst_group.group_id,
-                                 'merged_groups': [mg.group_id for mg in merged_groups],
-                                 'src_host': src_group.node_backends[0].node.host.addr,
-                                 'src_port': src_group.node_backends[0].node.port,
-                                 'src_family': src_group.node_backends[0].node.family,
-                                 'src_backend_id': src_group.node_backends[0].backend_id,
-                                 'src_base_path': src_group.node_backends[0].base_path,
-                                 'dst_host': dst_group.node_backends[0].node.host.addr,
-                                 'dst_port': dst_group.node_backends[0].node.port,
-                                 'dst_family': dst_group.node_backends[0].node.family,
-                                 'dst_backend_id': dst_group.node_backends[0].backend_id,
-                                 'dst_base_path': dst_group.node_backends[0].base_path,
-                                 },
-                                force=True)
-                            logger.info('Job successfully created: {0}'.format(job.id))
-                        except LockFailedError as e:
-                            logger.error(
-                                'Failed to create move job for moving '
-                                'group {0} ({1}) to {2} ({3}): {4}'.format(
-                                    src_group.group_id, src_dc,
-                                    dst_group.group_id, dst_dc, e))
-                        except Exception as e:
-                            logger.error(
-                                'Failed to create move job for moving '
-                                'group {0} ({1}) to {2} ({3}): {4}\n{5}'.format(
-                                    src_group.group_id, src_dc,
-                                    dst_group.group_id, dst_dc,
-                                    e, traceback.format_exc()))
+                                dst_group.group_id, dst_dc, e))
+                    except Exception as e:
+                        logger.error(
+                            'Failed to create move job for moving '
+                            'group {0} ({1}) to {2} ({3}): {4}\n{5}'.format(
+                                src_group.group_id, src_dc,
+                                dst_group.group_id, dst_dc,
+                                e, traceback.format_exc()))
 
         except ValueError as e:
             logger.error('Plan cannot be applied: {0}'.format(e))
@@ -469,35 +465,31 @@ class Planner(object):
         couple_ids_to_recover = self._recover_top_weight_couples(
             slots, active_jobs)
 
-        logger.debug('Lock acquiring')
-        with sync_manager.lock(self.job_processor.JOBS_LOCK, timeout=60):
-            logger.debug('Lock acquired')
+        for couple_id in couple_ids_to_recover:
 
-            for couple_id in couple_ids_to_recover:
+            logger.info('Creating recover job for couple {0}'.format(couple_id))
 
-                logger.info('Creating recover job for couple {0}'.format(couple_id))
+            couple = storage.couples[couple_id]
 
-                couple = storage.couples[couple_id]
+            if not _recovery_applicable_couple(couple):
+                logger.info('Couple {0} is no more applicable for recovery job'.format(
+                    couple_id))
+                continue
 
-                if not _recovery_applicable_couple(couple):
-                    logger.info('Couple {0} is no more applicable for recovery job'.format(
-                        couple_id))
-                    continue
+            try:
+                job = self.job_processor._create_job(
+                    jobs.JobTypes.TYPE_RECOVER_DC_JOB,
+                    {'couple': couple_id,
+                     'need_approving': need_approving})
+                logger.info('Created recover dc job for couple {0}, job id {1}'.format(
+                    couple, job.id))
+                created_jobs += 1
+            except Exception as e:
+                logger.error('Failed to create recover dc job for couple {0}: {1}'.format(
+                    couple_id, e))
+                continue
 
-                try:
-                    job = self.job_processor._create_job(
-                        jobs.JobTypes.TYPE_RECOVER_DC_JOB,
-                        {'couple': couple_id,
-                         'need_approving': need_approving})
-                    logger.info('Created recover dc job for couple {0}, job id {1}'.format(
-                        couple, job.id))
-                    created_jobs += 1
-                except Exception as e:
-                    logger.error('Failed to create recover dc job for couple {0}: {1}'.format(
-                        couple_id, e))
-                    continue
-
-            logger.info('Successfully created {0} recover dc jobs'.format(created_jobs))
+        logger.info('Successfully created {0} recover dc jobs'.format(created_jobs))
 
     def sync_recover_data(self):
 
@@ -863,11 +855,9 @@ class Planner(object):
             job_params['uncoupled_group'] = uncoupled_groups[0].group_id
             job_params['merged_groups'] = [g.group_id for g in uncoupled_groups[1:]]
 
-        with sync_manager.lock(self.job_processor.JOBS_LOCK,
-                               timeout=self.job_processor.JOB_MANUAL_TIMEOUT):
-            job = self.job_processor._create_job(
-                jobs.JobTypes.TYPE_RESTORE_GROUP_JOB,
-                job_params, force=force)
+        job = self.job_processor._create_job(
+            jobs.JobTypes.TYPE_RESTORE_GROUP_JOB,
+            job_params, force=force)
 
         return job.dump()
 
@@ -982,13 +972,9 @@ class Planner(object):
 
         job_params = self._get_move_group_params(group, uncoupled_groups=uncoupled_groups)
 
-        logger.debug('Lock acquiring')
-        with sync_manager.lock(self.job_processor.JOBS_LOCK,
-                               timeout=self.job_processor.JOB_MANUAL_TIMEOUT):
-            logger.debug('Lock acquired')
-            job = self.job_processor._create_job(
-                jobs.JobTypes.TYPE_MOVE_JOB,
-                job_params, force=force)
+        job = self.job_processor._create_job(
+            jobs.JobTypes.TYPE_MOVE_JOB,
+            job_params, force=force)
 
         return job.dump()
 
