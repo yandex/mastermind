@@ -74,7 +74,8 @@ class ZkSyncManager(object):
             retry = self._retry.copy()
             result = retry(self._inner_persistent_locks_acquire, locks=locks, data=data)
         except RetryFailedError:
-            raise LockError
+            raise LockError('Failed to acquire persistent locks {} after several retries'.format(
+                locks))
         except KazooException as e:
             logger.error('Failed to fetch persistent locks {0}: {1}\n{2}'.format(
                 locks, e, traceback.format_exc()))
@@ -115,7 +116,8 @@ class ZkSyncManager(object):
             logger.warn('Persistent lock {0} is already set by {1}'.format(failed_lock, holder))
             raise LockAlreadyAcquiredError(
                 'Lock for {0} is already acquired by job {1}'.format(failed_lock, holder),
-                lock_id=failed_lock, holder_id=holder, holders_ids=holders_ids)
+                lock_id=failed_lock, holder_id=holder,
+                lock_ids=failed_locks, holders_ids=holders_ids)
         elif failed:
             logger.error('Failed to set persistent locks {0}, result: {1}'.format(
                 locks, result))
