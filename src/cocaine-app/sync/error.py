@@ -44,7 +44,7 @@ class LockFailedError(LockError):
 
 class LockAlreadyAcquiredError(LockFailedError):
 
-    PARAMS = ('lock_id', 'holder_id', 'holders_ids')
+    PARAMS = ('lock_id', 'holder_id', 'lock_ids', 'holders_ids')
 
     @property
     def code(self):

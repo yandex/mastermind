@@ -1,8 +1,7 @@
 # encoding: utf-8
 from collections import defaultdict
 import copy
-from datetime import datetime
-import functools
+from contextlib import contextmanager
 import itertools
 import json
 import logging
@@ -11,7 +10,6 @@ import re
 import time
 import traceback
 
-from cocaine.futures import chain
 import elliptics
 import msgpack
 from mastermind.service import ReconnectableService
@@ -22,12 +20,14 @@ from config import config
 import helpers as h
 import infrastructure
 import inventory
+import jobs.job
 import keys
 import statistics
 import storage
 import timed_queue
 from timer import periodic_timer
 from sync import sync_manager
+from sync.error import LockAlreadyAcquiredError
 
 
 logger = logging.getLogger('mm.balancer')
@@ -590,6 +590,32 @@ class Balancer(object):
 
         return groups_by_total_space
 
+    @staticmethod
+    def _remove_unusable_groups(groups_by_total_space, groups):
+        for ts, group_ids in groups_by_total_space.iteritems():
+            if groups[0] in group_ids:
+                for group in groups:
+                    group_ids.remove(group)
+                break
+
+    @contextmanager
+    def _locked_uncoupled_groups(self, uncoupled_groups, groups_by_total_space, comment=''):
+        locks = dict(('{0}{1}'.format(jobs.job.Job.GROUP_LOCK_PREFIX, ug), ug)
+                     for ug in uncoupled_groups)
+        try:
+            sync_manager.persistent_locks_acquire(locks.keys(), data=comment)
+        except LockAlreadyAcquiredError as e:
+            failed_group_ids = [locks[lock_id] for lock_id in e.lock_ids]
+            self._remove_unusable_groups(groups_by_total_space, failed_group_ids)
+            yield [ug for ug in uncoupled_groups if ug not in failed_group_ids]
+
+        else:
+            try:
+                yield uncoupled_groups
+            finally:
+                sync_manager.persistent_locks_release(locks.keys())
+                self._remove_unusable_groups(groups_by_total_space, uncoupled_groups)
+
     def __couple_groups(self, size, couples, options, ns, groups_by_total_space):
 
         res = []
@@ -635,32 +661,17 @@ class Balancer(object):
 
                 ns_current_state = self.infrastructure.ns_current_state(
                     nodes, self.NODE_TYPES[1:])
-                groups_to_couple = self.__choose_groups_to_couple(
-                    ns_current_state, units, size, groups_by_total_space, mandatory_groups)
-                if not groups_to_couple:
-                    logger.warn('Not enough uncoupled groups to couple')
+
+                couple = self._build_couple(
+                    ns_current_state, units, size,
+                    groups_by_total_space, mandatory_groups,
+                    namespace=options['namespace'],
+                    init_state=options['init_state'],
+                    dry_run=options['dry_run'])
+
+                if couple is None:
+                    # not enough valid groups
                     break
-                logger.info('Chosen groups to couple: {0}'.format(groups_to_couple))
-
-                couple = storage.couples.add([storage.groups[g]
-                                              for g in groups_to_couple])
-
-                for ts, group_ids in groups_by_total_space.iteritems():
-                    if couple.groups[0].group_id in group_ids:
-                        for group in couple.groups:
-                            group_ids.remove(group.group_id)
-                        break
-
-                if not options['dry_run']:
-                    try:
-                        make_symm_group(
-                            self.node, couple, options['namespace'],
-                            options['init_state'] == storage.Status.FROZEN)
-                    except Exception as e:
-                        couple.destroy()
-                        res.append(str(e))
-                        continue
-                    couple.update_status()
 
                 self.infrastructure.account_ns_groups(nodes, couple.groups)
                 self.infrastructure.update_groups_list(tree)
@@ -673,7 +684,7 @@ class Balancer(object):
                 res.append(str(e))
                 continue
 
-        res.extend(['Not enough valid dcs and/or groups of appropriate'
+        res.extend(['Not enough valid dcs and/or groups of appropriate '
                     'total space for remaining couples creation'] * (couples - len(res)))
 
         if options['dry_run']:
@@ -796,15 +807,56 @@ class Balancer(object):
 
         return groups
 
+    def _build_couple(self,
+                      ns_current_state,
+                      units,
+                      size,
+                      groups_by_total_space,
+                      mandatory_groups,
+                      namespace,
+                      init_state,
+                      dry_run=False):
 
+        while True:
+            groups_to_couple = self.__choose_groups_to_couple(
+                ns_current_state, units, size, groups_by_total_space, mandatory_groups)
 
-    def __choose_groups_to_couple(self, ns_current_state, units, count, groups_by_total_space, mandatory_groups):
+            if not groups_to_couple:
+                return None
 
+            with self._locked_uncoupled_groups(groups_to_couple,
+                                               groups_by_total_space,
+                                               'couple build') as locked_uncoupled_group_ids:
+
+                if groups_to_couple != locked_uncoupled_group_ids:
+                    logger.warn('Failed to lock all uncoupled groups: locked {} / {}'.format(
+                        locked_uncoupled_group_ids, groups_to_couple))
+                    continue
+
+                logger.info('Chosen groups to couple: {0}'.format(groups_to_couple))
+
+                couple = storage.couples.add([storage.groups[g]
+                                              for g in groups_to_couple])
+
+                if not dry_run:
+                    try:
+                        make_symm_group(
+                            self.node, couple, namespace,
+                            init_state == storage.Status.FROZEN)
+                    except Exception:
+                        couple.destroy()
+                        raise
+                    couple.update_status()
+
+            return couple
+
+    def __choose_groups_to_couple(self, ns_current_state, units, count,
+                                  groups_by_total_space, mandatory_groups):
         candidates = []
         for ts, group_ids in groups_by_total_space.iteritems():
             if not all([mg in group_ids for mg in mandatory_groups]):
                 logger.debug('Could not find mandatory groups {0} in a list '
-                    'of groups with ts {1}'.format(mandatory_groups, ts))
+                             'of groups with ts {1}'.format(mandatory_groups, ts))
                 continue
 
             free_group_ids = [g for g in group_ids if g not in mandatory_groups]
@@ -822,7 +874,8 @@ class Balancer(object):
         candidate = candidates[0]
 
         if len(candidates) > 1:
-            weights = [(self.__weight_couple_groups(ns_current_state, units, c), c) for c in candidates]
+            weights = [(self.__weight_couple_groups(ns_current_state, units, c), c)
+                       for c in candidates]
             weights.sort()
             logger.info('Choosing candidate with least weight: {0}'.format(weights))
             candidate = weights[0][1]
@@ -1528,7 +1581,7 @@ def make_symm_group(n, couple, namespace, frozen):
 
     s = elliptics.Session(n)
     wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or config.get('wait_timeout', 5)
-    s.set_timeout(config.get('wait_timeout', 5))
+    s.set_timeout(wait_timeout)
 
     s.add_groups([g.group_id for g in couple.groups])
     packed = msgpack.packb(couple.compose_group_meta(namespace, frozen))
