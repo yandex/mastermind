@@ -400,8 +400,7 @@ class JobProcessor(object):
             except IndexError:
                 force = False
 
-            with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
-                job = self._create_job(job_type, params, force=force)
+            job = self._create_job(job_type, params, force=force)
 
         except LockFailedError as e:
             raise
