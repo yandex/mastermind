@@ -108,10 +108,10 @@ class NodeInfoUpdater(object):
         logger.info('Cluster was successfully updated')
         return True
 
-    def _force_nodes_update(self):
+    def _force_nodes_update(self, groups=None):
         try:
             with self.__cluster_update_lock:
-                self.update_status(groups=None)
+                self.update_status(groups=groups)
         except Exception as e:
             logger.info('Failed to update nodes status: {0}\n{1}'.format(e, traceback.format_exc()))
             raise
