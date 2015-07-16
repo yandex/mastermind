@@ -276,24 +276,18 @@ class NodeInfoUpdater(object):
                 fs.update_statistics(b_stat['backend']['vfs'], collect_ts)
 
                 node_backend.enable()
-                node_backend.dstat_error_code = b_stat.get('backend', {}).get(
-                    'dstat', {}).get('error', 0)
-                if node_backend.dstat_error_code != 0:
-                    logger.info('Node backend {0} dstat returned error code {1}'.format(
-                        str(node_backend), b_stat['backend']['dstat']['error']))
 
-                if node_backend.dstat_error_code == 0:
-                    logger.info('Updating statistics for node backend %s' % (str(node_backend)))
-                    if 'backend' not in b_stat:
-                        logger.warn('No backend in b_stat: {0}'.format(b_stat))
-                    elif 'dstat' not in b_stat['backend']:
-                        logger.warn('No dstat in backend: {0}'.format(b_stat['backend']))
-                    try:
-                        node_backend.update_statistics(b_stat, collect_ts)
-                    except KeyError as e:
-                        logger.warn('Bad stat for node backend {0} ({1}): {2}'.format(
-                            node_backend, e, b_stat))
-                        pass
+                logger.info('Updating statistics for node backend %s' % (str(node_backend)))
+                if 'backend' not in b_stat:
+                    logger.warn('No backend in b_stat: {0}'.format(b_stat))
+                elif 'dstat' not in b_stat['backend']:
+                    logger.warn('No dstat in backend: {0}'.format(b_stat['backend']))
+                try:
+                    node_backend.update_statistics(b_stat, collect_ts)
+                except KeyError as e:
+                    logger.warn('Bad stat for node backend {0} ({1}): {2}'.format(
+                        node_backend, e, b_stat))
+                    pass
 
                 if b_stat['status']['read_only'] or node_backend.stat_commit_errors > 0:
                     node_backend.make_read_only()

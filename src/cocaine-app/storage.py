@@ -186,18 +186,19 @@ class NodeBackendStat(object):
         if self.ts:
             dt = collect_ts - self.ts
 
-            last_read = raw_stat['backend']['dstat']['read_ios']
-            last_write = raw_stat['backend']['dstat']['write_ios']
+            if 'dstat' in raw_stat['backend']:
+                last_read = raw_stat['backend']['dstat']['read_ios']
+                last_write = raw_stat['backend']['dstat']['write_ios']
 
-            self.read_rps = (last_read - self.last_read) / dt
-            self.write_rps = (last_write - self.last_write) / dt
+                self.read_rps = (last_read - self.last_read) / dt
+                self.write_rps = (last_write - self.last_write) / dt
 
-            # Disk usage should be used here instead of load average
-            self.max_read_rps = self.max_rps(self.read_rps, self.node_stat.load_average)
-            self.max_write_rps = self.max_rps(self.write_rps, self.node_stat.load_average)
+                # Disk usage should be used here instead of load average
+                self.max_read_rps = self.max_rps(self.read_rps, self.node_stat.load_average)
+                self.max_write_rps = self.max_rps(self.write_rps, self.node_stat.load_average)
 
-            self.last_read = last_read
-            self.last_write = last_write
+                self.last_read = last_read
+                self.last_write = last_write
 
         self.ts = collect_ts
 
@@ -524,7 +525,6 @@ class NodeBackend(object):
         self.read_only = False
         self.disabled = False
         self.start_ts = 0
-        self.dstat_error_code = 0
         self.status = Status.INIT
         self.status_text = "Node %s is not inititalized yet" % (self.__str__())
 
@@ -561,10 +561,6 @@ class NodeBackend(object):
         if self.destroyed:
             self.status = Status.BAD
             self.status_text = 'Node backend {0} is destroyed'.format(self.__str__())
-
-        elif self.dstat_error_code != 0:
-            self.status = Status.STALLED
-            self.status_text = 'Node backend {0} returned error code {1}'.format(str(self), self.dstat_error_code)
 
         elif not self.stat:
             self.status = Status.INIT
