@@ -885,11 +885,6 @@ class Planner(object):
             'failed': {},
         }
 
-        def couple_busy_job(couple):
-            for cg in couple.groups:
-                if cg.active_job:
-                    return cg
-
         for couple in storage.couples.keys():
             for group in couple.groups:
                 if len(group.node_backends) != 1:
@@ -897,14 +892,6 @@ class Planner(object):
                     continue
 
                 if group.node_backends[0].node.host.addr in ips:
-
-                    busy_group = couple_busy_job(couple)
-                    if busy_group:
-                        res['failed'][group.group_id] = 'Group {} is processed ' \
-                            'by job {} ({})'.format(busy_group.group_id,
-                                                    busy_group.active_job['id'],
-                                                    busy_group.active_job['type'])
-                        continue
 
                     attempts = self.MOVE_GROUP_ATTEMPTS
                     while attempts > 0:
