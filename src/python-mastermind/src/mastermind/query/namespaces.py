@@ -5,29 +5,35 @@ from mastermind.query.couples import CouplesQuery, Couple
 
 
 class NamespacesQuery(Query):
+
+    DEFAULT_FILTER = {}
+
     def __init__(self, client, filter=None):
         super(NamespacesQuery, self).__init__(client)
-        self._filter = filter or {}
+        self._filter = filter or self.DEFAULT_FILTER
 
     def __getitem__(self, key):
         return Namespace(key, self.client)
 
     def __iter__(self):
-        groups = self.client.request('get_namespaces_list', [self._filter])
-        for g_data in groups:
-            gq = Namespace(NamespaceDataObject._raw_id(g_data), self.client)
-            del g_data['namespace']
-            gq._set_raw_data(g_data)
-            yield gq
+        namespaces = self.client.request('get_namespaces_list', [self._filter])
+        for ns_data in namespaces:
+            nsq = Namespace(NamespaceDataObject._raw_id(ns_data), self.client)
+            del ns_data['namespace']
+            nsq._set_raw_data(ns_data)
+            yield nsq
 
     def __contains__(self, key):
-        ns = Namespace(key, self.client)
-        try:
-            return bool(ns.settings)
-        except RuntimeError:
-            return False
+        namespaces = self.client.request('get_namespaces_list', [self._filter])
+        for ns_data in namespaces:
+            nsq = Namespace(NamespaceDataObject._raw_id(ns_data), self.client)
+            if nsq == key:
+                return True
+        return False
 
     def __delitem__(self, namespace):
+        if self._filter != self.DEFAULT_FILTER:
+            raise ValueError('Filter object does not support delete operation on non-empty filter')
         self.client.request('namespace_delete', [namespace])
 
     def filter(self, **kwargs):
@@ -318,6 +324,13 @@ class Namespace(NamespaceQuery, NamespaceDataObject):
     def __init__(self, id, client=None):
         super(Namespace, self).__init__(client)
         self.id = id
+
+    def __eq__(self, o):
+        if isinstance(o, basestring):
+            return self.id == o
+        elif isinstance(o, Namespace):
+            return self.id == o.id
+        return False
 
     def __repr__(self):
         return '<Namespace {}{}>'.format(self.id, ' [DELETED]' if self.deleted else '')
