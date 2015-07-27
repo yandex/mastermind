@@ -1,7 +1,11 @@
 from contextlib import contextmanager
+import logging
 from threading import Lock
 
 from sync.error import LockAlreadyAcquiredError
+
+
+logger = logging.getLogger('mm.sync')
 
 
 class SyncManager(object):
@@ -25,15 +29,18 @@ class SyncManager(object):
 
     def persistent_locks_acquire(self, locks, data=''):
         with self.__locks_lock:
-            acquired_locks = []
+            already_locked = []
             for lockid in locks:
                 lock = self.locks.setdefault(lockid, Lock())
                 if lock.locked():
-                    for alock in acquired_locks:
-                        alock.release()
-                    raise LockAlreadyAcquiredError
-                lock.acquire()
-                acquired_locks.append(lock)
+                    already_locked.append(lockid)
+            if already_locked:
+                raise LockAlreadyAcquiredError(lock_id=already_locked[0],
+                                               holder_id='',
+                                               lock_ids=already_locked,
+                                               holders_ids=[''])
+            for lockid in locks:
+                self.locks[lockid].acquire()
         return True
 
     def persistent_locks_release(self, locks, check=''):
