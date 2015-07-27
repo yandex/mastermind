@@ -183,7 +183,7 @@ class NodeBackendStat(object):
 
     def update(self, raw_stat, collect_ts):
 
-        if self.ts:
+        if self.ts and collect_ts > self.ts:
             dt = collect_ts - self.ts
 
             if 'dstat' in raw_stat['backend']:
@@ -997,7 +997,6 @@ class Couple(object):
 
         statuses = [group.update_status() for group in self.groups]
 
-        meta = self.groups[0].meta
         if any([not self.groups[0].equal_meta(group) for group in self.groups[1:]]):
             self.status = Status.BAD
             self.status_text = 'Couple {0} groups has unequal meta data'.format(str(self))
