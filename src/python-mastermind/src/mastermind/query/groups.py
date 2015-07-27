@@ -81,6 +81,11 @@ class GroupDataObject(LazyDataObject):
     def status_text(self):
         return self._data['status_text']
 
+    @property
+    @LazyDataObject._lazy_load
+    def node_backends(self):
+        return self._data['node_backends']
+
 
 class GroupQuery(Query):
     @property
