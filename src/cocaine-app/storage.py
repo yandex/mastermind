@@ -186,7 +186,7 @@ class NodeBackendStat(object):
         if self.ts and collect_ts > self.ts:
             dt = collect_ts - self.ts
 
-            if 'dstat' in raw_stat['backend']:
+            if 'dstat' in raw_stat['backend'] and 'error' not in raw_stat['backend']['dstat']:
                 last_read = raw_stat['backend']['dstat']['read_ios']
                 last_write = raw_stat['backend']['dstat']['write_ios']
 
