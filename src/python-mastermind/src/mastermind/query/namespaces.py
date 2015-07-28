@@ -345,6 +345,22 @@ class CouplesBuildResult(object):
             yield r
 
     def filter(self, success=None):
+        """
+        Filters build couple request results.
+
+        By default build couple request result is an iterable which contains
+        successfully created couples as well as errors that happened during a certain
+        couple creation. This method helps to separate successfully created couples from
+        couple creation errors.
+
+        Args:
+            success:
+                boolean flag that should be set to True to retrieve successfully created couples
+                and False for fetching only errors during couple creation.
+
+        Returns:
+            an iterable of couple build request results, filtered if required.
+        """
         def filter_records(r):
             if success is None:
                 return True
