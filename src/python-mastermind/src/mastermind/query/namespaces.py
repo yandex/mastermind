@@ -313,7 +313,7 @@ class NamespaceQuery(Query):
             c._set_raw_data(couple_data)
             created_couples.append(c)
 
-        return created_couples
+        return CouplesBuildResult(created_couples)
 
     @property
     def couples(self):
@@ -334,3 +334,19 @@ class Namespace(NamespaceQuery, NamespaceDataObject):
 
     def __repr__(self):
         return '<Namespace {}{}>'.format(self.id, ' [DELETED]' if self.deleted else '')
+
+
+class CouplesBuildResult(object):
+    def __init__(self, result):
+        self.result = result
+
+    def __iter__(self):
+        for r in self.result:
+            yield r
+
+    def filter(self, success=None):
+        def filter_records(r):
+            if success is None:
+                return True
+            return isinstance(r, Couple) == success
+        return CouplesBuildResult(filter(filter_records, self.result))
