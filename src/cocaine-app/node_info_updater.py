@@ -1,23 +1,17 @@
 # -*- coding: utf-8 -*-
-from contextlib import contextmanager
-import functools
-import json
 import logging
 import re
-import sys
 import threading
 import time
 import traceback
 
-from cocaine.services import Service
 import elliptics
 
 import balancer
 import balancelogicadapter as bla
 from config import config
-import errors
 import helpers as h
-from jobs import Job, JobTypes
+from jobs import Job
 import keys
 import timed_queue
 import storage
@@ -85,7 +79,6 @@ class NodeInfoUpdater(object):
             self.__nodeUpdateTimestamps = self.__nodeUpdateTimestamps[1:] + (time.time(),)
             bla.setConfigValue("dynamic_too_old_age", max(time.time() - self.__nodeUpdateTimestamps[0], reload_period * 3))
 
-
     def update_symm_groups(self):
         try:
             with self.__cluster_update_lock:
@@ -141,19 +134,20 @@ class NodeInfoUpdater(object):
             session.set_direct_id(address)
             logger.debug('Request for monitor_stat of node {0}'.format(
                 address))
-            requests.append((session.monitor_stat(address,
-                self.MONITOR_STAT_CATEGORIES), address))
+            requests.append((session.monitor_stat(address, self.MONITOR_STAT_CATEGORIES),
+                             address))
 
         for result, address in requests:
             try:
                 h.process_elliptics_async_result(result, self.update_statistics)
             except Exception as e:
-                logger.error('Failed to request monitor_stat for node {0}: '
-                    '{1}\n{2}'.format(address, e, traceback.format_exc()))
+                logger.exception('Failed to request monitor_stat for node {}: {}'.format(
+                    address, e))
                 continue
 
-        nbs = (groups and [nb for g in groups for nb in g.node_backends]
-                      or storage.node_backends.keys())
+        nbs = (groups and
+               [nb for g in groups for nb in g.node_backends] or
+               storage.node_backends.keys())
         for nb in nbs:
             nb.update_statistics_status()
             nb.update_status()
@@ -307,24 +301,23 @@ class NodeInfoUpdater(object):
     def update_symm_groups_async(self, groups=None):
 
         _queue = set()
+
         def _process_group_metadata(response, group, elapsed_time=None, end_time=None):
             logger.debug('Cluster updating: group {0} meta key read time: {1}.{2}'.format(
-                    group.group_id, elapsed_time.tsec, elapsed_time.tnsec))
+                group.group_id, elapsed_time.tsec, elapsed_time.tnsec))
             meta = response.data
 
             group.parse_meta(meta)
             couple = group.meta.get('couple')
             if couple is None:
-                logger.info('Read symmetric groups from group '
-                    '{0} (no couple data): {1}'.format(group.group_id, meta))
+                logger.info('Read symmetric groups from group {} (no couple data): {}'.format(
+                    group.group_id, meta))
                 return
 
-            logger.info('Read symmetric groups from group '
-                '{0}: {1}'.format(group.group_id, couple))
+            logger.info('Read symmetric groups from group {}: {}'.format(group.group_id, couple))
             for gid in couple:
                 if gid != group.group_id:
-                    logger.info('Scheduling update '
-                        'for group {0}'.format(gid))
+                    logger.info('Scheduling update for group {}'.format(gid))
                     _queue.add(gid)
 
             couple_str = ':'.join((str(gid) for gid in sorted(couple)))
@@ -333,17 +326,17 @@ class NodeInfoUpdater(object):
                 couple_str, couple_str in storage.couples))
 
             if group.type == storage.Group.TYPE_DATA:
-                if not couple_str in storage.couples:
+                if couple_str not in storage.couples:
                     logger.info('Creating couple {0}'.format(couple_str))
                     for gid in couple:
-                        if not gid in storage.groups:
-                            logger.info("Group {0} doesn't exist in "
-                                "all_groups, add fake data with couple={1}".format(gid, couple))
+                        if gid not in storage.groups:
+                            logger.info('Group {} is not found adding fake group for '
+                                        'couple {}'.format(gid, couple))
                             storage.groups.add(gid)
                     c = storage.couples.add([storage.groups[gid] for gid in couple])
                     logger.info('Created couple {0} {1}'.format(c, repr(c)))
             elif group.type == storage.Group.TYPE_CACHE:
-                if not couple_str in storage.cache_couples:
+                if couple_str not in storage.cache_couples:
                     logger.info('Creating cache couple {0}'.format(couple_str))
                     c = storage.cache_couples.add([storage.groups[gid] for gid in couple])
                     logger.info('Created cache couple {0} {1}'.format(c, repr(c)))
@@ -387,13 +380,12 @@ class NodeInfoUpdater(object):
                 try:
                     h.process_elliptics_async_result(result, _process_group_metadata, group)
                 except elliptics.NotFoundError as e:
-                    logger.warn('Failed to read symmetric_groups '
-                        'from group {0}: {1}'.format(group_id, e))
+                    logger.warn('Failed to read symmetric_groups from group {0}: {1}'.format(
+                        group_id, e))
                     group.parse_meta(None)
                 except Exception as e:
-                    logger.error('Failed to read symmetric_groups '
-                        'from group {0}: {1}\n{2}'.format(
-                            group_id, e, traceback.format_exc()))
+                    logger.exception('Failed to read symmetric_groups from group {0}: {1}'.format(
+                        group_id, e))
                     group.parse_meta(None)
                 finally:
                     try:
@@ -404,14 +396,11 @@ class NodeInfoUpdater(object):
                     try:
                         group.update_status_recursive()
                     except Exception as e:
-                        logger.error('Failed to update group {0} status: '
-                            '{1}\n{2}'.format(group, e, traceback.format_exc()))
+                        logger.exception('Failed to update group {0} status: {1}'.format(group, e))
                         pass
 
         except Exception as e:
-            logger.error('Critical error during symmetric group '
-                                 'update, {0}: {1}'.format(str(e),
-                                     traceback.format_exc()))
+            logger.exception('Critical error during symmetric group update')
 
     def stop(self):
         self.__tq.shutdown()
