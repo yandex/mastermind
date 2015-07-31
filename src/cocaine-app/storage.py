@@ -585,14 +585,14 @@ class NodeBackend(object):
 
         elif self.stalled:
             self.status = Status.STALLED
-            self.status_text = ('Statistics for node backend {0} is too old: '
-                'it was gathered {1} seconds ago'.format(self.__str__(),
-                    int(time.time() - self.stat.ts)))
+            self.status_text = ('Statistics for node backend {} is too old: '
+                                'it was gathered {} seconds ago'.format(
+                                    self.__str__(), int(time.time() - self.stat.ts)))
 
         elif self.fs.status == Status.BROKEN:
             self.status = Status.BROKEN
             self.status_text = ("Node backends' space limit is not properly "
-                "configured on fs {0}".format(self.fs.fsid))
+                                "configured on fs {0}".format(self.fs.fsid))
 
         elif self.read_only:
             self.status = Status.RO
@@ -652,7 +652,8 @@ class NodeBackend(object):
         res['status'] = self.status
         res['status_text'] = self.status_text
         res['dc'] = self.node.host.dc_or_not
-        res['last_stat_update'] = (self.stat and
+        res['last_stat_update'] = (
+            self.stat and
             datetime.datetime.fromtimestamp(self.stat.ts).strftime('%Y-%m-%d %H:%M:%S') or
             'unknown')
         if self.node.stat:
@@ -680,8 +681,9 @@ class NodeBackend(object):
             return '<Node backend object: DESTROYED!>'
 
         return ('<Node backend object: node=%s, backend_id=%d, '
-            'status=%s, read_only=%s, stat=%s>' % (str(self.node), self.backend_id,
-                self.status, str(self.read_only), repr(self.stat)))
+                'status=%s, read_only=%s, stat=%s>' % (
+                    str(self.node), self.backend_id,
+                    self.status, str(self.read_only), repr(self.stat)))
 
     def __str__(self):
         if self.destroyed:
@@ -787,7 +789,7 @@ class Group(object):
         if not self.meta:
             if (CACHE_GROUP_PATH_PREFIX and
                 any([nb.base_path.startswith(CACHE_GROUP_PATH_PREFIX)
-                        for nb in self.node_backends])):
+                     for nb in self.node_backends])):
                 return self.TYPE_UNMARKED
             return self.TYPE_DATA
         if self.meta.get('type') == self.TYPE_CACHE:
@@ -804,14 +806,14 @@ class Group(object):
             logger.info('Group {0}: no node backends, status set to INIT'.format(self.group_id))
             self.status = Status.INIT
             self.status_text = ('Group {0} is in INIT state because there is '
-                'no node backends serving this group'.format(self))
+                                'no node backends serving this group'.format(self))
             return self.status
 
         if FORBIDDEN_DHT_GROUPS and len(self.node_backends) > 1:
             self.status = Status.BROKEN
-            self.status_text = ('Group {0} is in BROKEN state because '
-                'is has {1} node backends but only 1 is allowed'.format(
-                    self.group_id, len(self.node_backends)))
+            self.status_text = ('Group {} is in BROKEN state because '
+                                'is has {} node backends but only 1 is allowed'.format(
+                                    self.group_id, len(self.node_backends)))
             return self.status
 
         # node statuses should be updated before group status is set
@@ -822,13 +824,13 @@ class Group(object):
         if not self.meta:
             self.status = Status.INIT
             self.status_text = ('Group {0} is in INIT state because meta key '
-                'was not read from it'.format(self))
+                                'was not read from it'.format(self))
             return self.status
 
         if Status.BROKEN in statuses:
             self.status = Status.BROKEN
             self.status_text = ('Group {0} has BROKEN status because '
-                'some node statuses are BROKEN'.format(self))
+                                'some node statuses are BROKEN'.format(self))
             return self.status
 
         if self.type == self.TYPE_DATA:
@@ -842,7 +844,7 @@ class Group(object):
         if Status.RO in statuses:
             self.status = Status.RO
             self.status_text = ('Group {0} is in Read-Only state because '
-                'there is RO node backends'.format(self))
+                                'there is RO node backends'.format(self))
 
             service_status = self.meta.get('service', {}).get('status')
             if service_status == Status.MIGRATING:
@@ -861,7 +863,7 @@ class Group(object):
         if not all([st == Status.OK for st in statuses]):
             self.status = Status.BAD
             self.status_text = ('Group {0} is in Bad state because '
-                'some node statuses are not OK'.format(self))
+                                'some node statuses are not OK'.format(self))
             return self.status
 
         self.status = Status.COUPLED
@@ -873,31 +875,30 @@ class Group(object):
         if not self.meta['couple']:
             self.status = Status.INIT
             self.status_text = ('Group {0} is in INIT state because there is '
-                'no coupling info'.format(self))
+                                'no coupling info'.format(self))
             return self.status
 
         if not self.couple and self.meta['couple']:
             self.status = Status.BAD
             self.status_text = ('Group {0} is in Bad state because '
-                'couple was not created'.format(self))
+                                'couple was not created'.format(self))
             return self.status
 
         if not self.couple.check_groups(self.meta['couple']):
             self.status = Status.BAD
-            self.status_text = ('Group {0} is in Bad state because '
-                'couple check fails'.format(self))
+            self.status_text = ('Group {} is in Bad state because couple check fails'.format(self))
             return self.status
 
         if not self.meta['namespace']:
             self.status = Status.BAD
             self.status_text = ('Group {0} is in Bad state because '
-                'no namespace has been assigned to it'.format(self))
+                                'no namespace has been assigned to it'.format(self))
             return self.status
 
-        if not self.group_id in self.meta['couple']:
+        if self.group_id not in self.meta['couple']:
             self.status = Status.BROKEN
             self.status_text = ('Group {0} is in BROKEN state because '
-                'its group id is missing from coupling info'.format(self))
+                                'its group id is missing from coupling info'.format(self))
             return self.status
 
     def info(self):
@@ -1051,7 +1052,7 @@ class Couple(object):
                 if not infrastructure.ns_settings.get(self.namespace):
                     self.status = Status.BROKEN
                     self.status_text = ('Couple {0} is assigned to a '
-                        'namespace {1}, which is not set up'.format(str(self), ns))
+                                        'namespace {1}, which is not set up'.format(self, ns))
                     return self.status
 
         if all([st == Status.COUPLED for st in statuses]):
@@ -1065,7 +1066,6 @@ class Couple(object):
                         str(self)))
                     return self.status
 
-            stats = self.get_stat()
             if self.is_full():
                 self.status = Status.FULL
                 self.status_text = 'Couple {0} is full'.format(str(self))
@@ -1101,7 +1101,7 @@ class Couple(object):
     def check_groups(self, groups):
 
         for group in self.groups:
-            if group.meta is None or not 'couple' in group.meta or not group.meta['couple']:
+            if group.meta is None or 'couple' not in group.meta or not group.meta['couple']:
                 return False
 
             if set(groups) != set(group.meta['couple']):
