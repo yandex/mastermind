@@ -671,6 +671,8 @@ class NodeBackend(object):
             res['fragmentation'] = self.stat.fragmentation
             res['defrag_state'] = self.stat.defrag_state
             res['want_defrag'] = self.stat.want_defrag
+            res['io_blocking_size'] = self.stat.io_blocking_size
+            res['io_nonblocking_size'] = self.stat.io_nonblocking_size
         if self.base_path:
             res['path'] = self.base_path
 
