@@ -179,6 +179,9 @@ class NodeBackendStat(object):
         self.start_stat_commit_err_count = 0
         self.cur_stat_commit_err_count = 0
 
+        self.io_blocking_size = 0
+        self.io_nonblocking_size = 0
+
         self.backend_start_ts = 0
 
     def update(self, raw_stat, collect_ts):
@@ -237,6 +240,10 @@ class NodeBackendStat(object):
             self.max_blob_base_size = 0
 
         self.blob_size = raw_stat['backend']['config']['blob_size']
+
+        self.io_blocking_size = raw_stat['io']['blocking']['current_size']
+        self.io_nonblocking_size = raw_stat['io']['nonblocking']['current_size']
+
         self.cur_stat_commit_err_count = raw_stat['stats'].get(
             'stat_commit', {}).get('errors', {}).get(errno.EROFS, 0)
 
@@ -299,6 +306,9 @@ class NodeBackendStat(object):
         res.max_blob_base_size = max(self.max_blob_base_size, other.max_blob_base_size)
         res.blob_size = max(self.blob_size, other.blob_size)
 
+        res.io_blocking_size = max(self.io_blocking_size, other.io_blocking_size)
+        res.io_nonblocking_size = max(self.io_nonblocking_size, other.io_nonblocking_size)
+
         return res
 
     def __mul__(self, other):
@@ -334,6 +344,9 @@ class NodeBackendStat(object):
         res.blob_size_limit = min(self.blob_size_limit, other.blob_size_limit)
         res.max_blob_base_size = max(self.max_blob_base_size, other.max_blob_base_size)
         res.blob_size = max(self.blob_size, other.blob_size)
+
+        res.io_blocking_size = max(self.io_blocking_size, other.io_blocking_size)
+        res.io_nonblocking_size = max(self.io_nonblocking_size, other.io_nonblocking_size)
 
         return res
 
