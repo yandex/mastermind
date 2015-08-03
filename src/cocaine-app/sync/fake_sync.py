@@ -44,12 +44,13 @@ class SyncManager(object):
         return True
 
     def persistent_locks_release(self, locks, check=''):
-        for lockid in locks:
-            lock = self.locks.get(lockid)
-            if lock and lock.locked():
-                return lock.release()
-            else:
-                logger.warn('Persistent lock {0} is already removed'.format(lockid))
+        with self.__locks_lock:
+            for lockid in locks:
+                lock = self.locks.get(lockid)
+                if lock and lock.locked():
+                    lock.release()
+                else:
+                    logger.warn('Persistent lock {0} is already removed'.format(lockid))
 
     def get_children_locks(self, lock_prefix):
         return [lock_id for lock_id in self.locks
