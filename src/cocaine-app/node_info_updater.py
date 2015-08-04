@@ -111,6 +111,7 @@ class NodeInfoUpdater(object):
 
     MONITOR_STAT_CATEGORIES = (elliptics.monitor_stat_categories.procfs |
                                elliptics.monitor_stat_categories.backend |
+                               elliptics.monitor_stat_categories.io |
                                elliptics.monitor_stat_categories.stats)
 
     def update_status(self, groups):
