@@ -1,3 +1,10 @@
+mastermind (2.25.40) trusty; urgency=medium
+
+  * Planner: take lock to prevent simultaneous move jobs planning on several
+    workers
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 04 Aug 2015 19:15:40 +0300
+
 mastermind (2.25.39) trusty; urgency=medium
 
   * mastermind fake sync: persistent locks removal fixed
