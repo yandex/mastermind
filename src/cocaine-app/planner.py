@@ -37,6 +37,7 @@ class Planner(object):
 
     COUPLE_DEFRAG_LOCK = 'planner/couple_defrag'
     RECOVER_DC_LOCK = 'planner/recover_dc'
+    MOVE_LOCK = 'planner/move'
 
     def __init__(self, meta_session, db, niu, job_processor):
 
@@ -97,7 +98,11 @@ class Planner(object):
                 logger.info('Found {0} unfinished move jobs (>= {1})'.format(count, max_move_jobs))
                 return
 
-            self._do_move_candidates(max_move_jobs - count)
+            with sync_manager.lock(Planner.MOVE_LOCK, blocking=False):
+                self._do_move_candidates(max_move_jobs - count)
+
+        except LockFailedError:
+            logger.info('Move jobs dc planner is already running')
         except Exception as e:
             logger.error('{0}: {1}'.format(e, traceback.format_exc()))
         finally:
