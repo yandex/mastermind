@@ -29,14 +29,13 @@ class CoupleDefragStateCheckTask(Task):
 
         couple = couples[self.couple]
 
-        if couple.status not in storage.GOOD_STATUSES:
-            raise JobBrokenError('Couple {0} has inappropriate status: {1}'.format(self.couple, couple.status))
-
         stats = []
         for group in couple.groups:
             for nb in group.node_backends:
+                if not nb.stat:
+                    continue
                 stats.append(nb.stat)
-        self.stats_ts = max([s.ts for s in stats])
+        self.stats_ts = max([s.ts for s in stats]) if stats else int(time.time())
 
     @property
     def finished(self):
@@ -55,7 +54,11 @@ class CoupleDefragStateCheckTask(Task):
         couple = couples[self.couple]
         stats = []
         for group in couple.groups:
+            if not group.node_backends:
+                return False
             for nb in group.node_backends:
+                if not nb.stat:
+                    return False
                 stats.append(nb.stat)
         cur_stats_ts = min([s.ts for s in stats])
         if cur_stats_ts <= self.stats_ts:
