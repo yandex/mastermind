@@ -1,3 +1,12 @@
+mastermind (2.25.42) trusty; urgency=medium
+
+  * Mastermind node info updater: couple status should be set to FULL if group
+    is not filled but hdd has no more space available
+  * Jobs processor: do not fail couple defrag job if couple lost its OK
+    status
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 06 Aug 2015 15:27:26 +0300
+
 mastermind (2.25.41) trusty; urgency=medium
 
   * Fetch elliptics backends' io stats
