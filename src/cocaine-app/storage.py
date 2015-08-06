@@ -635,6 +635,9 @@ class NodeBackend(object):
 
         if self.stat.used_space >= self.effective_space * (1.0 - reserved_space):
             return True
+        if self.effective_free_space <= 0:
+            return True
+        return False
 
     @property
     def stat_commit_errors(self):
