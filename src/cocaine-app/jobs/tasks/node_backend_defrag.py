@@ -1,6 +1,6 @@
 import logging
 
-from jobs import JobBrokenError, TaskTypes
+from jobs import JobBrokenError, RetryError, TaskTypes
 from minion_cmd import MinionCmdTask
 import storage
 
@@ -34,8 +34,8 @@ class NodeBackendDefragTask(MinionCmdTask):
                 'to any couple'.format(self, self.group))
 
         if group.couple.status not in storage.GOOD_STATUSES:
-            raise JobBrokenError('Task {0}: group {1} couple status is {2}, '
-                'unable to continue'.format(self, self.group, group.couple.status))
+            raise RetryError('Task {0}: group {1} couple status is {2}'.format(
+                self, self.group, group.couple.status))
 
         if node_backend not in group.node_backends:
             raise JobBrokenError('Task {0}: node backend {1} does not belong to '
