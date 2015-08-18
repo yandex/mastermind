@@ -1,3 +1,9 @@
+mastermind (2.25.43) trusty; urgency=medium
+
+  * Fix destination group selection for move planner
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 19 Aug 2015 01:49:13 +0300
+
 mastermind (2.25.42) trusty; urgency=medium
 
   * Mastermind node info updater: couple status should be set to FULL if group
