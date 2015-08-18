@@ -279,6 +279,15 @@ class Planner(object):
             busy_hosts=busy_hosts,
             busy_group_ids=busy_group_ids)
 
+    @staticmethod
+    def _split_candidates_by_dc(suitable_groups):
+        by_dc = {}
+        for candidates in suitable_groups:
+            unc_group = candidates[0]
+            dc = unc_group.node_backends[0].node.host.dc
+            by_dc.setdefault(dc, []).append(candidates)
+        return by_dc
+
     def _generate_candidates(self, candidate, busy_hosts, busy_group_ids):
         _candidates = []
 
@@ -310,76 +319,69 @@ class Planner(object):
                         src_group))
                     continue
 
-                for candidates in suitable_uncoupled_groups:
-                    logger.debug('checking src_group {0} against candidate {1}'.format(
-                        src_group.group_id, candidates))
+                candidates_per_dc = self._split_candidates_by_dc(suitable_uncoupled_groups)
 
-                    unc_group, merged_groups = candidates[0], candidates[1:]
+                for dst_dc, dc_candidates in candidates_per_dc.iteritems():
+                    for candidates in dc_candidates:
+                        logger.debug('checking src_group {} against candidate {} '
+                                     '({} -> {})'.format(
+                                         src_group.group_id, [g.id for g in candidates],
+                                         src_dc, dst_dc))
 
-                    dst_host = unc_group.node_backends[0].node.host.addr
+                        unc_group, merged_groups = candidates[0], candidates[1:]
+
+                        dst_host = unc_group.node_backends[0].node.host.addr
+
+                        dst_dc_state = candidate.state[dst_dc]
+                        if src_group.couple in dst_dc_state.couples:
+                            # can't move group to dst_dc because a group
+                            # from the same couple is already located there
+                            continue
+
+                        unc_group_stat = candidate.stats(unc_group)
+
+                        # TODO: check merged groups for files
+                        if unc_group_stat.files + unc_group_stat.files_removed > 0:
+                            continue
+
+                        if dst_host in busy_hosts:
+                            logger.debug('dst group {0} is skipped, {1} is in busy hosts'.format(
+                                unc_group.group_id, dst_host))
+                            continue
+
+                        break
+                    else:
+                        # no suitable uncoupled group found in dst_dc
+                        continue
+
+                    new_candidate = candidate.copy()
                     try:
-                        dst_dc = unc_group.node_backends[0].node.host.dc
-                    except CacheUpstreamError:
-                        logger.warn('Skipping {} because of cache failure'.format(
-                            unc_group.node_backends[0].node.host))
+                        new_candidate.move_group(src_dc, src_group, dst_dc, unc_group, merged_groups)
+                    except RuntimeError as e:
+                        logger.warn('Skipping candidate src group {}: {}'.format(src_group, e))
                         continue
 
-                    dst_dc_state = candidate.state[dst_dc]
-                    if src_group.couple in dst_dc_state.couples:
-                        # can't move group to dst_dc because a group
-                        # from the same couple is already located there
-                        continue
-
-                    if dst_dc == src_dc:
+                    if new_candidate.state_ms_error < base_ms:
                         logger.debug(
-                            'dst group {0} is skipped, dst dc is the same as source dc: {1}'.format(
-                                unc_group.group_id, dst_dc))
+                            'good candidate found: {0} group from {1} to {2}, '
+                            'deviation changed from {3} to {4} (weight: {5}, lost space {6}) '
+                            '(swap with group {7})'.format(
+                                src_group.group_id, src_dc, dst_dc, base_ms,
+                                new_candidate.state_ms_error, new_candidate.delta.weight,
+                                gb(new_candidate.delta.lost_space), unc_group.group_id))
+                        _candidates.append(new_candidate)
+                    else:
+                        logger.debug(
+                            'bad candidate: {0} group from {1} to {2}, '
+                            'deviation changed from {3} to {4} (swap with group {5})'.format(
+                                src_group.group_id, src_dc, dst_dc, base_ms,
+                                new_candidate.state_ms_error, unc_group.group_id))
+                        logger.debug('Base candidate:')
+                        candidate._debug()
+                        logger.debug('New candidate aftere moving:')
+                        new_candidate._debug()
 
-                    unc_group_stat = candidate.stats(unc_group)
-
-                    # TODO: check merged groups for files
-
-                    if unc_group_stat.files + unc_group_stat.files_removed > 0:
-                        continue
-
-                    if dst_host in busy_hosts:
-                        logger.debug('dst group {0} is skipped, {1} is in busy hosts'.format(
-                            unc_group.group_id, dst_host))
-                        continue
-
-                    break
-                else:
-                    # no suitable uncoupled group found
-                    continue
-
-                new_candidate = candidate.copy()
-                try:
-                    new_candidate.move_group(src_dc, src_group, dst_dc, unc_group, merged_groups)
-                except RuntimeError as e:
-                    logger.warn('Skipping candidate src group {}: {}'.format(src_group, e))
-                    continue
-
-                if new_candidate.state_ms_error < base_ms:
-                    logger.debug(
-                        'good candidate found: {0} group from {1} to {2}, '
-                        'deviation changed from {3} to {4} (weight: {5}, lost space {6}) '
-                        '(swap with group {7})'.format(
-                            src_group.group_id, src_dc, dst_dc, base_ms,
-                            new_candidate.state_ms_error, new_candidate.delta.weight,
-                            gb(new_candidate.delta.lost_space), unc_group.group_id))
-                    _candidates.append(new_candidate)
-                else:
-                    logger.debug(
-                        'bad candidate: {0} group from {1} to {2}, '
-                        'deviation changed from {3} to {4} (swap with group {5})'.format(
-                            src_group.group_id, src_dc, dst_dc, base_ms,
-                            new_candidate.state_ms_error, unc_group.group_id))
-                    logger.debug('Base candidate:')
-                    candidate._debug()
-                    logger.debug('New candidate aftere moving:')
-                    new_candidate._debug()
-
-                time.sleep(0.1)
+                    time.sleep(0.1)
             time.sleep(3)
 
         return _candidates
@@ -1186,8 +1188,7 @@ class Planner(object):
             try:
                 dc = g.node_backends[0].node.host.dc
             except CacheUpstreamError:
-                raise RuntimeError('Failed to get dc for host {}'.format(
-                    g.node_backends[0].node.host))
+                continue
             if g.group_id in busy_group_ids or dc in forbidden_dcs:
                 continue
             fs = g.node_backends[0].fs
@@ -1461,20 +1462,17 @@ class StorageState(object):
             obj._stats[group.group_id] = group.get_stat()
             obj.state[dc].add_uncoupled_group(group)
 
-        fsids = set()
         for group in storage.groups:
             for nb in group.node_backends:
                 if nb.stat is None:
                     continue
-                if nb.stat.fsid not in fsids:
-                    try:
-                        dc = nb.node.host.dc
-                    except CacheUpstreamError:
-                        logger.warn('Skipping host {} because of cache failure'.format(
-                            nb.node.host))
-                        continue
-                    obj.state[dc].apply_stat(nb.stat)
-                    fsids.add(nb.stat.fsid)
+                try:
+                    dc = nb.node.host.dc
+                except CacheUpstreamError:
+                    logger.warn('Skipping host {} because of cache failure'.format(
+                        nb.node.host))
+                    continue
+                obj.state[dc].apply_stat(nb.stat)
 
         logger.debug('Current state:')
         for dc, dc_state in obj.state.iteritems():
