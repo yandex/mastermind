@@ -534,7 +534,6 @@ class NodeBackend(object):
 
         self.stat = None
 
-        self.destroyed = False
         self.read_only = False
         self.disabled = False
         self.start_ts = 0
@@ -571,11 +570,7 @@ class NodeBackend(object):
                                          new_stat['backend']['config'].get('file')) + '/'
 
     def update_status(self):
-        if self.destroyed:
-            self.status = Status.BAD
-            self.status_text = 'Node backend {0} is destroyed'.format(self.__str__())
-
-        elif not self.stat:
+        if not self.stat:
             self.status = Status.INIT
             self.status_text = 'No statistics gathered for node backend {0}'.format(self.__str__())
 
@@ -682,18 +677,12 @@ class NodeBackend(object):
         return res
 
     def __repr__(self):
-        if self.destroyed:
-            return '<Node backend object: DESTROYED!>'
-
         return ('<Node backend object: node=%s, backend_id=%d, '
                 'status=%s, read_only=%s, stat=%s>' % (
                     str(self.node), self.backend_id,
                     self.status, str(self.read_only), repr(self.stat)))
 
     def __str__(self):
-        if self.destroyed:
-            raise Exception('Node backend object is destroyed')
-
         return '%s:%d/%d' % (self.node.host.addr, self.node.port, self.backend_id)
 
     def __hash__(self):
