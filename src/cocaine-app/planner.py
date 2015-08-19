@@ -163,6 +163,8 @@ class Planner(object):
                 raise ValueError('Found {0} unfinished move jobs'.format(
                     jobs_count))
 
+            need_approving = not self.params.get('move', {}).get('autoapprove', False)
+
             for i, candidate in enumerate(candidates):
                 logger.info('Candidate {0}: data {1}, ms_error delta {2}:'.format(
                     i, gb(candidate.delta.data_move_size), candidate.delta.ms_error_delta))
@@ -215,6 +217,7 @@ class Planner(object):
                              'dst_family': dst_group.node_backends[0].node.family,
                              'dst_backend_id': dst_group.node_backends[0].backend_id,
                              'dst_base_path': dst_group.node_backends[0].base_path,
+                             'need_approving': need_approving,
                              },
                             force=True)
                         logger.info('Job successfully created: {0}'.format(job.id))
