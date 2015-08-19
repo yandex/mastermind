@@ -1,3 +1,9 @@
+mastermind (2.25.46) trusty; urgency=medium
+
+  * Correct build
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 19 Aug 2015 16:59:32 +0300
+
 mastermind (2.25.45) trusty; urgency=medium
 
   * Add autoapprove setting for move planner jobs
