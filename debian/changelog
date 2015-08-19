@@ -1,3 +1,9 @@
+mastermind (2.25.44) trusty; urgency=medium
+
+  * Fix minor misprints
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 19 Aug 2015 12:18:16 +0300
+
 mastermind (2.25.43) trusty; urgency=medium
 
   * Fix destination group selection for move planner
