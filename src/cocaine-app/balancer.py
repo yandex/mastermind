@@ -285,7 +285,7 @@ class Balancer(object):
                 'node_backends': [nb.info() for g in couple for nb in g.node_backends]
             }
             try:
-                couples_by_nss.setdefault(couple.namespace, []).append(couple_data)
+                couples_by_nss.setdefault(couple.namespace.id, []).append(couple_data)
             except ValueError as e:
                 continue
 
@@ -306,12 +306,7 @@ class Balancer(object):
 
         for couple in storage.couples:
 
-            try:
-                namespaces.setdefault(couple.namespace, set())
-            except ValueError:
-                continue
-
-            namespaces[couple.namespace].add(len(couple))
+            namespaces.setdefault(couple.namespace.id, set()).add(len(couple))
 
             if couple.status not in storage.GOOD_STATUSES:
                 continue
@@ -423,12 +418,7 @@ class Balancer(object):
 
         couple = bad_couples[0]
 
-        namespaces = [g.meta['namespace'] for g in couple if g.meta and g.group_id != group_id]
-        if namespaces and not all(ns == namespaces[0] for ns in namespaces):
-            logger.error('Balancer error: namespaces of groups coupled with group %d are not the same: %s' % (group_id, namespaces))
-            return {'Balancer error': 'namespaces of groups coupled with group %d are not the same: %s' % (group_id, namespaces)}
-
-        namespace_to_use = namespaces and namespaces[0] or force_namespace
+        namespace_to_use = force_namespace or couple.namespace.id
         if not namespace_to_use:
             logger.error('Balancer error: cannot identify a namespace to use for group %d' % (group_id,))
             return {'Balancer error': 'cannot identify a namespace to use for group %d' % (group_id,)}
@@ -850,6 +840,12 @@ class Balancer(object):
                         raise
                     couple.update_status()
 
+                if not namespace in storage.namespaces:
+                    ns = storage.namespaces.add(namespace)
+                else:
+                    ns = storage.namespaces[namespace]
+                ns.add_couple(couple)
+
             return couple
 
     def __choose_groups_to_couple(self, ns_current_state, units, count,
@@ -1262,13 +1258,8 @@ class Balancer(object):
 
             self.__check_namespace(namespace)
 
-            for couple in storage.couples:
-                try:
-                    ns = couple.namespace
-                except ValueError:
-                    continue
-                if ns == namespace:
-                    raise ValueError('Namespace {0} has couples ({1})'.format(namespace, couple))
+            if namespace in storage.namespaces and storage.namespaces[namespace].couples:
+                raise ValueError('Cannot delete non-empty namespace'.format(namespace))
 
             try:
                 settings = self.infrastructure.ns_settings[namespace]
@@ -1332,7 +1323,7 @@ class Balancer(object):
 
     def __do_set_meta_freeze(self, couple, freeze):
 
-        group_meta = couple.compose_group_meta(couple.namespace, frozen=freeze)
+        group_meta = couple.compose_group_meta(couple.namespace.id, frozen=freeze)
 
         packed = msgpack.packb(group_meta)
         logger.info('packed meta for couple {0}: "{1}"'.format(
@@ -1444,7 +1435,7 @@ class Balancer(object):
                 info = couple.info().serialize()
                 info['hosts'] = couple.couple_hosts()
                 # couples
-                res[ns]['couples'].append(info)
+                res[ns.id]['couples'].append(info)
 
                 symm_groups.setdefault(couple.namespace, {})
                 symm_groups[couple.namespace].setdefault(len(couple), [])
@@ -1452,7 +1443,7 @@ class Balancer(object):
                 if couple.status not in storage.GOOD_STATUSES:
                     continue
 
-                symm_groups[couple.namespace][len(couple)].append(bla.SymmGroup(couple))
+                symm_groups[couple.namespace.id][len(couple)].append(bla.SymmGroup(couple))
             except Exception as e:
                 logger.error('Failed to include couple {0} in namespace states: {1}'.format(
                     str(couple), e))
