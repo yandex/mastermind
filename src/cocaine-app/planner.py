@@ -325,7 +325,7 @@ class Planner(object):
                     for candidates in dc_candidates:
                         logger.debug('checking src_group {} against candidate {} '
                                      '({} -> {})'.format(
-                                         src_group.group_id, [g.id for g in candidates],
+                                         src_group.group_id, [g.group_id for g in candidates],
                                          src_dc, dst_dc))
 
                         unc_group, merged_groups = candidates[0], candidates[1:]
@@ -1278,7 +1278,7 @@ class Planner(object):
 
     def select_uncoupled_groups(self, group):
         if len(group.node_backends) > 1:
-            raise ValueError('Group {0} should have no more than 1 backend'.format(group.group.id))
+            raise ValueError('Group {0} should have no more than 1 backend'.format(group.group_id))
 
         types = ['root'] + inventory.get_balancer_node_types() + ['hdd']
         tree, nodes = infrastructure.filtered_cluster_tree(types)
