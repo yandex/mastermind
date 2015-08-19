@@ -199,13 +199,7 @@ class CacheManager(object):
                     continue
 
                 couple_id = str(group.couple)
-                try:
-                    ns = group.couple.namespace
-                except ValueError:
-                    logger.error(
-                        'Key {}: couple of source group {} has broken '
-                        'namespaces settings'.format(key['id'], group.group_id))
-                    continue
+                ns = group.couple.namespace.id
 
             new_top_keys.setdefault(
                 (key['id'], couple_id),

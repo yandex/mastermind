@@ -144,10 +144,7 @@ class Statistics(object):
                       if group.couple else
                       str(group.group_id))
 
-            try:
-                ns = group.couple and group.couple.namespace or None
-            except ValueError as e:
-                ns = None
+            ns = group.couple and group.couple.namespace.id or None
 
             if ns == storage.Group.CACHE_NAMESPACE:
                 continue
