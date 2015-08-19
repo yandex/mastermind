@@ -677,12 +677,11 @@ class Infrastructure(object):
         hosts = []
 
         if namespace:
-            for couple in storage.couples:
-                try:
-                    if couple.namespace == namespace:
-                        hosts.extend([nb.node.host for g in couple for nb in g.node_backends])
-                except ValueError:
-                    continue
+            if namespace in storage.namespaces:
+                for couple in storage.namespaces[namespace].couples:
+                    hosts.extend([nb.node.host for g in couple for nb in g.node_backends])
+            else:
+                hosts = []
             hosts = list(set(hosts))
         else:
             hosts = storage.hosts.keys()
@@ -808,19 +807,13 @@ class Infrastructure(object):
         for hdd in nodes['hdd'].itervalues():
             hdd['groups'] = set()
 
-        for couple in storage.couples:
-            try:
-                ns = couple.namespace
-            except ValueError:
-                continue
+        if namespace in storage.namespaces:
+            for couple in storage.namespaces[namespace].couples:
 
-            if namespace != ns:
-                continue
+                if couple.status != storage.Status.OK:
+                    continue
 
-            if couple.status != storage.Status.OK:
-                continue
-
-            self.account_ns_groups(nodes, couple.groups)
+                self.account_ns_groups(nodes, couple.groups)
 
         self.update_groups_list(tree)
 

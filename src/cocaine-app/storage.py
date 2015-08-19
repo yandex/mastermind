@@ -6,6 +6,7 @@ import logging
 import math
 import os.path
 import time
+import types
 
 import msgpack
 
@@ -452,10 +453,12 @@ class FsStat(object):
     def __init__(self):
         self.ts = None
         self.total_space = 0
+        self.io_ticks = None
 
     def update(self, raw_stat, collect_ts):
         self.ts = collect_ts
-        self.total_space = raw_stat['blocks'] * raw_stat['bsize']
+        vfs_stat = raw_stat['vfs']
+        self.total_space = vfs_stat['blocks'] * vfs_stat['bsize']
 
 
 class Fs(object):
@@ -888,7 +891,7 @@ class Group(object):
             self.status_text = ('Group {} is in Bad state because couple check fails'.format(self))
             return self.status
 
-        if not self.meta['namespace']:
+        if not self.meta.get('namespace'):
             self.status = Status.BAD
             self.status_text = ('Group {0} is in Bad state because '
                                 'no namespace has been assigned to it'.format(self))
@@ -968,6 +971,7 @@ def status_change_log(f):
 class Couple(object):
     def __init__(self, groups):
         self.status = Status.INIT
+        self.namespace = None
         self.groups = sorted(groups, key=lambda group: group.group_id)
         self.meta = None
         for group in self.groups:
@@ -1006,9 +1010,21 @@ class Couple(object):
 
     @status_change_log
     def update_status(self):
-        self.active_job = None
-
         statuses = [group.update_status() for group in self.groups]
+
+        for group in self.groups:
+            if not group.meta:
+                self.status = Status.BAD
+                self.status_text = "Couple's group {} has empty meta data".format(group)
+                return self.status
+            if self.namespace != group.meta.get('namespace'):
+                self.status = Status.BAD
+                self.status_text = "Couple's namespace does not match namespace " \
+                                   "in group's meta data ('{}' != '{}')".format(
+                                       self.namespace, group.meta.get('namespace'))
+                return self.status
+
+        self.active_job = None
 
         if any([not self.groups[0].equal_meta(group) for group in self.groups[1:]]):
             self.status = Status.BAD
@@ -1043,16 +1059,11 @@ class Couple(object):
                 dc_set = dc_set | group_dcs
 
         if FORBIDDEN_NS_WITHOUT_SETTINGS:
-            try:
-                ns = self.namespace
-            except ValueError:
-                pass
-            else:
-                if not infrastructure.ns_settings.get(self.namespace):
-                    self.status = Status.BROKEN
-                    self.status_text = ('Couple {0} is assigned to a '
-                                        'namespace {1}, which is not set up'.format(self, ns))
-                    return self.status
+            if not infrastructure.ns_settings.get(self.namespace.id):
+                self.status = Status.BROKEN
+                self.status_text = ('Couple {} is assigned to a namespace {}, which is '
+                                    'not set up'.format(self, self.namespace))
+                return self.status
 
         if all([st == Status.COUPLED for st in statuses]):
 
@@ -1124,6 +1135,8 @@ class Couple(object):
         return self.status == Status.FULL
 
     def destroy(self):
+        if self.namespace:
+            self.namespace.remove_couple(self)
         for group in self.groups:
             group.couple = None
             group.meta = None
@@ -1141,29 +1154,11 @@ class Couple(object):
             'frozen': bool(frozen),
         }
 
-    @property
-    def namespace(self):
-        assert self.groups, "Couple %s has empty group list (id: %s)" % (repr(self), id(self))
-        available_metas = [group.meta for group in self.groups
-                           if group.meta]
-
-        if not available_metas:
-            # could not read meta data from any group
-            logger.error('Couple {0} has broken namespace settings'.format(self))
-            raise ValueError
-
-        assert all(['namespace' in meta
-                    for meta in available_metas]), "Couple %s has broken namespace settings" % (repr(self),)
-        assert all([meta['namespace'] == available_metas[0]['namespace']
-                    for meta in available_metas]), "Couple %s has broken namespace settings" % (repr(self),)
-
-        return available_metas[0]['namespace']
-
     RESERVED_SPACE_KEY = 'reserved-space-percentage'
 
     def is_full(self):
 
-        ns_reserved_space = infrastructure.ns_settings.get(self.namespace, {}).get(self.RESERVED_SPACE_KEY, 0.0)
+        ns_reserved_space = infrastructure.ns_settings.get(self.namespace.id, {}).get(self.RESERVED_SPACE_KEY, 0.0)
 
         # TODO: move this logic to effective_free_space property,
         #       it should handle all calculations by itself
@@ -1182,7 +1177,7 @@ class Couple(object):
 
         groups_effective_space = min([g.effective_space for g in self.groups])
 
-        reserved_space = infrastructure.ns_settings.get(self.namespace, {}).get(self.RESERVED_SPACE_KEY, 0.0)
+        reserved_space = infrastructure.ns_settings.get(self.namespace.id, {}).get(self.RESERVED_SPACE_KEY, 0.0)
         return int(math.floor(groups_effective_space * (1.0 - reserved_space)))
 
     @property
@@ -1203,7 +1198,7 @@ class Couple(object):
                 'couple_status_text': self.status_text,
                 'tuple': self.as_tuple()}
         try:
-            data['namespace'] = self.namespace
+            data['namespace'] = self.namespace.id
         except ValueError:
             pass
         stat = self.get_stat()
@@ -1266,7 +1261,6 @@ class Couple(object):
                     break
 
         return hosts
-
 
     @property
     def keys_diff(self):
@@ -1342,11 +1336,48 @@ class DcHostView(object):
         return self.dcs_hosts[key]
 
 
+class Namespace(object):
+    def __init__(self, id):
+        self.id = id
+        self.couples = set()
+
+    def add_couple(self, couple):
+        if couple.namespace:
+            raise ValueError('Couple {} already belongs to namespace {}, cannot be assigned to '
+                             'namespace {}'.format(couple, self, couple.namespace))
+        self.couples.add(couple)
+        couple.namespace = self
+
+    def remove_couple(self, couple):
+        self.couples.remove(couple)
+        couple.namespace = None
+
+    def __str__(self):
+        return self.id
+
+    def __hash__(self):
+        return hash(str(self))
+
+    def __eq__(self, other):
+        if isinstance(other, types.StringTypes):
+            return str(self) == other
+
+        if isinstance(other, Namespace):
+            return self.id == other.id
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __repr__(self):
+        return '<Namespace: id={id} >'.format(id=self.id)
+
+
 hosts = Repositary(Host)
 groups = Repositary(Group)
 nodes = Repositary(Node)
 node_backends = Repositary(NodeBackend, 'Node backend')
 couples = Repositary(Couple)
+namespaces = Repositary(Namespace)
 fs = Repositary(Fs)
 
 dc_host_view = DcHostView()

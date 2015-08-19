@@ -271,7 +271,7 @@ class NodeInfoUpdater(object):
 
                 if node_backend not in fs.node_backends:
                     fs.add_node_backend(node_backend)
-                fs.update_statistics(b_stat['backend']['vfs'], collect_ts)
+                fs.update_statistics(b_stat['backend'], collect_ts)
 
                 node_backend.enable()
 
@@ -314,7 +314,7 @@ class NodeInfoUpdater(object):
             group.parse_meta(meta)
             couple = group.meta.get('couple')
             if couple is None:
-                logger.info('Read symmetric groups from group {} (no couple data): {}'.format(
+                logger.error('Read symmetric groups from group {} (no couple data): {}'.format(
                     group.group_id, meta))
                 return
 
@@ -329,8 +329,15 @@ class NodeInfoUpdater(object):
             logger.debug('{0} in storage.couples: {1}'.format(
                 couple_str, couple_str in storage.couples))
 
-            if group.type == storage.Group.TYPE_DATA:
-                if couple_str not in storage.couples:
+            if couple_str not in storage.couples:
+
+                ns_id = group.meta.get('namespace')
+                if ns_id is None:
+                    logger.error('Inconsistent meta read from group {}, '
+                                 'missing namespace: {}'.format(group, group.meta))
+                    return
+
+                if group.type == storage.Group.TYPE_DATA:
                     logger.info('Creating couple {0}'.format(couple_str))
                     for gid in couple:
                         if gid not in storage.groups:
@@ -339,11 +346,21 @@ class NodeInfoUpdater(object):
                             storage.groups.add(gid)
                     c = storage.couples.add([storage.groups[gid] for gid in couple])
                     logger.info('Created couple {0} {1}'.format(c, repr(c)))
-            elif group.type == storage.Group.TYPE_CACHE:
-                if couple_str not in storage.cache_couples:
+                elif group.type == storage.Group.TYPE_CACHE:
                     logger.info('Creating cache couple {0}'.format(couple_str))
                     c = storage.cache_couples.add([storage.groups[gid] for gid in couple])
                     logger.info('Created cache couple {0} {1}'.format(c, repr(c)))
+                else:
+                    raise ValueError('Unknown group type for group {}: {}'.format(
+                        group, group.type))
+
+                if ns_id not in storage.namespaces:
+                    logger.info('Creating storage namespace {}'.format(ns_id))
+                    ns = storage.namespaces.add(ns_id)
+                else:
+                    ns = storage.namespaces[ns_id]
+
+                ns.add_couple(c)
             return
 
         try:

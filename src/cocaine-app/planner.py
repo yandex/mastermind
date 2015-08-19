@@ -1287,10 +1287,7 @@ class Planner(object):
         tree, nodes = infrastructure.filtered_cluster_tree(types)
 
         couple = group.couple
-        try:
-            ns = couple.namespace
-        except ValueError:
-            raise RuntimeError('Badly configured namespace for couple {0}'.format(couple))
+        ns = couple.namespace.id
 
         infrastructure.account_ns_couples(tree, nodes, ns)
         infrastructure.update_groups_list(tree)
