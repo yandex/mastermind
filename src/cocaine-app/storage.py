@@ -1156,10 +1156,16 @@ class Couple(object):
 
         ns_reserved_space = infrastructure.ns_settings.get(self.namespace, {}).get(self.RESERVED_SPACE_KEY, 0.0)
 
+        # TODO: move this logic to effective_free_space property,
+        #       it should handle all calculations by itself
         for group in self.groups:
             for nb in group.node_backends:
                 if nb.is_full(ns_reserved_space):
                     return True
+
+        if self.effective_free_space <= 0:
+            return True
+
         return False
 
     @property
