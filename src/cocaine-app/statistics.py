@@ -4,7 +4,6 @@ import logging
 
 from errors import CacheUpstreamError
 import storage
-from config import config
 import helpers as h
 from infrastructure import infrastructure
 
@@ -64,7 +63,6 @@ class Statistics(object):
         if couple.status not in storage.GOOD_STATUSES:
             return
         try:
-            ns = couple.namespace
             stat = couple.get_stat()
         except ValueError:
             return
