@@ -666,6 +666,7 @@ class NodeBackend(object):
             res['total_files'] = self.stat.files + self.stat.files_removed
             res['records_alive'] = self.stat.files
             res['records_removed'] = self.stat.files_removed
+            res['records_removed_size'] = self.stat.files_removed_size
             res['fragmentation'] = self.stat.fragmentation
             res['defrag_state'] = self.stat.defrag_state
             res['want_defrag'] = self.stat.want_defrag
