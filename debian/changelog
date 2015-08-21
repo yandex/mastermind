@@ -1,3 +1,9 @@
+mastermind (2.25.49) trusty; urgency=medium
+
+  * Add status_text of bad group to status_text of couple
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 21 Aug 2015 16:30:16 +0300
+
 mastermind (2.25.48) trusty; urgency=medium
 
   * Add removed records size to group info
