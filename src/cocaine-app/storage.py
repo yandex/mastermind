@@ -1080,8 +1080,12 @@ class Couple(object):
 
         elif Status.BAD in statuses:
 
+            group_status_texts = []
+            for group in filter(lambda g: g.status == Status.BAD, self.groups):
+                group_status_texts.append(group.status_text)
             self.status = Status.BAD
-            self.status_text = 'Couple {0} has bad groups'.format(str(self))
+            self.status_text = 'Couple {} has bad groups: {}'.format(
+                str(self), ', '.join(group_status_texts))
 
         elif Status.RO in statuses or Status.MIGRATING in statuses:
             self.status = Status.BAD
