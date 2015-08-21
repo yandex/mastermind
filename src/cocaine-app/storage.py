@@ -453,11 +453,51 @@ class FsStat(object):
     def __init__(self):
         self.ts = None
         self.total_space = 0
-        self.io_ticks = None
+        self.dstat = {}
+        self.disk_util = None
+        self.disk_util_read = None
+        self.disk_util_write = None
+
+    def apply_new_dstat(self, new_dstat):
+        if new_dstat:
+            diff_ts = new_dstat['ts'] - self.dstat['ts']
+
+            disk_util = ((self.dstat['io_ticks'] - new_dstat['io_ticks']) /
+                         diff_ts / float(10 ** 3))
+            self.disk_util = disk_util
+
+            read_ticks = new_dstat['read_ticks'] - self.dstat['read_ticks']
+            write_ticks = new_dstat['write_ticks'] - self.dstat['write_ticks']
+            total_rw_ticks = read_ticks + write_ticks
+            self.disk_util_read = (disk_util * (read_ticks / float(total_rw_ticks))
+                                   if total_rw_ticks else
+                                   0.0)
+            self.disk_util_write = (disk_util * (write_ticks / float(total_rw_ticks))
+                                    if total_rw_ticks else
+                                    0.0)
+        else:
+            self.disk_util = None
+            self.disk_util_read = None
+            self.disk_util_write = None
 
     def update(self, raw_stat, collect_ts):
         self.ts = collect_ts
         vfs_stat = raw_stat['vfs']
+        dstat_stat = raw_stat['dstat']
+
+        if 'error' in dstat_stat['dstat']:
+            new_dstat = {}
+            self.apply_new_dstat(new_dstat)
+            self.dstat = new_dstat
+        else:
+            new_dstat = {'io_ticks': dstat_stat['io_ticks'],
+                         'read_ticks': dstat_stat['read_ticks'],
+                         'write_ticks': dstat_stat['write_ticks'],
+                         'ts': (dstat_stat['timestamp']['tv_sec'] +
+                                dstat_stat['timestamp']['tv_usec'] / float(10 ** 6))
+            if self.dstat.get('ts'):
+                self.apply_new_dstat(new_dstat)
+
         self.total_space = vfs_stat['blocks'] * vfs_stat['bsize']
 
 
