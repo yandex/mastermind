@@ -311,11 +311,14 @@ class MoveJob(Job):
                              if self.GROUP_FILE_MARKER_PATH else
                              '')
 
-        params = {'node_backend': self.src_node_backend.encode('utf-8'),
-                  'group': str(self.group),
-                  'group_file_marker': self.marker_format(group_file_marker),
-                  'remove_group_file': group_file,
-                  'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]}
+        params = {
+            'node_backend': self.src_node_backend.encode('utf-8'),
+            'group': str(self.group),
+            'group_file_marker': self.marker_format(group_file_marker),
+            'remove_group_file': group_file,
+            'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS],
+            'unmark_backend': mark_backend,
+        }
 
         if self.GROUP_FILE_DIR_MOVE_SRC_RENAME and group_file:
             params['move_src'] = os.path.join(os.path.dirname(group_file))
