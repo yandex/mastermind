@@ -1,3 +1,9 @@
+mastermind (2.25.50) trusty; urgency=medium
+
+  * Take down the lock on src backend during move job final stage
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 28 Aug 2015 11:51:06 +0300
+
 mastermind (2.25.49) trusty; urgency=medium
 
   * Add status_text of bad group to status_text of couple
