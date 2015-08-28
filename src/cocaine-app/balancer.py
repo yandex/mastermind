@@ -979,7 +979,7 @@ class Balancer(object):
             raise Exception('Incorrect groups count')
 
         try:
-            max_group = int(self.node.meta_session.read_data(
+            max_group = int(self.node.meta_session.read_latest(
                 keys.MASTERMIND_MAX_GROUP_KEY).get()[0].data)
         except elliptics.NotFoundError:
             max_group = 0
