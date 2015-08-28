@@ -1,6 +1,6 @@
 import msgpack
 
-from mastermind.query import groups, namespaces, couples
+from mastermind.query import groups, namespaces, couples, namespaces_states
 from mastermind.service import ReconnectableService
 
 
@@ -49,6 +49,10 @@ class MastermindClient(object):
     @property
     def couples(self):
         return couples.CouplesQuery(self)
+
+    @property
+    def namespaces_states(self):
+        return namespaces_states.NamespacesStatesQuery(self)
 
     @property
     def remotes(self):
