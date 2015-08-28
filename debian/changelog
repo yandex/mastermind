@@ -1,3 +1,9 @@
+mastermind (2.25.52) trusty; urgency=medium
+
+  * Add draft on namespaces state query handler
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 28 Aug 2015 15:22:37 +0300
+
 mastermind (2.25.51) trusty; urgency=medium
 
   * Add forced namespaces states update handler
