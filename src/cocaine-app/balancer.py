@@ -28,6 +28,7 @@ import timed_queue
 from timer import periodic_timer
 from sync import sync_manager
 from sync.error import LockAlreadyAcquiredError
+import threading
 
 
 logger = logging.getLogger('mm.balancer')
@@ -50,6 +51,7 @@ class Balancer(object):
         self.niu = None
 
         self._namespaces_states = {}
+        self._namespaces_states_lock = threading.Lock()
         self.ns_states_timer = periodic_timer(seconds=config.get('nodes_reload_period', 60))
 
         self.__tq = timed_queue.TimedQueue()
@@ -1386,72 +1388,14 @@ class Balancer(object):
         return res
 
     def _update_namespaces_states(self):
+        start_ts = time.time()
         logger.info('Namespaces states updating: started')
         try:
-            start_ts = time.time()
-            default = lambda: {
-                'settings': {},
-                'couples': [],
-                'weights': {},
-                'statistics': {},
-            }
-
-            res = defaultdict(default)
-
-            # settings
-            ns_settings = self.infrastructure.ns_settings
-            for ns, settings in ns_settings.items():
-                res[ns]['settings'] = settings
-
-            # couples
-            symm_groups = {}
-            for couple in storage.couples:
-                try:
-                    try:
-                        ns = couple.namespace
-                    except ValueError:
-                        continue
-                    info = couple.info().serialize()
-                    # couples
-                    res[ns]['couples'].append(info)
-
-                    symm_groups.setdefault(couple.namespace, {})
-                    symm_groups[couple.namespace].setdefault(len(couple), [])
-
-                    if couple.status not in storage.GOOD_STATUSES:
-                        continue
-
-                    symm_groups[couple.namespace][len(couple)].append(bla.SymmGroup(couple))
-                except Exception as e:
-                    logger.error('Failed to include couple {0} in namespace states: {1}'.format(
-                        str(couple), e))
-                    continue
-
-            # weights
-            for ns, sizes in symm_groups.iteritems():
-                try:
-                    # TODO: convert size inside of __namespaces_weights function
-                    # when get_groups_weights handle is gone
-                    res[ns]['weights'] = dict(
-                        (str(k), v) for k, v in self.__namespaces_weights(ns, sizes).iteritems())
-                except ValueError as e:
-                    logger.error(e)
-                    continue
-                except Exception as e:
-                    logger.error('Failed to construct namespace {0} weights: {1}'.format(ns, e))
-                    continue
-
-            # statistics
-            for ns, stats in self.statistics.per_ns_statistics().iteritems():
-                res[ns]['statistics'] = stats
-
-            if isinstance(self._namespaces_states, Exception):
-                logger.info('Namespaces states updating: recovered')
-            self._namespaces_states = dict(res)
-
+            self._do_update_namespaces_states()
         except Exception as e:
             logger.exception('Namespaces states updating: failed: {}'.format(e))
-            self._namespaces_states = e
+            with self._namespaces_states_lock:
+                self._namespaces_states = e
         finally:
             logger.info('Namespaces states updating: finished, time: {0:.3f}'.format(
                 time.time() - start_ts))
@@ -1459,6 +1403,82 @@ class Balancer(object):
                 'ns_states_update',
                 self.ns_states_timer.next(),
                 self._update_namespaces_states)
+
+    @h.concurrent_handler
+    def force_update_namespaces_states(self, request):
+        start_ts = time.time()
+        logger.info('Namespaces states forced updating: started')
+        try:
+            self._do_update_namespaces_states()
+        except Exception as e:
+            logger.exception('Namespaces states forced updating: failed: {}'.format(e))
+            with self._namespaces_states_lock:
+                self._namespaces_states = e
+        finally:
+            logger.info('Namespaces states forced updating: finished, time: {0:.3f}'.format(
+                time.time() - start_ts))
+
+    def _do_update_namespaces_states(self):
+        default = lambda: {
+            'settings': {},
+            'couples': [],
+            'weights': {},
+            'statistics': {},
+        }
+
+        res = defaultdict(default)
+
+        # settings
+        ns_settings = self.infrastructure.ns_settings
+        for ns, settings in ns_settings.items():
+            res[ns]['settings'] = settings
+
+        # couples
+        symm_groups = {}
+        for couple in storage.couples:
+            try:
+                try:
+                    ns = couple.namespace
+                except ValueError:
+                    continue
+                info = couple.info().serialize()
+                # couples
+                res[ns]['couples'].append(info)
+
+                symm_groups.setdefault(couple.namespace, {})
+                symm_groups[couple.namespace].setdefault(len(couple), [])
+
+                if couple.status not in storage.GOOD_STATUSES:
+                    continue
+
+                symm_groups[couple.namespace][len(couple)].append(bla.SymmGroup(couple))
+            except Exception as e:
+                logger.error('Failed to include couple {0} in namespace states: {1}'.format(
+                    str(couple), e))
+                continue
+
+        # weights
+        for ns, sizes in symm_groups.iteritems():
+            try:
+                # TODO: convert size inside of __namespaces_weights function
+                # when get_groups_weights handle is gone
+                res[ns]['weights'] = dict(
+                    (str(k), v) for k, v in self.__namespaces_weights(ns, sizes).iteritems())
+            except ValueError as e:
+                logger.error(e)
+                continue
+            except Exception as e:
+                logger.error('Failed to construct namespace {0} weights: {1}'.format(ns, e))
+                continue
+
+        # statistics
+        for ns, stats in self.statistics.per_ns_statistics().iteritems():
+            res[ns]['statistics'] = stats
+
+        if isinstance(self._namespaces_states, Exception):
+            logger.info('Namespaces states updating: recovered')
+        with self._namespaces_states_lock:
+            self._namespaces_states = dict(res)
 
     # @h.concurrent_handler
     @h.handler_wne
