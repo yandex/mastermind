@@ -270,7 +270,7 @@ def group_force_update(host=None, app=None):
     '''Force mastermind node data collection'''
     s = service(host, app)
 
-    res = s.enqueue('force_nodes_update', '').get()
+    res = s.enqueue('force_nodes_update', msgpack.packb(None)).get()
     print res
 
 
