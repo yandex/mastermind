@@ -7,12 +7,13 @@ import traceback
 
 import elliptics
 
-import balancer
+# import balancer
 import balancelogicadapter as bla
 from config import config
 import helpers as h
 from jobs import Job
 import keys
+from load_manager import load_manager
 import timed_queue
 import storage
 
@@ -163,6 +164,7 @@ class NodeInfoUpdater(object):
             group.update_status()
 
         storage.dc_host_view.update()
+        load_manager.update(storage)
 
     STAT_COMMIT_RE = re.compile('^eblob\.(\d+)\.disk.stat_commit.errors\.(.*)')
 
@@ -329,7 +331,7 @@ class NodeInfoUpdater(object):
             logger.debug('{0} in storage.couples: {1}'.format(
                 couple_str, couple_str in storage.couples))
 
-            if couple_str not in storage.couples:
+            if couple_str not in storage.couples and couple_str not in storage.cache_couples:
 
                 ns_id = group.meta.get('namespace')
                 if ns_id is None:

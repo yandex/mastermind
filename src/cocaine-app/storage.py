@@ -485,16 +485,18 @@ class FsStat(object):
         vfs_stat = raw_stat['vfs']
         dstat_stat = raw_stat['dstat']
 
-        if 'error' in dstat_stat['dstat']:
+        if 'error' in dstat_stat:
             new_dstat = {}
             self.apply_new_dstat(new_dstat)
             self.dstat = new_dstat
         else:
-            new_dstat = {'io_ticks': dstat_stat['io_ticks'],
-                         'read_ticks': dstat_stat['read_ticks'],
-                         'write_ticks': dstat_stat['write_ticks'],
-                         'ts': (dstat_stat['timestamp']['tv_sec'] +
-                                dstat_stat['timestamp']['tv_usec'] / float(10 ** 6))
+            new_dstat = {
+                'io_ticks': dstat_stat['io_ticks'],
+                'read_ticks': dstat_stat['read_ticks'],
+                'write_ticks': dstat_stat['write_ticks'],
+                'ts': (dstat_stat['timestamp']['tv_sec'] +
+                       dstat_stat['timestamp']['tv_usec'] / float(10 ** 6)),
+            }
             if self.dstat.get('ts'):
                 self.apply_new_dstat(new_dstat)
 
