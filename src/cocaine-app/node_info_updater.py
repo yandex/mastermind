@@ -113,7 +113,8 @@ class NodeInfoUpdater(object):
     MONITOR_STAT_CATEGORIES = (elliptics.monitor_stat_categories.procfs |
                                elliptics.monitor_stat_categories.backend |
                                elliptics.monitor_stat_categories.io |
-                               elliptics.monitor_stat_categories.stats)
+                               elliptics.monitor_stat_categories.stats |
+                               elliptics.monitor_stat_categories.commands)
 
     def update_status(self, groups):
         self.monitor_stats(groups=groups)
@@ -222,6 +223,9 @@ class NodeInfoUpdater(object):
                 logger.warn('Bad procfs stat for node {0} ({1}): {2}'.format(node_addr, e, stat))
                 pass
 
+            fss = set()
+            good_node_backends = []
+
             backend_stats = NodeInfoUpdater._parsed_stats(stat['stats'])
 
             for b_stat in stat['backends'].itervalues():
@@ -275,6 +279,9 @@ class NodeInfoUpdater(object):
                     fs.add_node_backend(node_backend)
                 fs.update_statistics(b_stat['backend'], collect_ts)
 
+                fss.add(fs)
+                good_node_backends.append(node_backend)
+
                 node_backend.enable()
 
                 logger.info('Updating statistics for node backend %s' % (str(node_backend)))
@@ -300,6 +307,10 @@ class NodeInfoUpdater(object):
                         ' (moved from group {0})'.format(node_backend.group.group_id)
                         if node_backend.group else ''))
                     group.add_node_backend(node_backend)
+
+            for fs in fss:
+                fs.update_commands_stats()
+            node.update_commands_stats(good_node_backends)
 
         except Exception as e:
             logger.exception('Unable to process statictics for node {}'.format(node_addr))
@@ -421,6 +432,8 @@ class NodeInfoUpdater(object):
                     except Exception as e:
                         logger.exception('Failed to update group {0} status: {1}'.format(group, e))
                         pass
+
+            load_manager.update(storage)
 
         except Exception as e:
             logger.exception('Critical error during symmetric group update')

@@ -2,6 +2,7 @@
 import datetime
 import errno
 import functools
+import helpers as h
 import logging
 import math
 import os.path
@@ -108,26 +109,37 @@ class NodeStat(object):
     def __init__(self):
         self.ts = None
         self.load_average = 0.0
-        self.tx_bytes, self.rx_bytes = None, None
-        self.tx_rate, self.rx_rate = None, None
+        self.tx_bytes, self.rx_bytes = 0, 0
+        self.tx_rate, self.rx_rate = 0.0, 0.0
+
+        self.commands_stat = CommandsStat()
 
     def update(self, raw_stat, collect_ts):
         self.load_average = float(raw_stat['procfs']['vm']['la'][0]) / 100
         interfaces = raw_stat['procfs'].get('net', {}).get('net_interfaces', {})
 
         new_rx_bytes = sum(map(
-            lambda if_: if_[1].get('receive', {}).get('bytes', 0.0) if if_[0] != 'lo' else 0.0,
+            lambda if_: if_[1].get('receive', {}).get('bytes', 0) if if_[0] != 'lo' else 0,
             interfaces.items()))
         new_tx_bytes = sum(map(
-            lambda if_: if_[1].get('transmit', {}).get('bytes', 0.0) if if_[0] != 'lo' else 0.0,
+            lambda if_: if_[1].get('transmit', {}).get('bytes', 0) if if_[0] != 'lo' else 0,
             interfaces.items()))
 
         if self.ts is not None and collect_ts > self.ts:
             # conditions are checked for the case of *x_bytes counter overflow
-            if new_tx_bytes >= self.tx_bytes:
-                self.tx_rate = float(new_tx_bytes - self.tx_bytes) / (collect_ts - self.ts)
-            if new_rx_bytes >= self.rx_bytes:
-                self.rx_rate = float(new_rx_bytes - self.rx_bytes) / (collect_ts - self.ts)
+            diff_ts = collect_ts - self.ts
+            self.tx_rate = h.unidirectional_value_map(
+                self.tx_rate,
+                self.tx_bytes,
+                new_tx_bytes,
+                func=lambda ov, nv: (nv - ov) / float(diff_ts)
+            )
+            self.rx_rate = h.unidirectional_value_map(
+                self.rx_rate,
+                self.rx_bytes,
+                new_rx_bytes,
+                func=lambda ov, nv: (nv - ov) / float(diff_ts)
+            )
 
         self.tx_bytes = new_tx_bytes
         self.rx_bytes = new_rx_bytes
@@ -149,6 +161,163 @@ class NodeStat(object):
 
         return res
 
+    def update_commands_stats(self, node_backends):
+        self.commands_stat = sum((nb.stat.commands_stat for nb in node_backends), CommandsStat())
+
+
+class CommandsStat(object):
+    def __init__(self):
+        self.ts = None
+
+        self.ell_disk_read_time_cnt, self.ell_disk_write_time_cnt = None, None
+        self.ell_disk_read_size, self.ell_disk_write_size = None, None
+        self.ell_net_read_size, self.ell_net_write_size = None, None
+
+        self.ell_disk_read_time, self.ell_disk_write_time = 0, 0
+        self.ell_disk_read_rate, self.ell_disk_write_rate = 0.0, 0.0
+        self.ell_net_read_rate, self.ell_net_write_rate = 0.0, 0.0
+
+    def update(self, raw_stat, collect_ts):
+
+        disk_read_stats = self.commands_stats(
+            raw_stat,
+            read_ops=True,
+            disk=True,
+            internal=True,
+            outside=True
+        )
+        new_ell_disk_read_time_cnt = self.sum(disk_read_stats, 'time')
+        new_ell_disk_read_size = self.sum(disk_read_stats, 'size')
+        disk_write_stats = self.commands_stats(
+            raw_stat,
+            write_ops=True,
+            disk=True,
+            internal=True,
+            outside=True
+        )
+        new_ell_disk_write_time_cnt = self.sum(disk_write_stats, 'time')
+        new_ell_disk_write_size = self.sum(disk_write_stats, 'size')
+
+        net_read_stats = self.commands_stats(
+            raw_stat,
+            read_ops=True,
+            disk=True,
+            cache=True,
+            internal=True,
+            outside=True
+        )
+        new_ell_net_read_size = self.sum(net_read_stats, 'size')
+
+        net_write_stats = self.commands_stats(
+            raw_stat,
+            write_ops=True,
+            disk=True,
+            cache=True,
+            internal=True,
+            outside=True
+        )
+        new_ell_net_write_size = self.sum(net_write_stats, 'size')
+
+        if self.ts:
+            diff_ts = collect_ts - self.ts
+            if diff_ts <= 1:
+                return
+            self.ell_disk_read_time = h.unidirectional_value_map(
+                self.ell_disk_read_time,
+                self.ell_disk_read_time_cnt,
+                new_ell_disk_read_time_cnt,
+                func=lambda ov, nv: nv - ov
+            )
+            self.ell_disk_write_time = h.unidirectional_value_map(
+                self.ell_disk_write_time,
+                self.ell_disk_write_time_cnt,
+                new_ell_disk_write_time_cnt,
+                func=lambda ov, nv: nv - ov
+            )
+
+            self.ell_disk_read_rate = h.unidirectional_value_map(
+                self.ell_disk_read_rate,
+                self.ell_disk_read_size,
+                new_ell_disk_read_size,
+                func=lambda ov, nv: (nv - ov) / float(diff_ts)
+            )
+            self.ell_disk_write_rate = h.unidirectional_value_map(
+                self.ell_disk_write_rate,
+                self.ell_disk_write_size,
+                new_ell_disk_write_size,
+                func=lambda ov, nv: (nv - ov) / float(diff_ts)
+            )
+
+            self.ell_net_read_rate = h.unidirectional_value_map(
+                self.ell_net_read_rate,
+                self.ell_net_read_size,
+                new_ell_net_read_size,
+                func=lambda ov, nv: (nv - ov) / float(diff_ts)
+            )
+            self.ell_net_write_rate = h.unidirectional_value_map(
+                self.ell_net_write_rate,
+                self.ell_net_write_size,
+                new_ell_net_write_size,
+                func=lambda ov, nv: (nv - ov) / float(diff_ts)
+            )
+
+        self.ell_disk_read_time_cnt = new_ell_disk_read_time_cnt
+        self.ell_disk_write_time_cnt = new_ell_disk_write_time_cnt
+        self.ell_disk_read_size = new_ell_disk_read_size
+        self.ell_disk_write_size = new_ell_disk_write_size
+
+        self.ell_net_read_size = new_ell_net_read_size
+        self.ell_net_write_size = new_ell_net_write_size
+
+        self.ts = collect_ts
+
+    @staticmethod
+    def sum(stats, field):
+        return sum(map(lambda s: s[field], stats), 0)
+
+    @staticmethod
+    def commands_stats(commands,
+                       write_ops=False,
+                       read_ops=False,
+                       disk=False,
+                       cache=False,
+                       internal=False,
+                       outside=False):
+
+        def filter(cmd_type, src_type, dst_type):
+            if not write_ops and cmd_type == 'WRITE':
+                return False
+            if not read_ops and cmd_type != 'WRITE':
+                return False
+            if not disk and src_type == 'disk':
+                return False
+            if not cache and src_type == 'cache':
+                return False
+            if not internal and dst_type == 'internal':
+                return False
+            if not outside and dst_type == 'outside':
+                return False
+            return True
+
+        commands_stats = [stat
+                          for cmd_type, cmd_stat in commands.iteritems()
+                          for src_type, src_stat in cmd_stat.iteritems()
+                          for dst_type, stat in src_stat.iteritems()
+                          if filter(cmd_type, src_type, dst_type)]
+        return commands_stats
+
+    def __add__(self, other):
+        new = CommandsStat()
+
+        new.ell_disk_read_time = self.ell_disk_read_time + other.ell_disk_read_time
+        new.ell_disk_write_time = self.ell_disk_write_time + other.ell_disk_write_time
+        new.ell_disk_read_rate = self.ell_disk_read_rate + other.ell_disk_read_rate
+        new.ell_disk_write_rate = self.ell_disk_write_rate + other.ell_disk_write_rate
+        new.ell_net_read_rate = self.ell_net_read_rate + other.ell_net_read_rate
+        new.ell_net_write_rate = self.ell_net_write_rate + other.ell_net_write_rate
+
+        return new
+
 
 class NodeBackendStat(object):
     def __init__(self, node_stat):
@@ -157,6 +326,8 @@ class NodeBackendStat(object):
 
         self.free_space, self.total_space, self.used_space = 0, 0, 0
         self.vfs_free_space, self.vfs_total_space, self.vfs_used_space = 0, 0, 0
+
+        self.commands_stat = CommandsStat()
 
         self.last_read, self.last_write = 0, 0
         self.read_rps, self.write_rps = 0, 0
@@ -251,6 +422,8 @@ class NodeBackendStat(object):
         if self.backend_start_ts < raw_stat['status']['last_start']['tv_sec']:
             self.backend_start_ts = raw_stat['status']['last_start']['tv_sec']
             self._reset_stat_commit_errors()
+
+        self.commands_stat.update(raw_stat['commands'], collect_ts)
 
     def _reset_stat_commit_errors(self):
         self.start_stat_commit_err_count = self.cur_stat_commit_err_count
@@ -448,37 +621,76 @@ class Node(object):
         if isinstance(other, Node):
             return self.host.addr == other.host.addr and self.port == other.port
 
+    def update_commands_stats(self, node_backends):
+        self.stat.update_commands_stats(node_backends)
+
 
 class FsStat(object):
+
+    SECTOR_BYTES = 512
+
     def __init__(self):
         self.ts = None
         self.total_space = 0
+
         self.dstat = {}
-        self.disk_util = None
-        self.disk_util_read = None
-        self.disk_util_write = None
+        self.vfs_stat = {}
+        self.disk_util = 0.0
+        self.disk_util_read = 0.0
+        self.disk_util_write = 0.0
+
+        self.disk_read_rate = 0.0
+        self.disk_write_rate = 0.0
+
+        self.commands_stat = CommandsStat()
 
     def apply_new_dstat(self, new_dstat):
-        if new_dstat:
-            diff_ts = new_dstat['ts'] - self.dstat['ts']
+        if not self.dstat.get('ts'):
+            return
+        diff_ts = new_dstat['ts'] - self.dstat['ts']
+        if diff_ts <= 1.0:
+            return
 
-            disk_util = ((self.dstat['io_ticks'] - new_dstat['io_ticks']) /
-                         diff_ts / float(10 ** 3))
-            self.disk_util = disk_util
+        disk_util = ((self.dstat['io_ticks'] - new_dstat['io_ticks']) /
+                     diff_ts / float(10 ** 3))
+        self.disk_util = disk_util
 
-            read_ticks = new_dstat['read_ticks'] - self.dstat['read_ticks']
-            write_ticks = new_dstat['write_ticks'] - self.dstat['write_ticks']
-            total_rw_ticks = read_ticks + write_ticks
-            self.disk_util_read = (disk_util * (read_ticks / float(total_rw_ticks))
-                                   if total_rw_ticks else
-                                   0.0)
-            self.disk_util_write = (disk_util * (write_ticks / float(total_rw_ticks))
-                                    if total_rw_ticks else
-                                    0.0)
-        else:
-            self.disk_util = None
-            self.disk_util_read = None
-            self.disk_util_write = None
+        read_ticks = new_dstat['read_ticks'] - self.dstat['read_ticks']
+        write_ticks = new_dstat['write_ticks'] - self.dstat['write_ticks']
+        total_rw_ticks = read_ticks + write_ticks
+        self.disk_util_read = h.unidirectional_value_map(
+            self.disk_util_read,
+            self.dstat['read_ticks'],
+            new_dstat['read_ticks'],
+            func=lambda ov, nv: (total_rw_ticks and
+                                 disk_util * (nv - ov) / float(total_rw_ticks) or
+                                 0.0)
+        )
+        self.disk_util_write = h.unidirectional_value_map(
+            self.disk_util_write,
+            self.dstat['write_ticks'],
+            new_dstat['write_ticks'],
+            func=lambda ov, nv: (total_rw_ticks and
+                                 disk_util * (nv - ov) / float(total_rw_ticks) or
+                                 0.0)
+        )
+        self.disk_read_rate = h.unidirectional_value_map(
+            self.disk_read_rate,
+            self.dstat['read_sectors'],
+            new_dstat['read_sectors'],
+            func=lambda ov, nv: (nv - ov) * self.SECTOR_BYTES / float(diff_ts)
+        )
+
+    def apply_new_vfs_stat(self, new_vfs_stat):
+        new_free_space = new_vfs_stat['bavail'] * new_vfs_stat['bsize']
+        if self.vfs_stat.get('ts'):
+            diff_ts = new_vfs_stat['ts'] - self.vfs_stat['ts']
+            if diff_ts > 1.0:
+                written_bytes = self.free_space - new_free_space
+                self.disk_write_rate = written_bytes / diff_ts
+
+        self.total_space = new_vfs_stat['blocks'] * new_vfs_stat['bsize']
+        self.free_space = new_free_space
 
     def update(self, raw_stat, collect_ts):
         self.ts = collect_ts
@@ -488,19 +700,27 @@ class FsStat(object):
         if 'error' in dstat_stat:
             new_dstat = {}
             self.apply_new_dstat(new_dstat)
-            self.dstat = new_dstat
         else:
-            new_dstat = {
-                'io_ticks': dstat_stat['io_ticks'],
-                'read_ticks': dstat_stat['read_ticks'],
-                'write_ticks': dstat_stat['write_ticks'],
-                'ts': (dstat_stat['timestamp']['tv_sec'] +
-                       dstat_stat['timestamp']['tv_usec'] / float(10 ** 6)),
-            }
-            if self.dstat.get('ts'):
-                self.apply_new_dstat(new_dstat)
+            new_dstat = dstat_stat
+            new_dstat['ts'] = (dstat_stat['timestamp']['tv_sec'] +
+                               dstat_stat['timestamp']['tv_usec'] / float(10 ** 6))
+            self.apply_new_dstat(new_dstat)
 
-        self.total_space = vfs_stat['blocks'] * vfs_stat['bsize']
+        self.dstat = new_dstat
+
+        if 'error' in vfs_stat:
+            new_vfs_stat = {}
+            self.apply_new_vfs_stat(new_vfs_stat)
+        else:
+            new_vfs_stat = vfs_stat
+            new_vfs_stat['ts'] = (vfs_stat['timestamp']['tv_sec'] +
+                                  vfs_stat['timestamp']['tv_usec'] / float(10 ** 6))
+            self.apply_new_vfs_stat(new_vfs_stat)
+
+        self.vfs_stat = new_vfs_stat
+
+    def update_commands_stats(self, node_backends):
+        self.commands_stat = sum((nb.stat.commands_stat for nb in node_backends), CommandsStat())
 
 
 class Fs(object):
@@ -526,6 +746,9 @@ class Fs(object):
         if self.stat is None:
             self.stat = FsStat()
         self.stat.update(new_stat, collect_ts)
+
+    def update_commands_stats(self):
+        self.stat.update_commands_stats(self.node_backends)
 
     def update_status(self):
         nbs = self.node_backends.keys()
@@ -721,6 +944,7 @@ class NodeBackend(object):
             res['want_defrag'] = self.stat.want_defrag
             res['io_blocking_size'] = self.stat.io_blocking_size
             res['io_nonblocking_size'] = self.stat.io_nonblocking_size
+
         if self.base_path:
             res['path'] = self.base_path
 
