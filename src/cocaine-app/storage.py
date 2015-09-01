@@ -1017,7 +1017,7 @@ class Group(object):
             return
 
         parsed = msgpack.unpackb(meta)
-        if isinstance(parsed, tuple):
+        if isinstance(parsed, (tuple, list)):
             self.meta = {'version': 1, 'couple': parsed, 'namespace': self.DEFAULT_NAMESPACE, 'frozen': False}
         elif isinstance(parsed, dict) and parsed['version'] == 2:
             self.meta = parsed
