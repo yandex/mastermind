@@ -1,3 +1,9 @@
+mastermind (2.25.55) trusty; urgency=medium
+
+  * Set nolock flag for metakey read queries
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 07 Sep 2015 20:21:47 +0300
+
 mastermind (2.25.54) trusty; urgency=medium
 
   * Increase startup timeout for mastermind worker
