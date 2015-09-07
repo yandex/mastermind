@@ -132,6 +132,7 @@ class NodeInfoUpdater(object):
         requests = []
         for address in host_addrs:
             session = self.__session.clone()
+            session.cflags |= elliptics.command_flags.nolock
             session.set_direct_id(address)
             logger.debug('Request for monitor_stat of node {0}'.format(
                 address))
