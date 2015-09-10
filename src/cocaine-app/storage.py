@@ -614,12 +614,16 @@ class NodeBackend(object):
         share = float(self.stat.total_space) / self.stat.vfs_total_space
         free_space_req_share = math.ceil(VFS_RESERVED_SPACE * share)
 
-        return max(0, self.stat.total_space - free_space_req_share)
+        return int(max(0, self.stat.total_space - free_space_req_share))
 
     @property
     def effective_free_space(self):
-        return int(max(self.stat.free_space -
-                       (self.stat.total_space - self.effective_space), 0))
+        if self.vfs_free_space <= VFS_RESERVED_SPACE:
+            return 0
+        return max(
+            self.stat.free_space - (self.stat.total_space - self.effective_space),
+            0
+        )
 
     def is_full(self, reserved_space=0.0):
 
