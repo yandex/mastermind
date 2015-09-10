@@ -618,7 +618,7 @@ class NodeBackend(object):
 
     @property
     def effective_free_space(self):
-        if self.vfs_free_space <= VFS_RESERVED_SPACE:
+        if self.stat.vfs_free_space <= VFS_RESERVED_SPACE:
             return 0
         return max(
             self.stat.free_space - (self.stat.total_space - self.effective_space),
