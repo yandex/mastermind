@@ -22,8 +22,6 @@ class LoadManager(object):
                     groups[group] = gl = GroupLoad()
                     for nb in group.node_backends:
                         node_backends[nb] = nbl = NodeBackendLoad()
-                        nbl.set(nb.stat)
-                        gl.add_backend(nbl)
 
                         nb_hostname = nb.node.host.hostname
                         if nb_hostname not in net:
