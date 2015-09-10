@@ -1,3 +1,9 @@
+mastermind (2.25.57) trusty; urgency=medium
+
+  * Fix effective free space calculcation when disk contains irrelevant data
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 10 Sep 2015 14:08:30 +0300
+
 mastermind (2.25.56) trusty; urgency=medium
 
   * Fix effective free space calculcation when disk contains irrelevant data
