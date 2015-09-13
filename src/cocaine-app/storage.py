@@ -1218,8 +1218,55 @@ class Couple(object):
                 data['effective_space'], data['free_effective_space'] = 0, 0
 
         data['groups'] = [g.info().serialize() for g in self.groups]
+        data['hosts'] = {
+            'primary': []
+        }
+
         c._set_raw_data(data)
         return c
+
+    FALLBACK_HOSTS_PER_DC = config.get('fallback_hosts_per_dc', 10)
+
+    def couple_hosts(self):
+        hosts = {'primary': [],
+                 'fallback': []}
+        used_hosts = set()
+        used_dcs = set()
+
+        def serialize_node(node):
+            return {
+                'host': node.host.hostname,
+                'dc': node.host.dc,
+            }
+
+        for group in self.groups:
+            for nb in group.node_backends:
+                node = nb.node
+                if node.host in used_hosts:
+                    continue
+                try:
+                    hosts['primary'].append(serialize_node(node))
+                except CacheUpstreamError:
+                    continue
+                used_hosts.add(node.host)
+                used_dcs.add(node.host.dc)
+
+        for dc in used_dcs:
+            count = 0
+            for node in dc_host_view[dc].by_la:
+                if node.host in used_hosts:
+                    continue
+                try:
+                    hosts['fallback'].append(serialize_node(node))
+                except CacheUpstreamError:
+                    continue
+                used_hosts.add(node.host)
+                count += 1
+                if count >= self.FALLBACK_HOSTS_PER_DC:
+                    break
+
+        return hosts
+
 
     @property
     def keys_diff(self):
@@ -1259,12 +1306,50 @@ class Couple(object):
         return '<Couple object: status=%s, groups=[%s] >' % (self.status, ', '.join([repr(g) for g in self.groups]))
 
 
+class DcNodes(object):
+    def __init__(self):
+        self.nodes = []
+        self.__by_la = None
+
+    def append(self, node):
+        self.nodes.append(node)
+
+    @property
+    def by_la(self):
+        if self.__by_la is None:
+            self.__by_la = sorted(self.nodes, key=lambda node: node.stat.load_average)
+        return self.__by_la
+
+
+class DcHostView(object):
+
+    def __init__(self):
+        self.dcs_hosts = {}
+
+    def update(self):
+        dcs_hosts = {}
+        # TODO: iterate through hosts when host statistics will be moved
+        # to a separate object
+        hosts = set()
+        for node in nodes:
+            dc_hosts = dcs_hosts.setdefault(node.host.dc, DcNodes())
+            if node.host in hosts:
+                continue
+            dc_hosts.append(node)
+        self.dcs_hosts = dcs_hosts
+
+    def __getitem__(self, key):
+        return self.dcs_hosts[key]
+
+
 hosts = Repositary(Host)
 groups = Repositary(Group)
 nodes = Repositary(Node)
 node_backends = Repositary(NodeBackend, 'Node backend')
 couples = Repositary(Couple)
 fs = Repositary(Fs)
+
+dc_host_view = DcHostView()
 
 
 cache_couples = Repositary(Couple, 'Cache couple')

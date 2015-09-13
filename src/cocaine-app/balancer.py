@@ -1442,6 +1442,7 @@ class Balancer(object):
                 except ValueError:
                     continue
                 info = couple.info().serialize()
+                info['hosts'] = couple.couple_hosts()
                 # couples
                 res[ns]['couples'].append(info)
 
