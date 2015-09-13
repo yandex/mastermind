@@ -16,6 +16,7 @@ import keys
 from load_manager import load_manager
 import timed_queue
 import storage
+from weight_manager import weight_manager
 
 
 logger = logging.getLogger('mm.balancer')
@@ -434,6 +435,7 @@ class NodeInfoUpdater(object):
                         pass
 
             load_manager.update(storage)
+            weight_manager.update(storage)
 
         except Exception as e:
             logger.exception('Critical error during symmetric group update')
