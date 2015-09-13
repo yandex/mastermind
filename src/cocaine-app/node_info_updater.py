@@ -162,6 +162,8 @@ class NodeInfoUpdater(object):
             logger.info('Updating status for group {0}'.format(group.group_id))
             group.update_status()
 
+        storage.dc_host_view.update()
+
     STAT_COMMIT_RE = re.compile('^eblob\.(\d+)\.disk.stat_commit.errors\.(.*)')
 
     @staticmethod
