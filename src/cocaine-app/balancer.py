@@ -1465,6 +1465,19 @@ class Balancer(object):
                 logger.error('Failed to construct namespace {0} weights: {1}'.format(ns, e))
                 continue
 
+        for ns_id in config.get('weight', {}).get('only_namespaces', []):
+            if ns_id not in weight_manager.weights:
+                logger.error('Namespace {}: weights are not calculated by weight manager'.format(
+                    ns_id
+                ))
+                continue
+            res[ns_id]['weights'] = dict(
+                (str(k), v) for k, v in weight_manager.weights[ns_id].iteritems()
+            )
+            logger.info('Namespace {}: weights are updated by weight manager'.format(
+                ns_id
+            ))
+
         # statistics
         for ns, stats in self.statistics.per_ns_statistics().iteritems():
             res[ns]['statistics'] = stats
