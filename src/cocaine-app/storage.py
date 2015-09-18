@@ -651,8 +651,12 @@ class FsStat(object):
         if diff_ts <= 1.0:
             return
 
-        disk_util = ((self.dstat['io_ticks'] - new_dstat['io_ticks']) /
-                     diff_ts / float(10 ** 3))
+        disk_util = h.unidirectional_value_map(
+            self.disk_util,
+            self.dstat['io_ticks'],
+            new_dstat['io_ticks'],
+            func=lambda ov, nv: (nv - ov) / diff_ts / float(10 ** 3)
+        )
         self.disk_util = disk_util
 
         read_ticks = new_dstat['read_ticks'] - self.dstat['read_ticks']

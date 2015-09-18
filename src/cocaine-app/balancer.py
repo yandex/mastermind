@@ -8,6 +8,7 @@ import logging
 import operator
 import re
 import time
+import threading
 import traceback
 
 import elliptics
@@ -28,7 +29,7 @@ import timed_queue
 from timer import periodic_timer
 from sync import sync_manager
 from sync.error import LockAlreadyAcquiredError
-import threading
+from weight_manager import weight_manager
 
 
 logger = logging.getLogger('mm.balancer')
@@ -1455,7 +1456,8 @@ class Balancer(object):
                 # TODO: convert size inside of __namespaces_weights function
                 # when get_groups_weights handle is gone
                 res[ns]['weights'] = dict(
-                    (str(k), v) for k, v in self.__namespaces_weights(ns, sizes).iteritems())
+                    (str(k), v) for k, v in self.__namespaces_weights(ns, sizes).iteritems()
+                )
             except ValueError as e:
                 logger.error(e)
                 continue
