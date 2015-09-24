@@ -55,21 +55,26 @@ class Balancer(object):
         self._namespaces_states = {}
         self._namespaces_states_lock = threading.Lock()
         self.ns_states_timer = periodic_timer(seconds=config.get('nodes_reload_period', 60))
-        self.couple_free_eff_space_monitor = monitor.CoupleFreeEffectiveSpaceMonitor(meta_db)
-        self.couples_free_eff_space_collect_timer = periodic_timer(
-            seconds=self.couple_free_eff_space_monitor.DATA_COLLECT_PERIOD
-        )
+
+        self.statistics_monitor_enabled = bool(monitor.CoupleFreeEffectiveSpaceMonitor.STAT_CFG)
+
+        if self.statistics_monitor_enabled:
+            self.couple_free_eff_space_monitor = monitor.CoupleFreeEffectiveSpaceMonitor(meta_db)
+            self.couples_free_eff_space_collect_timer = periodic_timer(
+                seconds=self.couple_free_eff_space_monitor.DATA_COLLECT_PERIOD
+            )
 
         self.__tq = timed_queue.TimedQueue()
 
     def start(self):
         assert self.niu
         self._update_namespaces_states()
-        self.__tq.add_task_at(
-            'couples_free_effective_space_collect',
-            self.couples_free_eff_space_collect_timer.next(),
-            self.collect_couples_free_eff_space
-        )
+        if self.statistics_monitor_enabled:
+            self.__tq.add_task_at(
+                'couples_free_effective_space_collect',
+                self.couples_free_eff_space_collect_timer.next(),
+                self.collect_couples_free_eff_space
+            )
 
     def _start_tq(self):
         self.__tq.start()
