@@ -126,7 +126,7 @@ W = Worker(disown_timeout=config.get('disown_timeout', 2))
 logger.info("after creating worker")
 
 
-b = balancer.Balancer(n)
+b = balancer.Balancer(n, meta_db)
 
 
 def register_handle(h):
