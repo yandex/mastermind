@@ -23,6 +23,7 @@ import infrastructure
 import inventory
 import jobs.job
 import keys
+import monitor
 import statistics
 import storage
 import timed_queue
@@ -45,7 +46,7 @@ class Balancer(object):
 
     CLUSTER_CHANGES_LOCK = 'cluster'
 
-    def __init__(self, n):
+    def __init__(self, n, meta_db):
         self.node = n
         self.infrastructure = None
         self.statistics = statistics.Statistics(self)
@@ -54,12 +55,21 @@ class Balancer(object):
         self._namespaces_states = {}
         self._namespaces_states_lock = threading.Lock()
         self.ns_states_timer = periodic_timer(seconds=config.get('nodes_reload_period', 60))
+        self.couple_free_eff_space_monitor = monitor.CoupleFreeEffectiveSpaceMonitor(meta_db)
+        self.couples_free_eff_space_collect_timer = periodic_timer(
+            seconds=self.couple_free_eff_space_monitor.DATA_COLLECT_PERIOD
+        )
 
         self.__tq = timed_queue.TimedQueue()
 
     def start(self):
         assert self.niu
         self._update_namespaces_states()
+        self.__tq.add_task_at(
+            'couples_free_effective_space_collect',
+            self.couples_free_eff_space_collect_timer.next(),
+            self.collect_couples_free_eff_space
+        )
 
     def _start_tq(self):
         self.__tq.start()
@@ -1539,6 +1549,19 @@ class Balancer(object):
             '{base_name}-cache'.format(base_name=config.get('app_name', 'mastermind')),
             attempts=3, timeout=10, logger=logger)
         yield mc.enqueue('get_cached_keys', msgpack.packb(None))
+
+    def collect_couples_free_eff_space(self):
+        try:
+            self.couple_free_eff_space_monitor.collect()
+        except Exception:
+            logger.exception('Failed to collect couples effective free space')
+        finally:
+            self.__tq.add_task_at(
+                'couples_free_effective_space_collect',
+                self.couples_free_eff_space_collect_timer.next(),
+                self.collect_couples_free_eff_space
+            )
+
 
 def handlers(b):
     handlers = []
