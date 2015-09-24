@@ -61,11 +61,11 @@ class CoupleFreeEffectiveSpaceMonitor(object):
     @property
     def pending_namespaces(self):
         namespaces = []
-        ts = time.time() - self.DATA_COLLECT_PERIOD
+        start_ts = time.time() - self.DATA_COLLECT_PERIOD / 2
         for ns in storage.namespaces:
             res = self.collection.find(
                 spec={'namespace': ns.id,
-                      'ts': {'$gt': ts}},
+                      'ts': {'$gt': start_ts}},
                 fields=[],
                 limit=1
             )
