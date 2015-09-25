@@ -256,7 +256,7 @@ class Balancer(object):
         groups_by_dcs = {}
         for g in groups:
 
-            if not g in storage.groups:
+            if g not in storage.groups:
                 logger.info('Group %s not found' % (g,))
                 continue
 
@@ -291,7 +291,7 @@ class Balancer(object):
 
         for c in couples:
             couple_str = ':'.join([str(i) for i in sorted(c)])
-            if not couple_str in storage.couples:
+            if couple_str not in storage.couples:
                 logger.info('Couple %s not found' % couple_str)
             couple = storage.couples[couple_str]
 
@@ -302,7 +302,7 @@ class Balancer(object):
             }
             try:
                 couples_by_nss.setdefault(couple.namespace.id, []).append(couple_data)
-            except ValueError as e:
+            except ValueError:
                 continue
 
         return couples_by_nss
@@ -317,7 +317,7 @@ class Balancer(object):
         except IndexError:
             ns = None
 
-        if ns and not ns in self.infrastructure.ns_settings:
+        if ns and ns not in self.infrastructure.ns_settings:
             raise ValueError('Namespace "{0}" does not exist'.format(ns))
 
         for couple in storage.couples:
@@ -372,32 +372,35 @@ class Balancer(object):
 
         for size, symm_groups in sizes.iteritems():
             try:
-                logger.info('Namespace {0}, size {1}: calculating '
-                    'cluster info'.format(namespace, size))
+                logger.info('Namespace {0}, size {1}: calculating cluster info'.format(
+                    namespace, size))
                 (group_weights, info) = balancelogic.rawBalance(
                     symm_groups, bla_config,
                     bla._and(bla.GroupSizeEquals(size),
                              bla.GroupNamespaceEquals(namespace)))
                 ns_size_weights = \
                     [([g.group_id for g in item[0].groups],) +
-                         item[1:] +
-                         (int(item[0].get_stat().free_space),)
+                     item[1:] +
+                     (int(item[0].get_stat().free_space),)
                      for item in group_weights.items()]
                 if len(ns_size_weights):
                     ns_weights[size] = ns_size_weights
                     found_couples += len([item for item in ns_weights[size] if item[1] > 0])
-                logger.info('Namespace {0}, size {1}: '
-                    'cluster info: {2}'.format(namespace, size, info))
+                logger.info('Namespace {0}, size {1}: cluster info: {2}'.format(
+                    namespace, size, info))
             except Exception as e:
                 logger.error('Namespace {0}, size {1}: error {2}'.format(namespace, size, e))
                 continue
 
         settings = self.infrastructure.ns_settings[namespace]
         if found_couples < ns_min_units:
-            raise ValueError('Namespace {}, {}, has {} available couples, '
-                '{} required'.format(namespace,
+            raise ValueError(
+                'Namespace {}, {}, has {} available couples, {} required'.format(
+                    namespace,
                     'static' if 'static-couple' in settings else 'non-static',
-                    found_couples, ns_min_units))
+                    found_couples, ns_min_units
+                )
+            )
         return ns_weights
 
     @h.concurrent_handler
@@ -411,7 +414,7 @@ class Balancer(object):
         except IndexError:
             force_namespace = None
 
-        if not group_id in storage.groups:
+        if group_id not in storage.groups:
             return {'Balancer error': 'Group %d is not found' % group_id}
 
         group = storage.groups[group_id]
@@ -421,16 +424,16 @@ class Balancer(object):
             if group in couple:
                 if couple.status in storage.NOT_BAD_STATUSES:
                     logger.error('Balancer error: cannot repair, group %d is in couple %s' % (group_id, str(couple)))
-                    return {'Balancer error' : 'cannot repair, group %d is in couple %s' % (group_id, str(couple))}
+                    return {'Balancer error': 'cannot repair, group %d is in couple %s' % (group_id, str(couple))}
                 bad_couples.append(couple)
 
         if not bad_couples:
             logger.error('Balancer error: cannot repair, group %d is not a member of any couple' % group_id)
-            return {'Balancer error' : 'cannot repair, group %d is not a member of any couple' % group_id}
+            return {'Balancer error': 'cannot repair, group %d is not a member of any couple' % group_id}
 
         if len(bad_couples) > 1:
             logger.error('Balancer error: cannot repair, group %d is a member of several couples: %s' % (group_id, str(bad_couples)))
-            return {'Balancer error' : 'cannot repair, group %d is a member of several couples: %s' % (group_id, str(bad_couples))}
+            return {'Balancer error': 'cannot repair, group %d is a member of several couples: %s' % (group_id, str(bad_couples))}
 
         couple = bad_couples[0]
 
@@ -508,7 +511,7 @@ class Balancer(object):
         group_id = int(request)
         logger.info('get_couple_info: request: %s' % (str(request),))
 
-        if not group_id in storage.groups:
+        if group_id not in storage.groups:
             raise ValueError('Group %d is not found' % group_id)
 
         group = storage.groups[group_id]
@@ -545,21 +548,23 @@ class Balancer(object):
         for group in infrastructure.infrastructure.get_good_uncoupled_groups():
 
             if not len(group.node_backends):
-                logger.info('Group {0} cannot be used, it has '
-                    'empty node list'.format(group.group_id))
+                logger.info('Group {0} cannot be used, it has empty node list'.format(
+                    group.group_id))
                 continue
 
             if group.status != storage.Status.INIT:
-                logger.info('Group {0} cannot be used, status is {1}, '
-                    'should be {2}'.format(group.group_id, group.status, storage.Status.INIT))
+                logger.info('Group {0} cannot be used, status is {1}, should be {2}'.format(
+                    group.group_id, group.status, storage.Status.INIT))
                 continue
 
             suitable = True
             for node_backend in group.node_backends:
                 if node_backend.status != storage.Status.OK:
-                    logger.info('Group {0} cannot be used, node backend {1} status '
-                                'is {2} (not OK)'.format(group.group_id,
-                                     node_backend, node_backend.status))
+                    logger.info(
+                        'Group {0} cannot be used, node backend {1} status is {2} (not OK)'.format(
+                            group.group_id, node_backend, node_backend.status
+                        )
+                    )
                     suitable = False
                     break
 
@@ -591,8 +596,11 @@ class Balancer(object):
                         groups_by_total_space[ts_key].append(group_id)
                         break
                 else:
-                    raise ValueError('Failed to find total space key for group {0}, '
-                        'total space {1}'.format(group_id, ts))
+                    raise ValueError(
+                        'Failed to find total space key for group {0}, total space {1}'.format(
+                            group_id, ts
+                        )
+                    )
         else:
             groups_by_total_space['any'] = [group_id for group_id in suitable_groups]
 
@@ -704,7 +712,6 @@ class Balancer(object):
     NODE_TYPES = ['root'] + inventory.get_balancer_node_types() + ['hdd']
     DC_NODE_TYPE = inventory.get_dc_node_type()
 
-
     def __weight_combination(self, ns_current_type_state, comb):
         comb_groups_count = copy.copy(ns_current_type_state['nodes'])
         for selected_units in comb:
@@ -717,7 +724,6 @@ class Balancer(object):
     def __weight_couple_groups(self, ns_current_state, units, group_ids):
         weight = []
         for node_type in self.NODE_TYPES[1:]:
-            node_groups = {}
             comb = []
             for group_id in group_ids:
                 ng_keys = tuple(gu[node_type] for gu in units[group_id])
@@ -736,8 +742,11 @@ class Balancer(object):
             count, node_type, group_ids))
 
         if len(group_ids) < count:
-            logger.warn('Not enough groups for choosing on level {0}: '
-                '{1} uncoupled, {2} needed'.format(node_type, len(group_ids), count))
+            logger.warn(
+                'Not enough groups for choosing on level {0}: {1} uncoupled, {2} needed'.format(
+                    node_type, len(group_ids), count
+                )
+            )
             return []
 
         if count == 0:
@@ -748,8 +757,11 @@ class Balancer(object):
             level_units = tuple(gp[node_type] for gp in units[group_id])
             groups_by_level_units.setdefault(level_units, []).append(group_id)
 
-        logger.info('Level {0} current state: avg {1}, nodes {2}'.format(node_type,
-            ns_current_state[node_type]['avg'], ns_current_state[node_type]['nodes']))
+        logger.info('Level {0} current state: avg {1}, nodes {2}'.format(
+            node_type,
+            ns_current_state[node_type]['avg'],
+            ns_current_state[node_type]['nodes']
+        ))
         choice_list = []
         for choice, groups in groups_by_level_units.iteritems():
             choice_list.extend([choice] * min(count, len(groups)))
@@ -769,14 +781,16 @@ class Balancer(object):
         for comb in comb_set:
             if config.get('forbidden_dc_sharing_among_groups', False) and node_type == self.DC_NODE_TYPE:
                 comb_units = list(reduce(operator.add, comb))
-                if (len(comb_units + mandatory_groups_units) !=
-                    len(set(comb_units) | set(mandatory_groups_units))):
-                        continue
+                unique_units = set(comb_units) | set(mandatory_groups_units)
+                if (len(comb_units + mandatory_groups_units) != len(unique_units)):
+                    continue
             weights[comb] = self.__weight_combination(ns_current_state[node_type], comb)
 
         if not weights:
-            logger.warn('Not enough groups for choosing on level {0}: '
-                'could not find groups satisfying restrictions'.format(node_type))
+            logger.warn(
+                'Not enough groups for choosing on level {0}: '
+                'could not find groups satisfying restrictions'.format(node_type)
+            )
             return []
 
         logger.info('Combination weights: {0}'.format(weights))
@@ -795,7 +809,7 @@ class Balancer(object):
             groups = reduce(
                 operator.add,
                 (groups_by_level_units[level_units][:_count]
-                     for level_units, _count in node_counts.iteritems()),
+                 for level_units, _count in node_counts.iteritems()),
                 [])
         else:
             groups = reduce(
@@ -803,14 +817,18 @@ class Balancer(object):
                 (self.__choose_groups(ns_current_state, units, _count,
                                       groups_by_level_units[level_units],
                                       levels, mandatory_groups)
-                     for level_units, _count in node_counts.iteritems()),
+                 for level_units, _count in node_counts.iteritems()),
                 [])
 
         if len(groups) < count:
-            logger.warn('Not enough groups for choosing on level {0}: '
-                'could not find groups satisfying restrictions, '
-                'got {1} groups, expected {2}'.format(
-                    node_type, len(groups), count))
+            logger.warn(
+                'Not enough groups for choosing on level {0}: could not find groups '
+                'satisfying restrictions, got {1} groups, expected {2}'.format(
+                    node_type,
+                    len(groups),
+                    count
+                )
+            )
             return []
 
         return groups
@@ -856,7 +874,7 @@ class Balancer(object):
                         raise
                     couple.update_status()
 
-                if not namespace in storage.namespaces:
+                if namespace not in storage.namespaces:
                     ns = storage.namespaces.add(namespace)
                 else:
                     ns = storage.namespaces[namespace]
@@ -950,7 +968,7 @@ class Balancer(object):
         with sync_manager.lock(self.CLUSTER_CHANGES_LOCK, blocking=False):
 
             couple_str = ':'.join(map(str, sorted(request[0], key=lambda x: int(x))))
-            if not couple_str in storage.couples:
+            if couple_str not in storage.couples:
                 raise KeyError('Couple %s was not found' % (couple_str))
 
             couple = storage.couples[couple_str]
@@ -961,8 +979,7 @@ class Balancer(object):
 
             confirm = request[1]
 
-            logger.info('groups: %s; confirmation: "%s"' %
-                (couple_str, confirm))
+            logger.info('groups: %s; confirmation: "%s"' % (couple_str, confirm))
 
             correct_confirms = []
             correct_confirm = 'Yes, I want to break '
@@ -1105,8 +1122,10 @@ class Balancer(object):
                 settings.get('signature', {}).get('path_prefix'))
 
         if not all(keys) and any(keys):
-            raise ValueError('Signature token, signature path prefix '
-                'and redirect expire time should be set simultaneously')
+            raise ValueError(
+                'Signature token, signature path prefix '
+                'and redirect expire time should be set simultaneously'
+            )
 
         if settings.get('static-couple'):
             couple = settings['static-couple']
@@ -1123,32 +1142,47 @@ class Balancer(object):
 
             logger.debug('Checking couple {0} namespace'.format(couple))
             if ref_couple.namespace != namespace:
-                raise ValueError('Couple {0} namespace is {1}, not {2}'.format(ref_couple,
-                    ref_couple.namespace, namespace))
+                raise ValueError(
+                    'Couple {0} namespace is {1}, not {2}'.format(
+                        ref_couple,
+                        ref_couple.namespace,
+                        namespace
+                    )
+                )
 
             for c in storage.couples:
                 if c.namespace == namespace and c != ref_couple:
-                    raise ValueError('Namespace "{0}" has several couples, '
-                        'should have only 1 couple for static couple setting'.format(namespace))
+                    raise ValueError(
+                        'Namespace "{0}" has several couples, '
+                        'should have only 1 couple for static couple setting'.format(
+                            namespace
+                        )
+                    )
 
             for g in ref_couple:
                 if g not in groups:
-                    raise ValueError('Using incomplete couple {0}, '
-                        'full couple is {1}'.format(couple, ref_couple))
+                    raise ValueError(
+                        'Using incomplete couple {0}, full couple is {1}'.format(
+                            couple, ref_couple
+                        )
+                    )
 
             if groups_count:
                 if len(couple) != groups_count:
-                    raise ValueError('Couple {0} does not have '
-                        'length {1}'.format(couple, groups_count))
+                    raise ValueError('Couple {0} does not have length {1}'.format(
+                        couple, groups_count
+                    ))
             else:
                 groups_count = len(ref_couple.groups)
 
         settings['groups-count'] = groups_count
 
-    ALLOWED_NS_KEYS = set(['success-copies-num', 'groups-count',
+    ALLOWED_NS_KEYS = set([
+        'success-copies-num', 'groups-count',
         'static-couple', 'auth-keys', 'signature', 'redirect',
         'min-units', 'add-units', 'features', 'reserved-space-percentage',
-        'check-for-update', '__service'])
+        'check-for-update', '__service'
+    ])
     ALLOWED_NS_SIGN_KEYS = set(['token', 'path_prefix'])
     ALLOWED_NS_AUTH_KEYS = set(['write', 'read'])
     ALLOWED_REDIRECT_KEYS = set(['content-length-threshold', 'expire-time'])
@@ -1156,7 +1190,7 @@ class Balancer(object):
 
     def __merge_dict(self, dst, src):
         for k, val in src.iteritems():
-            if not k in dst:
+            if k not in dst:
                 dst[k] = val
             else:
                 if not isinstance(val, dict):
@@ -1184,13 +1218,17 @@ class Balancer(object):
             except elliptics.NotFoundError:
                 pass
             except Exception as e:
-                logger.error('Failed to update namespace {0} settings: '
-                    '{1}\n{2}'.format(namespace, str(e), traceback.format_exc()))
+                logger.error('Failed to update namespace {0} settings: {1}\n{2}'.format(
+                    namespace, str(e), traceback.format_exc()
+                ))
                 raise
 
         if cur_settings.get('__service', {}).get('is_deleted'):
-            logger.info('Namespace {0} is deleted, will not merge old settings '
-                'with new ones'.format(namespace))
+            logger.info(
+                'Namespace {0} is deleted, will not merge old settings with new ones'.format(
+                    namespace
+                )
+            )
             cur_settings = {'__service': cur_settings['__service']}
 
         cur_settings.setdefault('__service', {})
@@ -1252,7 +1290,7 @@ class Balancer(object):
         return self.infrastructure.ns_settings[namespace]
 
     def __check_namespace(self, namespace):
-        if not namespace in self.infrastructure.ns_settings:
+        if namespace not in self.infrastructure.ns_settings:
             raise ValueError('Namespace "{0}" does not exist'.format(namespace))
         else:
             logger.info('Current namespace {0} settings: {1}'.format(namespace, self.infrastructure.ns_settings[namespace]))
@@ -1285,8 +1323,9 @@ class Balancer(object):
 
                 self.infrastructure.set_ns_settings(namespace, settings)
             except Exception as e:
-                logger.error('Failed to delete namespace {0}: '
-                    '{1}\n{2}'.format(namespace, str(e), traceback.format_exc()))
+                logger.error('Failed to delete namespace {0}: {1}\n{2}'.format(
+                    namespace, str(e), traceback.format_exc()
+                ))
                 raise
 
         return True
@@ -1354,7 +1393,8 @@ class Balancer(object):
 
         if failed_groups:
             s = 'Failed to write meta key for couple {0} to groups {1}'.format(
-                    couple, list(failed_groups))
+                couple, list(failed_groups)
+            )
             logger.error(s)
             raise RuntimeError(s)
 
@@ -1426,12 +1466,13 @@ class Balancer(object):
                 time.time() - start_ts))
 
     def _do_update_namespaces_states(self):
-        default = lambda: {
-            'settings': {},
-            'couples': [],
-            'weights': {},
-            'statistics': {},
-        }
+        def default():
+            return {
+                'settings': {},
+                'couples': [],
+                'weights': {},
+                'statistics': {},
+            }
 
         res = defaultdict(default)
 
@@ -1575,10 +1616,10 @@ def handlers(b):
         for attr_name in dir(b):
             attr = b.__getattribute__(attr_name)
             if (not callable(attr) or
-                attr.__name__.startswith('_') or
-                attr_name.startswith('__') or
-                attr_name.startswith(private_prefix)):
-                    continue
+                    attr.__name__.startswith('_') or
+                    attr_name.startswith('__') or
+                    attr_name.startswith(private_prefix)):
+                continue
             logger.debug('adding handler: attr_name: {0}, attr.__name__ {1}'.format(attr_name, attr.__name__))
             handlers.append(attr)
     except Exception as e:
@@ -1602,9 +1643,9 @@ def consistent_write(session, key, data, retries=3):
     if failed_groups:
         # failed to write key to all destination groups
 
-        logger.info('Failed to write key consistently, '
-            'removing key {0} from groups {1}'.format(
-                key_esc, list(suc_groups)))
+        logger.info('Failed to write key consistently, removing key {0} from groups {1}'.format(
+            key_esc, list(suc_groups)
+        ))
 
         s.set_groups(suc_groups)
         _, left_groups = h.remove_retry(s, key, retries=retries)
@@ -1632,7 +1673,8 @@ def kill_symm_group(n, meta_session, couple):
 
     if failed_groups:
         s = 'Failed to remove couple {0} meta key for from groups {1}'.format(
-                couple, list(failed_groups))
+            couple, list(failed_groups)
+        )
         logger.error(s)
         raise RuntimeError(s)
 
