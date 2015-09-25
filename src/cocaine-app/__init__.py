@@ -1,11 +1,10 @@
 #!/usr/bin/python
 # encoding: utf-8
-from functools import wraps, partial
+from functools import wraps
 import logging
 import sys
 from time import sleep, time
 import traceback
-import types
 import uuid
 
 from cocaine.worker import Worker
@@ -14,7 +13,6 @@ from mastermind import errors
 
 sys.path.append('/usr/lib')
 
-import json
 import msgpack
 
 import elliptics
@@ -50,9 +48,14 @@ node_config.io_thread_num = config.get('io_thread_num', 1)
 node_config.nonblocking_io_thread_num = config.get('nonblocking_io_thread_num', 1)
 node_config.net_thread_num = config.get('net_thread_num', 1)
 
-logger.info('Node config: io_thread_num {0}, nonblocking_io_thread_num {1}, '
-    'net_thread_num {2}'.format(node_config.io_thread_num, node_config.nonblocking_io_thread_num,
-        node_config.net_thread_num))
+logger.info(
+    'Node config: io_thread_num {0}, nonblocking_io_thread_num {1}, '
+    'net_thread_num {2}'.format(
+        node_config.io_thread_num,
+        node_config.nonblocking_io_thread_num,
+        node_config.net_thread_num
+    )
+)
 
 n = elliptics.Node(log, node_config)
 
@@ -99,8 +102,7 @@ except Exception as e:
 
 
 wait_timeout = config.get('wait_timeout', 5)
-logger.info('sleeping for wait_timeout for nodes '
-             'to collect data ({0} sec)'.format(wait_timeout))
+logger.info('sleeping for wait_timeout for nodes to collect data ({0} sec)'.format(wait_timeout))
 sleep(wait_timeout)
 
 meta_wait_timeout = config['metadata'].get('wait_timeout', 5)
@@ -137,9 +139,14 @@ def register_handle(h):
         try:
             data = yield request.read()
             data = msgpack.unpackb(data)
-            logger.info(":{req_uid}: Running handler for event {0}, "
-                "data={1}".format(h.__name__, str(data), req_uid=req_uid))
-            #msgpack.pack(h(data), response)
+            logger.info(
+                ':{req_uid}: Running handler for event {0}, '
+                'data={1}'.format(
+                    h.__name__,
+                    str(data),
+                    req_uid=req_uid
+                )
+            )
             res = h(data)
             if isinstance(res, chain.Chain):
                 res = yield res
@@ -147,15 +154,20 @@ def register_handle(h):
                 logger.error('Synchronous handler for {0} handle'.format(h.__name__))
             response.write(res)
         except Exception as e:
-            logger.error(":{req_uid}: handler for event {0}, "
-                "data={1}: Balancer error: {2}\n{3}".format(
+            logger.error(
+                ':{req_uid}: handler for event {0}, data={1}: Balancer error: {2}\n{3}'.format(
                     h.__name__, str(data), e,
                     traceback.format_exc().replace('\n', '    '),
-                    req_uid=req_uid))
+                    req_uid=req_uid
+                )
+            )
             response.write({"Balancer error": str(e)})
         finally:
-            logger.info(':{req_uid}: Finished handler for event {0}, '
-                'time: {1:.3f}'.format(h.__name__, time() - start_ts, req_uid=req_uid))
+            logger.info(':{req_uid}: Finished handler for event {0}, time: {1:.3f}'.format(
+                h.__name__,
+                time() - start_ts,
+                req_uid=req_uid)
+            )
         response.close()
 
     W.on(h.__name__, wrapper)
@@ -189,8 +201,11 @@ def register_handle_wne(h):
                     h.__name__, str(data), code, error_msg, req_uid=req_uid))
             response.error(code, error_msg)
         finally:
-            logger.info(':{req_uid}: Finished handler for event {0}, '
-                'time: {1:.3f}'.format(h.__name__, time() - start_ts, req_uid=req_uid))
+            logger.info(':{req_uid}: Finished handler for event {0}, time: {1:.3f}'.format(
+                h.__name__,
+                time() - start_ts,
+                req_uid=req_uid)
+            )
 
     W.on(h.__name__, wrapper)
     logger.info("Registering handler for event {}".format(h.__name__))
@@ -247,8 +262,10 @@ def init_planner(job_processor, niu):
 
 def init_job_finder():
     if not config['metadata'].get('jobs', {}).get('db'):
-        logger.error('Job finder metadb is not set up '
-            '("metadata.jobs.db" key), will not be initialized')
+        logger.error(
+            'Job finder metadb is not set up '
+            '("metadata.jobs.db" key), will not be initialized'
+        )
         return None
     jf = jobs.JobFinder(meta_db)
     register_handle(jf.get_job_list)
@@ -256,10 +273,13 @@ def init_job_finder():
     register_handle(jf.get_jobs_status)
     return jf
 
+
 def init_job_processor(jf, minions, niu):
     if jf is None:
-        logger.error('Job processor will not be initialized because '
-            'job finder is not initialized')
+        logger.error(
+            'Job processor will not be initialized because '
+            'job finder is not initialized'
+        )
         return None
     j = jobs.JobProcessor(jf, n, meta_db, niu, minions)
     register_handle(j.create_job)
@@ -270,6 +290,7 @@ def init_job_processor(jf, minions, niu):
     register_handle(j.skip_failed_job_task)
     register_handle(j.restart_failed_to_start_job)
     return j
+
 
 def init_manual_locker(manual_locker):
     register_handle(manual_locker.host_acquire_lock)
