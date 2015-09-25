@@ -1,3 +1,4 @@
+import datetime
 import logging
 import time
 
@@ -14,10 +15,13 @@ logger = logging.getLogger('mm.monitor')
 class CoupleFreeEffectiveSpaceMonitor(object):
 
     COUPLE_FREE_EFF_SPACE_DATA = 'statistics/couple_free_eff_space'
+
     STAT_CFG = config.get('metadata', {}).get('statistics', {})
-    MAX_DATA_POINTS = STAT_CFG.get('max_data_points', 1000)
+    CFES_STAT_CFG = STAT_CFG.get('couple_free_effective_space', {})
+
     RECORD_WRITE_ATTEMPTS = STAT_CFG.get('write_attempts', 3)
-    DATA_COLLECT_PERIOD = STAT_CFG.get('collect_period', 300)
+    MAX_DATA_POINTS = CFES_STAT_CFG.get('max_data_points', 1000)
+    DATA_COLLECT_PERIOD = CFES_STAT_CFG.get('collect_period', 300)
 
     def __init__(self, db):
         self.collection = Collection(db[config['metadata']['statistics']['db']],
@@ -79,11 +83,13 @@ class CoupleFreeEffectiveSpaceMonitor(object):
             return
         records = []
         ts = int(time.time())
+        udt = datetime.datetime.utcnow()
         for ns_id, sample_data in data:
             records.append({
                 'namespace': ns_id,
                 'ts': ts,
                 'data': sample_data,
+                'utc_date': udt,
             })
         total_insert_records = len(data)
         inserted_records = 0
