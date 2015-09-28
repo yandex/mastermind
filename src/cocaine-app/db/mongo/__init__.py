@@ -1,4 +1,3 @@
-import json
 import logging
 
 logger = logging.getLogger('mm.mongo')
@@ -13,10 +12,6 @@ class MongoObject(object):
     @classmethod
     def new(cls, *args, **kwargs):
         pass
-
-    def dump(self):
-        assert self.MODEL, 'Model for type {0} is not defined'.format(type(self))
-        return self.MODEL.dump(self)
 
     def save(self):
         if not self._dirty:

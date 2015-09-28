@@ -6,7 +6,6 @@ import uuid
 
 from config import config
 from db.mongo import MongoObject
-from db.mongo.job import JobView
 from error import JobBrokenError
 import helpers as h
 import keys
@@ -29,8 +28,6 @@ RESTORE_CFG = config.get('restore', {})
 
 
 class Job(MongoObject):
-
-    MODEL = JobView
 
     STATUS_NOT_APPROVED = 'not_approved'
     STATUS_NEW = 'new'
