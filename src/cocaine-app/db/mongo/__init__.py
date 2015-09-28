@@ -23,11 +23,3 @@ class MongoObject(object):
             logger.error('Unexpected mongo response: {0}, saving object {1}'.format(res, self.dump()))
             raise RuntimeError('Mongo operation result: {0}'.format(res['ok']))
         self._dirty = False
-
-    @staticmethod
-    def updated_since(collection, update_ts):
-        params = {}
-        if update_ts:
-            params['update_ts'] = {'$gte': int(update_ts)}
-        logger.debug('Collection updated_since request')
-        return collection.find(params)
