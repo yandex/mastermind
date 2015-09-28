@@ -837,9 +837,9 @@ class NodeBackend(object):
     def update_statistics(self, new_stat, collect_ts):
         if self.stat is None:
             self.stat = NodeBackendStat(self.node.stat)
-        self.stat.update(new_stat, collect_ts)
         self.base_path = os.path.dirname(new_stat['backend']['config'].get('data') or
                                          new_stat['backend']['config'].get('file')) + '/'
+        self.stat.update(new_stat, collect_ts)
 
     def update_status(self):
         if not self.stat:
