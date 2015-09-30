@@ -29,7 +29,7 @@ CACHE_DEFAULT_PORT = 9999
 BASE_STORAGE_PATH = config.get('elliptics_base_storage_path', '/srv/storage/')
 
 RSYNC_MODULE = config.get('restore', {}).get('rsync_use_module') and \
-               config['restore'].get('rsync_module')
+    config['restore'].get('rsync_module')
 RSYNC_USER = config.get('restore', {}).get('rsync_user', 'rsync')
 
 RECOVERY_DC_CNF = config.get('infrastructure', {}).get('recovery_dc', {})
@@ -41,8 +41,13 @@ logger.info('Rsync user: %s' % RSYNC_USER)
 def dnet_client_backend_command(command):
     def wrapper(host, port, family, backend_id):
         cmd = 'dnet_client backend -r {host}:{port}:{family} {command} --backend {backend_id} --wait-timeout=1000'
-        return cmd.format(command=command,
-            host=host, port=port, family=family, backend_id=backend_id)
+        return cmd.format(
+            command=command,
+            host=host,
+            port=port,
+            family=family,
+            backend_id=backend_id
+        )
     return wrapper
 
 
@@ -57,12 +62,16 @@ class Infrastructure(object):
     RSYNC_MODULE_CMD = ('rsync -av --progress --timeout=1200 '
                         '"rsync://{user}@{src_host}/{module}/{src_path}{file_tpl}" '
                         '"{dst_path}"')
-    DNET_RECOVERY_DC_CMD = ('dnet_recovery dc {remotes} -g {groups} -D {tmp_dir} '
-        '-a {attempts} -b {batch} -l {log} -L {log_level} -n {processes_num} -M')
+    DNET_RECOVERY_DC_CMD = (
+        'dnet_recovery dc {remotes} -g {groups} -D {tmp_dir} '
+        '-a {attempts} -b {batch} -l {log} -L {log_level} -n {processes_num} -M'
+    )
     DNET_RECOVERY_DC_REMOTE_TPL = '-r {host}:{port}:{family}'
 
-    DNET_DEFRAG_CMD = ('dnet_client backend -r {host}:{port}:{family} '
-        'defrag --backend {backend_id}')
+    DNET_DEFRAG_CMD = (
+        'dnet_client backend -r {host}:{port}:{family} '
+        'defrag --backend {backend_id}'
+    )
 
     HISTORY_RECORD_AUTOMATIC = 'automatic'
     HISTORY_RECORD_MANUAL = 'manual'
@@ -91,7 +100,8 @@ class Infrastructure(object):
         self.cache = cache
         cache.init(self.meta_session, self.__tq)
 
-        self.__tq.add_task_in(self.TASK_UPDATE,
+        self.__tq.add_task_in(
+            self.TASK_UPDATE,
             config.get('infrastructure_update_period', 300),
             self._update_state)
 
@@ -117,16 +127,16 @@ class Infrastructure(object):
         nodes_history = []
         for node_set in self.state[group_id]['nodes']:
 
-            nodes_history.append(
-                {'set': node_set['set'],
-                 'timestamp': node_set['timestamp'],
-                 'type': self.__node_state_type(node_set)
-                })
+            nodes_history.append({
+                'set': node_set['set'],
+                'timestamp': node_set['timestamp'],
+                'type': self.__node_state_type(node_set),
+            })
         return {'couples': couples_history,
                 'nodes': nodes_history}
 
     def node_backend_in_last_history_state(self, group_id, host, port, backend_id):
-        if not group_id in self.state:
+        if group_id not in self.state:
             raise ValueError('Group {0} history is not found'.format(group_id))
 
         last_node_set = self.state[group_id]['nodes'][-1]['set']
@@ -151,15 +161,21 @@ class Infrastructure(object):
             logger.error('Failed to sync infrastructure state, time: {0:.3f}, {1}\n{2}'.format(
                          time.time() - start_ts, e, traceback.format_exc()))
         finally:
-            self.__tq.add_task_in(self.TASK_SYNC,
+            self.__tq.add_task_in(
+                self.TASK_SYNC,
                 config.get('infrastructure_sync_period', 60),
-                self._sync_state)
+                self._sync_state
+            )
 
     @classmethod
     def __node_state_type(cls, node_state):
-        return node_state.get('type',
-            node_state.get('manual', False) and cls.HISTORY_RECORD_MANUAL or
-                cls.HISTORY_RECORD_AUTOMATIC)
+        return node_state.get(
+            'type',
+            (
+                node_state.get('manual', False) and cls.HISTORY_RECORD_MANUAL or
+                cls.HISTORY_RECORD_AUTOMATIC
+            )
+        )
 
     def __do_sync_state(self):
         group_ids = set()
@@ -173,8 +189,7 @@ class Infrastructure(object):
                 # logger.debug('Fetched infrastructure item: %s' %
                 #               (state_group,))
 
-                if (self.state.get(state_group['id']) and
-                    state_group['id'] in storage.groups):
+                if (self.state.get(state_group['id']) and state_group['id'] in storage.groups):
 
                     group = storage.groups[state_group['id']]
 
@@ -206,7 +221,7 @@ class Infrastructure(object):
     def _unserialize(data):
         group_state = msgpack.unpackb(data)
         group_state['nodes'] = list(group_state['nodes'])
-        if not 'couples' in group_state:
+        if 'couples' not in group_state:
             group_state['couples'] = []
         group_state['couples'] = list(group_state['couples'])
         return group_state
@@ -311,13 +326,14 @@ class Infrastructure(object):
             start = time.time()
             for data in self.ns_settings_idx:
                 self.__do_sync_ns_settings(data, start)
-        except Exception as e:
-            logger.error('Failed to sync ns settings: %s\n%s' %
-                          (e, traceback.format_exc()))
+        except Exception:
+            logger.exception('Failed to sync ns settings')
         finally:
-            self.__tq.add_task_in(self.NS_SETTINGS_SYNC,
+            self.__tq.add_task_in(
+                self.NS_SETTINGS_SYNC,
                 config.get('infrastructure_ns_settings_sync_period', 60),
-                self._sync_ns_settings)
+                self._sync_ns_settings
+            )
 
     def sync_single_ns_settings(self, namespace):
         logger.debug('fetching namespace {0} settings'.format(namespace))
@@ -326,8 +342,9 @@ class Infrastructure(object):
 
     def __do_sync_ns_settings(self, data, start_ts):
         settings = msgpack.unpackb(data)
-        logger.debug('fetched namespace settings for "{0}" '
-            '({1:.3f}s)'.format(settings['namespace'], time.time() - start_ts))
+        logger.debug('fetched namespace settings for "{0}" ({1:.3f}s)'.format(
+            settings['namespace'], time.time() - start_ts
+        ))
         ns = settings['namespace']
         del settings['namespace']
         self.ns_settings[ns] = settings
@@ -341,11 +358,12 @@ class Infrastructure(object):
         start = time.time()
 
         self.ns_settings_idx[namespace] = msgpack.packb(settings)
-        if not namespace in self.ns_settings:
+        if namespace not in self.ns_settings:
             self.ns_settings_idx.set_tag(namespace)
 
-        logger.debug('namespace "{0}" settings saved to index '
-            '({1:.4f}s)'.format(namespace, time.time() - start))
+        logger.debug('namespace "{0}" settings saved to index ({1:.4f}s)'.format(
+            namespace, time.time() - start
+        ))
 
         del settings['namespace']
         self.ns_settings[namespace] = settings
@@ -371,9 +389,12 @@ class Infrastructure(object):
 
     def detach_node(self, group_id, host, port, backend_id, record_type=None):
         with self.__state_lock:
-            if not group_id in self.state:
-                raise ValueError('Node backend {0}:{1}/{2} not found in '
-                    'group {3} history state'.format(host, port, backend_id, group_id))
+            if group_id not in self.state:
+                raise ValueError(
+                    'Node backend {0}:{1}/{2} not found in group {3} history state'.format(
+                        host, port, backend_id, group_id
+                    )
+                )
 
             group_state = self.state[group_id]
             state_nodes = list(group_state['nodes'][-1]['set'][:])
@@ -382,21 +403,35 @@ class Infrastructure(object):
             for i, state_node in enumerate(state_nodes):
                 state_host, state_port, state_family, state_backend_id = state_node[:4]
                 if state_host == host and state_port == port and state_backend_id == backend_id:
-                    logger.debug('Removing node backend {0}:{1}/{2} from '
-                        'group {3} history state'.format(host, port, backend_id, group_id))
+                    logger.debug(
+                        'Removing node backend {0}:{1}/{2} from group {3} history state'.format(
+                            host, port, backend_id, group_id
+                        )
+                    )
                     del state_nodes[i]
                     break
             else:
-                raise ValueError('Node backend {0}:{1}/{2} not found in '
-                    'group {3} history state'.format(host, port, backend_id, group_id))
+                raise ValueError(
+                    'Node backend {0}:{1}/{2} not found in group {3} history state'.format(
+                        host, port, backend_id, group_id
+                    )
+                )
 
-            self._update_group(group_id, state_nodes, None,
-                record_type=record_type or self.HISTORY_RECORD_MANUAL)
+            self._update_group(
+                group_id, state_nodes,
+                None,
+                record_type=record_type or self.HISTORY_RECORD_MANUAL
+            )
 
-
-    def move_group_cmd(self, src_host, src_port=None, src_family=2,
-                       src_path=None,  dst_port=None, dst_path=None,
-                       user=None, file_tpl='data*'):
+    def move_group_cmd(self,
+                       src_host,
+                       src_port=None,
+                       src_family=2,
+                       src_path=None,
+                       dst_port=None,
+                       dst_path=None,
+                       user=None,
+                       file_tpl='data*'):
         cmd_src_path = src_path
         if RSYNC_MODULE:
             cmd = self.RSYNC_MODULE_CMD.format(
@@ -423,11 +458,11 @@ class Infrastructure(object):
         cmd = inventory.node_start_command(host, port, family)
 
         if cmd is None:
-            raise RuntimeError('Node start command is not provided '
-                'by inventory implementation')
+            raise RuntimeError('Node start command is not provided by inventory implementation')
 
-        logger.info('Command for starting elliptics node {0}:{1} '
-            'was requested: {2}'.format(host, port, cmd))
+        logger.info('Command for starting elliptics node {0}:{1} was requested: {2}'.format(
+            host, port, cmd
+        ))
 
         return cmd
 
@@ -438,14 +473,15 @@ class Infrastructure(object):
 
         node_addr = '{0}:{1}'.format(host, port)
 
-        if not node_addr in storage.nodes:
+        if node_addr not in storage.nodes:
             raise ValueError("Node {0} doesn't exist".format(node_addr))
 
         node = storage.nodes[node_addr]
 
         cmd = inventory.node_shutdown_command(node.host, node.port, node.family)
-        logger.info('Command for shutting down elliptics node {0} '
-            'was requested: {1}'.format(node_addr, cmd))
+        logger.info('Command for shutting down elliptics node {0} was requested: {1}'.format(
+            node_addr, cmd
+        ))
 
         return cmd
 
@@ -453,7 +489,6 @@ class Infrastructure(object):
     _disable_node_backend_cmd = staticmethod(dnet_client_backend_command('disable'))
     _make_readonly_node_backend_cmd = staticmethod(dnet_client_backend_command('make_readonly'))
     _make_writable_node_backend_cmd = staticmethod(dnet_client_backend_command('make_writable'))
-
 
     @h.concurrent_handler
     def enable_node_backend_cmd(self, request):
@@ -465,11 +500,13 @@ class Infrastructure(object):
         cmd = self._enable_node_backend_cmd(host, port, family, backend_id)
 
         if cmd is None:
-            raise RuntimeError('Node backend start command is not provided '
-                'by inventory implementation')
+            raise RuntimeError(
+                'Node backend start command is not provided by inventory implementation'
+            )
 
-        logger.info('Command for starting elliptics node {0} '
-            'was requested: {1}'.format(nb_addr, cmd))
+        logger.info('Command for starting elliptics node {0} was requested: {1}'.format(
+            nb_addr, cmd
+        ))
 
         return cmd
 
@@ -480,15 +517,18 @@ class Infrastructure(object):
 
         nb_addr = '{0}:{1}/{2}'.format(host, port, backend_id).encode('utf-8')
 
-        if not nb_addr in storage.node_backends:
+        if nb_addr not in storage.node_backends:
             raise ValueError("Node backend {0} doesn't exist".format(nb_addr))
 
         nb = storage.node_backends[nb_addr]
 
         cmd = self._disable_node_backend_cmd(
             nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id)
-        logger.info('Command for shutting down elliptics node backend {0} '
-            'was requested: {1}'.format(nb_addr, cmd))
+        logger.info(
+            'Command for shutting down elliptics node backend {0} was requested: {1}'.format(
+                nb_addr, cmd
+            )
+        )
 
         return cmd
 
@@ -498,15 +538,18 @@ class Infrastructure(object):
 
         nb_addr = '{0}:{1}/{2}'.format(host, port, backend_id).encode('utf-8')
 
-        if not nb_addr in storage.node_backends:
+        if nb_addr not in storage.node_backends:
             raise ValueError("Node backend {0} doesn't exist".format(nb_addr))
 
         nb = storage.node_backends[nb_addr]
 
         cmd = self._make_readonly_node_backend_cmd(
             nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id)
-        logger.info('Command for making elliptics node backend {0} read-only '
-            'was requested: {1}'.format(nb_addr, cmd))
+        logger.info(
+            'Command for making elliptics node backend {0} read-only was requested: {1}'.format(
+                nb_addr, cmd
+            )
+        )
 
         return cmd
 
@@ -516,15 +559,18 @@ class Infrastructure(object):
 
         nb_addr = '{0}:{1}/{2}'.format(host, port, backend_id).encode('utf-8')
 
-        if not nb_addr in storage.node_backends:
+        if nb_addr not in storage.node_backends:
             raise ValueError("Node backend {0} doesn't exist".format(nb_addr))
 
         nb = storage.node_backends[nb_addr]
 
         cmd = self._make_writable_node_backend_cmd(
             nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id)
-        logger.info('Command for making elliptics node backend {0} writable '
-            'was requested: {1}'.format(nb_addr, cmd))
+        logger.info(
+            'Command for making elliptics node backend {0} writable was requested: {1}'.format(
+                nb_addr, cmd
+            )
+        )
 
         return cmd
 
@@ -535,13 +581,14 @@ class Infrastructure(object):
 
         node_addr = '{0}:{1}'.format(host, port)
 
-        if not node_addr in storage.nodes:
+        if node_addr not in storage.nodes:
             raise ValueError("Node {0} doesn't exist".format(node_addr))
 
         cmd = self._reconfigure_node_cmd(host, port, family)
 
-        logger.info('Command for reconfiguring elliptics node {0} '
-            'was requested: {1}'.format(node_addr, cmd))
+        logger.info('Command for reconfiguring elliptics node {0} was requested: {1}'.format(
+            node_addr, cmd
+        ))
 
         return cmd
 
@@ -550,8 +597,9 @@ class Infrastructure(object):
         cmd = inventory.node_reconfigure(host, port, family)
 
         if cmd is None:
-            raise RuntimeError('Node reconfiguration command is not provided '
-                'by inventory implementation')
+            raise RuntimeError(
+                'Node reconfiguration command is not provided by inventory implementation'
+            )
         return cmd
 
     @h.concurrent_handler
@@ -559,15 +607,16 @@ class Infrastructure(object):
 
         try:
             group_id = int(request[0])
-            if not group_id in storage.groups:
+            if group_id not in storage.groups:
                 raise ValueError
         except (ValueError, TypeError):
             raise ValueError('Group {0} is not found'.format(request[0]))
 
         cmd = self._recover_group_cmd(group_id)
 
-        logger.info('Command for dc recovery for group {0} '
-            'was requested: {1}'.format(group_id, cmd))
+        logger.info('Command for dc recovery for group {0} was requested: {1}'.format(
+            group_id, cmd
+        ))
 
         return cmd
 
@@ -587,8 +636,10 @@ class Infrastructure(object):
         cmd = self.DNET_RECOVERY_DC_CMD.format(
             remotes=' '.join(remotes),
             groups=','.join(str(g) for g in group.couple.groups),
-            tmp_dir=RECOVERY_DC_CNF.get('tmp_dir',
-                '/var/tmp/dnet_recovery_dc_{group_id}').format(group_id=group_id),
+            tmp_dir=RECOVERY_DC_CNF.get(
+                'tmp_dir',
+                '/var/tmp/dnet_recovery_dc_{group_id}'
+            ).format(group_id=group_id),
             attempts=RECOVERY_DC_CNF.get('attempts', 1),
             batch=RECOVERY_DC_CNF.get('batch', 2000),
             log=RECOVERY_DC_CNF.get('log', 'dnet_recovery.log').format(group_id=group_id),
@@ -614,8 +665,9 @@ class Infrastructure(object):
             node_backend.node.family,
             node_backend.backend_id)
 
-        logger.info('Command for node backend {0} defragmentation '
-            'was requested: {1}'.format(node_backend, cmd))
+        logger.info('Command for node backend {0} defragmentation was requested: {1}'.format(
+            node_backend, cmd
+        ))
 
         return cmd
 
@@ -715,7 +767,7 @@ class Infrastructure(object):
                     type_nodes[tree_node['full_path']] = cur_node
                     new_child = cur_node
 
-                if not 'parent' in tree_node:
+                if 'parent' not in tree_node:
                     if not root:
                         root = nodes[tree_node['type']]
                     break
@@ -746,7 +798,7 @@ class Infrastructure(object):
         flatten_tree(tree)
 
         for k in nodes.keys():
-            if not k in types:
+            if k not in types:
                 del nodes[k]
 
         nodes['hdd'] = {}
@@ -760,7 +812,7 @@ class Infrastructure(object):
                     nb.node.host))
                 continue
 
-            if not full_path in nodes['host']:
+            if full_path not in nodes['host']:
                 logger.warn('Host {0} is not found in cluster tree'.format(full_path))
                 continue
             if nb.stat is None:
@@ -768,7 +820,7 @@ class Infrastructure(object):
 
             fsid = str(nb.stat.fsid)
             fsid_full_path = full_path + '|' + fsid
-            if not fsid_full_path in nodes['hdd']:
+            if fsid_full_path not in nodes['hdd']:
                 hdd_node = {
                     'type': 'hdd',
                     'name': fsid,
@@ -780,11 +832,13 @@ class Infrastructure(object):
         return tree, nodes
 
     def update_groups_list(self, root):
-        if not 'children' in root:
+        if 'children' not in root:
             return root.setdefault('groups', set())
-        root['groups'] = reduce(operator.or_,
+        root['groups'] = reduce(
+            operator.or_,
             (self.update_groups_list(child) for child in root.get('children', [])),
-            set())
+            set()
+        )
         return root['groups']
 
     def account_ns_groups(self, nodes, groups):
@@ -796,7 +850,7 @@ class Infrastructure(object):
                     logger.warn('Skipping {} because of cache failure'.format(
                         nb.node.host))
                     continue
-                if not hdd_path in nodes['hdd']:
+                if hdd_path not in nodes['hdd']:
                     # when building cluster tree every host resolve operation
                     # failed for this hdd
                     continue
@@ -823,7 +877,7 @@ class Infrastructure(object):
             ns_current_state[node_type] = {'nodes': {},
                                            'avg': 0}
             for child in nodes[node_type].itervalues():
-                if not 'groups' in child:
+                if 'groups' not in child:
                     logger.error('No groups in child {0}'.format(child))
                 ns_current_state[node_type]['nodes'][child['full_path']] = len(child.get('groups', []))
             ns_current_state[node_type]['avg'] = (
@@ -857,13 +911,11 @@ class Infrastructure(object):
 
                 while parent:
                     if parent['type'] in types:
-                        full_path = '|'.join(reversed(parts))
                         nb_units[parent['type']] = '|'.join(parts)
                     parts.pop()
                     parent = parent.get('parent')
 
-                nb_units['hdd'] = (nb_units['host'] + '|' +
-                    str(nb.stat.fsid))
+                nb_units['hdd'] = nb_units['host'] + '|' + str(nb.stat.fsid)
 
                 units[group.group_id].append(nb_units)
 
@@ -878,10 +930,10 @@ class Infrastructure(object):
         return group_ids_in_service
 
     def get_good_uncoupled_groups(self,
-        max_node_backends=None,
-        including_in_service=False,
-        status=None,
-        types=None):
+                                  max_node_backends=None,
+                                  including_in_service=False,
+                                  status=None,
+                                  types=None):
 
         suitable_groups = []
         locked_hosts = manual_locker.get_locked_hosts()
@@ -891,19 +943,26 @@ class Infrastructure(object):
         logger.debug('Groups in service - total {0}: {1}'.format(
             len(in_service), in_service))
         for group in storage.groups.keys():
-            if Infrastructure.is_uncoupled_group_good(group,
+
+            if Infrastructure.is_uncoupled_group_good(
+                    group,
                     locked_hosts,
                     types or (storage.Group.TYPE_DATA,),
                     max_node_backends=max_node_backends,
                     in_service=in_service,
                     status=status):
+
                 suitable_groups.append(group)
 
         return suitable_groups
 
     @staticmethod
-    def is_uncoupled_group_good(group, locked_hosts,
-        types, max_node_backends=None, in_service=None, status=None):
+    def is_uncoupled_group_good(group,
+                                locked_hosts,
+                                types,
+                                max_node_backends=None,
+                                in_service=None,
+                                status=None):
 
         if group.couple is not None:
             return False
