@@ -16,6 +16,9 @@ MM_HOSTNAME_CACHE_HOST = 'mastermind:hostname_cache_%s'
 MM_HOSTTREE_CACHE_IDX = 'mastermind:hosttree_cache'
 MM_HOSTTREE_CACHE_HOST = 'mastermind:hosttree_cache_%s'
 
+MM_IPADDRESSES_CACHE_IDX = 'mastermind:ipaddresses_cache'
+MM_IPADDRESSES_CACHE_HOST = 'mastermind:ipaddresses_cache_%s'
+
 MM_NAMESPACE_SETTINGS_IDX = 'mastermind:ns_settings_idx'
 MM_NAMESPACE_SETTINGS_KEY_TPL = 'mastermind:ns_setttings:%s'
 
