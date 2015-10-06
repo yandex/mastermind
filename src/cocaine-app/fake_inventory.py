@@ -89,6 +89,7 @@ def node_reconfigure(host, port, family):
     '''
     return None
 
+
 def set_net_monitoring_downtime(host):
     '''
     If your infrastructure monitors network activity, it can cause alerts
@@ -99,6 +100,7 @@ def set_net_monitoring_downtime(host):
     is already set.
     '''
     return None
+
 
 def remove_net_monitoring_downtime(host):
     '''
