@@ -73,10 +73,10 @@ class RestoreGroupJob(Job):
                     group.node_backends[0].node.host.addr)
                 add_fs(group)
             else:
-                old_group_state = infrastructure.get_group_history(
-                    group.group_id)['nodes'][-1]['set']
-                if len(old_group_state):
-                    host = old_group_state[0][0]
+                old_group_node_backends_set = infrastructure.get_group_history(
+                    group.group_id).nodes[-1].set
+                if old_group_node_backends_set:
+                    host = cache.get_ip_address_by_host(old_group_node_backends_set[0].hostname)
                     resources[Job.RESOURCE_HOST_IN].append(host)
 
         self.resources = resources
@@ -88,9 +88,14 @@ class RestoreGroupJob(Job):
 
         self.check_node_backends(src_group)
 
-        old_group_state = infrastructure.get_group_history(group.group_id)['nodes'][-1]['set']
-        if old_group_state:
-            old_host, old_port, old_family, old_backend_id, old_base_path = old_group_state[0][:5]
+        old_group_node_backends_set = infrastructure.get_group_history(group.group_id).nodes[-1].set
+        if old_group_node_backends_set:
+            old_node_backend = old_group_node_backends_set[0]
+            old_host = cache.get_ip_address_by_host(old_node_backend.hostname)
+            old_port = old_node_backend.port
+            old_family = old_node_backend.family
+            old_backend_id = old_node_backend.backend_id
+            old_base_path = old_node_backend.path
 
         if self.uncoupled_group:
             uncoupled_group = storage.groups[self.uncoupled_group]
@@ -102,9 +107,12 @@ class RestoreGroupJob(Job):
             dst_base_path = uncoupled_group.node_backends[0].base_path
             dst_backend_id = uncoupled_group.node_backends[0].backend_id
         else:
-            if len(old_group_state) != 1:
-                raise JobBrokenError('History of group {0} lists {1} '
-                    'node backends, 1 expected'.format(self.group, len(old_group_state)))
+            if len(old_group_node_backends_set) != 1:
+                raise JobBrokenError(
+                    'History of group {0} lists {1} node backends, 1 expected'.format(
+                        self.group, len(old_group_node_backends_set)
+                    )
+                )
 
             # gettings dst_* from group history
             dst_host, dst_port, dst_backend_id = old_host, old_port, old_backend_id
@@ -356,7 +364,7 @@ class RestoreGroupJob(Job):
 
         if self.uncoupled_group:
 
-            if old_group_state:
+            if old_group_node_backends_set:
                 task = HistoryRemoveNodeTask.new(self,
                                                  group=self.group,
                                                  host=old_host,

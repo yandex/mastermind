@@ -461,12 +461,12 @@ class Balancer(object):
     @h.concurrent_handler
     def get_group_history(self, request):
         group = int(request[0])
-        group_history = {}
 
         if self.infrastructure:
             group_history = self.infrastructure.get_group_history(group)
+            return group_history.dump()
 
-        return group_history
+        raise ValueError('History for group {} is not found'.format(group))
 
     NODE_BACKEND_RE = re.compile('(.+):(\d+)/(\d+)')
 
