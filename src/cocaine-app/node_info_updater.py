@@ -11,6 +11,7 @@ import elliptics
 import balancelogicadapter as bla
 from config import config
 import helpers as h
+from infrastructure import infrastructure
 from jobs import Job
 import keys
 from load_manager import load_manager
@@ -234,9 +235,12 @@ class NodeInfoUpdater(object):
                 backend_id = b_stat['backend_id']
                 b_stat['stats'] = backend_stats.get(backend_id, {})
 
+                update_group_history = False
+
                 node_backend_addr = '{0}/{1}'.format(node_addr, backend_id)
                 if node_backend_addr not in storage.node_backends:
                     node_backend = storage.node_backends.add(node, backend_id)
+                    update_group_history = True
                 else:
                     node_backend = storage.node_backends[node_backend_addr]
 
@@ -291,12 +295,17 @@ class NodeInfoUpdater(object):
                     logger.warn('No backend in b_stat: {0}'.format(b_stat))
                 elif 'dstat' not in b_stat['backend']:
                     logger.warn('No dstat in backend: {0}'.format(b_stat['backend']))
+
+                prev_base_path = node_backend.base_path
                 try:
                     node_backend.update_statistics(b_stat, collect_ts)
                 except KeyError as e:
                     logger.warn('Bad stat for node backend {0} ({1}): {2}'.format(
                         node_backend, e, b_stat))
                     pass
+
+                if node_backend.base_path != prev_base_path:
+                    update_group_history = True
 
                 if b_stat['status']['read_only'] or node_backend.stat_commit_errors > 0:
                     node_backend.make_read_only()
@@ -308,7 +317,11 @@ class NodeInfoUpdater(object):
                         node_backend, group.group_id,
                         ' (moved from group {0})'.format(node_backend.group.group_id)
                         if node_backend.group else ''))
+                    update_group_history = True
                     group.add_node_backend(node_backend)
+
+                if update_group_history:
+                    infrastructure.update_group_history(group)
 
             for fs in fss:
                 fs.update_commands_stats()
@@ -368,6 +381,9 @@ class NodeInfoUpdater(object):
                 else:
                     raise ValueError('Unknown group type for group {}: {}'.format(
                         group, group.type))
+
+                for gid in couple:
+                    infrastructure.update_group_history(storage.groups[gid])
 
                 if ns_id not in storage.namespaces:
                     logger.info('Creating storage namespace {}'.format(ns_id))
@@ -437,6 +453,8 @@ class NodeInfoUpdater(object):
 
             load_manager.update(storage)
             weight_manager.update(storage)
+
+            infrastructure.schedule_history_update()
 
         except Exception as e:
             logger.exception('Critical error during symmetric group update')
