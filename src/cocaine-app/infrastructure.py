@@ -11,6 +11,14 @@ import msgpack
 from config import config
 from errors import CacheUpstreamError
 import helpers as h
+from history import (
+    GroupHistory,
+    GroupNodeBackendsSetRecord,
+    GroupNodeBackendsSet,
+    GroupNodeBackendRecord,
+    GroupCoupleRecord,
+    GroupStateRecord
+)
 import indexes
 from infrastructure_cache import cache
 import inventory
@@ -73,10 +81,6 @@ class Infrastructure(object):
         'defrag --backend {backend_id}'
     )
 
-    HISTORY_RECORD_AUTOMATIC = 'automatic'
-    HISTORY_RECORD_MANUAL = 'manual'
-    HISTORY_RECORD_JOB = 'job'
-
     def __init__(self):
 
         # actual init happens in 'init' method
@@ -85,25 +89,23 @@ class Infrastructure(object):
         self.node = None
         self.meta_session = None
         self.cache = None
+        self._sync_ts = int(time.time())
 
-        self.state = {}
-        self.__state_lock = threading.Lock()
+        self._groups_to_update = set()
+        self._groups_to_update_lock = threading.Lock()
+
         self.__tq = timed_queue.TimedQueue()
 
-    def init(self, node, job_finder):
+    def init(self, node, job_finder, group_history_finder):
         self.node = node
         self.job_finder = job_finder
+        self.group_history_finder = group_history_finder
         self.meta_session = self.node.meta_session
 
         self._sync_state()
 
         self.cache = cache
         cache.init(self.meta_session, self.__tq)
-
-        self.__tq.add_task_in(
-            self.TASK_UPDATE,
-            config.get('infrastructure_update_period', 300),
-            self._update_state)
 
         self.ns_settings_idx = \
             indexes.TagSecondaryIndex(keys.MM_NAMESPACE_SETTINGS_IDX,
@@ -116,36 +118,28 @@ class Infrastructure(object):
         self.ns_settings = {}
         self._sync_ns_settings()
 
+    def schedule_history_update(self):
+        self.__tq.add_task_in(
+            task_id=self.TASK_UPDATE,
+            secs=config.get('infrastructure_update_period', 300),
+            function=self._update_state
+        )
+
     def _start_tq(self):
         self.__tq.start()
 
     def get_group_history(self, group_id):
-        couples_history = []
-        for couple in self.state[group_id]['couples']:
-            couples_history.append({'couple': couple['couple'],
-                                    'timestamp': couple['timestamp']})
-        nodes_history = []
-        for node_set in self.state[group_id]['nodes']:
-
-            nodes_history.append({
-                'set': node_set['set'],
-                'timestamp': node_set['timestamp'],
-                'type': self.__node_state_type(node_set),
-            })
-        return {'couples': couples_history,
-                'nodes': nodes_history}
+        group_history = self.group_history_finder.group_history(group_id)
+        if group_history is None:
+            raise ValueError('History for group {} is not found'.format(group_id))
+        return group_history
 
     def node_backend_in_last_history_state(self, group_id, host, port, backend_id):
-        if group_id not in self.state:
-            raise ValueError('Group {0} history is not found'.format(group_id))
+        group_history = self.get_group_history(group_id)
 
-        last_node_set = self.state[group_id]['nodes'][-1]['set']
+        last_node_set = group_history.nodes[-1].set
         for k in last_node_set:
-            if len(k) == 2:
-                # old style history record
-                continue
-            nb_host, nb_port, nb_family, nb_backend_id = k[:4]
-            if host == nb_host and port == nb_port and backend_id == nb_backend_id:
+            if host == k.host and port == k.port and backend_id == k.backend_id:
                 return True
 
         return False
@@ -167,158 +161,248 @@ class Infrastructure(object):
                 self._sync_state
             )
 
-    @classmethod
-    def __node_state_type(cls, node_state):
-        return node_state.get(
-            'type',
-            (
-                node_state.get('manual', False) and cls.HISTORY_RECORD_MANUAL or
-                cls.HISTORY_RECORD_AUTOMATIC
-            )
+    def __do_sync_state(self):
+        """
+        Apply all new non-automatic history records
+
+        To sync group state among all mastermind workers we apply the following strategy:
+
+            any worker can add a new state record (couple or node backends set) and
+            mark it with a non-automatic type (manual, job, etc.). Such state changes
+            are found and applied by all other workers periodically.
+
+        This method implements the described strategy by performing search and applying
+        records that are found.
+        """
+        new_ts = int(time.time())
+
+        types_to_sync = (
+            GroupStateRecord.HISTORY_RECORD_MANUAL,
+            GroupStateRecord.HISTORY_RECORD_JOB
         )
 
-    def __do_sync_state(self):
-        group_ids = set()
-        with self.__state_lock:
+        for group_history in self.group_history_finder.search_by_history_record(
+            type=types_to_sync,
+            start_ts=self._sync_ts,
+            finish_ts=new_ts
+        ):
+            logger.debug('Found updated group history for group {}'.format(group_history.group_id))
+            if group_history.group_id not in storage.groups:
+                continue
+            group = storage.groups[group_history.group_id]
+            for node_backends_set in group_history.nodes:
+                if not self._sync_ts <= node_backends_set.timestamp < new_ts:
+                    continue
+                if node_backends_set.type not in types_to_sync:
+                    continue
 
-            idxs = self.meta_session.find_all_indexes([keys.MM_GROUPS_IDX])
-            for idx in idxs:
-                data = idx.indexes[0].data
-
-                state_group = self._unserialize(data)
-                # logger.debug('Fetched infrastructure item: %s' %
-                #               (state_group,))
-
-                if (self.state.get(state_group['id']) and state_group['id'] in storage.groups):
-
-                    group = storage.groups[state_group['id']]
-
-                    for nodes_state in reversed(state_group['nodes']):
-                        if nodes_state['timestamp'] <= self.state[state_group['id']]['nodes'][-1]['timestamp']:
+                for nb in group.node_backends:
+                    for nb_record in node_backends_set.set:
+                        if (
+                            nb_record.hostname == nb.hostname and
+                            nb_record.port == nb.port and
+                            nb_record.family == nb.family and
+                            nb_record.backend_id == nb.backend_id and
+                            nb_record.path == nb.base_path
+                        ):
                             break
+                    else:
+                        logger.info(
+                            'Removing {} from group {} due to manual group detaching'.format(
+                                nb, group.group_id
+                            )
+                        )
+                        group.remove_node_backend(nb)
+                        group.update_status_recursive()
+        self._sync_ts = new_ts
 
-                        if self.__node_state_type(nodes_state) != self.HISTORY_RECORD_AUTOMATIC:
-                            nodes_set = set(nodes_state['set'])
-                            for nb in group.node_backends:
-                                if not (nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id, nb.base_path) in nodes_set:
-                                    logger.info('Removing {0} from group {1} due to manual group detaching'.format(nb, group.group_id))
-                                    group.remove_node_backend(nb)
-                            group.update_status_recursive()
+    def update_group_history(self, group):
+        """
+        Add group to update group history queue
 
-                self.state[state_group['id']] = state_group
-                group_ids.add(state_group['id'])
+        This method should be called if there is a chance that group has changed
+        it's state and it's group history record needs to be updated.
+        This can happen when:
+            - node backend is added to group;
+            - existing node backend changes its path;
+            - group is added to couple.
+        """
+        with self._groups_to_update_lock:
+            self._groups_to_update.add(group)
 
-            for gid in set(self.state.keys()) - group_ids:
-                logger.info('Group %d is not found in infrastructure state, '
-                            'removing' % gid)
-                del self.state[gid]
+    def _new_group_history(self, group_id):
+        gh = GroupHistory(group_id=group_id)
+        gh.collection = self.group_history_finder.collection
+        return gh
 
-    @staticmethod
-    def _serialize(data):
-        return msgpack.packb(data)
+    def _new_group_node_backends_set_record(self, group, group_history):
+        """
+        Create new node backends set record for group history
 
-    @staticmethod
-    def _unserialize(data):
-        group_state = msgpack.unpackb(data)
-        group_state['nodes'] = list(group_state['nodes'])
-        if 'couples' not in group_state:
-            group_state['couples'] = []
-        group_state['couples'] = list(group_state['couples'])
-        return group_state
+        New record is not allowed to exclude any of the backends that are recorded
+        in the history's most recent set. The sole purpose of new record generation
+        is to extend mentioned set with a new backend that wasn't already there but
+        should be according to the current group's set.
 
-    @staticmethod
-    def _new_group_state(group_id):
-        return {
-            'id': group_id,
-            'nodes': [],
-            'couples': [],
-        }
+        The workflow is following:
+
+            1) if group's current state contains node backends that are not found
+            in the most recent history record, a new record should be created containing
+            all node backends from the most recent history record as well as node backends
+            from the current group's state;
+
+            2) if group's current state contains no node backends, new record should not
+            be created (this can happen if the group is temporarily unavailable).
+
+        Returns:
+            - new node backends set record to save;
+            - <None> if node backends set should not be updated.
+        """
+
+        current_state_node_backends_set = GroupNodeBackendsSet(
+            GroupNodeBackendRecord(**{
+                'hostname': nb.node.host.hostname,
+                'port': nb.node.port,
+                'family': nb.node.family,
+                'backend_id': nb.backend_id,
+                'path': nb.base_path,
+            })
+            for nb in group.node_backends if nb.stat
+        )
+
+        if not current_state_node_backends_set:
+            return None
+
+        if group_history.nodes:
+            history_node_backends_set = group_history.nodes[-1]
+        else:
+            history_node_backends_set = GroupNodeBackendsSetRecord(set=GroupNodeBackendsSet())
+
+        # extended node backends set which includes newly seen nodes,
+        # do not discard lost nodes
+        unaccounted_history_node_backends_set = GroupNodeBackendsSet(
+            nb
+            for nb in history_node_backends_set.set
+            if nb not in current_state_node_backends_set
+        )
+        ext_current_state_node_backends_set = GroupNodeBackendsSetRecord(
+            set=current_state_node_backends_set + unaccounted_history_node_backends_set
+        )
+
+        if ext_current_state_node_backends_set != history_node_backends_set:
+            logger.info(
+                'Group {} info does not match, last state: {}, '
+                'current state: {}'.format(
+                    group.group_id, history_node_backends_set, ext_current_state_node_backends_set
+                )
+            )
+            return ext_current_state_node_backends_set
+
+        return None
+
+    def _new_group_couple_record(self, group, group_history):
+        """
+        Create new couple record for group history
+
+        New record is not allowed to add "no couple" record to history.
+        If group is new and uncoupled such record should be provided by uncoupled group
+        init script (not implemeted at the time).
+        In case couple is being broken "no couple" record of non-automatic type creation
+        should be provided by the action-performing code.
+
+        The worlflow is following:
+            1) if group's current couple differs from the one set in the most recent
+            history record create a new couple record with current group's couple;
+            2) if group's current couple is <None>, new record should not be created.
+
+        Returns:
+            - new couple record to save;
+            - <None> if couple record should not be updated.
+        """
+
+        if group.couple is None:
+            return None
+
+        storage_couple = GroupCoupleRecord(couple=group.couple.as_tuple())
+
+        history_couple = (
+            group_history.couples and group_history.couples[-1] or
+            GroupCoupleRecord(couple=())
+        )
+
+        if history_couple and history_couple != storage_couple:
+            logger.info(
+                'Group {} couple does not match, last state: {}, '
+                'current state: {}'.format(
+                    group.group_id, history_couple, storage_couple
+                )
+            )
+            return storage_couple
+
+        return None
 
     def _update_state(self):
-        groups_to_update = []
+        """
+        Check if group's current state corresponds to group history record,
+        update record if necessary
+        """
         start_ts = time.time()
+
+        failed_groups = set()
+
         try:
             logger.info('Updating infrastructure state')
 
-            logger.info('Fetching fresh infrastructure state')
-            self.__do_sync_state()
-            logger.info('Done fetching fresh infrastructure state, time: {0:.3f}'.format(
-                time.time() - start_ts))
+            with self._groups_to_update_lock:
+                groups_to_update = self._groups_to_update
+                self._groups_to_update = set()
 
-            for g in storage.groups.keys():
+            for g in groups_to_update:
 
-                group_state = self.state.get(g.group_id,
-                                             self._new_group_state(g.group_id))
+                try:
+                    group_history = (
+                        self.group_history_finder.group_history(g.group_id) or
+                        self._new_group_history(g.group_id)
+                    )
 
-                storage_nodes = tuple((nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id, nb.base_path)
-                                      for nb in g.node_backends if nb.stat)
-                storage_couple = (tuple([group.group_id for group in g.couple])
-                                  if g.couple is not None else
-                                  tuple())
+                    new_node_backends_set_record = self._new_group_node_backends_set_record(
+                        group=g,
+                        group_history=group_history
+                    )
 
-                if not storage_nodes:
-                    logger.debug('Storage nodes list for group %d is empty, '
-                                  'skipping' % (g.group_id,))
-                    continue
+                    new_couple_record = self._new_group_couple_record(
+                        group=g,
+                        group_history=group_history
+                    )
 
-                new_nodes = None
-                new_couple = None
+                    if new_node_backends_set_record or new_couple_record:
+                        self._update_group(
+                            group_history=group_history,
+                            new_nodes=new_node_backends_set_record,
+                            new_couple=new_couple_record
+                        )
 
-                with self.__state_lock:
-                    if not g.group_id in self.state:
-                        # add group to state only if checks succeeded
-                        self.state[g.group_id] = group_state
+                except CacheUpstreamError as e:
+                    logger.error('Failed to update history for group {}: {}'.format(
+                        g.group_id, e
+                    ))
+                    failed_groups.add(g)
+                except Exception:
+                    logger.exception('Failed to update history for group {}'.format(
+                        g.group_id
+                    ))
+                    failed_groups.add(g)
 
-                    cur_group_state = (group_state['nodes'] and
-                                       group_state['nodes'][-1]
-                                       or {'set': []})
-
-                    state_nodes = tuple(tuple(nbs)
-                                        for nbs in cur_group_state['set'])
-                    state_nodes_set = set(state_nodes)
-
-                    # extended storage nodes set which includes newly seen nodes,
-                    # do not discard lost nodes
-                    # also filter out old history nodes
-                    ext_storage_nodes = (storage_nodes + tuple(
-                        nb for nb in state_nodes
-                            if nb not in storage_nodes and len(nb) != 2))
-
-                    if set(ext_storage_nodes) != state_nodes_set:
-                        logger.info('Group %d info does not match,'
-                                     'last state: %s, current state: %s' %
-                                     (g.group_id, state_nodes, ext_storage_nodes))
-                        new_nodes = ext_storage_nodes
-
-                    cur_couple_state = (group_state['couples'] and
-                                        group_state['couples'][-1]
-                                        or {'couple': tuple()})
-                    state_couple = cur_couple_state['couple']
-
-                    if storage_couple and set(state_couple) != set(storage_couple):
-                        logger.info('Group %d couple does not match,'
-                                     'last state: %s, current state: %s' %
-                                     (g.group_id, state_couple, storage_couple))
-                        new_couple = storage_couple
-
-                    if new_nodes or new_couple:
-                        try:
-                            self._update_group(g.group_id, new_nodes, new_couple)
-                        except Exception as e:
-                            logger.error('Failed to update infrastructure state for group %s: %s\n%s' %
-                                (g.group_id, e, traceback.format_exc()))
-                            pass
-
+        except Exception:
+            logger.exception('Failed to update infrastructure state')
+        finally:
+            if failed_groups:
+                logger.error('Failed to update history for {} groups'.format(len(failed_groups)))
+                with self._groups_to_update_lock:
+                    self._groups_to_update.update(failed_groups)
 
             logger.info('Finished updating infrastructure state, time: {0:.3f}'.format(
                 time.time() - start_ts))
-        except Exception as e:
-            logger.error('Failed to update infrastructure state, time: {0:.3f}, {1}\n{2}'.format(
-                            time.time() - start_ts, e, traceback.format_exc()))
-        finally:
-            self.__tq.add_task_in(self.TASK_UPDATE,
-                config.get('infrastructure_update_period', 300),
-                self._update_state)
 
     def _sync_ns_settings(self):
         try:
@@ -368,60 +452,57 @@ class Infrastructure(object):
         del settings['namespace']
         self.ns_settings[namespace] = settings
 
-    def _update_group(self, group_id, new_nodes=None, new_couple=None, record_type=None):
-        group = self.state[group_id]
-        if new_nodes is not None:
-            new_nodes_state = {'set': new_nodes,
-                               'timestamp': time.time()}
-            new_nodes_state['type'] = record_type or self.HISTORY_RECORD_AUTOMATIC
+    def _update_group(self,
+                      group_history,
+                      new_nodes=None,
+                      new_couple=None,
+                      record_type=GroupStateRecord.HISTORY_RECORD_AUTOMATIC):
 
-            group['nodes'].append(new_nodes_state)
+        if new_nodes is not None:
+            new_nodes.timestamp = time.time()
+            new_nodes.type = record_type
+
+            group_history.nodes.append(new_nodes)
+            group_history._dirty = True
 
         if new_couple is not None:
-            new_couples_state = {'couple': new_couple,
-                                 'timestamp': time.time()}
-            group['couples'].append(new_couples_state)
+            new_couple.timestamp = time.time()
+            new_couple.type = record_type
 
-        eid = self.meta_session.transform(keys.MM_ISTRUCT_GROUP % group_id)
-        logger.info('Updating state for group %s' % group_id)
-        self.meta_session.update_indexes(eid, [keys.MM_GROUPS_IDX],
-                                              [self._serialize(group)]).get()
+            group_history.couples.append(new_couple)
+            group_history._dirty = True
 
-    def detach_node(self, group_id, host, port, backend_id, record_type=None):
-        with self.__state_lock:
-            if group_id not in self.state:
-                raise ValueError(
-                    'Node backend {0}:{1}/{2} not found in group {3} history state'.format(
-                        host, port, backend_id, group_id
+        group_history.save()
+
+    def detach_node(self, group_id, hostname, port, backend_id, record_type=None):
+        group_history = self.get_group_history(group_id)
+
+        node_backends_set = group_history.nodes[-1].set[:]
+
+        for i, node_backend in enumerate(node_backends_set):
+            if (node_backend.hostname == hostname and
+                    node_backend.port == port and
+                    node_backend.backend_id == backend_id):
+
+                logger.debug(
+                    'Removing node backend {0}:{1}/{2} from group {3} history state'.format(
+                        hostname, port, backend_id, group_id
                     )
                 )
-
-            group_state = self.state[group_id]
-            state_nodes = list(group_state['nodes'][-1]['set'][:])
-
-            logger.info('{0}'.format(state_nodes))
-            for i, state_node in enumerate(state_nodes):
-                state_host, state_port, state_family, state_backend_id = state_node[:4]
-                if state_host == host and state_port == port and state_backend_id == backend_id:
-                    logger.debug(
-                        'Removing node backend {0}:{1}/{2} from group {3} history state'.format(
-                            host, port, backend_id, group_id
-                        )
-                    )
-                    del state_nodes[i]
-                    break
-            else:
-                raise ValueError(
-                    'Node backend {0}:{1}/{2} not found in group {3} history state'.format(
-                        host, port, backend_id, group_id
-                    )
+                del node_backends_set[i]
+                break
+        else:
+            raise ValueError(
+                'Node backend {0}:{1}/{2} not found in group {3} history state'.format(
+                    hostname, port, backend_id, group_id
                 )
-
-            self._update_group(
-                group_id, state_nodes,
-                None,
-                record_type=record_type or self.HISTORY_RECORD_MANUAL
             )
+
+        self._update_group(
+            group_history=group_history,
+            new_nodes=GroupNodeBackendsSetRecord(set=node_backends_set),
+            record_type=record_type or GroupStateRecord.HISTORY_RECORD_MANUAL
+        )
 
     def move_group_cmd(self,
                        src_host,
@@ -688,38 +769,33 @@ class Infrastructure(object):
 
         entries = []
 
-        if not path.startswith('^'):
-            path = '^' + path
-        if not path.endswith('$'):
-            path = path + '$'
-        path = path.replace('*', '.*')
-
         start_idx = 0
         if params.get('last', False):
             start_idx = -1
 
-        for group_id, group_history in self.state.iteritems():
-            for node_set in group_history['nodes'][start_idx:]:
-                ts = node_set['timestamp']
-                for node in node_set['set']:
+        group_histories = self.group_history_finder.search_by_node_backend(
+            hostname=host,
+            path=path
+        )
+        for group_history in group_histories:
+            for node_backends_set in group_history.nodes[start_idx:]:
+                for node_backend in node_backends_set.set:
 
-                    node_path = node[4]
-
-                    if not node_path:
+                    if not node_backend.path:
                         continue
 
-                    if re.match(path, node_path) is not None and node[0] == host:
-                        entries.append((ts, group_id, node_set))
+                    if re.match(path, node_backend.path) is not None and node_backend.hostname == host:
+                        entries.append((group_history, node_backends_set))
                         break
 
         entries.sort(key=lambda e: e[0])
         result = []
 
-        for entry in entries:
-            result.append({'group': entry[1],
-                           'set': entry[2]['set'],
-                           'timestamp': entry[0],
-                           'type': self.__node_state_type(entry[2])})
+        for group_history, node_backends_set in entries:
+            result.append({'group': group_history.group_id,
+                           'set': [nb.dump() for nb in node_backends_set.set],
+                           'timestamp': node_backends_set.timestamp,
+                           'type': node_backends_set.type})
 
         return result
 

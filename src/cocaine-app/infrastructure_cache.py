@@ -66,7 +66,11 @@ class InfrastructureCache(object):
         return self.strictable(self.hosttree_cache, hostname, strict)
 
     def get_ip_address_by_host(self, host, strict=True):
-        addresses = self.strictable(self.ip_addresses_cache, host, strict)
+        addresses = self.strictable(
+            cache=self.ip_addresses_cache,
+            key=host,
+            strict=strict
+        )
 
         if addresses.get(self.DEFAULT_FAMILY, None):
             return addresses[self.DEFAULT_FAMILY][0]
