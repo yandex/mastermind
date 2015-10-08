@@ -1,4 +1,4 @@
-mastermind (2.25.59) trusty; urgency=medium
+mastermind (2.25.66) trusty; urgency=medium
 
   * Fix settings comparison with basic python types
 
