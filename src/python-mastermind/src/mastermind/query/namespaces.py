@@ -205,6 +205,14 @@ class NamespaceDataObject(LazyDataObject):
         def __len__(self):
             return len(self._settings)
 
+        def __eq__(self, other):
+            if isinstance(other, NamespaceDataObject.Settings):
+                return self._settings == other._settings
+            return self._settings == other
+
+        def __ne__(self, other):
+            return not self == other
+
         def keys(self):
             return self._settings.keys()
 
