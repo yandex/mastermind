@@ -1,3 +1,9 @@
+mastermind (2.25.59) trusty; urgency=medium
+
+  * Fix settings comparison with basic python types
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 08 Oct 2015 12:55:36 +0300
+
 mastermind (2.25.58) trusty; urgency=medium
 
   * Add couple primary and fallback hosts to namespaces states
