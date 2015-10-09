@@ -185,3 +185,26 @@ class Collection(OriginalCollection):
             (self.database.connection.name, self.database.name, self.name, 'find_one', str(args), str(kwargs), slave_read_status(kwargs))
         __set_request_message__(request_message)
         return super(Collection, self).find_one(*args, **kwargs)
+
+    def list(self, **kwargs):
+        """
+        Returns mongo query cursor
+
+        The cursor can be further parametrized by additional filteres,
+        query parameters, etc.
+        """
+        params = {}
+
+        for k, v in kwargs.iteritems():
+            if v is None:
+                continue
+            params.update(self.condition(k, v))
+
+        return self.find(params)
+
+    @staticmethod
+    def condition(field_name, field_val):
+        if isinstance(field_val, (list, tuple)):
+            return {field_name: {'$in': list(field_val)}}
+        else:
+            return {field_name: field_val}
