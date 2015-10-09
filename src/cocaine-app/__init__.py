@@ -276,6 +276,12 @@ def init_job_finder():
 
 
 def init_group_history_finder():
+    if not config['metadata'].get('history', {}).get('db'):
+        logger.error(
+            'History finder metadb is not set up '
+            '("metadata.history.db" key), will not be initialized'
+        )
+        return None
     ghf = history.GroupHistoryFinder(meta_db)
     return ghf
 

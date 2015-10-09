@@ -102,7 +102,8 @@ class Infrastructure(object):
         self.group_history_finder = group_history_finder
         self.meta_session = self.node.meta_session
 
-        self._sync_state()
+        if self.group_history_finder:
+            self._sync_state()
 
         self.cache = cache
         cache.init(self.meta_session, self.__tq)
@@ -119,6 +120,8 @@ class Infrastructure(object):
         self._sync_ns_settings()
 
     def schedule_history_update(self):
+        if not self.group_history_finder:
+            return
         self.__tq.add_task_in(
             task_id=self.TASK_UPDATE,
             secs=config.get('infrastructure_update_period', 300),
@@ -129,6 +132,8 @@ class Infrastructure(object):
         self.__tq.start()
 
     def get_group_history(self, group_id):
+        if not self.group_history_finder:
+            raise ValueError('History for group {} is not found'.format(group_id))
         group_history = self.group_history_finder.group_history(group_id)
         if group_history is None:
             raise ValueError('History for group {} is not found'.format(group_id))
@@ -766,6 +771,9 @@ class Infrastructure(object):
             path = params['path']
         except KeyError:
             raise ValueError('Host and path parameters are required')
+
+        if not self.group_history_finder:
+            return []
 
         entries = []
 
