@@ -1,3 +1,9 @@
+mastermind (2.25.69) trusty; urgency=medium
+
+  * Accept generators to GroupNodeBackendsSet
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 09 Oct 2015 18:15:17 +0300
+
 mastermind (2.25.68) trusty; urgency=medium
 
   * Store group history in mongo instead of meta elliptics
