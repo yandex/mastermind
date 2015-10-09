@@ -1,7 +1,6 @@
 import logging
 import socket
 import time
-import traceback
 
 import msgpack
 
@@ -17,6 +16,13 @@ logger = logging.getLogger('mm.infrastructure')
 
 
 class InfrastructureCache(object):
+
+    DEFAULT_FAMILY = config['elliptics']['nodes'][0][2]
+    FAMILIES_FALLBACK_PRIO = {
+        socket.AF_INET6: (socket.AF_INET,),
+        socket.AF_INET: (),
+    }
+
     def init(self, meta_session, tq):
         self.meta_session = meta_session
         self.__tq = tq
@@ -31,6 +37,14 @@ class InfrastructureCache(object):
 
         self.hosttree_cache = HostTreeCacheItem(self.meta_session,
             keys.MM_HOSTTREE_CACHE_IDX, keys.MM_HOSTTREE_CACHE_HOST, self.__tq)
+
+        self.ip_addresses_cache = IpAddressesCacheItem(
+            meta_session=self.meta_session,
+            idx_key=keys.MM_IPADDRESSES_CACHE_IDX,
+            key_tpl=keys.MM_IPADDRESSES_CACHE_HOST,
+            task_queue=self.__tq
+        )
+
         self.hosttree_cache._sync_cache()
 
     @staticmethod
@@ -51,6 +65,25 @@ class InfrastructureCache(object):
     def get_host_tree(self, hostname, strict=True):
         return self.strictable(self.hosttree_cache, hostname, strict)
 
+    def get_ip_address_by_host(self, host, strict=True):
+        addresses = self.strictable(
+            cache=self.ip_addresses_cache,
+            key=host,
+            strict=strict
+        )
+
+        if addresses.get(self.DEFAULT_FAMILY, None):
+            return addresses[self.DEFAULT_FAMILY][0]
+
+        for family in self.FAMILIES_FALLBACK_PRIO.get(self.DEFAULT_FAMILY, []):
+            if addresses.get(family, None):
+                return addresses[family][0]
+
+        if strict:
+            raise ValueError('Host {} cannot be resolved to ip address'.format(host))
+
+        return None
+
 
 cache = InfrastructureCache()
 
@@ -68,10 +101,10 @@ class InfrastructureCacheManager(object):
 
 class CacheItem(object):
 
-    def __init__(self, meta_session, idx_key, key_key, tq):
+    def __init__(self, meta_session, idx_key, key_tpl, task_queue):
         self.meta_session = meta_session.clone()
-        self.idx = indexes.SecondaryIndex(idx_key, key_key, self.meta_session)
-        self.__tq = tq
+        self.idx = indexes.SecondaryIndex(idx_key, key_tpl, self.meta_session)
+        self.__tq = task_queue
         self.cache = {}
 
         for attr in ['taskname', 'logprefix', 'sync_period', 'key_expire_time']:
@@ -178,3 +211,17 @@ class HostTreeCacheItem(CacheItem):
 
     def get_value(self, key):
         return inventory.get_host_tree(key)
+
+
+class IpAddressesCacheItem(CacheItem):
+    def __init__(self, *args, **kwargs):
+        self.taskname = 'infrastructure_ipaddresses_cache_sync'
+        self.logprefix = 'ipaddresses cache: '
+        self.sync_period = config.get('infrastructure_ipaddresses_cache_update_period', 600)
+        self.key_expire_time = config.get('infrastructure_ipaddresses_cache_valid_time', 604800)
+        super(IpAddressesCacheItem, self).__init__(*args, **kwargs)
+
+        self.fallback_value = {}
+
+    def get_value(self, key):
+        return inventory.get_host_ip_addresses(key)

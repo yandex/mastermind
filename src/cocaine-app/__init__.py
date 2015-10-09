@@ -25,6 +25,7 @@ logger = logging.getLogger('mm.init')
 import balancer
 import balancelogicadapter
 from db.mongo.pool import MongoReplicaSetClient
+import history
 import infrastructure
 import jobs
 import minions
@@ -212,9 +213,9 @@ def register_handle_wne(h):
     return wrapper
 
 
-def init_infrastructure(jf):
+def init_infrastructure(jf, ghf):
     infstruct = infrastructure.infrastructure
-    infstruct.init(n, jf)
+    infstruct.init(n, jf, ghf)
     register_handle(infstruct.shutdown_node_cmd)
     register_handle(infstruct.start_node_cmd)
     register_handle(infstruct.disable_node_backend_cmd)
@@ -274,6 +275,11 @@ def init_job_finder():
     return jf
 
 
+def init_group_history_finder():
+    ghf = history.GroupHistoryFinder(meta_db)
+    return ghf
+
+
 def init_job_processor(jf, minions, niu):
     if jf is None:
         logger.error(
@@ -299,7 +305,8 @@ def init_manual_locker(manual_locker):
 
 
 jf = init_job_finder()
-io = init_infrastructure(jf)
+ghf = init_group_history_finder()
+io = init_infrastructure(jf, ghf)
 niu = init_node_info_updater(jf)
 b.niu = niu
 b.start()

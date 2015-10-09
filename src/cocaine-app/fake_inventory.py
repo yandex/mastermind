@@ -89,6 +89,7 @@ def node_reconfigure(host, port, family):
     '''
     return None
 
+
 def set_net_monitoring_downtime(host):
     '''
     If your infrastructure monitors network activity, it can cause alerts
@@ -100,8 +101,42 @@ def set_net_monitoring_downtime(host):
     '''
     return None
 
+
 def remove_net_monitoring_downtime(host):
     '''
     See "set_net_monitoring_downtime" doc string.
     '''
     return None
+
+
+def get_host_ip_addresses(hostname):
+    '''
+    Resolves hostname to ip(v6) addresses
+
+    Mastermind will preferably use address with a family corresponding
+    to elliptics client connection settings.
+
+    Returns:
+        {
+            socket.AF_INET: [
+                '1.2.3.4',
+                '5.6.7.8',
+            ],
+            socket.AF_INET6: [
+                '2001:db8:0:1',
+            ]
+        }
+    '''
+    ip_addresses = {}
+    host, port, family, socktype = hostname, None, socket.AF_UNSPEC, socket.SOL_TCP
+    records = socket.getaddrinfo(host, port, family, socktype)
+    for record in records:
+        # record format is (family, socktype, proto, canonname, sockaddr),
+        # sockaddr format depends on family of the socket:
+        # socket.AF_INET - (address, port),
+        # socket.AF_INET6 - (address, port, flow info, scope id).
+        # See docs for more info: https://docs.python.org/2/library/socket.html#socket.getaddrinfo
+        family, sockaddr = record[0], record[4]
+        ip_address = sockaddr[0]
+        ip_addresses.setdefault(family, []).append(ip_address)
+    return ip_addresses

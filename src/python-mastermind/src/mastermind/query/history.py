@@ -25,7 +25,7 @@ class CoupleHistoryRecord(object):
 
 class NodeBackendSetHistoryRecord(object):
     def __init__(self, data):
-        self.set = [NodeBackendHistoryRecord(ns) for ns in data['set']]
+        self.set = [NodeBackendHistoryRecord(**ns) for ns in data['set']]
         self.timestamp = data['timestamp']
         self.type = data['type']
 
@@ -38,20 +38,20 @@ class NodeBackendSetHistoryRecord(object):
 
 
 class NodeBackendHistoryRecord(object):
-    def __init__(self, data):
-        self.addr = data[0]
-        self.port = data[1]
-        self.family = data[2]
-        self.backend_id = data[3]
-        self.base_path = data[4]
+    def __init__(self, hostname, port, family, backend_id, path):
+        self.hostname = hostname
+        self.port = port
+        self.family = family
+        self.backend_id = backend_id
+        self.path = path
 
     def __str__(self):
-        return '{host}:{port}:{family}/{backend_id} {path}'.format(
-            host=self.addr,
+        return '{hostname}:{port}:{family}/{backend_id} {path}'.format(
+            hostname=self.hostname,
             port=self.port,
             family=self.family,
             backend_id=self.backend_id,
-            path=self.base_path)
+            path=self.path)
 
     def __repr__(self):
         return '<{}: {}>'.format(type(self).__name__, str(self))
