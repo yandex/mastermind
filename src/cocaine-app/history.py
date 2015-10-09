@@ -101,7 +101,7 @@ class GroupNodeBackendsSet(list):
     """
     def __init__(self, *args, **kwargs):
         super(GroupNodeBackendsSet, self).__init__(*args, **kwargs)
-        if len(self) != len(set(*args, **kwargs)):
+        if len(self) != len(set(self)):
             raise ValueError('Node backends set should contain only unique elements')
 
     def append(self, item):
@@ -287,7 +287,7 @@ class GroupHistoryFinder(object):
             return None
         except Exception:
             logger.exception('History finder failed')
-            return None
+            raise
 
     def groups_history(self, ids=None):
         group_histories = [
