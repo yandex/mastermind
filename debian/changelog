@@ -1,3 +1,9 @@
+mastermind (2.25.70) trusty; urgency=medium
+
+  * Add ability to run worker without history collection
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 09 Oct 2015 19:29:22 +0300
+
 mastermind (2.25.69) trusty; urgency=medium
 
   * Accept generators to GroupNodeBackendsSet
