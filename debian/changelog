@@ -1,3 +1,10 @@
+mastermind (2.25.71) trusty; urgency=medium
+
+  * Fix exception type for non-blocking locks (when acquiring failed)
+  * Fix group history update task scheduling
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 12 Oct 2015 14:16:06 +0300
+
 mastermind (2.25.70) trusty; urgency=medium
 
   * Add ability to run worker without history collection
