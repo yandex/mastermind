@@ -83,7 +83,7 @@ class TimedQueue:
             return
         with self.__heap_lock:
             if task_id in self.__task_by_id:
-                raise Exception("Task with ID %s already exists" % task_id)
+                raise ValueError("Task with ID %s already exists" % task_id)
             task = Task(task_id, function, args, kwargs)
             heapq.heappush(self.__heap, (at, task))
             self.__task_by_id[task_id] = task
