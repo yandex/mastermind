@@ -122,11 +122,15 @@ class Infrastructure(object):
     def schedule_history_update(self):
         if not self.group_history_finder:
             return
-        self.__tq.add_task_in(
-            task_id=self.TASK_UPDATE,
-            secs=config.get('infrastructure_update_period', 300),
-            function=self._update_state
-        )
+        try:
+            self.__tq.add_task_in(
+                task_id=self.TASK_UPDATE,
+                secs=0,
+                function=self._update_state
+            )
+        except ValueError:
+            # task is already scheduled
+            pass
 
     def _start_tq(self):
         self.__tq.start()
