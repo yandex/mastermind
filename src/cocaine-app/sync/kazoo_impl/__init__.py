@@ -54,13 +54,15 @@ class ZkSyncManager(object):
             acquired = lock.acquire(blocking=blocking, timeout=timeout)
             logger.debug('Lock {0} acquired: {1}'.format(lockid, acquired))
             if not acquired:
-                raise LockFailedError(lock_id=lockid)
+                # TODO: Change exception time or set all required parameters for
+                # this type of exception
+                raise LockAlreadyAcquiredError(lock_id=lockid)
             yield
         except LockTimeout:
             logger.info('Failed to acquire lock {} due to timeout ({} seconds)'.format(
                 lockid, timeout))
             raise LockFailedError(lock_id=lockid)
-        except LockFailedError:
+        except LockAlreadyAcquiredError:
             raise
         except LockError as e:
             logger.error('Failed to acquire lock {0}: {1}\n{2}'.format(
