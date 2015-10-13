@@ -1,3 +1,10 @@
+mastermind (2.25.72) trusty; urgency=medium
+
+  * Check uncoupled groups right before settings metakey
+  * Prevent statistics calculation failing
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 13 Oct 2015 18:41:32 +0300
+
 mastermind (2.25.71) trusty; urgency=medium
 
   * Fix exception type for non-blocking locks (when acquiring failed)
