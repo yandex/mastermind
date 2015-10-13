@@ -76,7 +76,7 @@ class Statistics(object):
         ns_stats = {}
         try:
             _, per_ns_stat, _ = self.per_entity_stat()
-        except Exception as e:
+        except Exception:
             logger.exception('Failed to calculate namespace statistics')
             return ns_stats
 
@@ -109,24 +109,25 @@ class Statistics(object):
         data['removed_keys'] += files_stat.files_removed
 
     def per_entity_stat(self):
-        default = lambda: {
-            'free_space': 0,
-            'total_space': 0,
-            'effective_space': 0,
-            'effective_free_space': 0,
-            'uncoupled_space': 0,
+        def default():
+            return {
+                'free_space': 0,
+                'total_space': 0,
+                'effective_space': 0,
+                'effective_free_space': 0,
+                'uncoupled_space': 0,
 
-            'open_couples': 0,
-            'frozen_couples': 0,
-            'closed_couples': 0,
-            'broken_couples': 0,
-            'bad_couples': 0,
-            'total_couples': 0,
-            'uncoupled_groups': 0,
+                'open_couples': 0,
+                'frozen_couples': 0,
+                'closed_couples': 0,
+                'broken_couples': 0,
+                'bad_couples': 0,
+                'total_couples': 0,
+                'uncoupled_groups': 0,
 
-            'total_keys': 0,
-            'removed_keys': 0,
-        }
+                'total_keys': 0,
+                'removed_keys': 0,
+            }
 
         by_dc = defaultdict(default)
         by_ns = defaultdict(default)
@@ -156,18 +157,18 @@ class Statistics(object):
                     except CacheUpstreamError:
                         continue
 
-                    if not couple in dc_couple_map[dc]:
+                    if couple not in dc_couple_map[dc]:
                         self.account_couples(by_dc[dc], group)
                         if ns:
                             self.account_keys(by_dc[dc], couple)
                             self.account_effective_memory(by_dc[dc], couple)
                         dc_couple_map[dc].add(couple)
-                    if ns and not couple in ns_couple_map[ns]:
+                    if ns and couple not in ns_couple_map[ns]:
                         self.account_couples(by_ns[ns], group)
                         self.account_effective_memory(by_ns[ns], couple)
                         self.account_keys(by_ns[ns], couple)
                         ns_couple_map[ns].add(couple)
-                    if ns and not couple in ns_dc_couple_map[ns][dc]:
+                    if ns and couple not in ns_dc_couple_map[ns][dc]:
                         self.account_couples(by_ns_dc[ns][dc], group)
                         self.account_effective_memory(by_ns_dc[ns][dc], couple)
                         self.account_keys(by_ns_dc[ns][dc], couple)
@@ -195,14 +196,15 @@ class Statistics(object):
                 h.defaultdict_to_dict(by_ns_dc))
 
     def count_outaged_couples(self, by_dc_stats, by_ns_stats):
-        default = lambda: {
-            'open_couples': 0,
-            'frozen_couples': 0,
-            'closed_couples': 0,
-            'broken_couples': 0,
-            'bad_couples': 0,
-            'total_couples': 0,
-        }
+        def default():
+            return {
+                'open_couples': 0,
+                'frozen_couples': 0,
+                'closed_couples': 0,
+                'broken_couples': 0,
+                'bad_couples': 0,
+                'total_couples': 0,
+            }
 
         by_dc = defaultdict(default)
         by_ns = defaultdict(lambda: defaultdict(default))
@@ -274,7 +276,6 @@ class Statistics(object):
         excluding space occupied by replicas, accounts for groups residing
         on the same file systems, etc."""
 
-
         # TODO: Change min_free_space* usage
         host_fsid_memory_map = {}
 
@@ -308,13 +309,18 @@ class Statistics(object):
             group_top_stats = []
             for group in couple.groups:
                 # space is summed through all the group node backends
-                group_top_stats.append(reduce(self.dict_keys_sum,
-                       [host_fsid_memory_map[(nb.node.host.addr, nb.stat.fsid)] for nb in group.node_backends if nb.stat]))
+                group_top_stats.append(
+                    reduce(
+                        self.dict_keys_sum,
+                        [host_fsid_memory_map[(nb.node.host.addr, nb.stat.fsid)]
+                         for nb in group.node_backends if nb.stat]
+                    )
+                )
 
             # max space available for the couple
             couple_top_stats = reduce(self.dict_keys_min, group_top_stats)
 
-            #increase storage stats
+            # increase storage stats
             res = reduce(self.dict_keys_sum, [res, couple_top_stats])
 
             for group in couple.groups:
@@ -345,7 +351,7 @@ class Statistics(object):
     @staticmethod
     def per_key_update(dest, src):
         for key, val in dest.iteritems():
-            if not key in src:
+            if key not in src:
                 continue
             val.update(src[key])
 
@@ -465,8 +471,10 @@ class Statistics(object):
         res['total_space'] = stat.total_space
         res['free_space'] = stat.free_space
 
-        res['free_effective_space'] = max(stat.free_space -
-            (stat.total_space - eff_space), 0.0)
+        res['free_effective_space'] = max(
+            stat.free_space - (stat.total_space - eff_space),
+            0.0
+        )
         res['used_space'] = stat.used_space
         res['fragmentation'] = stat.fragmentation
 
