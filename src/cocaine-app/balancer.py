@@ -861,6 +861,19 @@ class Balancer(object):
 
                 logger.info('Chosen groups to couple: {0}'.format(groups_to_couple))
 
+                unsuitable_group_ids = get_unsuitable_uncoupled_group_ids(
+                    self.node, groups_to_couple
+                )
+                if unsuitable_group_ids:
+                    logger.error(
+                        'Groups {} cannot be coupled: failed to ensure empty metakey '
+                        'for groups {}'.format(
+                            groups_to_couple,
+                            unsuitable_group_ids,
+                        )
+                    )
+                    continue
+
                 couple = storage.couples.add([storage.groups[g]
                                               for g in groups_to_couple])
 
@@ -1677,6 +1690,47 @@ def kill_symm_group(n, meta_session, couple):
         )
         logger.error(s)
         raise RuntimeError(s)
+
+
+def get_unsuitable_uncoupled_group_ids(n, group_ids):
+    logger.info('Checking empty meta key for groups {0}'.format(group_ids))
+
+    s = elliptics.Session(n)
+    wait_timeout = (
+        config
+        .get('elliptics', {})
+        .get('wait_timeout', None)
+    ) or config.get('wait_timeout', 5)
+    s.set_timeout(wait_timeout)
+    s.set_exceptions_policy(elliptics.exceptions_policy.no_exceptions)
+    s.set_filter(elliptics.filters.all_final)
+
+    results = {}
+    for group_id in group_ids:
+        session = s.clone()
+        session.add_groups([group_id])
+
+        logger.debug('Request to check {0} for group {1}'.format(
+            keys.SYMMETRIC_GROUPS_KEY.replace('\0', '\\0'), group_id))
+        results[group_id] = session.read_data(keys.SYMMETRIC_GROUPS_KEY)
+
+    unsuitable_uncoupled_groups = []
+
+    def update_unsuitable_groups(entry, group_id, elapsed_time=None, end_time=None):
+        if entry.error.code != -2:
+            # -2 is the one and only sign that this uncoupled group is suitable
+            unsuitable_uncoupled_groups.append(group_id)
+
+    while results:
+        group_id, result = results.popitem()
+        h.process_elliptics_async_result(
+            result=result,
+            processor=update_unsuitable_groups,
+            group_id=group_id,
+            raise_on_error=False
+        )
+
+    return unsuitable_uncoupled_groups
 
 
 def make_symm_group(n, couple, namespace, frozen):
