@@ -138,48 +138,55 @@ class Statistics(object):
 
         for group in sorted(storage.groups, key=lambda g: not bool(g.couple)):
 
-            couple = (group.couple
-                      if group.couple else
-                      str(group.group_id))
+            try:
 
-            ns = group.couple and group.couple.namespace.id or None
+                couple = (group.couple
+                          if group.couple else
+                          str(group.group_id))
 
-            if ns == storage.Group.CACHE_NAMESPACE:
-                continue
+                ns = group.couple and group.couple.namespace.id or None
 
-            for node_backend in group.node_backends:
-
-                try:
-                    dc = node_backend.node.host.dc
-                except CacheUpstreamError:
+                if ns == storage.Group.CACHE_NAMESPACE:
                     continue
 
-                if not couple in dc_couple_map[dc]:
-                    self.account_couples(by_dc[dc], group)
+                for node_backend in group.node_backends:
+
+                    try:
+                        dc = node_backend.node.host.dc
+                    except CacheUpstreamError:
+                        continue
+
+                    if not couple in dc_couple_map[dc]:
+                        self.account_couples(by_dc[dc], group)
+                        if ns:
+                            self.account_keys(by_dc[dc], couple)
+                            self.account_effective_memory(by_dc[dc], couple)
+                        dc_couple_map[dc].add(couple)
+                    if ns and not couple in ns_couple_map[ns]:
+                        self.account_couples(by_ns[ns], group)
+                        self.account_effective_memory(by_ns[ns], couple)
+                        self.account_keys(by_ns[ns], couple)
+                        ns_couple_map[ns].add(couple)
+                    if ns and not couple in ns_dc_couple_map[ns][dc]:
+                        self.account_couples(by_ns_dc[ns][dc], group)
+                        self.account_effective_memory(by_ns_dc[ns][dc], couple)
+                        self.account_keys(by_ns_dc[ns][dc], couple)
+                        ns_dc_couple_map[ns][dc].add(couple)
+
+                    if not node_backend.stat:
+                        logger.debug('No stats available for node %s' % str(node_backend))
+                        continue
+
+                    self.account_memory(by_dc[dc], group, node_backend.stat)
+
                     if ns:
-                        self.account_keys(by_dc[dc], couple)
-                        self.account_effective_memory(by_dc[dc], couple)
-                    dc_couple_map[dc].add(couple)
-                if ns and not couple in ns_couple_map[ns]:
-                    self.account_couples(by_ns[ns], group)
-                    self.account_effective_memory(by_ns[ns], couple)
-                    self.account_keys(by_ns[ns], couple)
-                    ns_couple_map[ns].add(couple)
-                if ns and not couple in ns_dc_couple_map[ns][dc]:
-                    self.account_couples(by_ns_dc[ns][dc], group)
-                    self.account_effective_memory(by_ns_dc[ns][dc], couple)
-                    self.account_keys(by_ns_dc[ns][dc], couple)
-                    ns_dc_couple_map[ns][dc].add(couple)
-
-                if not node_backend.stat:
-                    logger.debug('No stats available for node %s' % str(node_backend))
-                    continue
-
-                self.account_memory(by_dc[dc], group, node_backend.stat)
-
-                if ns:
-                    self.account_memory(by_ns[ns], group, node_backend.stat)
-                    self.account_memory(by_ns_dc[ns][dc], group, node_backend.stat)
+                        self.account_memory(by_ns[ns], group, node_backend.stat)
+                        self.account_memory(by_ns_dc[ns][dc], group, node_backend.stat)
+            except Exception:
+                logger.exception(
+                    'Failed to account group {} in dc and ns statistics'.format(group.group_id)
+                )
+                continue
 
         self.count_outaged_couples(by_dc, by_ns_dc)
 
