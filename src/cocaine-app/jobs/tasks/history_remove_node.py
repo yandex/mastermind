@@ -1,6 +1,7 @@
 import logging
 import time
 
+import history
 from infrastructure import infrastructure
 from infrastructure_cache import cache
 from jobs import TaskTypes
@@ -32,7 +33,7 @@ class HistoryRemoveNodeTask(Task):
                 'from group {3} history'.format(
                     self.parent_job.id, self.id, nb_str, self.group))
             infrastructure.detach_node(self.group, self.host, self.port, self.backend_id,
-                infrastructure.HISTORY_RECORD_JOB)
+                history.GroupStateRecord.HISTORY_RECORD_JOB)
             logger.info('Job {0}, task {1}: removed node backend {2} '
                 'from group {3} history'.format(
                     self.parent_job.id, self.id, nb_str, self.group))
