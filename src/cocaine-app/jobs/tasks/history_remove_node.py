@@ -1,6 +1,7 @@
 import logging
 import time
 
+from errors import CacheUpstreamError
 import history
 from infrastructure import infrastructure
 from infrastructure_cache import cache
@@ -86,8 +87,13 @@ class HistoryRemoveNodeTask(Task):
         else:
             nb_in_group = False
 
+        try:
+            hostname = cache.get_hostname_by_addr(self.host)
+        except CacheUpstreamError:
+            raise ValueError('Failed to resolve job host {}'.format(self.host))
+
         nb_in_history = infrastructure.node_backend_in_last_history_state(
-            self.group, self.host, self.port, self.backend_id)
+            self.group, hostname, self.port, self.backend_id)
         logger.debug('Job {0}, task {1}: checking node backend {2} '
             'in group {3} history set: {4}'.format(
                 self.parent_job.id, self.id, nb_str, self.group, nb_in_history))
