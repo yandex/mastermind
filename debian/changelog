@@ -1,3 +1,9 @@
+mastermind (2.25.75) trusty; urgency=medium
+
+  * Fix group detach node task during restore job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 19 Oct 2015 14:52:49 +0300
+
 mastermind (2.25.74) trusty; urgency=medium
 
   * Fix group detach node task during restore job
