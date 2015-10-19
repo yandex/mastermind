@@ -28,26 +28,35 @@ class HistoryRemoveNodeTask(Task):
         pass
 
     def execute(self):
-        nb_str = '{0}:{1}/{2}'.format(self.host, self.port, self.backend_id).encode('utf-8')
+        try:
+            hostname = cache.get_hostname_by_addr(self.host)
+        except CacheUpstreamError:
+            raise ValueError('Failed to resolve job host {}'.format(self.host))
+
+        nb_hostname_str = '{0}:{1}/{2}'.format(
+            hostname, self.port, self.backend_id
+        ).encode('utf-8')
         try:
             logger.info('Job {0}, task {1}: removing node backend {2} '
                 'from group {3} history'.format(
-                    self.parent_job.id, self.id, nb_str, self.group))
-            infrastructure.detach_node(self.group, self.host, self.port, self.backend_id,
+                    self.parent_job.id, self.id, nb_hostname_str, self.group))
+            infrastructure.detach_node(self.group, hostname, self.port, self.backend_id,
                 history.GroupStateRecord.HISTORY_RECORD_JOB)
             logger.info('Job {0}, task {1}: removed node backend {2} '
                 'from group {3} history'.format(
-                    self.parent_job.id, self.id, nb_str, self.group))
+                    self.parent_job.id, self.id, nb_hostname_str, self.group))
         except ValueError as e:
             # TODO: Think about changing ValueError to some dedicated exception
             # to differentiate between event when there is no such node in group
             # and an actual ValueError being raised
             logger.error('Job {0}, task {1}: failed to remove node backend {2} '
                 'from group {3} history: {4}'.format(
-                    self.parent_job.id, self.id, nb_str, self.group, e))
+                    self.parent_job.id, self.id, nb_hostname_str, self.group, e))
             pass
 
         group = self.group in storage.groups and storage.groups[self.group] or None
+
+        nb_str = '{0}:{1}/{2}'.format(self.host, self.port, self.backend_id).encode('utf-8')
         node_backend = nb_str in storage.node_backends and storage.node_backends[nb_str] or None
         if group and node_backend and node_backend in group.node_backends:
             logger.info('Job {0}, task {1}: removing node backend {2} '
