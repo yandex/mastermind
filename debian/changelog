@@ -1,3 +1,9 @@
+mastermind (2.25.73) trusty; urgency=medium
+
+  * Fix group detach node task during restore job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 19 Oct 2015 12:57:02 +0300
+
 mastermind (2.25.72) trusty; urgency=medium
 
   * Check uncoupled groups right before settings metakey
