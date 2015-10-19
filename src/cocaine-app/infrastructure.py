@@ -143,12 +143,12 @@ class Infrastructure(object):
             raise ValueError('History for group {} is not found'.format(group_id))
         return group_history
 
-    def node_backend_in_last_history_state(self, group_id, host, port, backend_id):
+    def node_backend_in_last_history_state(self, group_id, hostname, port, backend_id):
         group_history = self.get_group_history(group_id)
 
         last_node_set = group_history.nodes[-1].set
         for k in last_node_set:
-            if host == k.host and port == k.port and backend_id == k.backend_id:
+            if hostname == k.hostname and port == k.port and backend_id == k.backend_id:
                 return True
 
         return False
