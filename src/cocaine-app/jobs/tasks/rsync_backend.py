@@ -1,7 +1,6 @@
 import logging
 
 from errors import CacheUpstreamError
-from infrastructure import infrastructure
 from infrastructure_cache import cache
 import inventory
 import jobs
@@ -22,11 +21,19 @@ class RsyncBackendTask(MinionCmdTask):
         self.type = TaskTypes.TYPE_RSYNC_BACKEND_TASK
 
     def execute(self, processor):
-        logger.info('Job {0}, task {1}: checking group {2} and node backend {3} '
-            'state'.format(self.parent_job.id, self.id, self.group, self.node_backend))
+        logger.info(
+            'Job {job_id}, task {task_id}: checking group {group_id} '
+            'and node backend {nb} state'.format(
+                job_id=self.parent_job.id,
+                task_id=self.id,
+                group_id=self.group,
+                nb=self.node_backend
+            )
+        )
 
         if self.node_backend:
-            # Check if old backend is down
+            # Check if old backend is down or if a group is already running on a
+            # different node backends
             # This check is not applied to move job
             current_group_node_backends = []
             if self.group in storage.groups:
@@ -80,8 +87,14 @@ class RsyncBackendTask(MinionCmdTask):
                 for hostname in not_set_hostnames:
                     inventory.set_net_monitoring_downtime(hostname)
             except Exception as e:
-                logger.error('Job {0}, task {1}: failed to set net monitoring downtime: '
-                    '{2}'.format(self.parent_job.id, self.id, e))
+                logger.error(
+                    'Job {job_id}, task {task_id}: failed to set net monitoring downtime: '
+                    '{error}'.format(
+                        job_id=self.parent_job.id,
+                        task_id=self.id,
+                        error=e
+                    )
+                )
                 raise
 
         try:
@@ -95,8 +108,13 @@ class RsyncBackendTask(MinionCmdTask):
                 raise ValueError('failed to set all downtimes: {0}/{1}'.format(
                     res['nInserted'], len(hostnames)))
         except Exception as e:
-            logger.error('Job {0}, task {1}: unexpected mongo error: '
-                '{2}'.format(self.parent_job.id, self.id, e))
+            logger.error(
+                'Job {job_id}, task {task_id}: unexpected mongo error: {error}'.format(
+                    job_id=self.parent_job.id,
+                    task_id=self.id,
+                    error=e
+                )
+            )
             raise
 
     def on_exec_stop(self, processor):
@@ -116,8 +134,14 @@ class RsyncBackendTask(MinionCmdTask):
                 for hostname in release_hostnames:
                     inventory.remove_net_monitoring_downtime(hostname)
             except Exception as e:
-                logger.error('Job {0}, task {1}: failed to remove net monitoring downtime: '
-                    '{2}'.format(self.parent_job.id, self.id, e))
+                logger.error(
+                    'Job {job_id}, task {task_id}: failed to remove net monitoring downtime: '
+                    '{error}'.format(
+                        job_id=self.parent_job.id,
+                        task_id=self.id,
+                        error=e
+                    )
+                )
                 raise
 
         try:
@@ -127,6 +151,11 @@ class RsyncBackendTask(MinionCmdTask):
             if res['ok'] != 1:
                 raise ValueError('bad response: {0}'.format(res))
         except Exception as e:
-            logger.error('Job {0}, task {1}: unexpected mongo error: '
-                '{2}'.format(self.parent_job.id, self.id, e))
+            logger.error(
+                'Job {job_id}, task {task_id}: unexpected mongo error: {error}'.format(
+                    job_id=self.parent_job.id,
+                    task_id=self.id,
+                    error=e
+                )
+            )
             raise
