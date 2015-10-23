@@ -13,6 +13,19 @@ logger = logging.getLogger('mm.monitor')
 
 
 class CoupleFreeEffectiveSpaceMonitor(object):
+    """
+    Performs monitoring for couple free effective space distribution in a namespace
+
+    To get the picture of how namespace is being filled up in time we need to record
+    samples of couples' free effective space distribution periodically.
+    The following steps are performed to collect the measurements:
+        1) all namespace couples are sorted by free effective space percentage;
+        2) sample is formed by:
+            a) recording each couple's free effective space percentage if
+               namespace has less than <MAX_DATA_POINTS> couples;
+            b) selecting couples uniformly and recording its free effective
+               space percentage to get <MAX_DATA_POINTS> measurements;
+    """
 
     COUPLE_FREE_EFF_SPACE_DATA = 'statistics/couple_free_eff_space'
 
@@ -28,6 +41,11 @@ class CoupleFreeEffectiveSpaceMonitor(object):
                                      'couple_free_effective_space')
 
     def collect(self):
+        """
+        Runs samples collect task
+
+        Samples collection is performed periodically each <DATA_COLLECT_PERIOD> seconds.
+        """
         try:
             with sync_manager.lock(
                     CoupleFreeEffectiveSpaceMonitor.COUPLE_FREE_EFF_SPACE_DATA,
