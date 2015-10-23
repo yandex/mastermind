@@ -117,7 +117,7 @@ def init_node_info_updater(n):
 
 def init_infrastructure(W, n):
     infstruct = infrastructure.infrastructure
-    infstruct.init(n, None)
+    infstruct.init(n, None, None)
     return infstruct
 
 
