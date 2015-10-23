@@ -2,6 +2,8 @@ import datetime
 import logging
 import time
 
+import pymongo
+
 from config import config
 from db.mongo.pool import Collection
 import storage
@@ -55,6 +57,50 @@ class CoupleFreeEffectiveSpaceMonitor(object):
         except LockAlreadyAcquiredError:
             logger.info('Couples\' effective free space is already being collected')
             pass
+
+    def get_namespace_samples(self, namespace, limit, skip=0):
+        """
+        Returns samples of monitor records for a namespace.
+
+        Samples are represented by a dict:
+            {
+                'total': total number of samples for a namespace;
+                'samples': a list of data samples described below;
+            }
+
+        A structure of a single data sample:
+            {
+                'ts': timestamp of a current data sample;
+                'data': a list of selected couples' measurements;
+            }
+
+        NB: This kind of query can be heavy. It's time complexity is linear in general
+        and actual consumed time is increasing when `skip` parameter grows.
+        It uses reversed index on keys ('namespace', 'ts') which gives
+        best possible time guarantees for our case and allows to fetch
+        most recent records in optimal time.
+        """
+        samples = (
+            self.collection
+            .find(
+                spec={'namespace': namespace},
+                fields={
+                    '_id': False,
+                    'data': True,
+                    'ts': True,
+                }
+            )
+            .sort([('ts', pymongo.DESCENDING)])
+            .skip(skip)
+            .limit(
+                max(limit, 0)
+            )
+        )
+
+        return {
+            'total': samples.count(),
+            'samples': list(samples),
+        }
 
     def __collect_free_effective_space(self):
         data = []
