@@ -33,8 +33,8 @@ class CoupleFreeEffectiveSpaceMonitor(object):
     CFES_STAT_CFG = STAT_CFG.get('couple_free_effective_space', {})
 
     RECORD_WRITE_ATTEMPTS = STAT_CFG.get('write_attempts', 3)
-    MAX_DATA_POINTS = CFES_STAT_CFG.get('max_data_points', 1000)
-    DATA_COLLECT_PERIOD = CFES_STAT_CFG.get('collect_period', 300)
+    MAX_DATA_POINTS = CFES_STAT_CFG.get('max_data_points', 500)
+    DATA_COLLECT_PERIOD = CFES_STAT_CFG.get('collect_period', 3600)
 
     def __init__(self, db):
         self.collection = Collection(db[config['metadata']['statistics']['db']],
