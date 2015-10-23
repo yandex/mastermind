@@ -1,3 +1,10 @@
+mastermind (2.25.76) trusty; urgency=medium
+
+  * Add handler for fetching couple free effective space monitor samples
+  * Change monitor statistics collection settings
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 23 Oct 2015 14:03:28 +0300
+
 mastermind (2.25.75) trusty; urgency=medium
 
   * Fix group detach node task during restore job
