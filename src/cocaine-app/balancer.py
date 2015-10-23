@@ -1621,6 +1621,29 @@ class Balancer(object):
                 self.collect_couples_free_eff_space
             )
 
+    @h.concurrent_handler
+    def get_monitor_effective_free_space(self, request):
+        try:
+            namespace = request[0]
+        except IndexError:
+            raise ValueError('Namespace is required')
+
+        try:
+            options = request[1]
+        except IndexError:
+            raise ValueError('Query options are required')
+
+        try:
+            samples_limit = int(options['limit'])
+        except (KeyError, TypeError, ValueError):
+            raise ValueError('Query options should contain "limit" parameter')
+
+        return self.couple_free_eff_space_monitor.get_namespace_samples(
+            namespace=namespace,
+            limit=samples_limit,
+            skip=int(options.get('offset', 0))
+        )
+
 
 def handlers(b):
     handlers = []
