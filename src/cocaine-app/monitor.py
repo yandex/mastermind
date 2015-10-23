@@ -59,7 +59,7 @@ class CoupleFreeEffectiveSpaceMonitor(object):
     def __collect_free_effective_space(self):
         data = []
 
-        for ns in self.pending_namespaces:
+        for ns in self.__pending_namespaces:
             ns_free_eff_space_pct = []
             for couple in ns.couples:
                 if couple.effective_space <= 0:
@@ -81,7 +81,7 @@ class CoupleFreeEffectiveSpaceMonitor(object):
         self.__save_sample_data(data)
 
     @property
-    def pending_namespaces(self):
+    def __pending_namespaces(self):
         namespaces = []
         start_ts = time.time() - self.DATA_COLLECT_PERIOD / 2
         for ns in storage.namespaces:
