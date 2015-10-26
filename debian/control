@@ -21,7 +21,8 @@ Depends:
  python-balancelogic (>= 0.4),
  python-tornado,
  cocaine-tools (<< 0.12),
- python-pymongo,
+ python-pymongo (<< 3),
+ python-bson (<< 3),
  cocaine-runtime (<< 0.12),
  python-mastermind (= ${binary:Version}),
 Recommends: python-kazoo
