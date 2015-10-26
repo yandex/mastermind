@@ -2,7 +2,11 @@ Source: mastermind
 Section: net
 Priority: extra
 Maintainer: Andrey Godin <agodin@yandex-team.ru>
-Build-Depends: debhelper (>= 8.0.0), cdbs, python, python-central
+Build-Depends:
+ debhelper (>= 8.0.0),
+ cdbs,
+ python,
+ python-central,
 Standards-Version: 3.9.2
 Homepage: https://github.com/toshic/mastermind
 Vcs-Git: git://github.com/toshic/mastermind.git
@@ -10,18 +14,38 @@ XS-Python-Version: >= 2.6
 
 Package: mastermind
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, cocaine-framework-python (<< 0.12), python-balancelogic (>= 0.4), python-tornado, cocaine-tools (<< 0.12), python-pymongo, cocaine-runtime (<< 0.12), python-mastermind (= ${binary:Version})
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ cocaine-framework-python (<< 0.12),
+ python-balancelogic (>= 0.4),
+ python-tornado,
+ cocaine-tools (<< 0.12),
+ python-pymongo,
+ cocaine-runtime (<< 0.12),
+ python-mastermind (= ${binary:Version}),
 Recommends: python-kazoo
 Description: Metabalancer for elliptics storage
 
 Package: mastermind-utils
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, python-opster (>= 4.0), cocaine-framework-python (<< 0.12), python-msgpack | msgpack-python, python-tornado, python-mastermind (= ${binary:Version})
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ python-opster (>= 4.0),
+ cocaine-framework-python (<< 0.12),
+ python-msgpack | msgpack-python,
+ python-tornado,
+ python-mastermind (= ${binary:Version}),
 Description: Metabalancer CLI for elliptics storage
 
 Package: python-mastermind
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
- python-tornado, cocaine-framework-python (<< 0.12)
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ ${python:Depends},
+ python-tornado,
+ cocaine-framework-python (<< 0.12),
 XB-Python-Version: >= 2.6
 Description: Common components and a client library for Mastermind
