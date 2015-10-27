@@ -88,7 +88,8 @@ class RestoreGroupJob(Job):
 
         self.check_node_backends(src_group)
 
-        old_group_node_backends_set = infrastructure.get_group_history(group.group_id).nodes[-1].set
+        group_history = infrastructure.get_group_history(group.group_id)
+        old_group_node_backends_set = group_history.nodes and group_history.nodes[-1].set or []
         if old_group_node_backends_set:
             old_node_backend = old_group_node_backends_set[0]
             old_host = cache.get_ip_address_by_host(old_node_backend.hostname)
