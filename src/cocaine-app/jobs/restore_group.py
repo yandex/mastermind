@@ -267,16 +267,19 @@ class RestoreGroupJob(Job):
         if remove_path and self.uncoupled_group:
             params['remove_path'] = remove_path
 
-        task = RsyncBackendTask.new(self,
+        check_node_backend = None
+        if old_group_node_backends_set:
+            check_node_backend = self.node_backend(old_host, old_port, old_backend_id)
+
+        task = RsyncBackendTask.new(
+            self,
             host=dst_host,
             src_host=src_group.node_backends[0].node.host.addr,
             group=self.group,
             cmd=move_cmd,
-            node_backend=self.node_backend(
-                src_group.node_backends[0].node.host.addr,
-                src_group.node_backends[0].node.port,
-                src_group.node_backends[0].backend_id),
-            params=params)
+            node_backend=check_node_backend,
+            params=params
+        )
         self.tasks.append(task)
 
         additional_files = config.get('restore', {}).get('restore_additional_files', [])
