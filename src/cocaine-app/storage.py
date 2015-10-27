@@ -1286,7 +1286,7 @@ class Couple(object):
             if not group.meta:
                 self.status = Status.BAD
                 self.status_text = "Couple's group {} has empty meta data".format(group)
-                return self.status
+                return self.account_job_in_status()
             if self.namespace != group.meta.get('namespace'):
                 self.status = Status.BAD
                 self.status_text = "Couple's namespace does not match namespace " \
