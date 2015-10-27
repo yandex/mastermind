@@ -857,11 +857,14 @@ class Planner(object):
         job_params['src_group'] = src_group.group_id
 
         if use_uncoupled_group:
-            nodes_set = infrastructure.get_group_history(group.group_id).nodes[-1].set
-            if len(nodes_set) == 1:
+            old_hostname = None
+            group_history = infrastructure.get_group_history(group.group_id)
+            if len(group_history.nodes) and len(group_history.nodes[-1].set):
+                old_hostname = group_history.nodes[-1].set[0].hostname
+            if old_hostname:
                 uncoupled_groups = self.find_uncoupled_groups(
                     group=group,
-                    host_addr=cache.get_ip_address_by_host(nodes_set[0].hostname)
+                    host_addr=cache.get_ip_address_by_host(old_hostname)
                 )
             else:
                 uncoupled_groups = self.select_uncoupled_groups(group)
