@@ -1,3 +1,10 @@
+mastermind (2.25.79) trusty; urgency=medium
+
+  * Fix wrong node backend check on group restoring job
+  * Fix accounting job for a couple status when group is down
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 27 Oct 2015 19:30:12 +0300
+
 mastermind (2.25.78) trusty; urgency=medium
 
   * Add proper pymongo and bson dependencies (<< 3)
