@@ -42,9 +42,12 @@ class RsyncBackendTask(MinionCmdTask):
 
             if self.node_backend in storage.node_backends:
                 old_node_backend = storage.node_backends[self.node_backend]
-                current_group_node_backends.discard(old_node_backend)
                 expected_statuses = (storage.Status.STALLED, storage.Status.INIT, storage.Status.RO)
-                if old_node_backend.status not in expected_statuses:
+                old_group_node_backend_is_up = (
+                    old_node_backend in current_group_node_backends and
+                    old_node_backend.status not in expected_statuses
+                )
+                if old_group_node_backend_is_up:
                     raise JobBrokenError(
                         'Node backend {nb} has status {status}, '
                         'expected {expected_statuses}'.format(
@@ -53,6 +56,7 @@ class RsyncBackendTask(MinionCmdTask):
                             expected_statuses=expected_statuses
                         )
                     )
+                current_group_node_backends.discard(old_node_backend)
 
             if current_group_node_backends:
                 raise JobBrokenError(
