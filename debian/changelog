@@ -1,3 +1,9 @@
+mastermind (2.25.83) trusty; urgency=medium
+
+  * Increase startup-timeout for mastermind-cache worker
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 02 Nov 2015 12:26:18 +0300
+
 mastermind (2.25.82) trusty; urgency=medium
 
   * Fix for searching for uncoupled group to restore backend without history
