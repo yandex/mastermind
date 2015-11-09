@@ -197,6 +197,16 @@ class PoolWorker(object):
 
 
 def run_worker(task_queue, result_queue, PoolWorker, initkwds={}):
+    # Force 'logging' module's global lock release,
+    # otherwise this can cause following bug:
+    # - MainProcess-Thread1 acquires 'logging' module's global lock on getting
+    # logger/message logging/etc.
+    # - MainProcess-Thread2 with running pool forks to run worker process;
+    # - ChildProcess-Thread1 tries to acquire 'logging' module's global lock
+    # when getting the logger object and blocks forever because it received
+    # a copy of already acquired lock from its parent process.
+    logging._lock = None
+
     ioloop = IOLoop.current()
 
     worker = PoolWorker(
