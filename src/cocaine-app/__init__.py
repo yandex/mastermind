@@ -7,6 +7,11 @@ from time import sleep, time
 import traceback
 import uuid
 
+# NB: pool should be initialized before importing
+# any of cocaine-framework-python modules to avoid
+# tornado ioloop dispatcher issues
+import monitor_pool
+
 from cocaine.worker import Worker
 from cocaine.futures import chain
 
