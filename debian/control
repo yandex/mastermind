@@ -5,6 +5,7 @@ Maintainer: Andrey Godin <agodin@yandex-team.ru>
 Build-Depends:
  debhelper (>= 8.0.0),
  cdbs,
+ bash-completion,
  python,
  python-central,
  python-setuptools,
