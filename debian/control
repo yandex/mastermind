@@ -7,6 +7,7 @@ Build-Depends:
  cdbs,
  python,
  python-central,
+ python-setuptools,
 Standards-Version: 3.9.2
 Homepage: https://github.com/toshic/mastermind
 Vcs-Git: git://github.com/toshic/mastermind.git
