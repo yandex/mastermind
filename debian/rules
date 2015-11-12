@@ -4,18 +4,23 @@
 override_dh_builddeb:
 	dh_builddeb -- -Zgzip
 
-DEB_PYTHON_SYSTEM=pycentral
+PY_BUILD_DIR=build/python-lib
 
-include /usr/share/cdbs/1/rules/debhelper.mk
-include /usr/share/cdbs/1/class/python-distutils.mk
+override_dh_auto_build:
+	dh_auto_build -- --build-lib $(CURDIR)/$(PY_BUILD_DIR)
 
+override_dh_auto_test:
+	cd $(CURDIR)/$(PY_BUILD_DIR); python -m pytest
 
-pre-build::
-	mkdir -p $(CURDIR)/debian/tmp/usr/lib/mastermind/cocaine-app/
-	mkdir -p $(CURDIR)/debian/tmp/usr/bin/
-	cp $(CURDIR)/usr/bin/mastermind_deploy.sh $(CURDIR)/debian/tmp/usr/bin/mastermind_deploy.sh
-	cp $(CURDIR)/usr/bin/mastermind_app_name.sh $(CURDIR)/debian/tmp/usr/bin/mastermind_app_name.sh
-	$(CURDIR)/make_tree.sh $(CURDIR)
+override_dh_auto_clean:
+	rm -rf $(CURDIR)/$(PY_BUILD_DIR)
+	dh_auto_clean
 
-install/mastermind-utils::
-	dh_bash-completion
+override_dh_auto_install:
+	mkdir -p $(CURDIR)/debian/tmp
+	cd $(CURDIR)/src/cocaine-app/
+	find . -type f -name \*.py -print0 | tar czvf $(CURDIR)/debian/tmp/mastermind.tar.gz --null -T -
+	dh_auto_install
+
+%:
+	dh $@ --with python2,bash-completion
