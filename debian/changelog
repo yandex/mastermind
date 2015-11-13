@@ -1,3 +1,9 @@
+mastermind (2.25.84) trusty; urgency=medium
+
+  * Add free reserved space to couple statistics
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 13 Nov 2015 14:19:41 +0300
+
 mastermind (2.25.83) trusty; urgency=medium
 
   * Increase startup-timeout for mastermind-cache worker
