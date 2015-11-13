@@ -1,3 +1,9 @@
+mastermind (2.25.85) trusty; urgency=medium
+
+  * Fix mastermind build
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 13 Nov 2015 15:08:21 +0300
+
 mastermind (2.25.84) trusty; urgency=medium
 
   * Add free reserved space to couple statistics
