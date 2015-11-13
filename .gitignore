@@ -1,5 +1,4 @@
 *.pyc
-debian/*
 build/*
 mastermind.egg-info
 
