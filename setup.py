@@ -18,5 +18,4 @@ setup(
                  'mastermind.query': 'src/python-mastermind/src/mastermind/query',
                  'mastermind.utils': 'src/python-mastermind/src/mastermind/utils',
                  },
-    install_requires=["tornado >= 3.0", "cocaine < 0.12"],
 )
