@@ -1443,12 +1443,22 @@ class Couple(object):
         return False
 
     @property
+    def groups_effective_space(self):
+        return min([g.effective_space for g in self.groups])
+
+    @property
+    def ns_reserved_space_percentage(self):
+        return infrastructure.ns_settings.get(self.namespace.id, {}).get(self.RESERVED_SPACE_KEY, 0.0)
+
+    @property
+    def ns_reserved_space(self):
+        return int(math.ceil(self.groups_effective_space * self.ns_reserved_space_percentage))
+
+    @property
     def effective_space(self):
-
-        groups_effective_space = min([g.effective_space for g in self.groups])
-
-        reserved_space = infrastructure.ns_settings.get(self.namespace.id, {}).get(self.RESERVED_SPACE_KEY, 0.0)
-        return int(math.floor(groups_effective_space * (1.0 - reserved_space)))
+        return int(math.floor(
+            self.groups_effective_space * (1.0 - self.ns_reserved_space_percentage)
+        ))
 
     @property
     def effective_free_space(self):
@@ -1457,6 +1467,21 @@ class Couple(object):
             return 0
         return int(max(stat.free_space -
                        (stat.total_space - self.effective_space), 0))
+
+    @property
+    def free_reserved_space(self):
+        stat = self.get_stat()
+        if not stat:
+            return 0
+        reserved_space = self.ns_reserved_space
+        groups_free_eff_space = stat.free_space - (stat.total_space - self.groups_effective_space)
+        if groups_free_eff_space <= 0:
+            # when free space is less than what was reserved for service demands
+            return 0
+        if groups_free_eff_space > reserved_space:
+            # when free effective space > 0
+            return reserved_space
+        return groups_free_eff_space
 
     def as_tuple(self):
         return tuple(group.group_id for group in self.groups)
@@ -1478,9 +1503,11 @@ class Couple(object):
             try:
                 data['effective_space'] = self.effective_space
                 data['free_effective_space'] = self.effective_free_space
+                data['free_reserved_space'] = self.free_reserved_space
             except ValueError:
                 # failed to determine couple's namespace
                 data['effective_space'], data['free_effective_space'] = 0, 0
+                data['free_reserved_space'] = 0
 
         data['groups'] = [g.info().serialize() for g in self.groups]
         data['hosts'] = {

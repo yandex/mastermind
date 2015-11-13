@@ -163,7 +163,7 @@ def to_gb(bytes):
 
 def convert_stats(d):
     for k in ('free_space', 'free_effective_space', 'used_space',
-              'total_space', 'records_removed_size'):
+              'total_space', 'records_removed_size', 'free_reserved_space'):
         if k in d:
             d[k] = '{0:.3f} Gb'.format(to_gb(d[k]))
     if 'fragmentation' in d:
