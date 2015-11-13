@@ -12,6 +12,7 @@ import elliptics
 from errors import CacheUpstreamError
 from cocaine.futures import chain
 from config import config
+from mastermind import errors
 
 
 logger = logging.getLogger('mm.balancer')
@@ -152,6 +153,59 @@ def register_handle(W, h):
 
     W.on(h.__name__, wrapper)
     logger.info("Registering handler for event %s" % h.__name__)
+    return wrapper
+
+
+def register_handle_wne(worker, handle):
+    """
+    Registers handle that uses native cocaine exceptions to inform client of an error.
+    * wne = with native exceptions
+    """
+    handle_name = handle.__name__
+
+    @wraps(handle)
+    def wrapper(request, response):
+        start_ts = time()
+        req_uid = uuid.uuid4().hex
+        try:
+            data = yield request.read()
+            data = msgpack.unpackb(data)
+            logger.info(
+                ':{req_uid}: Running handle for event {event}, data={data}'.format(
+                    req_uid=req_uid,
+                    event=handle_name,
+                    data=str(data),
+                )
+            )
+            res = yield handle(data)
+            response.write(res)
+            response.close()
+        except Exception as e:
+            code, error_msg = ((e.code, e.message)
+                               if isinstance(e, errors.MastermindError) else
+                               (errors.GENERAL_ERROR_CODE, str(e)))
+            logger.exception(
+                ':{req_uid}: handler for event {event}, data={data}, error: '
+                'code {error_code}, {error_msg}'.format(
+                    req_uid=req_uid,
+                    event=handle_name,
+                    data=str(data),
+                    error_code=code,
+                    error_msg=error_msg,
+                )
+            )
+            response.error(code, error_msg)
+        finally:
+            logger.info(
+                ':{req_uid}: Finished handler for event {event}, time: {time:.3f}'.format(
+                    req_uid=req_uid,
+                    event=handle_name,
+                    time=time() - start_ts,
+                )
+            )
+
+    worker.on(handle_name, wrapper)
+    logger.info("Registering handle for event {}".format(handle_name))
     return wrapper
 
 
