@@ -18,8 +18,7 @@ override_dh_auto_clean:
 
 override_dh_auto_install:
 	mkdir -p $(CURDIR)/debian/tmp
-	cd $(CURDIR)/src/cocaine-app/
-	find . -type f -name \*.py -print0 | tar czvf $(CURDIR)/debian/tmp/mastermind.tar.gz --null -T -
+	cd $(CURDIR)/src/cocaine-app/; find . -type f -name \*.py -print0 | tar czvf $(CURDIR)/debian/tmp/mastermind.tar.gz --null -T -
 	dh_auto_install
 
 %:
