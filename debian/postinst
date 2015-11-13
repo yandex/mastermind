@@ -16,6 +16,9 @@ case "$1" in
 
     BASE_APP_NAME=`/usr/bin/mastermind_app_name.sh`
 
+    /usr/bin/mastermind_deploy.sh $DEPLOY_DIR $BASE_APP_NAME-inventory mastermind-inventory.manifest mastermind-inventory.profile
+    cocaine-tool runlist add-app -n default --app $BASE_APP_NAME-inventory --profile $BASE_APP_NAME-inventory --force
+
     /usr/bin/mastermind_deploy.sh $DEPLOY_DIR $BASE_APP_NAME mastermind.manifest mastermind.profile
     cocaine-tool runlist add-app -n default --app $BASE_APP_NAME --profile $BASE_APP_NAME --force
 

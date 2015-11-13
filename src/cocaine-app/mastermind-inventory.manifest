@@ -1,0 +1,4 @@
+{
+    "slave" : "inventory_worker.py"
+}
+
