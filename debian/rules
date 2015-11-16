@@ -5,12 +5,15 @@ override_dh_builddeb:
 	dh_builddeb -- -Zgzip
 
 PY_BUILD_DIR=build/python-lib
+TESTS_DIR=tests
 
 override_dh_auto_build:
 	dh_auto_build -- --build-lib $(CURDIR)/$(PY_BUILD_DIR)
 
 override_dh_auto_test:
-	cd $(CURDIR)/$(PY_BUILD_DIR); python -m pytest
+	cp -r $(CURDIR)/$(TESTS_DIR) $(CURDIR)/$(PY_BUILD_DIR) && \
+		cd $(CURDIR)/$(PY_BUILD_DIR) && \
+		python -m pytest $(TESTS_DIR)
 
 override_dh_auto_clean:
 	rm -rf $(CURDIR)/$(PY_BUILD_DIR)
