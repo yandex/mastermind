@@ -10,6 +10,7 @@ Build-Depends:
  python-pytest,
  python-msgpack | msgpack-python,
  python-tornado,
+ cocaine-framework-python,
 Standards-Version: 3.9.2
 Homepage: https://github.com/toshic/mastermind
 Vcs-Git: git://github.com/toshic/mastermind.git
