@@ -4,6 +4,7 @@ import time
 import pytest
 
 from mastermind import pool
+from fixtures.util import parametrize
 
 
 class TimingWrapper(object):
@@ -31,9 +32,12 @@ class TestPool(object):
         p = pool.Pool(processes=2)
         assert len(p._pool) == 2
 
-    @pytest.mark.parametrize(
+    @parametrize(
         'processes, task_delay',
-        [(4, 5.0)]
+        [(4, 5.0)],
+        arglabels={
+            'task_delay': 'task delay'
+        },
     )
     def test_terminate(self, delay_task_worker_pool):
         """Pool termination"""
@@ -45,9 +49,12 @@ class TestPool(object):
 
         assert 0 <= join.elapsed <= 0.2
 
-    @pytest.mark.parametrize(
+    @parametrize(
         'processes, task_delay',
-        [(2, 1.0)]
+        [(2, 0.5)],
+        arglabels={
+            'task_delay': 'task delay'
+        },
     )
     def test_close(self, delay_task_worker_pool):
         """Pool soft close"""
@@ -57,11 +64,14 @@ class TestPool(object):
         join = TimingWrapper(delay_task_worker_pool.join)
         join()
 
-        assert 1 <= join.elapsed <= 1.3
+        assert 0.5 <= join.elapsed <= 0.8
 
-    @pytest.mark.parametrize(
+    @parametrize(
         'processes, task_delay',
-        [(2, 1.0)]
+        [(2, 1.0)],
+        arglabels={
+            'task_delay': 'task delay'
+        },
     )
     def test_restore_pool(self, delay_task_worker_pool):
         """Resurrection of workers in case of worker process termination"""
@@ -72,9 +82,12 @@ class TestPool(object):
             assert w.is_alive() is True
             assert w.exitcode is None
 
-    @pytest.mark.parametrize(
+    @parametrize(
         'processes, task_delay',
-        [(4, 0.0)]
+        [(4, 0.0)],
+        arglabels={
+            'task_delay': 'task delay'
+        },
     )
     def test_imap_unordered(self, delay_task_worker_pool):
         """imap_unordered with default chunksize (1)"""
@@ -84,9 +97,12 @@ class TestPool(object):
         delay_task_worker_pool.close()
 
     @pytest.mark.xfail
-    @pytest.mark.parametrize(
+    @parametrize(
         'processes, task_delay',
-        [(4, 0.0)]
+        [(4, 0.0)],
+        arglabels={
+            'task_delay': 'task delay'
+        },
     )
     def test_imap_unordered_chunk(self, delay_task_worker_pool):
         """imap_unordered with chunksize > 1"""
@@ -99,17 +115,23 @@ class TestPool(object):
         assert range(RESULTS_NUM) == sorted(list(res))
         delay_task_worker_pool.close()
 
-    @pytest.mark.parametrize(
+    @parametrize(
         'processes, task_delay',
-        [(2, 0.0)]
+        [(2, 0.0)],
+        arglabels={
+            'task_delay': 'task delay'
+        },
     )
     def test_apply(self, delay_task_worker_pool):
         assert delay_task_worker_pool.apply(None, (1,)) == 1
 
     @pytest.mark.xfail
-    @pytest.mark.parametrize(
+    @parametrize(
         'processes, task_delay',
-        [(2, 0.0)]
+        [(2, 0.0)],
+        arglabels={
+            'task_delay': 'task delay'
+        },
     )
     def test_map(self, delay_task_worker_pool):
         """map with default chunksize (None)"""
@@ -117,9 +139,12 @@ class TestPool(object):
         assert delay_task_worker_pool.map(None, xrange(RESULTS_NUM)) == range(RESULTS_NUM)
 
     @pytest.mark.xfail
-    @pytest.mark.parametrize(
+    @parametrize(
         'processes, task_delay',
-        [(2, 0.0)]
+        [(2, 0.0)],
+        arglabels={
+            'task_delay': 'task delay'
+        },
     )
     def test_map_chunk(self, delay_task_worker_pool):
         """map with chunksize 1"""
@@ -128,17 +153,23 @@ class TestPool(object):
             None, xrange(RESULTS_NUM), chunksize=1
         ) == range(RESULTS_NUM)
 
-    @pytest.mark.parametrize(
+    @parametrize(
         'processes, task_delay',
-        [(2, 0.0)]
+        [(2, 0.0)],
+        arglabels={
+            'task_delay': 'task delay'
+        },
     )
     def test_apply_async(self, delay_task_worker_pool):
         """Blocking apply_async"""
         delay_task_worker_pool.apply_async(None, (1,)).get() == 1
 
-    @pytest.mark.parametrize(
+    @parametrize(
         'processes, task_delay',
-        [(2, 1.0)]
+        [(2, 1.0)],
+        arglabels={
+            'task_delay': 'task delay'
+        },
     )
     def test_apply_async_timeout(self, delay_task_worker_pool):
         """Timeout on apply_async call"""
@@ -146,9 +177,12 @@ class TestPool(object):
             delay_task_worker_pool.apply_async(None, (1,)).get(0.5)
 
     @pytest.mark.xfail
-    @pytest.mark.parametrize(
+    @parametrize(
         'processes, task_delay',
-        [(1, 0.0)]
+        [(1, 0.0)],
+        arglabels={
+            'task_delay': 'task delay'
+        },
     )
     def test_apply_map_async(self, delay_task_worker_pool):
         """Blocking map_async"""
@@ -158,9 +192,12 @@ class TestPool(object):
             xrange(RESULTS_NUM)
         ).get() == range(RESULTS_NUM)
 
-    @pytest.mark.parametrize(
+    @parametrize(
         'processes, task_delay',
-        [(2, 1.0)]
+        [(2, 1.0)],
+        arglabels={
+            'task_delay': 'task delay'
+        },
     )
     def test_apply_map_async_timeout(self, delay_task_worker_pool):
         """Timeout on map_async call"""
@@ -168,9 +205,12 @@ class TestPool(object):
         with pytest.raises(multiprocessing.TimeoutError):
             delay_task_worker_pool.map_async(None, xrange(RESULTS_NUM)).get(0.5)
 
-    @pytest.mark.parametrize(
+    @parametrize(
         'processes, task_delay',
-        [(2, 0.0)]
+        [(2, 0.0)],
+        arglabels={
+            'task_delay': 'task delay'
+        },
     )
     def test_imap(self, delay_task_worker_pool):
         """imap in iterator and list mode"""

@@ -1,14 +1,27 @@
 import socket
 
 import msgpack
-import pytest
+
+from fixtures.util import parametrize
 
 
-@pytest.mark.parametrize('family', (socket.AF_INET, socket.AF_INET6))
-@pytest.mark.parametrize('data_size', (1024,))
-@pytest.mark.parametrize('valid_json', (True, False,))
-@pytest.mark.parametrize('encode_content', (True, False,))
-@pytest.mark.parametrize('request_timeout', (0.2,))
+@parametrize('family', (socket.AF_INET, socket.AF_INET6))
+@parametrize('data_size', (1024,), arglabels={'data_size': 'data size'})
+@parametrize(
+    'valid_json',
+    (True, False,),
+    arglabels={'valid_json': 'response in json'},
+)
+@parametrize(
+    'encode_content',
+    (True, False,),
+    arglabels={'encode_content': 'zlib encoding'}
+)
+@parametrize(
+    'request_timeout',
+    (0.2,),
+    arglabels={'request_timeout': 'request timeout'}
+)
 class TestMonitorStatParseWorker(object):
     """Test MonitorStatParse worker
 
@@ -17,8 +30,16 @@ class TestMonitorStatParseWorker(object):
         - support of 'deflate' encoding;
         - timeout tolerance.
     """
-    @pytest.mark.parametrize('response_code', (200,))
-    @pytest.mark.parametrize('response_processing_time', (0.0,))
+    @parametrize(
+        'response_code',
+        (200,),
+        arglabels={'response_code': 'http code'},
+    )
+    @parametrize(
+        'response_processing_time',
+        (0.0,),
+        arglabels={'response_processing_time': 'processing time'},
+    )
     def test_200_response(self,
                           monitor_pool,
                           ascii_data,
@@ -34,8 +55,16 @@ class TestMonitorStatParseWorker(object):
         if valid_json:
             assert result['content']['data'] == ascii_data
 
-    @pytest.mark.parametrize('response_code', (404, 502,))
-    @pytest.mark.parametrize('response_processing_time', (0.0,))
+    @parametrize(
+        'response_code',
+        (404, 502,),
+        arglabels={'response_code': 'http code'},
+    )
+    @parametrize(
+        'response_processing_time',
+        (0.0,),
+        arglabels={'response_processing_time': 'processing time'},
+    )
     def test_bad_response(self,
                           monitor_pool,
                           ascii_data,
@@ -47,8 +76,16 @@ class TestMonitorStatParseWorker(object):
         result = msgpack.unpackb(monitor_pool.apply(None, (task,)))
         assert response_code == result['code']
 
-    @pytest.mark.parametrize('response_code', (200,))
-    @pytest.mark.parametrize('response_processing_time', (0.5,))
+    @parametrize(
+        'response_code',
+        (200,),
+        arglabels={'response_code': 'http code'},
+    )
+    @parametrize(
+        'response_processing_time',
+        (0.5,),
+        arglabels={'response_processing_time': 'processing time'},
+    )
     def test_timeout(self,
                      monitor_pool,
                      ascii_data,
