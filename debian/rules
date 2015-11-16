@@ -13,7 +13,7 @@ override_dh_auto_build:
 override_dh_auto_test:
 	cp -r $(CURDIR)/$(TESTS_DIR) $(CURDIR)/$(PY_BUILD_DIR) && \
 		cd $(CURDIR)/$(PY_BUILD_DIR) && \
-		python -m pytest $(TESTS_DIR)
+		python -m pytest -v -l -x --duration 20 $(TESTS_DIR)
 
 override_dh_auto_clean:
 	rm -rf $(CURDIR)/$(PY_BUILD_DIR)
