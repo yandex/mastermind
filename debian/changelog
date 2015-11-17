@@ -1,3 +1,12 @@
+mastermind (2.25.87) trusty; urgency=medium
+
+  * Use simplejson for faster parsing
+  * Using monitor pool to fetch monitor stats from elliptics nodes
+  * Inventory worker implementation
+  * Fix build tests running
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 17 Nov 2015 13:59:44 +0300
+
 mastermind (2.25.86) trusty; urgency=medium
 
   * Fix mastermind build
