@@ -11,6 +11,7 @@ Build-Depends:
  python-msgpack | msgpack-python,
  python-tornado,
  cocaine-framework-python,
+ python-simplejson,
 Standards-Version: 3.9.2
 Homepage: https://github.com/toshic/mastermind
 Vcs-Git: git://github.com/toshic/mastermind.git
@@ -53,4 +54,5 @@ Depends:
  ${python:Depends},
  python-tornado,
  cocaine-framework-python (<< 0.12),
+ python-simplejson,
 Description: Common components and a client library for Mastermind

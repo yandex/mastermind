@@ -6,6 +6,7 @@ import time
 import traceback
 
 import elliptics
+import msgpack
 
 # import balancer
 import balancelogicadapter as bla
@@ -15,6 +16,9 @@ from infrastructure import infrastructure
 from jobs import Job
 import keys
 from load_manager import load_manager
+from mastermind import helpers as mh
+from mastermind.pool import skip_exceptions
+from monitor_pool import monitor_pool
 import timed_queue
 import storage
 from weight_manager import weight_manager
@@ -122,8 +126,83 @@ class NodeInfoUpdater(object):
         self.monitor_stats(groups=groups)
         self.update_symm_groups_async(groups=groups)
 
-    def monitor_stats(self, groups=None):
+    @staticmethod
+    def log_monitor_stat_exc(e):
+        logger.error('Malformed monitor stat response: {}'.format(e))
 
+    @staticmethod
+    def _do_get_monitor_stats(host_addrs):
+        """Execute monitor stat requests via pool and return successful responses
+
+        Sends requests to monitor pool and processes responses.
+        Request can fail in several ways:
+            - exception happened and http monitor stat response was not fetched;
+            - http monitor stat response returned with bad status (not 2xx);
+            - http monitor stat response contained invalid data (e.g.,
+            malformed json);
+            - monitor stat response did not contain host and/or port,
+            so we cannot determine response's source.
+
+        In case of any of these events we should log it and
+        skip to the next monitor stat response.
+        """
+        results = monitor_pool.imap_unordered(
+            None,
+            ((ha.host, ha.port, ha.family) for ha in host_addrs)
+        )
+        logger.info('Waiting for monitor stats results')
+
+        for packed_result in skip_exceptions(results,
+                                             on_exc=NodeInfoUpdater.log_monitor_stat_exc):
+            try:
+                result = msgpack.unpackb(packed_result)
+            except Exception:
+                logger.exception('Malformed monitor stat result')
+                continue
+
+            try:
+                node_addr = '{host}:{port}'.format(
+                    host=result['host'],
+                    port=result['port'],
+                )
+            except KeyError:
+                logger.error('Malformed monitor stat result: host and port are required')
+                continue
+
+            try:
+                node = storage.nodes[node_addr]
+            except KeyError:
+                logger.exception()
+                continue
+
+            try:
+                if result['error']:
+                    logger.info(
+                        'Monitor stat {node}: request to {url} failed with error {error}'.format(
+                            node=node,
+                            url=result['url'],
+                            error=result['error'],
+                        )
+                    )
+                    continue
+                elif result['code'] != 200:
+                    logger.info(
+                        'Monitor stat {node}: request to {url} failed with code {code}'.format(
+                            node=node,
+                            url=result['url'],
+                            code=result['code'],
+                        )
+                    )
+                    continue
+
+                yield node, result
+            except Exception:
+                logger.exception(
+                    'Failed to process monitor stat response for node {}'.format(node)
+                )
+                continue
+
+    def monitor_stats(self, groups=None):
         if groups:
             hosts = set((nb.node.host.addr, nb.node.port, nb.node.family)
                         for g in groups for nb in g.node_backends)
@@ -133,23 +212,26 @@ class NodeInfoUpdater(object):
             host_addrs = set(r.address for r in self.__session.routes.get_unique_routes())
             logger.info('Unique routes calculated')
 
-        requests = []
-        for address in host_addrs:
-            session = self.__session.clone()
-            session.cflags |= elliptics.command_flags.nolock
-            session.set_direct_id(address)
-            logger.debug('Request for monitor_stat of node {0}'.format(
-                address))
-            requests.append((session.monitor_stat(address, self.MONITOR_STAT_CATEGORIES),
-                             address))
+        for ha in host_addrs:
+            node_addr = '{host}:{port}'.format(
+                host=ha.host,
+                port=ha.port,
+            )
+            if ha.host not in storage.hosts:
+                logger.debug('Adding host {}'.format(ha.host))
+                host = storage.hosts.add(ha.host)
+            else:
+                host = storage.hosts[ha.host]
+            if node_addr not in storage.nodes:
+                logger.debug('Adding node {}'.format(node_addr))
+                storage.nodes.add(host, ha.port, ha.family)
 
-        for result, address in requests:
-            try:
-                h.process_elliptics_async_result(result, self.update_statistics)
-            except Exception as e:
-                logger.exception('Failed to request monitor_stat for node {}: {}'.format(
-                    address, e))
-                continue
+        for node, result in self._do_get_monitor_stats(host_addrs):
+            self.update_statistics(
+                node,
+                result['content'],
+                elapsed_time=result['request_time']
+            )
 
         nbs = (groups and
                [nb for g in groups for nb in g.node_backends] or
@@ -196,34 +278,21 @@ class NodeInfoUpdater(object):
         return parsed_stats
 
     @staticmethod
-    def update_statistics(m_stat, elapsed_time=None, end_time=None):
+    def update_statistics(node, stat, elapsed_time=None):
 
-        node_addr = '{0}:{1}'.format(m_stat.address.host, m_stat.address.port)
-        logger.debug('Cluster updating: node {0} statistics time: {1}.{2:03d}'.format(
-            node_addr, elapsed_time.tsec, int(round(elapsed_time.tnsec / (1000.0 * 1000.0)))))
-        logger.info('Stats: {0}'.format(node_addr))
+        logger.debug(
+            'Cluster updating: node {0} statistics time: {1:03f}'.format(
+                node, elapsed_time
+            )
+        )
 
-        collect_ts = end_time.tsec
-
-        stat = m_stat.statistics
+        collect_ts = mh.elliptics_time_to_ts(stat['timestamp'])
 
         try:
-            host_addr = m_stat.address.host
-            if host_addr not in storage.hosts:
-                logger.debug('Adding host {0}'.format(host_addr))
-                host = storage.hosts.add(host_addr)
-            else:
-                host = storage.hosts[host_addr]
-
-            if node_addr not in storage.nodes:
-                node = storage.nodes.add(host, m_stat.address.port, m_stat.address.family)
-            else:
-                node = storage.nodes[node_addr]
-
             try:
                 node.update_statistics(stat, collect_ts)
             except KeyError as e:
-                logger.warn('Bad procfs stat for node {0} ({1}): {2}'.format(node_addr, e, stat))
+                logger.warn('Bad procfs stat for node {0} ({1}): {2}'.format(node, e, stat))
                 pass
 
             fss = set()
@@ -237,7 +306,7 @@ class NodeInfoUpdater(object):
 
                 update_group_history = False
 
-                node_backend_addr = '{0}/{1}'.format(node_addr, backend_id)
+                node_backend_addr = '{0}/{1}'.format(node, backend_id)
                 if node_backend_addr not in storage.node_backends:
                     node_backend = storage.node_backends.add(node, backend_id)
                     update_group_history = True
@@ -273,11 +342,11 @@ class NodeInfoUpdater(object):
                     continue
 
                 fsid = b_stat['backend']['vfs']['fsid']
-                fsid_key = '{addr}:{fsid}'.format(addr=host_addr, fsid=fsid)
+                fsid_key = '{host}:{fsid}'.format(host=node.host, fsid=fsid)
 
                 if fsid_key not in storage.fs:
                     logger.debug('Adding fs {0}'.format(fsid_key))
-                    fs = storage.fs.add(host, fsid)
+                    fs = storage.fs.add(node.host, fsid)
                 else:
                     fs = storage.fs[fsid_key]
 
@@ -328,7 +397,7 @@ class NodeInfoUpdater(object):
             node.update_commands_stats(good_node_backends)
 
         except Exception as e:
-            logger.exception('Unable to process statictics for node {}'.format(node_addr))
+            logger.exception('Unable to process statistics for node {}'.format(node))
 
     def update_symm_groups_async(self, groups=None):
 
