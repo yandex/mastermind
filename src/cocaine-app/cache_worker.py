@@ -2,6 +2,11 @@
 import logging
 import time
 
+# NB: pool should be initialized before importing
+# any of cocaine-framework-python modules to avoid
+# tornado ioloop dispatcher issues
+import monitor_pool
+
 from cocaine.asio.exceptions import LocatorResolveError
 from cocaine.worker import Worker
 import elliptics
