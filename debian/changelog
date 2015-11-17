@@ -1,3 +1,9 @@
+mastermind (2.25.88) trusty; urgency=medium
+
+  * Decreased cocaine workers' pool limit to 5
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 17 Nov 2015 14:31:24 +0300
+
 mastermind (2.25.87) trusty; urgency=medium
 
   * Use simplejson for faster parsing
