@@ -209,7 +209,7 @@ class NodeInfoUpdater(object):
             host_addrs = [elliptics.Address(*host) for host in hosts]
         else:
             logger.info('Before calculating routes')
-            host_addrs = set(r.address for r in self.__session.routes.get_unique_routes())
+            host_addrs = self.__session.routes.addresses()
             logger.info('Unique routes calculated')
 
         for ha in host_addrs:
