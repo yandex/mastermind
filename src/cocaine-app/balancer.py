@@ -37,6 +37,8 @@ logger = logging.getLogger('mm.balancer')
 
 logger.info('balancer.py')
 
+CONFIG_REMOTES = config.get('elliptics', {}).get('nodes', [])
+
 
 class Balancer(object):
 
@@ -1032,10 +1034,10 @@ class Balancer(object):
 
         return range(max_group + 1, max_group + 1 + groups_count)
 
-    @h.concurrent_handler
+    # @h.concurrent_handler
+    @h.handler_wne
     def get_config_remotes(self, request):
-        nodes = config.get('elliptics', {}).get('nodes', []) or config["elliptics_nodes"]
-        return tuple(nodes)
+        return CONFIG_REMOTES
 
     def __get_couple(self, groups):
         couple_str = ':'.join(map(str, sorted(groups, key=lambda x: int(x))))
