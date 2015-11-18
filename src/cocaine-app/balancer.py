@@ -57,9 +57,11 @@ class Balancer(object):
 
         self._namespaces_states = {}
         self._cached_keys = {}
+        self._flow_stats = {}
         self._namespaces_states_lock = threading.Lock()
         self.ns_states_timer = periodic_timer(seconds=config.get('nodes_reload_period', 60))
         self.cached_keys_timer = periodic_timer(seconds=config.get('nodes_reload_period', 60))
+        self.flow_stats_timer = periodic_timer(seconds=config.get('nodes_reload_period', 60))
 
         self.statistics_monitor_enabled = bool(monitor.CoupleFreeEffectiveSpaceMonitor.STAT_CFG)
 
@@ -80,6 +82,7 @@ class Balancer(object):
         assert self.niu
         self._update_namespaces_states()
         self._update_cached_keys()
+        self._update_flow_stats()
         if self.statistics_monitor_enabled:
             self.__tq.add_task_at(
                 'couples_free_effective_space_collect',
@@ -1661,6 +1664,46 @@ class Balancer(object):
             raise cached_keys
 
         return cached_keys
+
+    def _update_flow_stats(self):
+        start_ts = time.time()
+        logger.info('Flow stats updating: started')
+        try:
+            self._do_update_flow_stats()
+        finally:
+            logger.info('Flow stats updating: finished, time: {0:.3f}'.format(
+                time.time() - start_ts))
+            self.__tq.add_task_at(
+                'flow_stats_update',
+                self.flow_stats_timer.next(),
+                self._update_flow_stats)
+
+    @h.concurrent_handler
+    def force_update_flow_stats(self, request):
+        start_ts = time.time()
+        logger.info('Flow stats forced updating: started')
+        try:
+            self._do_update_flow_stats()
+        finally:
+            logger.info('Flow stats forced updating: finished, time: {0:.3f}'.format(
+                time.time() - start_ts))
+
+    def _do_update_flow_stats(self):
+        try:
+            self._flow_stats = self.statistics.calculate_flow_stats()
+        except Exception as e:
+            logger.exception('Flow stats updating: failed')
+            self._flow_stats = e
+
+    # @h.concurrent_handler
+    @h.handler_wne
+    def get_flow_stats(self, request):
+        flow_stats = self._flow_stats
+
+        if isinstance(flow_stats, Exception):
+            raise flow_stats
+
+        return flow_stats
 
     def collect_couples_free_eff_space(self):
         try:

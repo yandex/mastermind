@@ -334,9 +334,7 @@ class Statistics(object):
 
         return res
 
-    @h.concurrent_handler
-    def get_flow_stats(self, request):
-
+    def calculate_flow_stats(self):
         per_dc_stat, per_ns_stat, per_ns_dc_stat = self.per_entity_stat()
 
         res = self.total_stats(per_dc_stat)
