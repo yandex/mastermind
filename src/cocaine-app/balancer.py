@@ -14,6 +14,7 @@ import traceback
 import elliptics
 import msgpack
 from mastermind.service import ReconnectableService
+from tornado.ioloop import IOLoop
 
 import balancelogicadapter as bla
 import balancelogic
@@ -46,6 +47,8 @@ class Balancer(object):
 
     CLUSTER_CHANGES_LOCK = 'cluster'
 
+    MAKE_IOLOOP = 'make_ioloop'
+
     def __init__(self, n, meta_db):
         self.node = n
         self.infrastructure = None
@@ -67,6 +70,11 @@ class Balancer(object):
             )
 
         self.__tq = timed_queue.TimedQueue()
+        self.__tq.add_task_in(
+            self.MAKE_IOLOOP,
+            0,
+            self._make_tq_thread_ioloop
+        )
 
     def start(self):
         assert self.niu
@@ -78,6 +86,11 @@ class Balancer(object):
                 self.couples_free_eff_space_collect_timer.next(),
                 self.collect_couples_free_eff_space
             )
+
+    def _make_tq_thread_ioloop(self):
+        logger.debug('Balancer task queue, creating thread ioloop')
+        io_loop = IOLoop()
+        io_loop.make_current()
 
     def _start_tq(self):
         self.__tq.start()
