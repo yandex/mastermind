@@ -1564,8 +1564,10 @@ class Balancer(object):
     # @h.concurrent_handler
     @h.handler_wne
     def get_namespaces_states(self, request):
-        if isinstance(self._namespaces_states, Exception):
-            raise self._namespaces_states
+        namespaces_states = self._namespaces_states
+
+        if isinstance(namespaces_states, Exception):
+            raise namespaces_states
 
         try:
             namespaces = request[0]
@@ -1573,10 +1575,10 @@ class Balancer(object):
             namespaces = []
 
         res = {}
-        for ns in namespaces or self._namespaces_states:
-            if ns not in self._namespaces_states:
+        for ns in namespaces or namespaces_states:
+            if ns not in namespaces_states:
                 continue
-            res[ns] = self._namespaces_states[ns]
+            res[ns] = namespaces_states[ns]
 
         return res
 
