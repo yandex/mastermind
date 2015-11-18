@@ -1,3 +1,11 @@
+mastermind (2.25.91) trusty; urgency=medium
+
+  * Split planner config section into several sections
+  * Cache flow stats
+  * Use cache to handle get_cache_keys
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 18 Nov 2015 21:45:31 +0300
+
 mastermind (2.25.90) trusty; urgency=medium
 
   * Fix cache worker startup script
