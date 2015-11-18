@@ -47,7 +47,7 @@ class Planner(object):
         self.candidates = []
         self.meta_session = meta_session
         self.job_processor = job_processor
-        self.__max_plan_length = self.params.get('max_plan_length', 5)
+        self.__max_plan_length = self.params.get('move', {}).get('max_plan_length', 5)
         self.__tq = timed_queue.TimedQueue()
 
         self.node_info_updater = niu
@@ -62,20 +62,26 @@ class Planner(object):
         if config['metadata'].get('planner', {}).get('db'):
             self.collection = Collection(db[config['metadata']['planner']['db']], 'planner')
 
-            if (self.params.get('enabled', False)):
-
+            if self.params.get('move', {}).get('enabled', False):
                 self.__tq.add_task_in(
                     self.MOVE_CANDIDATES,
                     10,
-                    self._move_candidates)
+                    self._move_candidates
+                )
+
+            if self.params.get('recover_dc', {}).get('enabled', False):
                 self.__tq.add_task_at(
                     self.RECOVER_DC,
                     self.recover_dc_timer.next(),
-                    self._recover_dc)
+                    self._recover_dc
+                )
+
+            if self.params.get('couple_defrag', {}).get('enabled', False):
                 self.__tq.add_task_at(
                     self.COUPLE_DEFRAG,
                     self.couple_defrag_timer.next(),
-                    self._couple_defrag)
+                    self._couple_defrag
+                )
 
     def _start_tq(self):
         self.__tq.start()
@@ -109,7 +115,7 @@ class Planner(object):
             logger.info('Move candidates planner finished')
             self.__tq.add_task_in(
                 self.MOVE_CANDIDATES,
-                self.params.get('generate_plan_period', 1800),
+                self.params.get('move', {}).get('generate_plan_period', 1800),
                 self._move_candidates)
 
     def __busy_hosts(self, job_type):
