@@ -53,8 +53,10 @@ class Balancer(object):
         self.niu = None
 
         self._namespaces_states = {}
+        self._cached_keys = {}
         self._namespaces_states_lock = threading.Lock()
         self.ns_states_timer = periodic_timer(seconds=config.get('nodes_reload_period', 60))
+        self.cached_keys_timer = periodic_timer(seconds=config.get('nodes_reload_period', 60))
 
         self.statistics_monitor_enabled = bool(monitor.CoupleFreeEffectiveSpaceMonitor.STAT_CFG)
 
@@ -69,6 +71,7 @@ class Balancer(object):
     def start(self):
         assert self.niu
         self._update_namespaces_states()
+        self._update_cached_keys()
         if self.statistics_monitor_enabled:
             self.__tq.add_task_at(
                 'couples_free_effective_space_collect',
@@ -1598,16 +1601,51 @@ class Balancer(object):
         return {'couples': couples_diff,
                 'total_keys_diff': sum(couples_diff.itervalues())}
 
-    @h.source
-    @h.handler_wne
-    def get_cached_keys(self, request):
+    def _update_cached_keys(self):
+        start_ts = time.time()
+        logger.info('Cached keys updating: started')
+        try:
+            self._do_update_cached_keys()
+        finally:
+            logger.info('Cached keys updating: finished, time: {0:.3f}'.format(
+                time.time() - start_ts))
+            self.__tq.add_task_at(
+                'cached_keys_update',
+                self.cached_keys_timer.next(),
+                self._update_cached_keys)
+
+    @h.concurrent_handler
+    def force_update_cached_keys(self, request):
+        start_ts = time.time()
+        logger.info('Cached keys forced updating: started')
+        try:
+            self._do_update_cached_keys()
+        finally:
+            logger.info('Cached keys forced updating: finished, time: {0:.3f}'.format(
+                time.time() - start_ts))
+
+    def _do_update_cached_keys(self):
         if not config.get("cache") or not config.get('metadata', {}).get('cache', {}):
-            yield {}
-            raise StopIteration
+            self._cached_keys = {}
+            return
         mc = ReconnectableService(
             '{base_name}-cache'.format(base_name=config.get('app_name', 'mastermind')),
             attempts=3, timeout=10, logger=logger)
-        yield mc.enqueue('get_cached_keys', msgpack.packb(None))
+        try:
+            self._cached_keys = mc.enqueue('get_cached_keys', msgpack.packb(None)).get()
+        except Exception as e:
+            logger.exception('Cached keys updating: failed')
+            self._cached_keys = e
+
+    # @h.concurrent_handler
+    @h.handler_wne
+    def get_cached_keys(self, request):
+        cached_keys = self._cached_keys
+
+        if isinstance(cached_keys, Exception):
+            raise cached_keys
+
+        return cached_keys
 
     def collect_couples_free_eff_space(self):
         try:
