@@ -206,7 +206,6 @@ def init_node_info_updater(jf):
 
 
 def init_statistics():
-    register_handle(b.statistics.get_flow_stats)
     register_handle(b.statistics.get_groups_tree)
     register_handle(b.statistics.get_couple_statistics)
     return b.statistics
