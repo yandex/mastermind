@@ -41,7 +41,7 @@ class Planner(object):
 
     def __init__(self, meta_session, db, niu, job_processor):
 
-        self.params = config.get('planner', config.get('smoother')) or {}
+        self.params = config.get('planner', {})
 
         logger.info('Planner initializing')
         self.candidates = []
