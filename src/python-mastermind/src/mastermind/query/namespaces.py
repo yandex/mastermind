@@ -62,6 +62,7 @@ class NamespacesQuery(Query):
               redirect_content_length_threshold=None,
               redirect_expire_time=None,
               redirect_query_args=None,
+              redirect_add_orig_path_query_arg=None,
               multipart_content_length_threshold=None,
               select_couple_to_upload=None,
               reserved_space_percentage=None,
@@ -92,7 +93,9 @@ class NamespacesQuery(Query):
           redirect_expire_time: period of time for which redirect url
                 is considered valid
           redirect_query_args: query arguments that should be included
-            in redirect link to storage when it is being formed by proxy
+            in redirect url to storage when it is being formed by proxy
+          redirect_add_orig_path_query_arg: add original url path to
+            redirect url as a query arg when True
           multipart_content_length_threshold: this flag enables multipart upload for
             requests with content length less than threshold if this flag is True
           select_couple_to_upload: this flag allows client to manually select a couple
@@ -152,6 +155,8 @@ class NamespacesQuery(Query):
             redirect['expire-time'] = int(redirect_expire_time)
         if redirect_query_args:
             redirect['query-args'] = redirect_query_args
+        if redirect_add_orig_path_query_arg:
+            redirect['add-orig-path-query-arg'] = redirect_add_orig_path_query_arg == '1'
 
         if redirect:
             settings['redirect'] = redirect
@@ -161,8 +166,8 @@ class NamespacesQuery(Query):
             features['multipart'] = {
                 'content-length-threshold': int(multipart_content_length_threshold)
             }
-        if select_couple_to_upload == 'true':
-            features['select-couple-to-upload'] = True
+        if select_couple_to_upload:
+            features['select-couple-to-upload'] = select_couple_to_upload not in ('1', 'true')
         if custom_expiration_time:
             features['custom-expiration-time'] = custom_expiration_time != '0'
 

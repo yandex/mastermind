@@ -710,6 +710,11 @@ def ns_setup(namespace,
                  'Query arguments that should be included in redirect link to storage '
                  'when it is being formed by proxy'
              ),
+             redirect_add_orig_path_query_arg=(
+                 '',
+                 '',
+                 'Add original url path to redirect url as a query arg (1|0)',
+             ),
              multipart_content_length_threshold=(
                  '',
                  '',
@@ -718,7 +723,8 @@ def ns_setup(namespace,
              ),
              select_couple_to_upload=(
                  '',
-                 '', 'Client is allowed to select a couple to write key to (true|false)'
+                 '',
+                 'Client is allowed to select a couple to write key to (1|0)'
              ),
              reserved_space_percentage=(
                  '',
@@ -760,6 +766,7 @@ def ns_setup(namespace,
             redirect_content_length_threshold=redirect_content_length_threshold,
             redirect_expire_time=redirect_expire_time,
             redirect_query_args=redirect_query_args,
+            redirect_add_orig_path_query_arg=redirect_add_orig_path_query_arg,
             multipart_content_length_threshold=multipart_content_length_threshold,
             select_couple_to_upload=select_couple_to_upload,
             reserved_space_percentage=reserved_space_percentage,
@@ -824,6 +831,8 @@ def ns_setup(namespace,
             redirect['expire-time'] = int(redirect_expire_time)
         if redirect_query_args:
             redirect['query-args'] = redirect_query_args
+        if redirect_add_orig_path_query_arg:
+            redirect['add-orig-path-query-arg'] = redirect_add_orig_path_query_arg == '1'
 
         if redirect:
             settings['redirect'] = redirect
@@ -833,8 +842,8 @@ def ns_setup(namespace,
             features['multipart'] = {
                 'content-length-threshold': int(multipart_content_length_threshold)
             }
-        if select_couple_to_upload == 'true':
-            features['select-couple-to-upload'] = True
+        if select_couple_to_upload:
+            features['select-couple-to-upload'] = select_couple_to_upload in ('1', 'true')
         if custom_expiration_time:
             features['custom-expiration-time'] = custom_expiration_time != '0'
 

@@ -1225,7 +1225,12 @@ class Balancer(object):
     ])
     ALLOWED_NS_SIGN_KEYS = set(['token', 'path_prefix'])
     ALLOWED_NS_AUTH_KEYS = set(['write', 'read'])
-    ALLOWED_REDIRECT_KEYS = set(['content-length-threshold', 'expire-time', 'query-args'])
+    ALLOWED_REDIRECT_KEYS = set([
+        'content-length-threshold',
+        'expire-time',
+        'query-args',
+        'add-orig-path-query-arg',
+    ])
     ALLOWED_SERVICE_KEYS = set(['is_deleted'])
 
     def __merge_dict(self, dst, src):
