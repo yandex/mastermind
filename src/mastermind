@@ -704,6 +704,12 @@ def ns_setup(namespace,
                  'instead of balancer urls'
              ),
              redirect_expire_time=('', '', 'Time for which redirect url is considered valid'),
+             redirect_query_args=(
+                 '',
+                 [],
+                 'Query arguments that should be included in redirect link to storage '
+                 'when it is being formed by proxy'
+             ),
              multipart_content_length_threshold=(
                  '',
                  '',
@@ -753,6 +759,7 @@ def ns_setup(namespace,
             add_units=add_units,
             redirect_content_length_threshold=redirect_content_length_threshold,
             redirect_expire_time=redirect_expire_time,
+            redirect_query_args=redirect_query_args,
             multipart_content_length_threshold=multipart_content_length_threshold,
             select_couple_to_upload=select_couple_to_upload,
             reserved_space_percentage=reserved_space_percentage,
@@ -815,6 +822,8 @@ def ns_setup(namespace,
             redirect['content-length-threshold'] = int(redirect_content_length_threshold)
         if redirect_expire_time:
             redirect['expire-time'] = int(redirect_expire_time)
+        if redirect_query_args:
+            redirect['query-args'] = redirect_query_args
 
         if redirect:
             settings['redirect'] = redirect

@@ -59,7 +59,9 @@ class NamespacesQuery(Query):
               auth_key_write=None, auth_key_read=None,
               sign_token=None, sign_path_prefix=None,
               min_units=None, add_units=None,
-              redirect_content_length_threshold=None, redirect_expire_time=None,
+              redirect_content_length_threshold=None,
+              redirect_expire_time=None,
+              redirect_query_args=None,
               multipart_content_length_threshold=None,
               select_couple_to_upload=None,
               reserved_space_percentage=None,
@@ -89,6 +91,8 @@ class NamespacesQuery(Query):
             proxy to return direct urls instead of balancer urls
           redirect_expire_time: period of time for which redirect url
                 is considered valid
+          redirect_query_args: query arguments that should be included
+            in redirect link to storage when it is being formed by proxy
           multipart_content_length_threshold: this flag enables multipart upload for
             requests with content length less than threshold if this flag is True
           select_couple_to_upload: this flag allows client to manually select a couple
@@ -146,6 +150,8 @@ class NamespacesQuery(Query):
             redirect['content-length-threshold'] = int(redirect_content_length_threshold)
         if redirect_expire_time:
             redirect['expire-time'] = int(redirect_expire_time)
+        if redirect_query_args:
+            redirect['query-args'] = redirect_query_args
 
         if redirect:
             settings['redirect'] = redirect
