@@ -1,3 +1,9 @@
+mastermind (2.25.92) trusty; urgency=medium
+
+  * Fix cocaine worker termination
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 19 Nov 2015 14:44:39 +0300
+
 mastermind (2.25.91) trusty; urgency=medium
 
   * Split planner config section into several sections
