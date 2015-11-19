@@ -718,7 +718,8 @@ def ns_setup(namespace,
              ),
              select_couple_to_upload=(
                  '',
-                 '', 'Client is allowed to select a couple to write key to (1|0)'
+                 '',
+                 'Client is allowed to select a couple to write key to (1|0)'
              ),
              reserved_space_percentage=(
                  '',
