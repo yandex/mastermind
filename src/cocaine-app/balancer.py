@@ -1126,6 +1126,14 @@ class Balancer(object):
             raise ValueError('redirect expire time should be positive integer')
 
         try:
+            query_args = settings['redirect']['query-args']
+            for query_arg in query_args:
+                if not isinstance(query_arg, basestring):
+                    raise ValueError('query-args should be a list of strings')
+        except KeyError:
+            pass
+
+        try:
             reserved_space_percentage = settings['reserved-space-percentage'] = float(settings['reserved-space-percentage'])
             if not 0.0 <= reserved_space_percentage <= 1.0:
                 raise ValueError
@@ -1217,7 +1225,7 @@ class Balancer(object):
     ])
     ALLOWED_NS_SIGN_KEYS = set(['token', 'path_prefix'])
     ALLOWED_NS_AUTH_KEYS = set(['write', 'read'])
-    ALLOWED_REDIRECT_KEYS = set(['content-length-threshold', 'expire-time'])
+    ALLOWED_REDIRECT_KEYS = set(['content-length-threshold', 'expire-time', 'query-args'])
     ALLOWED_SERVICE_KEYS = set(['is_deleted'])
 
     def __merge_dict(self, dst, src):
