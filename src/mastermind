@@ -684,33 +684,52 @@ def ns_setup(namespace,
              auth_key_read=('', False, 'Set proxy auth-key for reading'),
              sign_token=('', '', 'Signature token'),
              sign_path_prefix=('', '', 'Signature path prefix'),
-             min_units=('u', '', 'Minimal number of units available for write operations '
-                'in namespace when namespace is considered alive'),
-             add_units=('', '', 'Number of additional units with positive weights '
-                'that mastermind will add to namespace group weights if available'),
+             min_units=(
+                 'u',
+                 '',
+                 'Minimal number of units available for write operations in namespace '
+                 'when namespace is considered alive'
+             ),
+             add_units=(
+                 '',
+                 '',
+                 'Number of additional units with positive weights that mastermind '
+                 'will add to namespace group weights if available'
+             ),
              couple=('c', '', 'Set static couple for namespace (1:2:10)'),
-             redirect_content_length_threshold=('', '', 'Set content length threshold for '
-                'proxy to return direct urls instead of balancer urls'),
-             redirect_expire_time=('', '', 'Time for which redirect url is considered '
-                'valid'),
-             multipart_content_length_threshold=('', '', 'Set multipart feature '
-                'content length threshold (multipart upload is enabled for '
-                'requests with content length less than threshold)'),
-             select_couple_to_upload=('', '', 'Client is allowed to select a couple '
-                'to write key to (true|false)'),
-             reserved_space_percentage=('', '', 'Percentage of effective space that '
-                'will be reserved for future updates, couple will be closed when '
-                'free effective space percentage is less than or equal to reserved '
-                'space percentage'),
+             redirect_content_length_threshold=(
+                 '',
+                 '',
+                 'Set content length threshold for proxy to return direct urls '
+                 'instead of balancer urls'
+             ),
+             redirect_expire_time=('', '', 'Time for which redirect url is considered valid'),
+             multipart_content_length_threshold=(
+                 '',
+                 '',
+                 'Set multipart feature content length threshold (multipart upload '
+                 'is enabled for requests with content length less than threshold)'
+             ),
+             select_couple_to_upload=(
+                 '',
+                 '', 'Client is allowed to select a couple to write key to (true|false)'
+             ),
+             reserved_space_percentage=(
+                 '',
+                 '',
+                 'Percentage of effective space that will be reserved for '
+                 'future updates, couple will be closed when free effective space '
+                 'percentage is less than or equal to reserved space percentage'
+             ),
              check_for_update=('', '', 'Insert the key only of does not exist already (1|0)'),
-             custom_expiration_time=('', '', 'Allows namespace to use expire-time '
-                'argument for signing url (1|0)'),
+             custom_expiration_time=(
+                 '',
+                 '',
+                 'Allows namespace to use expire-time argument for signing url (1|0)'
+             ),
              json=('', None, 'Format output as json'),
              host=None, app=None):
 
-    # json_input=('j', False, 'Namespace settings will be imported without '
-    #    'validation from --input-source source (default /dev/stdin)'),
-    # input_source=('i', '/dev/stdin', 'Input file for namespace settings'),
     '''Namespace setup.
     Updates settings by default with given keys.
     Use --overwrite to completely overwrite namespace settings.'''
