@@ -1,3 +1,11 @@
+mastermind (2.25.93) trusty; urgency=medium
+
+    * Add orig path query arg settings
+    * Fix select couple to upload namespace setting
+    * Add redirect query args support
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 19 Nov 2015 19:13:34 +0300
+
 mastermind (2.25.92) trusty; urgency=medium
 
   * Fix cocaine worker termination
