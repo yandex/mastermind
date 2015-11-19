@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 import logging
+import sys
+import signal
 import time
 
 # NB: pool should be initialized before importing
@@ -164,6 +166,13 @@ def init_job_processor(jf, meta_db, niu):
 
 
 if __name__ == '__main__':
+
+    def term_handler(signo, frame):
+        # required to guarantee execution of cleanup functions registered
+        # with atexit.register
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, term_handler)
 
     n = init_elliptics_node()
 

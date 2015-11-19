@@ -1,3 +1,4 @@
+import atexit
 import elliptics
 
 from mastermind.pool import Pool
@@ -27,3 +28,10 @@ monitor_pool = Pool(
     },
     processes=MONITOR_CFG.get('pool_size', 5),
 )
+
+
+@atexit.register
+def stop_pool():
+    """Stop pool workers on main process shutdown"""
+    monitor_pool.close()
+    monitor_pool.join()

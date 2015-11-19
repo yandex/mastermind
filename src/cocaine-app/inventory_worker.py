@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 import logging
+import signal
+import sys
 
 from cocaine.asio.exceptions import LocatorResolveError
 from cocaine.worker import Worker
@@ -30,6 +32,13 @@ def init_inventory_worker(worker):
 DEFAULT_DISOWN_TIMEOUT = 2
 
 if __name__ == '__main__':
+
+    def term_handler(signo, frame):
+        # required to guarantee execution of cleanup functions registered
+        # with atexit.register
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, term_handler)
 
     logger.info("before creating inventory worker")
     worker = Worker(disown_timeout=config.get('disown_timeout', DEFAULT_DISOWN_TIMEOUT))
