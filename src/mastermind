@@ -718,7 +718,7 @@ def ns_setup(namespace,
              ),
              select_couple_to_upload=(
                  '',
-                 '', 'Client is allowed to select a couple to write key to (true|false)'
+                 '', 'Client is allowed to select a couple to write key to (1|0)'
              ),
              reserved_space_percentage=(
                  '',
@@ -833,8 +833,8 @@ def ns_setup(namespace,
             features['multipart'] = {
                 'content-length-threshold': int(multipart_content_length_threshold)
             }
-        if select_couple_to_upload == 'true':
-            features['select-couple-to-upload'] = True
+        if select_couple_to_upload:
+            features['select-couple-to-upload'] = select_couple_to_upload in ('1', 'true')
         if custom_expiration_time:
             features['custom-expiration-time'] = custom_expiration_time != '0'
 

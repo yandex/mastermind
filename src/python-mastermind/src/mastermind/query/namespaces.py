@@ -161,8 +161,8 @@ class NamespacesQuery(Query):
             features['multipart'] = {
                 'content-length-threshold': int(multipart_content_length_threshold)
             }
-        if select_couple_to_upload == 'true':
-            features['select-couple-to-upload'] = True
+        if select_couple_to_upload:
+            features['select-couple-to-upload'] = select_couple_to_upload not in ('1', 'true')
         if custom_expiration_time:
             features['custom-expiration-time'] = custom_expiration_time != '0'
 
