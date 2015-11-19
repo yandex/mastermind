@@ -2,6 +2,7 @@
 # encoding: utf-8
 from functools import wraps
 import logging
+import signal
 import sys
 from time import sleep, time
 import traceback
@@ -42,6 +43,15 @@ from manual_locks import manual_locker
 
 i = iter(xrange(100))
 logger.info("trace %d" % (i.next()))
+
+
+def term_handler(signo, frame):
+    # required to guarantee execution of cleanup functions registered
+    # with atexit.register
+    sys.exit(0)
+
+
+signal.signal(signal.SIGTERM, term_handler)
 
 nodes = config.get('elliptics', {}).get('nodes', []) or config["elliptics_nodes"]
 logger.debug("config: %s" % str(nodes))
