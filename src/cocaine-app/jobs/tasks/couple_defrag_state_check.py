@@ -35,7 +35,10 @@ class CoupleDefragStateCheckTask(Task):
                 if not nb.stat:
                     continue
                 stats.append(nb.stat)
-        self.stats_ts = max([s.ts for s in stats]) if stats else int(time.time())
+        stats_ts = [int(time.time())]
+        if stats:
+            stats_ts.extend([s.ts for s in stats])
+        self.stats_ts = max(stats_ts)
 
     @property
     def finished(self):
