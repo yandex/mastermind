@@ -1,3 +1,9 @@
+mastermind (2.25.94) trusty; urgency=medium
+
+  * Fix defrag complete decision based on stalled stats
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 20 Nov 2015 17:52:35 +0300
+
 mastermind (2.25.93) trusty; urgency=medium
 
     * Add orig path query arg settings
