@@ -89,6 +89,8 @@ class WeightManager(object):
                     ns_weights.setdefault(len(couple.groups), [])
                     if couple.status != storage.Status.OK:
                         continue
+                    if couple not in self.couples:
+                        continue
                     ns_sizes.setdefault(len(couple.groups), []).append(self.couples[couple])
 
                 required_units = WeightCalculator.ns_used_resources(ns)
