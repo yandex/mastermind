@@ -272,11 +272,12 @@ class GroupHistoryFinder(object):
             .list(group_id=group_id)
             .limit(1)
         )
-        if not group_history_list.count():
+        try:
+            group_history = GroupHistory.new(**group_history_list[0])
+        except IndexError:
             raise GroupHistoryNotFoundError(
                 'Group history for group {} is not found'.format(group_id)
             )
-        group_history = GroupHistory.new(**group_history_list[0])
         group_history.collection = self.collection
         return group_history
 
