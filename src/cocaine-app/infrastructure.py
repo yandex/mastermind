@@ -359,6 +359,24 @@ class Infrastructure(object):
 
         failed_groups = set()
 
+        def update_group_history_record(group, group_history):
+            new_node_backends_set_record = self._new_group_node_backends_set_record(
+                group=group,
+                group_history=group_history,
+            )
+
+            new_couple_record = self._new_group_couple_record(
+                group=group,
+                group_history=group_history,
+            )
+
+            if new_node_backends_set_record or new_couple_record:
+                self._update_group(
+                    group_history=group_history,
+                    new_nodes=new_node_backends_set_record,
+                    new_couple=new_couple_record
+                )
+
         try:
             logger.info('Updating infrastructure state')
 
@@ -366,41 +384,33 @@ class Infrastructure(object):
                 groups_to_update = self._groups_to_update
                 self._groups_to_update = set()
 
-            for g in groups_to_update:
+            group_ids = list(g.group_id for g in groups_to_update)
+            group_histories = iter(self.group_history_finder.search_by_group_ids(group_ids))
+
+            while groups_to_update:
 
                 try:
-                    group_history = (
-                        self.group_history_finder.group_history(g.group_id) or
-                        self._new_group_history(g.group_id)
-                    )
+                    group_history = group_histories.next()
+                    group = storage.groups[group_history.group_id]
+                    groups_to_update.remove(group)
+                except StopIteration:
+                    # executed only once per new group in storage
+                    # so it does not introduce noticeable overhead
+                    group = groups_to_update.pop()
+                    group_history = self._new_group_history(group.group_id)
 
-                    new_node_backends_set_record = self._new_group_node_backends_set_record(
-                        group=g,
-                        group_history=group_history
-                    )
-
-                    new_couple_record = self._new_group_couple_record(
-                        group=g,
-                        group_history=group_history
-                    )
-
-                    if new_node_backends_set_record or new_couple_record:
-                        self._update_group(
-                            group_history=group_history,
-                            new_nodes=new_node_backends_set_record,
-                            new_couple=new_couple_record
-                        )
-
+                try:
+                    update_group_history_record(group, group_history)
                 except CacheUpstreamError as e:
                     logger.error('Failed to update history for group {}: {}'.format(
-                        g.group_id, e
+                        group, e
                     ))
-                    failed_groups.add(g)
+                    failed_groups.add(group)
                 except Exception:
                     logger.exception('Failed to update history for group {}'.format(
-                        g.group_id
+                        group
                     ))
-                    failed_groups.add(g)
+                    failed_groups.add(group)
 
         except Exception:
             logger.exception('Failed to update infrastructure state')

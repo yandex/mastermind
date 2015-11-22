@@ -299,6 +299,13 @@ class GroupHistoryFinder(object):
             gh._dirty = False
         return group_histories
 
+    def search_by_group_ids(self, group_ids):
+        group_history_records = self.collection.find({'group_id': {'$in': group_ids}})
+        for group_history_record in group_history_records:
+            gh = GroupHistory(**group_history_record)
+            gh.collection = self.collection
+            yield gh
+
     def search_by_node_backend(self,
                                hostname=None,
                                port=None,
