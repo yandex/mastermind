@@ -240,7 +240,7 @@ class Infrastructure(object):
             self._groups_to_update.add(group)
 
     def _new_group_history(self, group_id):
-        gh = GroupHistory(group_id=group_id)
+        gh = GroupHistory.new(group_id=group_id)
         gh.collection = self.group_history_finder.collection
         return gh
 
