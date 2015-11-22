@@ -52,7 +52,6 @@ class GroupHistory(MongoObject):
 
     @classmethod
     def new(cls, **kwargs):
-        super(GroupHistory, cls).new(**kwargs)
         group_history = cls(**kwargs)
         group_history._dirty = True
         return group_history
@@ -273,7 +272,7 @@ class GroupHistoryFinder(object):
             .limit(1)
         )
         try:
-            group_history = GroupHistory.new(**group_history_list[0])
+            group_history = GroupHistory(**group_history_list[0])
         except IndexError:
             raise GroupHistoryNotFoundError(
                 'Group history for group {} is not found'.format(group_id)
