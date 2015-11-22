@@ -543,10 +543,11 @@ class NodeInfoUpdater(object):
                         logger.exception('Failed to update group {0} status: {1}'.format(group, e))
                         pass
 
-            load_manager.update(storage)
-            weight_manager.update(storage)
+            if groups is None:
+                load_manager.update(storage)
+                weight_manager.update(storage)
 
-            infrastructure.schedule_history_update()
+                infrastructure.schedule_history_update()
 
         except Exception as e:
             logger.exception('Critical error during symmetric group update')
