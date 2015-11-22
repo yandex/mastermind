@@ -152,6 +152,7 @@ class NodeInfoUpdater(object):
         )
         logger.info('Waiting for monitor stats results')
 
+        # TODO: set timeout!!!
         for packed_result in skip_exceptions(results,
                                              on_exc=NodeInfoUpdater.log_monitor_stat_exc):
             try:
@@ -233,6 +234,7 @@ class NodeInfoUpdater(object):
                 elapsed_time=result['request_time']
             )
 
+        # TODO: can we use iterkeys?
         nbs = (groups and
                [nb for g in groups for nb in g.node_backends] or
                storage.node_backends.keys())
@@ -240,6 +242,7 @@ class NodeInfoUpdater(object):
             nb.update_statistics_status()
             nb.update_status()
 
+        # TODO: can we use iterkeys?
         fss = (groups and set(nb.fs for nb in nbs) or storage.fs.keys())
         for fs in fss:
             fs.update_status()
