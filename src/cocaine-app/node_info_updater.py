@@ -152,6 +152,7 @@ class NodeInfoUpdater(object):
         )
         logger.info('Waiting for monitor stats results')
 
+        # TODO: set timeout!!!
         for packed_result in skip_exceptions(results,
                                              on_exc=NodeInfoUpdater.log_monitor_stat_exc):
             try:
@@ -233,6 +234,7 @@ class NodeInfoUpdater(object):
                 elapsed_time=result['request_time']
             )
 
+        # TODO: can we use iterkeys?
         nbs = (groups and
                [nb for g in groups for nb in g.node_backends] or
                storage.node_backends.keys())
@@ -240,6 +242,7 @@ class NodeInfoUpdater(object):
             nb.update_statistics_status()
             nb.update_status()
 
+        # TODO: can we use iterkeys?
         fss = (groups and set(nb.fs for nb in nbs) or storage.fs.keys())
         for fs in fss:
             fs.update_status()
@@ -278,6 +281,99 @@ class NodeInfoUpdater(object):
         return parsed_stats
 
     @staticmethod
+    def _process_backend_statistics(node,
+                                    b_stat,
+                                    backend_stats,
+                                    collect_ts,
+                                    processed_fss,
+                                    processed_node_backends):
+
+        backend_id = b_stat['backend_id']
+
+        nb_config = (b_stat['config']
+                     if 'config' in b_stat else
+                     b_stat['backend']['config'])
+        gid = nb_config['group']
+
+        if gid == 0:
+            # skip zero group ids
+            return
+
+        b_stat['stats'] = backend_stats.get(backend_id, {})
+
+        update_group_history = False
+
+        node_backend_addr = '{0}/{1}'.format(node, backend_id)
+        if node_backend_addr not in storage.node_backends:
+            node_backend = storage.node_backends.add(node, backend_id)
+            update_group_history = True
+        else:
+            node_backend = storage.node_backends[node_backend_addr]
+
+        if b_stat['status']['state'] != 1:
+            logger.info('Node backend {0} is not enabled: state {1}'.format(
+                str(node_backend), b_stat['status']['state']))
+            node_backend.disable()
+            return
+
+        node_backend.enable()
+
+        if gid not in storage.groups:
+            logger.debug('Adding group {0}'.format(gid))
+            group = storage.groups.add(gid)
+        else:
+            group = storage.groups[gid]
+
+        fsid = b_stat['backend']['vfs']['fsid']
+        fsid_key = '{host}:{fsid}'.format(host=node.host, fsid=fsid)
+
+        if fsid_key not in storage.fs:
+            logger.debug('Adding fs {0}'.format(fsid_key))
+            fs = storage.fs.add(node.host, fsid)
+        else:
+            fs = storage.fs[fsid_key]
+
+        if node_backend not in fs.node_backends:
+            fs.add_node_backend(node_backend)
+
+        if fs not in processed_fss:
+            fs.update_statistics(b_stat['backend'], collect_ts)
+            processed_fss.add(fs)
+
+        logger.info('Updating statistics for node backend {}'.format(node_backend))
+        prev_base_path = node_backend.base_path
+        try:
+            node_backend.update_statistics(b_stat, collect_ts)
+        except KeyError as e:
+            logger.warn('Bad stat for node backend {0} ({1}): {2}'.format(
+                node_backend, e, b_stat))
+            pass
+
+        if node_backend.base_path != prev_base_path:
+            update_group_history = True
+
+        if b_stat['status']['read_only'] or node_backend.stat_commit_errors > 0:
+            node_backend.make_read_only()
+        else:
+            node_backend.make_writable()
+
+        if node_backend.group is not group:
+            logger.debug('Adding node backend {0} to group {1}{2}'.format(
+                node_backend, group.group_id,
+                ' (moved from group {0})'.format(node_backend.group.group_id)
+                if node_backend.group else ''))
+            group.add_node_backend(node_backend)
+            update_group_history = True
+
+        # these backends' commands stat are used later to update accumulated
+        # node commands stat
+        processed_node_backends.append(node_backend)
+
+        if update_group_history:
+            logger.debug('Group {} history may be outdated, adding to update queue'.format(group))
+            infrastructure.update_group_history(group)
+
+    @staticmethod
     def update_statistics(node, stat, elapsed_time=None):
 
         logger.debug(
@@ -301,103 +397,33 @@ class NodeInfoUpdater(object):
             backend_stats = NodeInfoUpdater._parsed_stats(stat['stats'])
 
             for b_stat in stat['backends'].itervalues():
-                backend_id = b_stat['backend_id']
-                b_stat['stats'] = backend_stats.get(backend_id, {})
-
-                update_group_history = False
-
-                node_backend_addr = '{0}/{1}'.format(node, backend_id)
-                if node_backend_addr not in storage.node_backends:
-                    node_backend = storage.node_backends.add(node, backend_id)
-                    update_group_history = True
-                else:
-                    node_backend = storage.node_backends[node_backend_addr]
-
-                nb_config = (b_stat['config']
-                             if 'config' in b_stat else
-                             b_stat['backend']['config'])
-
-                gid = nb_config['group']
-
-                if gid == 0:
-                    # skip zero group ids
-                    continue
-
-                if b_stat['status']['state'] != 1:
-                    logger.info('Node backend {0} is not enabled: state {1}'.format(
-                        str(node_backend), b_stat['status']['state']))
-                    node_backend.disable()
-                    continue
-
-                if gid not in storage.groups:
-                    logger.debug('Adding group {0}'.format(gid))
-                    group = storage.groups.add(gid)
-                else:
-                    group = storage.groups[gid]
-
-                if 'vfs' not in b_stat['backend']:
-                    logger.error(
-                        'Failed to parse statistics for node backend {0}, '
-                        'vfs key not found: {1}'.format(node_backend, b_stat))
-                    continue
-
-                fsid = b_stat['backend']['vfs']['fsid']
-                fsid_key = '{host}:{fsid}'.format(host=node.host, fsid=fsid)
-
-                if fsid_key not in storage.fs:
-                    logger.debug('Adding fs {0}'.format(fsid_key))
-                    fs = storage.fs.add(node.host, fsid)
-                else:
-                    fs = storage.fs[fsid_key]
-
-                if node_backend not in fs.node_backends:
-                    fs.add_node_backend(node_backend)
-                fs.update_statistics(b_stat['backend'], collect_ts)
-
-                fss.add(fs)
-                good_node_backends.append(node_backend)
-
-                node_backend.enable()
-
-                logger.info('Updating statistics for node backend %s' % (str(node_backend)))
-                if 'backend' not in b_stat:
-                    logger.warn('No backend in b_stat: {0}'.format(b_stat))
-                elif 'dstat' not in b_stat['backend']:
-                    logger.warn('No dstat in backend: {0}'.format(b_stat['backend']))
-
-                prev_base_path = node_backend.base_path
                 try:
-                    node_backend.update_statistics(b_stat, collect_ts)
-                except KeyError as e:
-                    logger.warn('Bad stat for node backend {0} ({1}): {2}'.format(
-                        node_backend, e, b_stat))
-                    pass
+                    NodeInfoUpdater._process_backend_statistics(
+                        node,
+                        b_stat,
+                        backend_stats,
+                        collect_ts,
+                        fss,
+                        good_node_backends
+                    )
+                except Exception:
+                    backend_id = b_stat['backend_id']
+                    logger.exception(
+                        'Failed to process backend {} stats on node {}'.format(backend_id, node)
+                    )
+                    continue
 
-                if node_backend.base_path != prev_base_path:
-                    update_group_history = True
-
-                if b_stat['status']['read_only'] or node_backend.stat_commit_errors > 0:
-                    node_backend.make_read_only()
-                else:
-                    node_backend.make_writable()
-
-                if node_backend.group is not group:
-                    logger.debug('Adding node backend {0} to group {1}{2}'.format(
-                        node_backend, group.group_id,
-                        ' (moved from group {0})'.format(node_backend.group.group_id)
-                        if node_backend.group else ''))
-                    update_group_history = True
-                    group.add_node_backend(node_backend)
-
-                if update_group_history:
-                    infrastructure.update_group_history(group)
-
+            logger.debug('Cluster updating: node {}, updating FS commands stats'.format(node))
             for fs in fss:
                 fs.update_commands_stats()
+
+            logger.debug('Cluster updating: node {}, updating node commands stats'.format(node))
             node.update_commands_stats(good_node_backends)
 
         except Exception as e:
             logger.exception('Unable to process statistics for node {}'.format(node))
+        finally:
+            logger.debug('Cluster updating: node {}, statistics processed'.format(node))
 
     def update_symm_groups_async(self, groups=None):
 
@@ -520,10 +546,11 @@ class NodeInfoUpdater(object):
                         logger.exception('Failed to update group {0} status: {1}'.format(group, e))
                         pass
 
-            load_manager.update(storage)
-            weight_manager.update(storage)
+            if groups is None:
+                load_manager.update(storage)
+                weight_manager.update(storage)
 
-            infrastructure.schedule_history_update()
+                infrastructure.schedule_history_update()
 
         except Exception as e:
             logger.exception('Critical error during symmetric group update')

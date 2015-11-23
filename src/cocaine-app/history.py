@@ -52,7 +52,6 @@ class GroupHistory(MongoObject):
 
     @classmethod
     def new(cls, **kwargs):
-        super(GroupHistory, cls).new(**kwargs)
         group_history = cls(**kwargs)
         group_history._dirty = True
         return group_history
@@ -272,11 +271,12 @@ class GroupHistoryFinder(object):
             .list(group_id=group_id)
             .limit(1)
         )
-        if not group_history_list.count():
+        try:
+            group_history = GroupHistory(**group_history_list[0])
+        except IndexError:
             raise GroupHistoryNotFoundError(
                 'Group history for group {} is not found'.format(group_id)
             )
-        group_history = GroupHistory.new(**group_history_list[0])
         group_history.collection = self.collection
         return group_history
 
@@ -298,6 +298,13 @@ class GroupHistoryFinder(object):
             gh.collection = self.collection
             gh._dirty = False
         return group_histories
+
+    def search_by_group_ids(self, group_ids):
+        group_history_records = self.collection.find({'group_id': {'$in': group_ids}})
+        for group_history_record in group_history_records:
+            gh = GroupHistory(**group_history_record)
+            gh.collection = self.collection
+            yield gh
 
     def search_by_node_backend(self,
                                hostname=None,

@@ -321,6 +321,7 @@ class CommandsStat(object):
 
 class NodeBackendStat(object):
     def __init__(self, node_stat):
+        # TODO: not required anymore, remove (?)
         self.node_stat = node_stat
         self.ts = None
 
@@ -768,6 +769,10 @@ class Fs(object):
             self.status = Status.BROKEN
         else:
             self.status = Status.OK
+
+        # TODO: unwind cycle dependency between node backend status and fs
+        # status. E.g., check node backend status and file system status
+        # separately on group status updating.
 
         if self.status != prev_status:
             logger.info('Changing status of fs {0}, affecting node backends {1}'.format(

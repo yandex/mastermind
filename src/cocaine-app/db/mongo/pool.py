@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import logging
-import pymongo
 import sys
 import time
 import re
@@ -10,7 +9,6 @@ import traceback
 from copy import deepcopy
 import pymongo
 from pymongo.collection import Collection as OriginalCollection
-from pymongo.errors import ConnectionFailure, OperationFailure, AutoReconnect
 from pymongo.mongo_replica_set_client import MongoReplicaSetClient as MRSC
 
 

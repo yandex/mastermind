@@ -44,6 +44,7 @@ implementation changes.
 from collections import Iterator
 from datetime import timedelta
 import logging
+from multiprocessing import TimeoutError
 from multiprocessing.pool import Pool as OriginalPool
 from multiprocessing.queues import SimpleQueue as OriginalSimpleQueue
 from multiprocessing.queues import Empty
@@ -296,14 +297,16 @@ class SimpleQueue(OriginalSimpleQueue):
         self.get = get
 
 
-def skip_exceptions(result, on_exc=None):
+def skip_exceptions(result, on_exc=None, timeout=None):
     if not isinstance(result, Iterator):
         raise TypeError('Iterator object is expected')
 
     while True:
         try:
-            yield result.next()
+            yield result.next(timeout)
         except StopIteration:
+            raise
+        except TimeoutError:
             raise
         except Exception as e:
             if on_exc:
