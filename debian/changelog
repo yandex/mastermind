@@ -1,3 +1,11 @@
+mastermind (2.25.95) trusty; urgency=medium
+
+  * Fix frequent weight and load data updating
+  * Optimize history records fetching from mongo
+  * Add exception-safe backend stats processing
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 23 Nov 2015 15:00:58 +0300
+
 mastermind (2.25.94) trusty; urgency=medium
 
   * Fix defrag complete decision based on stalled stats
