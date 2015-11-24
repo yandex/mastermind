@@ -13,12 +13,13 @@ import traceback
 
 import elliptics
 import msgpack
-from mastermind.service import ReconnectableService
+# from mastermind.service import ReconnectableService
 from tornado.ioloop import IOLoop
 
 import balancelogicadapter as bla
 import balancelogic
 from config import config
+from db.mongo.pool import Collection
 import helpers as h
 import infrastructure
 import inventory
@@ -72,6 +73,15 @@ class Balancer(object):
             self.couples_free_eff_space_collect_timer = periodic_timer(
                 seconds=self.couple_free_eff_space_monitor.DATA_COLLECT_PERIOD
             )
+
+        try:
+            keys_db_uri = config['metadata']['cache']['db']
+        except KeyError:
+            logger.error('Config parameter metadata.cache.db is required '
+                         'for cache manager')
+            self.keys_db = None
+        else:
+            self.keys_db = Collection(meta_db[keys_db_uri], 'keys')
 
         self.__tq = timed_queue.TimedQueue()
         self.__tq.add_task_in(
@@ -1658,17 +1668,34 @@ class Balancer(object):
                 time.time() - start_ts))
 
     def _do_update_cached_keys(self):
-        if not config.get("cache") or not config.get('metadata', {}).get('cache', {}):
+        # TODO:
+        # Uncomment when cocaine-framework-python is fixed or upgrade to cocaine >= 12
+        # if not config.get("cache") or not config.get('metadata', {}).get('cache', {}):
+        #     self._cached_keys = {}
+        #     return
+        # mc = ReconnectableService(
+        #     '{base_name}-cache'.format(base_name=config.get('app_name', 'mastermind')),
+        #     attempts=3, timeout=10, logger=logger)
+        # try:
+        #     self._cached_keys = mc.enqueue('get_cached_keys', msgpack.packb(None)).get()
+        # except Exception as e:
+        #     logger.exception('Cached keys updating: failed')
+        #     self._cached_keys = e
+
+        # Copy from src/cocaine-app/cache.py:get_cached_keys
+        if self.keys_db is None:
             self._cached_keys = {}
             return
-        mc = ReconnectableService(
-            '{base_name}-cache'.format(base_name=config.get('app_name', 'mastermind')),
-            attempts=3, timeout=10, logger=logger)
-        try:
-            self._cached_keys = mc.enqueue('get_cached_keys', msgpack.packb(None)).get()
-        except Exception as e:
-            logger.exception('Cached keys updating: failed')
-            self._cached_keys = e
+        res = {}
+        keys = self.keys_db.find({'cache_groups': {'$ne': []}})
+        for key in keys:
+            by_key = res.setdefault(key['id'], {})
+            couple_id = str(key['data_groups'][0])
+            by_key[couple_id] = {
+                'data_groups': key['data_groups'],
+                'cache_groups': key['cache_groups'],
+            }
+        self._cached_keys = res
 
     # @h.concurrent_handler
     @h.handler_wne
