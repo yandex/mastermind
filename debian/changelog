@@ -1,3 +1,9 @@
+mastermind (2.25.97) trusty; urgency=medium
+
+  * Temporarily fix cocaine service usage from sync thread
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 24 Nov 2015 17:02:59 +0300
+
 mastermind (2.25.96) trusty; urgency=medium
 
   * Optimize get_config_remotes handle
