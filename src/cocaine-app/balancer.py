@@ -79,9 +79,9 @@ class Balancer(object):
         except KeyError:
             logger.error('Config parameter metadata.cache.db is required '
                          'for cache manager')
-            self.keys_db = None
+            self._keys_db = None
         else:
-            self.keys_db = Collection(meta_db[keys_db_uri], 'keys')
+            self._keys_db = Collection(meta_db[keys_db_uri], 'keys')
 
         self.__tq = timed_queue.TimedQueue()
         self.__tq.add_task_in(
@@ -99,7 +99,7 @@ class Balancer(object):
             self.__tq.add_task_at(
                 'couples_free_effective_space_collect',
                 self.couples_free_eff_space_collect_timer.next(),
-                self.collect_couples_free_eff_space
+                self._collect_couples_free_eff_space
             )
 
     def _make_tq_thread_ioloop(self):
@@ -1683,11 +1683,11 @@ class Balancer(object):
         #     self._cached_keys = e
 
         # Copy from src/cocaine-app/cache.py:get_cached_keys
-        if self.keys_db is None:
+        if self._keys_db is None:
             self._cached_keys = {}
             return
         res = {}
-        keys = self.keys_db.find({'cache_groups': {'$ne': []}})
+        keys = self._keys_db.find({'cache_groups': {'$ne': []}})
         for key in keys:
             by_key = res.setdefault(key['id'], {})
             couple_id = str(key['data_groups'][0])
@@ -1747,7 +1747,7 @@ class Balancer(object):
 
         return flow_stats
 
-    def collect_couples_free_eff_space(self):
+    def _collect_couples_free_eff_space(self):
         try:
             self.couple_free_eff_space_monitor.collect()
         except Exception:
@@ -1756,7 +1756,7 @@ class Balancer(object):
             self.__tq.add_task_at(
                 'couples_free_effective_space_collect',
                 self.couples_free_eff_space_collect_timer.next(),
-                self.collect_couples_free_eff_space
+                self._collect_couples_free_eff_space
             )
 
     @h.concurrent_handler
@@ -1790,9 +1790,9 @@ def handlers(b):
         for attr_name in dir(b):
             attr = b.__getattribute__(attr_name)
             if (not callable(attr) or
-                    attr.__name__.startswith('_') or
-                    attr_name.startswith('__') or
-                    attr_name.startswith(private_prefix)):
+                    attr_name.startswith('_') or
+                    attr_name.startswith(private_prefix) or
+                    attr.__name__.startswith('_')):
                 continue
             logger.debug('adding handler: attr_name: {0}, attr.__name__ {1}'.format(attr_name, attr.__name__))
             handlers.append(attr)
