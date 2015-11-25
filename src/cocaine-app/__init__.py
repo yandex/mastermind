@@ -206,11 +206,18 @@ def init_infrastructure(jf, ghf):
     return infstruct
 
 
-def init_node_info_updater(jf):
+def init_node_info_updater(jf, statistics):
     logger.info("trace node info updater %d" % (i.next()))
-    niu = node_info_updater.NodeInfoUpdater(n, jf)
+    niu = node_info_updater.NodeInfoUpdater(
+        node=n,
+        job_finder=jf,
+        prepare_namespaces_states=True,
+        prepare_flow_stats=True,
+        statistics=statistics)
     niu.start()
     register_handle(niu.force_nodes_update)
+    register_handle(niu.force_update_namespaces_states)
+    register_handle(niu.force_update_flow_stats)
 
     return niu
 
@@ -290,7 +297,7 @@ def init_manual_locker(manual_locker):
 jf = init_job_finder()
 ghf = init_group_history_finder()
 io = init_infrastructure(jf, ghf)
-niu = init_node_info_updater(jf)
+niu = init_node_info_updater(jf, b.statistics)
 b.niu = niu
 b.start()
 init_statistics()

@@ -1,5 +1,4 @@
 # encoding: utf-8
-from collections import defaultdict
 import copy
 from contextlib import contextmanager
 import itertools
@@ -8,7 +7,6 @@ import logging
 import operator
 import re
 import time
-import threading
 import traceback
 
 import elliptics
@@ -32,7 +30,6 @@ import timed_queue
 from timer import periodic_timer
 from sync import sync_manager
 from sync.error import LockAlreadyAcquiredError
-from weight_manager import weight_manager
 
 
 logger = logging.getLogger('mm.balancer')
@@ -61,13 +58,8 @@ class Balancer(object):
         self.statistics = statistics.Statistics(self)
         self.niu = None
 
-        self._namespaces_states = {}
         self._cached_keys = {}
-        self._flow_stats = {}
-        self._namespaces_states_lock = threading.Lock()
-        self.ns_states_timer = periodic_timer(seconds=config.get('nodes_reload_period', 60))
         self.cached_keys_timer = periodic_timer(seconds=config.get('nodes_reload_period', 60))
-        self.flow_stats_timer = periodic_timer(seconds=config.get('nodes_reload_period', 60))
 
         self.statistics_monitor_enabled = bool(monitor.CoupleFreeEffectiveSpaceMonitor.STAT_CFG)
 
@@ -95,9 +87,7 @@ class Balancer(object):
 
     def start(self):
         assert self.niu
-        self._update_namespaces_states()
         self._update_cached_keys()
-        self._update_flow_stats()
         if self.statistics_monitor_enabled:
             self.__tq.add_task_at(
                 'couples_free_effective_space_collect',
@@ -1494,124 +1484,10 @@ class Balancer(object):
 
         return res
 
-    def _update_namespaces_states(self):
-        start_ts = time.time()
-        logger.info('Namespaces states updating: started')
-        try:
-            self._do_update_namespaces_states()
-        except Exception as e:
-            logger.exception('Namespaces states updating: failed: {}'.format(e))
-            with self._namespaces_states_lock:
-                self._namespaces_states = e
-        finally:
-            logger.info('Namespaces states updating: finished, time: {0:.3f}'.format(
-                time.time() - start_ts))
-            self.__tq.add_task_at(
-                'ns_states_update',
-                self.ns_states_timer.next(),
-                self._update_namespaces_states)
-
-    @h.concurrent_handler
-    def force_update_namespaces_states(self, request):
-        start_ts = time.time()
-        logger.info('Namespaces states forced updating: started')
-        try:
-            self._do_update_namespaces_states()
-        except Exception as e:
-            logger.exception('Namespaces states forced updating: failed: {}'.format(e))
-            with self._namespaces_states_lock:
-                self._namespaces_states = e
-        finally:
-            logger.info('Namespaces states forced updating: finished, time: {0:.3f}'.format(
-                time.time() - start_ts))
-
-    def _do_update_namespaces_states(self):
-        def default():
-            return {
-                'settings': {},
-                'couples': [],
-                'weights': {},
-                'statistics': {},
-            }
-
-        res = defaultdict(default)
-
-        # settings
-        ns_settings = self.infrastructure.ns_settings
-        for ns, settings in ns_settings.items():
-            res[ns]['settings'] = settings
-
-        # couples
-        symm_groups = {}
-        for couple in storage.couples:
-            try:
-                try:
-                    ns = couple.namespace
-                except ValueError:
-                    continue
-                info = couple.info().serialize()
-                info['hosts'] = couple.couple_hosts()
-                # couples
-                res[ns.id]['couples'].append(info)
-
-                symm_groups.setdefault(couple.namespace, {})
-                symm_groups[couple.namespace].setdefault(len(couple), [])
-
-                if couple.status not in storage.GOOD_STATUSES:
-                    continue
-
-                symm_groups[couple.namespace.id][len(couple)].append(bla.SymmGroup(couple))
-            except Exception as e:
-                logger.error('Failed to include couple {0} in namespace states: {1}'.format(
-                    str(couple), e))
-                continue
-
-        # weights
-        for ns, sizes in symm_groups.iteritems():
-            try:
-                # TODO: convert size inside of __namespaces_weights function
-                # when get_groups_weights handle is gone
-                res[ns]['weights'] = dict(
-                    (str(k), v) for k, v in self.__namespaces_weights(ns, sizes).iteritems()
-                )
-            except ValueError as e:
-                logger.error(e)
-                continue
-            except Exception as e:
-                logger.error('Failed to construct namespace {0} weights: {1}'.format(ns, e))
-                continue
-
-        new_weights_namespaces = (
-            config.get('weight', {}).get('only_namespaces', [])
-            if 'only_namespaces' in config.get('weight', {}) else
-            weight_manager.weights.iterkeys()
-        )
-        for ns_id in new_weights_namespaces:
-            if ns_id not in weight_manager.weights:
-                logger.error('Namespace {}: weights are not calculated by weight manager'.format(
-                    ns_id
-                ))
-                continue
-            res[ns_id]['weights'] = dict(
-                (str(k), v) for k, v in weight_manager.weights[ns_id].iteritems()
-            )
-            logger.info('Namespace {}: weights are updated by weight manager'.format(
-                ns_id
-            ))
-
-        # statistics
-        for ns, stats in self.statistics.per_ns_statistics().iteritems():
-            res[ns]['statistics'] = stats
-
-        if isinstance(self._namespaces_states, Exception):
-            logger.info('Namespaces states updating: recovered')
-        with self._namespaces_states_lock:
-            self._namespaces_states = dict(res)
-
     # @h.concurrent_handler
     @h.handler_wne
     def get_namespaces_states(self, request):
-        namespaces_states = self._namespaces_states
+        namespaces_states = self.niu._namespaces_states
 
         if isinstance(namespaces_states, Exception):
             raise namespaces_states
@@ -1628,6 +1504,16 @@ class Balancer(object):
             res[ns] = namespaces_states[ns]
 
         return res
+
+    # @h.concurrent_handler
+    @h.handler_wne
+    def get_flow_stats(self, request):
+        flow_stats = self.niu._flow_stats
+
+        if isinstance(flow_stats, Exception):
+            raise flow_stats
+
+        return flow_stats
 
     @h.concurrent_handler
     def storage_keys_diff(self, request):
@@ -1709,46 +1595,6 @@ class Balancer(object):
             raise cached_keys
 
         return cached_keys
-
-    def _update_flow_stats(self):
-        start_ts = time.time()
-        logger.info('Flow stats updating: started')
-        try:
-            self._do_update_flow_stats()
-        finally:
-            logger.info('Flow stats updating: finished, time: {0:.3f}'.format(
-                time.time() - start_ts))
-            self.__tq.add_task_at(
-                'flow_stats_update',
-                self.flow_stats_timer.next(),
-                self._update_flow_stats)
-
-    @h.concurrent_handler
-    def force_update_flow_stats(self, request):
-        start_ts = time.time()
-        logger.info('Flow stats forced updating: started')
-        try:
-            self._do_update_flow_stats()
-        finally:
-            logger.info('Flow stats forced updating: finished, time: {0:.3f}'.format(
-                time.time() - start_ts))
-
-    def _do_update_flow_stats(self):
-        try:
-            self._flow_stats = self.statistics.calculate_flow_stats()
-        except Exception as e:
-            logger.exception('Flow stats updating: failed')
-            self._flow_stats = e
-
-    # @h.concurrent_handler
-    @h.handler_wne
-    def get_flow_stats(self, request):
-        flow_stats = self._flow_stats
-
-        if isinstance(flow_stats, Exception):
-            raise flow_stats
-
-        return flow_stats
 
     def _collect_couples_free_eff_space(self):
         try:

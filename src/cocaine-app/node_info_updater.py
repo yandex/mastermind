@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from collections import defaultdict
 import logging
 import re
 import threading
@@ -31,11 +32,18 @@ COUPLES_META_UPDATE_TASK_ID = 'couples_meta_update'
 
 
 class NodeInfoUpdater(object):
-
-    def __init__(self, node, job_finder):
+    def __init__(self,
+                 node,
+                 job_finder,
+                 prepare_namespaces_states=False,
+                 prepare_flow_stats=False,
+                 statistics=None):
         logger.info("Created NodeInfoUpdater")
         self.__node = node
+        self.statistics = statistics
         self.job_finder = job_finder
+        self._namespaces_states = {}
+        self._flow_stats = {}
         self.__tq = timed_queue.TimedQueue()
         self.__session = elliptics.Session(self.__node)
         wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or config.get('wait_timeout', 5)
@@ -43,6 +51,13 @@ class NodeInfoUpdater(object):
         self.__nodeUpdateTimestamps = (time.time(), time.time())
 
         self.__cluster_update_lock = threading.Lock()
+
+        if prepare_namespaces_states and statistics is None:
+            raise AssertionError('Statistics is required for namespaces states calculation')
+        if prepare_flow_stats and statistics is None:
+            raise AssertionError('Statistics is required for flow stats calculation')
+        self._prepare_namespaces_states = prepare_namespaces_states
+        self._prepare_flow_stats = prepare_flow_stats
 
     def start(self):
         self.node_statistics_update()
@@ -92,6 +107,14 @@ class NodeInfoUpdater(object):
                 start_ts = time.time()
                 logger.info('Cluster updating: updating group coupling info started')
                 self.update_symm_groups_async()
+
+            if self._prepare_namespaces_states:
+                logger.info('Recalculating namespace states')
+                self._update_namespaces_states()
+            if self._prepare_flow_stats:
+                logger.info('Recalculating flow stats')
+                self._update_flow_stats()
+
         except Exception as e:
             logger.info('Failed to update groups: {0}\n{1}'.format(
                 e, traceback.format_exc()))
@@ -554,6 +577,116 @@ class NodeInfoUpdater(object):
 
         except Exception as e:
             logger.exception('Critical error during symmetric group update')
+
+    @h.concurrent_handler
+    def force_update_namespaces_states(self, request):
+        start_ts = time.time()
+        logger.info('Namespaces states forced updating: started')
+        try:
+            self._do_update_namespaces_states()
+        except Exception as e:
+            logger.exception('Namespaces states forced updating: failed')
+            self._namespaces_states = e
+        finally:
+            logger.info('Namespaces states forced updating: finished, time: {0:.3f}'.format(
+                time.time() - start_ts))
+
+    def _update_namespaces_states(self):
+        start_ts = time.time()
+        logger.info('Namespaces states updating: started')
+        try:
+            self._do_update_namespaces_states()
+        except Exception as e:
+            logger.exception('Namespaces states updating: failed')
+            self._namespaces_states = e
+        finally:
+            logger.info('Namespaces states updating: finished, time: {0:.3f}'.format(
+                time.time() - start_ts))
+
+    def _do_update_namespaces_states(self):
+        def default():
+            return {
+                'settings': {},
+                'couples': [],
+                'weights': {},
+                'statistics': {},
+            }
+
+        res = defaultdict(default)
+
+        # settings
+        ns_settings = infrastructure.ns_settings
+        for ns, settings in ns_settings.items():
+            res[ns]['settings'] = settings
+
+        # couples
+        symm_groups = {}
+        for couple in storage.couples:
+            try:
+                try:
+                    ns = couple.namespace
+                except ValueError:
+                    continue
+                info = couple.info().serialize()
+                info['hosts'] = couple.couple_hosts()
+                # couples
+                res[ns.id]['couples'].append(info)
+
+                symm_groups.setdefault(couple.namespace, {})
+                symm_groups[couple.namespace].setdefault(len(couple), [])
+
+                if couple.status not in storage.GOOD_STATUSES:
+                    continue
+
+                symm_groups[couple.namespace.id][len(couple)].append(bla.SymmGroup(couple))
+            except Exception as e:
+                logger.error('Failed to include couple {0} in namespace states: {1}'.format(
+                    str(couple), e))
+                continue
+
+        # weights
+        for ns_id in weight_manager.weights:
+            res[ns_id]['weights'] = dict(
+                (str(k), v) for k, v in weight_manager.weights[ns_id].iteritems()
+            )
+            logger.info('Namespace {}: weights are updated by weight manager'.format(
+                ns_id
+            ))
+
+        # statistics
+        for ns, stats in self.statistics.per_ns_statistics().iteritems():
+            res[ns]['statistics'] = stats
+
+        if isinstance(self._namespaces_states, Exception):
+            logger.info('Namespaces states updating: recovered')
+
+        self._namespaces_states = dict(res)
+
+    @h.concurrent_handler
+    def force_update_flow_stats(self, request):
+        start_ts = time.time()
+        logger.info('Flow stats forced updating: started')
+        try:
+            self._do_update_flow_stats()
+        finally:
+            logger.info('Flow stats forced updating: finished, time: {0:.3f}'.format(
+                time.time() - start_ts))
+
+    def _update_flow_stats(self):
+        start_ts = time.time()
+        logger.info('Flow stats updating: started')
+        try:
+            self._do_update_flow_stats()
+        finally:
+            logger.info('Flow stats updating: finished, time: {0:.3f}'.format(
+                time.time() - start_ts))
+
+    def _do_update_flow_stats(self):
+        try:
+            self._flow_stats = self.statistics.calculate_flow_stats()
+        except Exception as e:
+            logger.exception('Flow stats updating: failed')
+            self._flow_stats = e
 
     def stop(self):
         self.__tq.shutdown()
