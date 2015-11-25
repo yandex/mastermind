@@ -1,3 +1,9 @@
+mastermind (2.25.98) trusty; urgency=medium
+
+  * Fix cocaine handlers registering
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 25 Nov 2015 14:58:59 +0300
+
 mastermind (2.25.97) trusty; urgency=medium
 
   * Temporarily fix cocaine service usage from sync thread
