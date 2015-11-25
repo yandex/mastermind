@@ -43,6 +43,9 @@ CONFIG_REMOTES = config.get('elliptics', {}).get('nodes', [])
 
 
 class Balancer(object):
+    # TODO: remove cycle dependency for Statistics and Balancer object,
+    # this should fix NodeInfoUpdater constructor parameters
+    # (prepare_namespace_states)
 
     DT_FORMAT = '%Y-%m-%d %H:%M:%S'
     MIN_NS_UNITS = config.get('balancer_config', {}).get('min_units', 1)

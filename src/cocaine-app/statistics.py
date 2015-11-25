@@ -252,6 +252,7 @@ class Statistics(object):
         for dc in dc_stats:
             if 'outages' in dc:
                 del dc['outages']
+        # TODO: Fix for empty storage case, 'reduce' call fails
         return dict(reduce(self.dict_keys_sum, dc_stats))
 
     def get_couple_stats(self):
