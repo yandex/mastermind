@@ -1155,7 +1155,7 @@ class Group(object):
                                 'no coupling info'.format(self))
             return self.status
 
-        if not self.couple and self.meta['couple']:
+        if not self.couple:
             self.status = Status.BAD
             self.status_text = ('Group {0} is in Bad state because '
                                 'couple was not created'.format(self))
