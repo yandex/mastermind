@@ -1,3 +1,10 @@
+mastermind (2.25.100) trusty; urgency=medium
+
+  * Fix for newly built couple status calculation
+  * Fix misprint in mastermind client
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 01 Dec 2015 16:48:01 +0300
+
 mastermind (2.25.99) trusty; urgency=medium
 
   * Fix for running cached data update handlers
