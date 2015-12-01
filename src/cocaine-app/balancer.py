@@ -909,13 +909,17 @@ class Balancer(object):
                     except Exception:
                         couple.destroy()
                         raise
-                    couple.update_status()
 
                 if namespace not in storage.namespaces:
                     ns = storage.namespaces.add(namespace)
                 else:
                     ns = storage.namespaces[namespace]
                 ns.add_couple(couple)
+
+                if not dry_run:
+                    # update should happen after couple has been added to
+                    # namespace
+                    couple.update_status()
 
             return couple
 
