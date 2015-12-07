@@ -23,6 +23,7 @@ import infrastructure
 import inventory
 import jobs.job
 import keys
+from mastermind_core.response import CachedGzipResponse
 import monitor
 import statistics
 import storage
@@ -58,7 +59,7 @@ class Balancer(object):
         self.statistics = statistics.Statistics(self)
         self.niu = None
 
-        self._cached_keys = {}
+        self._cached_keys = CachedGzipResponse()
         self.cached_keys_timer = periodic_timer(seconds=config.get('nodes_reload_period', 60))
 
         self.statistics_monitor_enabled = bool(monitor.CoupleFreeEffectiveSpaceMonitor.STAT_CFG)
@@ -1542,6 +1543,8 @@ class Balancer(object):
         logger.info('Cached keys updating: started')
         try:
             self._do_update_cached_keys()
+        except Exception as e:
+            self._cached_keys.set_exception(e)
         finally:
             logger.info('Cached keys updating: finished, time: {0:.3f}'.format(
                 time.time() - start_ts))
@@ -1556,6 +1559,8 @@ class Balancer(object):
         logger.info('Cached keys forced updating: started')
         try:
             self._do_update_cached_keys()
+        except Exception as e:
+            self._cached_keys.set_exception(e)
         finally:
             logger.info('Cached keys forced updating: finished, time: {0:.3f}'.format(
                 time.time() - start_ts))
@@ -1577,7 +1582,7 @@ class Balancer(object):
 
         # Copy from src/cocaine-app/cache.py:get_cached_keys
         if self._keys_db is None:
-            self._cached_keys = {}
+            self._cached_keys.set_result({})
             return
         res = {}
         keys = self._keys_db.find({'cache_groups': {'$ne': []}})
@@ -1588,15 +1593,12 @@ class Balancer(object):
                 'data_groups': key['data_groups'],
                 'cache_groups': key['cache_groups'],
             }
-        self._cached_keys = res
+        self._cached_keys.set_result(res)
 
     # @h.concurrent_handler
     @h.handler_wne
     def get_cached_keys(self, request):
-        cached_keys = self._cached_keys
-
-        if isinstance(cached_keys, Exception):
-            raise cached_keys
+        cached_keys = self._cached_keys.get_result(compressed=request.get('gzip', False))
 
         return cached_keys
 
