@@ -19,6 +19,7 @@ import keys
 from load_manager import load_manager
 from mastermind import helpers as mh
 from mastermind.pool import skip_exceptions
+from mastermind_core.response import CachedGzipResponse
 from monitor_pool import monitor_pool
 import timed_queue
 import storage
@@ -42,7 +43,7 @@ class NodeInfoUpdater(object):
         self.__node = node
         self.statistics = statistics
         self.job_finder = job_finder
-        self._namespaces_states = {}
+        self._namespaces_states = CachedGzipResponse()
         self._flow_stats = {}
         self.__tq = timed_queue.TimedQueue()
         self.__session = elliptics.Session(self.__node)
@@ -586,7 +587,7 @@ class NodeInfoUpdater(object):
             self._do_update_namespaces_states()
         except Exception as e:
             logger.exception('Namespaces states forced updating: failed')
-            self._namespaces_states = e
+            self._namespaces_states.set_exception(e)
         finally:
             logger.info('Namespaces states forced updating: finished, time: {0:.3f}'.format(
                 time.time() - start_ts))
@@ -598,7 +599,7 @@ class NodeInfoUpdater(object):
             self._do_update_namespaces_states()
         except Exception as e:
             logger.exception('Namespaces states updating: failed')
-            self._namespaces_states = e
+            self._namespaces_states.set_exception(e)
         finally:
             logger.info('Namespaces states updating: finished, time: {0:.3f}'.format(
                 time.time() - start_ts))
@@ -657,10 +658,7 @@ class NodeInfoUpdater(object):
         for ns, stats in self.statistics.per_ns_statistics().iteritems():
             res[ns]['statistics'] = stats
 
-        if isinstance(self._namespaces_states, Exception):
-            logger.info('Namespaces states updating: recovered')
-
-        self._namespaces_states = dict(res)
+        self._namespaces_states.set_result(dict(res))
 
     @h.concurrent_handler
     def force_update_flow_stats(self, request):

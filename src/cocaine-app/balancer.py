@@ -24,6 +24,7 @@ import inventory
 import jobs.job
 import keys
 from mastermind_core.response import CachedGzipResponse
+from mastermind_core.helpers import gzip_compress
 import monitor
 import statistics
 import storage
@@ -1492,21 +1493,24 @@ class Balancer(object):
     # @h.concurrent_handler
     @h.handler_wne
     def get_namespaces_states(self, request):
-        namespaces_states = self.niu._namespaces_states
+        namespaces = request.get('namespaces', [])
 
-        if isinstance(namespaces_states, Exception):
-            raise namespaces_states
-
-        try:
-            namespaces = request[0]
-        except (IndexError, TypeError):
-            namespaces = []
-
-        res = {}
-        for ns in namespaces or namespaces_states:
-            if ns not in namespaces_states:
-                continue
-            res[ns] = namespaces_states[ns]
+        if namespaces:
+            # TODO: optimize this case or drop 'namespaces' parameter support
+            res = {}
+            namespaces_states = self.niu._namespaces_states.get_result(
+                compressed=False
+            )
+            for ns in namespaces:
+                if ns not in namespaces_states:
+                    continue
+                res[ns] = namespaces_states[ns]
+            if request.get('gzip', False):
+                res = gzip_compress(json.dumps(res))
+        else:
+            res = self.niu._namespaces_states.get_result(
+                compressed=request.get('gzip', False)
+            )
 
         return res
 
