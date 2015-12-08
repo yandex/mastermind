@@ -23,6 +23,8 @@ import infrastructure
 import inventory
 import jobs.job
 import keys
+from mastermind_core.response import CachedGzipResponse
+from mastermind_core.helpers import gzip_compress
 import monitor
 import statistics
 import storage
@@ -58,7 +60,7 @@ class Balancer(object):
         self.statistics = statistics.Statistics(self)
         self.niu = None
 
-        self._cached_keys = {}
+        self._cached_keys = CachedGzipResponse()
         self.cached_keys_timer = periodic_timer(seconds=config.get('nodes_reload_period', 60))
 
         self.statistics_monitor_enabled = bool(monitor.CoupleFreeEffectiveSpaceMonitor.STAT_CFG)
@@ -1491,21 +1493,25 @@ class Balancer(object):
     # @h.concurrent_handler
     @h.handler_wne
     def get_namespaces_states(self, request):
-        namespaces_states = self.niu._namespaces_states
+        request = request or {}
+        namespaces = request.get('namespaces', [])
 
-        if isinstance(namespaces_states, Exception):
-            raise namespaces_states
-
-        try:
-            namespaces = request[0]
-        except (IndexError, TypeError):
-            namespaces = []
-
-        res = {}
-        for ns in namespaces or namespaces_states:
-            if ns not in namespaces_states:
-                continue
-            res[ns] = namespaces_states[ns]
+        if namespaces:
+            # TODO: optimize this case or drop 'namespaces' parameter support
+            res = {}
+            namespaces_states = self.niu._namespaces_states.get_result(
+                compressed=False
+            )
+            for ns in namespaces:
+                if ns not in namespaces_states:
+                    continue
+                res[ns] = namespaces_states[ns]
+            if request.get('gzip', False):
+                res = gzip_compress(json.dumps(res))
+        else:
+            res = self.niu._namespaces_states.get_result(
+                compressed=request.get('gzip', False)
+            )
 
         return res
 
@@ -1542,6 +1548,8 @@ class Balancer(object):
         logger.info('Cached keys updating: started')
         try:
             self._do_update_cached_keys()
+        except Exception as e:
+            self._cached_keys.set_exception(e)
         finally:
             logger.info('Cached keys updating: finished, time: {0:.3f}'.format(
                 time.time() - start_ts))
@@ -1556,6 +1564,8 @@ class Balancer(object):
         logger.info('Cached keys forced updating: started')
         try:
             self._do_update_cached_keys()
+        except Exception as e:
+            self._cached_keys.set_exception(e)
         finally:
             logger.info('Cached keys forced updating: finished, time: {0:.3f}'.format(
                 time.time() - start_ts))
@@ -1577,7 +1587,7 @@ class Balancer(object):
 
         # Copy from src/cocaine-app/cache.py:get_cached_keys
         if self._keys_db is None:
-            self._cached_keys = {}
+            self._cached_keys.set_result({})
             return
         res = {}
         keys = self._keys_db.find({'cache_groups': {'$ne': []}})
@@ -1588,15 +1598,13 @@ class Balancer(object):
                 'data_groups': key['data_groups'],
                 'cache_groups': key['cache_groups'],
             }
-        self._cached_keys = res
+        self._cached_keys.set_result(res)
 
     # @h.concurrent_handler
     @h.handler_wne
     def get_cached_keys(self, request):
-        cached_keys = self._cached_keys
-
-        if isinstance(cached_keys, Exception):
-            raise cached_keys
+        request = request or {}
+        cached_keys = self._cached_keys.get_result(compressed=request.get('gzip', False))
 
         return cached_keys
 
