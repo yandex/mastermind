@@ -1493,6 +1493,7 @@ class Balancer(object):
     # @h.concurrent_handler
     @h.handler_wne
     def get_namespaces_states(self, request):
+        request = request or {}
         namespaces = request.get('namespaces', [])
 
         if namespaces:
@@ -1602,6 +1603,7 @@ class Balancer(object):
     # @h.concurrent_handler
     @h.handler_wne
     def get_cached_keys(self, request):
+        request = request or {}
         cached_keys = self._cached_keys.get_result(compressed=request.get('gzip', False))
 
         return cached_keys
