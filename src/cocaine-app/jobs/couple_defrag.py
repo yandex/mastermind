@@ -41,7 +41,10 @@ class CoupleDefragJob(Job):
     def _set_resources(self):
         resources = {Job.RESOURCE_FS: []}
 
-        couple = storage.couples[self.couple]
+        couples = (storage.cache_couples
+                   if self.is_cache_couple else
+                   storage.couples)
+        couple = couples[self.couple]
 
         for g in couple.groups:
             resources[Job.RESOURCE_FS].append(
