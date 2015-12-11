@@ -1,3 +1,9 @@
+mastermind (2.25.105) trusty; urgency=medium
+
+  * Fix misprint
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 11 Dec 2015 15:52:49 +0300
+
 mastermind (2.25.104) trusty; urgency=medium
 
   * Fix for new msgpack version
