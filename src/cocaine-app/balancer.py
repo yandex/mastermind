@@ -474,7 +474,12 @@ class Balancer(object):
             logger.error('Balancer error: cannot identify a namespace to use for group %d' % (group_id,))
             return {'Balancer error': 'cannot identify a namespace to use for group %d' % (group_id,)}
 
-        frozen = any([g.meta.get('frozen') for g in couple if g.meta and g.group_id != group_id])
+        # TODO: convert this to a separate well-documented function
+        frozen = any(
+            g.meta.get('frozen')
+            for g in couple
+            if g.meta and g.group_id != group_id
+        )
 
         make_symm_group(self.node, couple, namespace_to_use, frozen)
         couple.update_status()
@@ -935,7 +940,7 @@ class Balancer(object):
                                   groups_by_total_space, mandatory_groups):
         candidates = []
         for ts, group_ids in groups_by_total_space.iteritems():
-            if not all([mg in group_ids for mg in mandatory_groups]):
+            if not all(mg in group_ids for mg in mandatory_groups):
                 logger.debug('Could not find mandatory groups {0} in a list '
                              'of groups with ts {1}'.format(mandatory_groups, ts))
                 continue

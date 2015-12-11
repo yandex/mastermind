@@ -354,8 +354,9 @@ class JobProcessor(object):
             elif task.status == Task.STATUS_FAILED:
                 break
 
-        if all([task.status in (Task.STATUS_COMPLETED, Task.STATUS_SKIPPED)
-                for task in job.tasks]):
+        finished_statuses = (Task.STATUS_COMPLETED, Task.STATUS_SKIPPED)
+
+        if all(task.status in finished_statuses for task in job.tasks):
             logger.info('Job {0}, tasks processing is finished'.format(job.id))
             try:
                 job.status = Job.STATUS_COMPLETED
