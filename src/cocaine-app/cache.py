@@ -450,7 +450,7 @@ class CacheDistributor(object):
                            }, ...
         }"""
 
-        self._update_cache_groups()
+        self.update_cache_groups()
 
         top = self._filter_by_bandwidth(top)
         logger.info('Keys after applying bandwidth filter: {0}'.format(
@@ -847,7 +847,7 @@ class CacheDistributor(object):
 
         return group
 
-    def _update_cache_groups(self):
+    def update_cache_groups(self):
         new_groups = {}
         for group in storage.groups:
             if (group.type != storage.Group.TYPE_CACHE or
@@ -900,6 +900,7 @@ class CacheCleaner(object):
         start_ts = time.time()
         logger.info('Cache cleaning started')
         try:
+            self.distibutor.update_cache_groups()
             cache_groups = self.distributor.cache_groups
 
             dirty_cgs = dict((k, cg) for k, cg in cache_groups.iteritems()
