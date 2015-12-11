@@ -377,7 +377,10 @@ class Balancer(object):
         logger.info(str(result))
         return result
 
-    def __namespaces_weights(self, namespace, sizes, symm_groups=[]):
+    def __namespaces_weights(self, namespace, sizes, symm_groups=None):
+
+        if symm_groups is None:
+            symm_groups = []
 
         found_couples = 0
 

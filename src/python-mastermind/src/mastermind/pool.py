@@ -197,7 +197,7 @@ class PoolWorker(object):
             self._ioloop.stop()
 
 
-def run_worker(task_queue, result_queue, PoolWorker, initkwds={}):
+def run_worker(task_queue, result_queue, PoolWorker, initkwds=None):
     # Force 'logging' module's global lock release,
     # otherwise this can cause following bug:
     # - MainProcess-Thread1 acquires 'logging' module's global lock on getting
@@ -206,6 +206,10 @@ def run_worker(task_queue, result_queue, PoolWorker, initkwds={}):
     # - ChildProcess-Thread1 tries to acquire 'logging' module's global lock
     # when getting the logger object and blocks forever because it received
     # a copy of already acquired lock from its parent process.
+
+    if initkwds is None:
+        initkwds = {}
+
     logging._lock = None
 
     ioloop = IOLoop.current()
@@ -234,7 +238,10 @@ class Pool(OriginalPool):
                     NB: *args is not supported;
         *args, **kwargs: parameters to pass to original Pool base class.
     """
-    def __init__(self, worker=PoolWorker, w_initkwds={}, *args, **kwargs):
+    def __init__(self, worker=PoolWorker, w_initkwds=None, *args, **kwargs):
+        if w_initkwds is None:
+            w_initkwds = {}
+
         self._worker = worker
         self._w_initkwds = w_initkwds
 

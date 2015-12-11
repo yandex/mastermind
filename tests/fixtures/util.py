@@ -13,7 +13,7 @@ def ascii_data(data_size):
     )
 
 
-def parametrize(argnames, argvalues, arglabels={}, **kwds):
+def parametrize(argnames, argvalues, arglabels=None, **kwds):
     """Overrides 'pytest.mark.parametrize' implementation with
     automatic argvalue labels generation.
 
@@ -32,6 +32,8 @@ def parametrize(argnames, argvalues, arglabels={}, **kwds):
             If @ids is supplied it will be passed as is to @pytest.mark.parametrize.
         **kwds - any other arguments for @pytest.mark.parametrize.
     """
+    if arglabels is None:
+        arglabels = {}
 
     if 'ids' in kwds:
         ids = kwds.pop('ids')
