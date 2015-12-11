@@ -900,7 +900,7 @@ class CacheCleaner(object):
         start_ts = time.time()
         logger.info('Cache cleaning started')
         try:
-            self.distibutor.update_cache_groups()
+            self.distributor.update_cache_groups()
             cache_groups = self.distributor.cache_groups
 
             dirty_cgs = dict((k, cg) for k, cg in cache_groups.iteritems()
