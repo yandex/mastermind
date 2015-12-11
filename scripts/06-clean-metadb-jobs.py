@@ -2,7 +2,6 @@
 import datetime
 import json
 import logging
-import msgpack
 from Queue import Queue
 import sys
 import time

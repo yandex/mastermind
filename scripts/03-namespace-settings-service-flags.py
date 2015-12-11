@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import json
 import logging
-import msgpack
 from Queue import Queue
 import sys
 import time
