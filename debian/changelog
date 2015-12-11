@@ -1,3 +1,9 @@
+mastermind (2.25.103) trusty; urgency=medium
+
+  * Update cache distributor groups list on cache cleaning
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 11 Dec 2015 14:54:55 +0300
+
 mastermind (2.25.102) trusty; urgency=medium
 
   * Fix for defragmentation job of cache groups
