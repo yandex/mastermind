@@ -1334,7 +1334,8 @@ class Couple(object):
                 dc_set = dc_set | group_dcs
 
         if FORBIDDEN_NS_WITHOUT_SETTINGS:
-            if not infrastructure.ns_settings.get(self.namespace.id):
+            is_cache_couple = self.namespace.id == Group.CACHE_NAMESPACE
+            if not infrastructure.ns_settings.get(self.namespace.id) and not is_cache_couple:
                 self.status = Status.BROKEN
                 self.status_text = ('Couple {} is assigned to a namespace {}, which is '
                                     'not set up'.format(self, self.namespace))
