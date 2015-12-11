@@ -931,7 +931,7 @@ def cache_keys(host=None, app=None):
     '''Fetch cached keys'''
     s = service(host, app)
 
-    res = s.enqueue('get_cached_keys', '').get()
+    res = s.enqueue('get_cached_keys', msgpack.packb(None)).get()
     print res
 
 
@@ -1055,7 +1055,7 @@ def cache_clean(host=None, app=None):
     '''Release lock on a host'''
     s = service(host, app)
 
-    result = s.enqueue('cache_clean', '').get()
+    result = s.enqueue('cache_clean', msgpack.packb(None)).get()
 
     if isinstance(result, dict) and 'Error' in result:
         print result['Error']
