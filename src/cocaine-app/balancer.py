@@ -388,7 +388,10 @@ class Balancer(object):
 
         # TODO: remove this crutch when get_group_weights becomes obsolete
         if isinstance(sizes, set):
-            sizes = dict([(size, symm_groups) for size in sizes])
+            sizes = {
+                size: symm_groups
+                for size in sizes
+            }
 
         ns_add_units = self.infrastructure.ns_settings.get(namespace, {}).get(
             'add-units', self.ADD_NS_UNITS)

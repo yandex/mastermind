@@ -68,7 +68,10 @@ class Task(object):
                'finish_ts': self.finish_ts,
                'error_msg': self.error_msg,
                'attempts': self.attempts}
-        res.update(dict([(k, getattr(self, k)) for k in self.PARAMS]))
+        res.update({
+            k: getattr(self, k)
+            for k in self.PARAMS
+        })
         return res
 
     def human_dump(self):

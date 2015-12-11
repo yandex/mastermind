@@ -1446,7 +1446,10 @@ class DcState(object):
 class StorageState(object):
     def __init__(self):
         self.delta = Delta()
-        self.state = dict([(dc, DcState(self)) for dc in self.__dcs()])
+        self.state = {
+            dc: DcState(self)
+            for dc in self.__dcs()
+        }
         self._stats = {}
         self.moved_groups = []
 

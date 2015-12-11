@@ -20,8 +20,11 @@ except (ImportError, KeyError) as e:
 
 
 def encode_dict(params):
-    return dict([(k, v if not isinstance(v, unicode) else v.encode('utf-8'))
-                 for k, v in params.iteritems()])
+    return {
+        k: v
+        if not isinstance(v, unicode) else v.encode('utf-8')
+        for k, v in params.iteritems()
+    }
 
 
 logger.info('Sync manager being used: {0}'.format(SyncManager))

@@ -207,7 +207,10 @@ class Job(MongoObject):
                 'type': self.type,
                 'error_msg': self.error_msg}
 
-        data.update(dict([(k, getattr(self, k)) for k in self.PARAMS]))
+        data.update({
+            k: getattr(self, k)
+            for k in self.PARAMS
+        })
         return data
 
     def dump(self):
