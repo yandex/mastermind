@@ -1265,11 +1265,6 @@ class Couple(object):
 
     def account_job_in_status(self):
         if self.status == Status.BAD:
-            for group in self.groups:
-                if group.active_job:
-                    self.active_job = group.active_job
-                    break
-
             if self.active_job and self.active_job['type'] in (JobTypes.TYPE_MOVE_JOB,
                                                                JobTypes.TYPE_RESTORE_GROUP_JOB):
                 if self.active_job['status'] in (jobs.job.Job.STATUS_NEW,
@@ -1300,6 +1295,10 @@ class Couple(object):
                 return self.status
 
         self.active_job = None
+        for group in self.groups:
+            if group.active_job:
+                self.active_job = group.active_job
+                break
 
         if any([not self.groups[0].equal_meta(group) for group in self.groups[1:]]):
             self.status = Status.BAD
