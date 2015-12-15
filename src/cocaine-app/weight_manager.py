@@ -543,7 +543,7 @@ class NodeBackendResources(object):
 
 class DiskResources(object):
 
-    DISK_UTIL_THRESHOLD = WEIGHT_CFG.get('disk', {}).get('disk_util_threshold', 0.4)
+    DISK_UTIL_THRESHOLD = WEIGHT_CFG.get('disk', {}).get('disk_util_threshold', 0.3)
     MAX_DISK_UTIL = 1.0
 
     def __init__(self, key, disk_load):
