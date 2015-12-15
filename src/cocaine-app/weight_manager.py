@@ -4,6 +4,8 @@ import random
 
 from config import config
 from infrastructure import infrastructure
+from jobs.job import Job
+from jobs.job_types import JobTypes
 from load_manager import load_manager
 import logging
 
@@ -53,6 +55,7 @@ class WeightManager(object):
                         disk_key,
                         DiskResources(disk_key, load_manager.disks[disk_key])
                     )
+                    disk_res.account_node_backend(nb)
                     nbs_res.append(
                         NodeBackendResources(
                             disk_res,
@@ -340,7 +343,11 @@ class WeightCalculator(object):
 
 class CouplesBuckets(object):
 
-    BUCKET_ORDER = ('base', 'tired')
+    # a couple is checked against buckets in order
+    # described by BUCKET_ORDER. Each bucket should have
+    # 'is_<bucket_id>' method. Couple falls into a first
+    # bucket for which is passes the check.
+    BUCKET_ORDER = ('base', 'on_defragmenting_disk', 'tired')
 
     def __init__(self, couples_res):
         self.skip = set()
@@ -348,6 +355,13 @@ class CouplesBuckets(object):
         self.buckets_idx = [set() for _ in xrange(len(self.BUCKET_ORDER))]
         for couple_res in couples_res:
             self.insert(couple_res)
+
+    @staticmethod
+    def utilized(couple_res):
+        return (couple_res.disk_util >= DiskResources.DISK_UTIL_THRESHOLD or
+                couple_res.net_write_rate >= NetResources.WRITE_RATE_THRESHOLD or
+                couple_res.io_blocking_queue_size >= 10 or
+                couple_res.io_nonblocking_queue_size >= 10)
 
     @staticmethod
     def is_base(couple_res):
@@ -358,10 +372,11 @@ class CouplesBuckets(object):
             len(couple_res.groups_res),
             [nbr.net_write_rate for gr in couple_res.groups_res for nbr in gr.node_backends_res]
         ))
-        return (couple_res.disk_util < 0.7 and
-                couple_res.net_write_rate < NetResources.WRITE_RATE_THRESHOLD and
-                couple_res.io_blocking_queue_size < 10 and
-                couple_res.io_nonblocking_queue_size < 10)
+        return not CouplesBuckets.utilized(couple_res) and not couple_res.on_defragmenting_disk
+
+    @staticmethod
+    def is_on_defragmenting_disk(couple_res):
+        return not CouplesBuckets.utilized(couple_res) and couple_res.on_defragmenting_disk
 
     @staticmethod
     def is_tired(couple_res):
@@ -450,6 +465,10 @@ class CoupleResources(object):
         return max(g_res.disk_util for g_res in self.groups_res)
 
     @property
+    def on_defragmenting_disk(self):
+        return any(g_res.on_defragmenting_disk for g_res in self.groups_res)
+
+    @property
     def net_write_rate(self):
         return max(g_res.net_write_rate for g_res in self.groups_res)
 
@@ -486,6 +505,10 @@ class GroupResources(object):
         return sum(nb_res.disk_util for nb_res in self.node_backends_res)
 
     @property
+    def on_defragmenting_disk(self):
+        return any(nb_res.is_defragmentation_running for nb_res in self.node_backends_res)
+
+    @property
     def net_write_rate(self):
         return sum(nb_res.net_write_rate for nb_res in self.node_backends_res)
 
@@ -510,13 +533,18 @@ class NodeBackendResources(object):
         return self.disk_res.disk_util
 
     @property
+    def is_defragmentation_running(self):
+        return self.disk_res.is_defragmentation_running
+
+    @property
     def net_write_rate(self):
         return self.node_res.net_write_rate
 
 
 class DiskResources(object):
 
-    DISK_UTIL_THRESHOLD = WEIGHT_CFG.get('disk', {}).get('disk_util_threshold', 0.4)
+    DISK_UTIL_THRESHOLD = WEIGHT_CFG.get('disk', {}).get('disk_util_threshold', 0.3)
+    MAX_DISK_UTIL = 1.0
 
     def __init__(self, key, disk_load):
         self.key = key
@@ -529,15 +557,33 @@ class DiskResources(object):
         )
         ext_write_disk_util = ext_write_rate_ratio * disk_load.disk_util_write
 
-        self.disk_util = min(disk_load.disk_util_read + ext_write_disk_util, 1.0)
+        self.disk_util = min(disk_load.disk_util_read + ext_write_disk_util, self.MAX_DISK_UTIL)
+        self.is_defragmentation_running = False
+
+    def account_node_backend(self, nb):
+        """Account node backend that resides on the disk.
+
+        NB: This method is guaranteed to be called once per backend.
+        """
+        if nb.stat.defrag_state == 1:
+            self.is_defragmentation_running = True
+        else:
+            active_job = nb.group.couple.active_job
+            if active_job is not None:
+                is_defrag_job = active_job['type'] == JobTypes.TYPE_COUPLE_DEFRAG_JOB
+                is_executing_job = active_job['status'] in (Job.STATUS_NEW, Job.STATUS_EXECUTING)
+                if is_defrag_job and is_executing_job:
+                    self.is_defragmentation_running = True
 
     @staticmethod
     def key(nb):
         return (nb.node.host.hostname, nb.fs.fsid)
 
     def claim(self, resource_units):
-        self.disk_util = min(self.disk_util + resource_units.disk_util,
-                             1.0)
+        self.disk_util = min(
+            self.disk_util + resource_units.disk_util,
+            self.MAX_DISK_UTIL
+        )
 
     def __repr__(self):
         return '<Disk {}: disk_util: {:.4f}>'.format(self.key, self.disk_util)
