@@ -1,6 +1,5 @@
 # encoding: utf-8
 from copy import deepcopy
-import json
 import logging
 
 from config import config
