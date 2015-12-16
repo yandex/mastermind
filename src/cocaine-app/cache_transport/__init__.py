@@ -19,13 +19,5 @@ except (ImportError, KeyError) as e:
     from fake_transport import Transport as CacheTaskManager
 
 
-def encode_dict(params):
-    return {
-        k: v
-        if not isinstance(v, unicode) else v.encode('utf-8')
-        for k, v in params.iteritems()
-    }
-
-
 logger.info('Cache task manager being used: {0}'.format(CacheTaskManager))
-cache_task_manager = CacheTaskManager(**encode_dict(params))
+cache_task_manager = CacheTaskManager(**params)
