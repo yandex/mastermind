@@ -13,6 +13,7 @@ from kazoo.exceptions import (
 )
 from kazoo.retry import KazooRetry, RetryFailedError
 from mastermind.utils.queue import LockingQueue
+from mastermind_core import helpers
 import msgpack
 
 # from errors import ConnectionError, InvalidDataError
@@ -45,7 +46,7 @@ class ZkSyncManager(object):
 
         self._retry = KazooRetry(max_tries=self.RETRIES)
 
-        self.lock_path_prefix = lock_path_prefix
+        self.lock_path_prefix = helpers.encode(lock_path_prefix)
 
     @contextmanager
     def lock(self, lockid, blocking=True, timeout=LOCK_TIMEOUT):
@@ -184,7 +185,7 @@ class ZkCacheTaskManager(object):
             logger.error(e)
             raise
 
-        self.lock_path_prefix = lock_path_prefix
+        self.lock_path_prefix = helpers.encode(lock_path_prefix)
 
     def put_task(self, task):
         group_id = task['group']
