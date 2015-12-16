@@ -69,7 +69,7 @@ class CoupleDefragStateCheckTask(Task):
                 self.parent_job.id, self.id, self.stats_ts))
             return False
 
-        if all([s.defrag_state == 0 for s in stats]):
+        if all(s.defrag_state == 0 for s in stats):
             logger.debug('Job {0}, task {1}: defrag finished, start_ts {2}, current ts {3}, '
                 'defrag statuses {4}'.format(self.parent_job.id, self.id, self.stats_ts,
                     cur_stats_ts, [s.defrag_state for s in stats]))

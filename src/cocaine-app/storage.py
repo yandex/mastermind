@@ -1064,10 +1064,15 @@ class Group(object):
     @property
     def type(self):
         if not self.meta:
-            if (CACHE_GROUP_PATH_PREFIX and
-                any([nb.base_path.startswith(CACHE_GROUP_PATH_PREFIX)
-                     for nb in self.node_backends])):
-                return self.TYPE_UNMARKED
+
+            if CACHE_GROUP_PATH_PREFIX:
+
+                def is_cache_group_backend(nb):
+                    return nb.base_path.startswith(CACHE_GROUP_PATH_PREFIX)
+
+                if any(is_cache_group_backend(nb) for nb in self.node_backends):
+                    return self.TYPE_UNMARKED
+
             return self.TYPE_DATA
         if self.meta.get('type') == self.TYPE_CACHE:
             return self.TYPE_CACHE
@@ -1137,7 +1142,7 @@ class Group(object):
 
             return self.status
 
-        if not all([st == Status.OK for st in statuses]):
+        if not all(st == Status.OK for st in statuses):
             self.status = Status.BAD
             self.status_text = ('Group {0} is in Bad state because '
                                 'some node statuses are not OK'.format(self))
@@ -1300,12 +1305,12 @@ class Couple(object):
                 self.active_job = group.active_job
                 break
 
-        if any([not self.groups[0].equal_meta(group) for group in self.groups[1:]]):
+        if any(not self.groups[0].equal_meta(group) for group in self.groups):
             self.status = Status.BAD
             self.status_text = 'Couple {0} groups has unequal meta data'.format(str(self))
             return self.account_job_in_status()
 
-        if any([group.meta and group.meta.get('frozen') for group in self.groups]):
+        if any(group.meta and group.meta.get('frozen') for group in self.groups):
             self.status = Status.FROZEN
             self.status_text = 'Couple {0} is frozen'.format(str(self))
             return self.status
@@ -1340,12 +1345,12 @@ class Couple(object):
                                     'not set up'.format(self, self.namespace))
                 return self.status
 
-        if all([st == Status.COUPLED for st in statuses]):
+        if all(st == Status.COUPLED for st in statuses):
 
             if FORBIDDEN_UNMATCHED_GROUP_TOTAL_SPACE:
                 group_stats = [g.get_stat() for g in self.groups]
                 total_spaces = [gs.total_space for gs in group_stats if gs]
-                if any([ts != total_spaces[0] for ts in total_spaces]):
+                if any(ts != total_spaces[0] for ts in total_spaces):
                     self.status = Status.BROKEN
                     self.status_text = ('Couple {0} has unequal total space in groups'.format(
                         str(self)))
@@ -1403,7 +1408,7 @@ class Couple(object):
 
     @property
     def frozen(self):
-        return any([group.meta.get('frozen') for group in self.groups])
+        return any(group.meta.get('frozen') for group in self.groups)
 
     @property
     def closed(self):
