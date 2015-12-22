@@ -14,8 +14,6 @@ import msgpack
 # from mastermind.service import ReconnectableService
 from tornado.ioloop import IOLoop
 
-import balancelogicadapter as bla
-import balancelogic
 from config import config
 from db.mongo.pool import Collection
 import helpers as h
