@@ -26,7 +26,9 @@ import log
 log.setup_logger()
 logger = logging.getLogger('mm.init')
 
-
+# storage should be imported before balancer
+# TODO: remove this dependency
+import storage
 import balancer
 from db.mongo.pool import MongoReplicaSetClient
 import helpers
