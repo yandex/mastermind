@@ -1,3 +1,11 @@
+mastermind (2.25.108) trusty; urgency=medium
+
+  * Remove old weight balancer traits
+  * Fix for updating node backends set on history updates
+  * Update couple namespace handle to use new weight manager
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 23 Dec 2015 17:58:38 +0300
+
 mastermind (2.25.107) trusty; urgency=medium
 
   * Account disk defragmentation when calculating couple weights
