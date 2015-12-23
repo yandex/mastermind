@@ -14,8 +14,6 @@ import msgpack
 # from mastermind.service import ReconnectableService
 from tornado.ioloop import IOLoop
 
-import balancelogicadapter as bla
-import balancelogic
 from config import config
 from db.mongo.pool import Collection
 import helpers as h
@@ -335,105 +333,29 @@ class Balancer(object):
 
     @h.concurrent_handler
     def get_group_weights(self, request):
-        namespaces = {}
-        all_symm_group_objects = []
-
         try:
             ns = request[0]
         except IndexError:
             ns = None
 
-        if ns and ns not in self.infrastructure.ns_settings:
+        namespaces_states = self.niu._namespaces_states.get_result(compressed=False)
+        if ns and ns not in namespaces_states:
             raise ValueError('Namespace "{0}" does not exist'.format(ns))
 
-        for couple in storage.couples:
-
-            namespaces.setdefault(couple.namespace.id, set()).add(len(couple))
-
-            if couple.status not in storage.GOOD_STATUSES:
-                continue
-
-            symm_group = bla.SymmGroup(couple)
-            all_symm_group_objects.append(symm_group)
+        if ns is None:
+            namespaces = namespaces_states.iterkeys()
+        else:
+            namespaces = [ns]
 
         result = {}
-
-        namespaces = ([(ns, namespaces.get(ns, set()))]
-                      if ns is not None else
-                      namespaces.iteritems())
-
-        for namespace, sizes in namespaces:
+        for namespace in namespaces:
             try:
-                result[namespace] = self.__namespaces_weights(
-                    namespace, sizes, symm_groups=all_symm_group_objects)
-            except ValueError as e:
-                logger.error(e)
-                continue
+                result[namespace] = namespaces_states[namespace]['weights']
+            except KeyError:
+                # No couples to write to in namespace
+                pass
 
-        if len(result) == 0:
-            raise ValueError('Failed to satisfy {0} availability settings'.format(
-                'namespace ' + ns if ns else 'all namespaces'))
-
-        logger.info(str(result))
         return result
-
-    def __namespaces_weights(self, namespace, sizes, symm_groups=None):
-
-        if symm_groups is None:
-            symm_groups = []
-
-        found_couples = 0
-
-        ns_weights = {}
-
-        # TODO: remove this crutch when get_group_weights becomes obsolete
-        if isinstance(sizes, set):
-            sizes = {
-                size: symm_groups
-                for size in sizes
-            }
-
-        ns_add_units = self.infrastructure.ns_settings.get(namespace, {}).get(
-            'add-units', self.ADD_NS_UNITS)
-        ns_min_units = self.infrastructure.ns_settings.get(namespace, {}).get(
-            'min-units', self.MIN_NS_UNITS)
-
-        bla_config = bla.getConfig()
-        bla_config['AdditionalUnitsNumber'] = ns_add_units
-        bla_config['MinimumUnitsWithPositiveWeight'] = ns_min_units
-
-        for size, symm_groups in sizes.iteritems():
-            try:
-                logger.info('Namespace {0}, size {1}: calculating cluster info'.format(
-                    namespace, size))
-                (group_weights, info) = balancelogic.rawBalance(
-                    symm_groups, bla_config,
-                    bla._and(bla.GroupSizeEquals(size),
-                             bla.GroupNamespaceEquals(namespace)))
-                ns_size_weights = \
-                    [([g.group_id for g in item[0].groups],) +
-                     item[1:] +
-                     (int(item[0].get_stat().free_space),)
-                     for item in group_weights.items()]
-                if len(ns_size_weights):
-                    ns_weights[size] = ns_size_weights
-                    found_couples += len([item for item in ns_weights[size] if item[1] > 0])
-                logger.info('Namespace {0}, size {1}: cluster info: {2}'.format(
-                    namespace, size, info))
-            except Exception as e:
-                logger.error('Namespace {0}, size {1}: error {2}'.format(namespace, size, e))
-                continue
-
-        settings = self.infrastructure.ns_settings[namespace]
-        if found_couples < ns_min_units:
-            raise ValueError(
-                'Namespace {}, {}, has {} available couples, {} required'.format(
-                    namespace,
-                    'static' if 'static-couple' in settings else 'non-static',
-                    found_couples, ns_min_units
-                )
-            )
-        return ns_weights
 
     @h.concurrent_handler
     def repair_groups(self, request):

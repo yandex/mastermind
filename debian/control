@@ -23,7 +23,6 @@ Depends:
  ${shlibs:Depends},
  ${misc:Depends},
  cocaine-framework-python (<< 0.12),
- python-balancelogic (>= 0.4),
  python-tornado (>= 4.0),
  cocaine-tools (<< 0.12),
  python-pymongo (<< 3),

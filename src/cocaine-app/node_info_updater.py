@@ -10,7 +10,6 @@ import elliptics
 import msgpack
 
 # import balancer
-import balancelogicadapter as bla
 from config import config
 import helpers as h
 from infrastructure import infrastructure
@@ -100,7 +99,6 @@ class NodeInfoUpdater(object):
             reload_period = config.get('nodes_reload_period', 60)
             self.__tq.add_task_in('node_statistics_update', reload_period, self.node_statistics_update)
             self.__nodeUpdateTimestamps = self.__nodeUpdateTimestamps[1:] + (time.time(),)
-            bla.setConfigValue("dynamic_too_old_age", max(time.time() - self.__nodeUpdateTimestamps[0], reload_period * 3))
 
     def update_symm_groups(self):
         try:
@@ -621,7 +619,6 @@ class NodeInfoUpdater(object):
             res[ns]['settings'] = settings
 
         # couples
-        symm_groups = {}
         for couple in storage.couples:
             try:
                 try:
@@ -632,14 +629,6 @@ class NodeInfoUpdater(object):
                 info['hosts'] = couple.couple_hosts()
                 # couples
                 res[ns.id]['couples'].append(info)
-
-                symm_groups.setdefault(couple.namespace, {})
-                symm_groups[couple.namespace].setdefault(len(couple), [])
-
-                if couple.status not in storage.GOOD_STATUSES:
-                    continue
-
-                symm_groups[couple.namespace.id][len(couple)].append(bla.SymmGroup(couple))
             except Exception as e:
                 logger.error('Failed to include couple {0} in namespace states: {1}'.format(
                     str(couple), e))

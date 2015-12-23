@@ -26,9 +26,10 @@ import log
 log.setup_logger()
 logger = logging.getLogger('mm.init')
 
-
+# storage should be imported before balancer
+# TODO: remove this dependency
+import storage
 import balancer
-import balancelogicadapter
 from db.mongo.pool import MongoReplicaSetClient
 import helpers
 import history
@@ -134,8 +135,6 @@ mrsc_options = config['metadata'].get('options', {})
 meta_db = None
 if config['metadata'].get('url'):
     meta_db = MongoReplicaSetClient(config['metadata']['url'], **mrsc_options)
-
-balancelogicadapter.setConfig(config["balancer_config"])
 
 
 logger.info("trace %d" % (i.next()))
