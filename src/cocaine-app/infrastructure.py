@@ -208,9 +208,9 @@ class Infrastructure(object):
                 for nb in group.node_backends:
                     for nb_record in node_backends_set.set:
                         if (
-                            nb_record.hostname == nb.hostname and
-                            nb_record.port == nb.port and
-                            nb_record.family == nb.family and
+                            nb_record.hostname == nb.node.host.hostname and
+                            nb_record.port == nb.node.port and
+                            nb_record.family == nb.node.family and
                             nb_record.backend_id == nb.backend_id and
                             nb_record.path == nb.base_path
                         ):
