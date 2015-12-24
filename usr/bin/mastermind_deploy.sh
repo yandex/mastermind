@@ -8,6 +8,7 @@ PROFILE=$4
 echo "Cleaning old version of application $APP_NAME..."
 
 rm -rf /var/lib/cocaine/apps/$APP_NAME
+rm -f /var/lib/cocaine/manifests/$APP_NAME
 rm -rf /var/spool/cocaine/$APP_NAME
 rm -rf /var/cache/cocaine/apps/$APP_NAME
 rm -f /var/cache/cocaine/manifests/$APP_NAME
