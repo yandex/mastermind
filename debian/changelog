@@ -1,3 +1,9 @@
+mastermind (2.25.109) trusty; urgency=medium
+
+  * Remove old app manifest during installation
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 24 Dec 2015 12:59:06 +0300
+
 mastermind (2.25.108) trusty; urgency=medium
 
   * Remove old weight balancer traits
