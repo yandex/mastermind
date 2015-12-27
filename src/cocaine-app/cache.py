@@ -656,10 +656,11 @@ class CacheDistributor(object):
                 else:
                     raise lookup.error
 
-            dc = storage.groups[group_id].node_backends[0].node.host.dc
-            key_by_dc[dc] = {
+            host = storage.groups[group_id].node_backends[0].node.host
+            key_by_dc[host.dc] = {
                 'group': group_id,
                 'size': lookup.size,
+                'host': host,
             }
 
         for result, eid, group_id in lookups:
@@ -692,8 +693,10 @@ class CacheDistributor(object):
 
         candidates_by_dc = {}
 
+        hosts_with_key = set()
         for dc in key_by_dc:
             candidates_by_dc[dc] = DcKeyCacheCandidates(dc, key_by_dc[dc]['group'])
+            hosts_with_key.add(key_by_dc[dc]['host'])
 
         busy_cache_groups = set()
         # search only by key id because all cache groups
@@ -708,6 +711,8 @@ class CacheDistributor(object):
                     if cg.dc not in candidates_by_dc:
                         continue
                     candidates_by_dc[cg.dc].account_key_copy()
+                    for nb in cg.group.node_backends:
+                        hosts_with_key.add(nb.node.host)
 
         copies_num = len(key['cache_groups']) + len(key['data_groups']) + count
         bw_per_copy = (float(key_stat['size']) / key_stat['period_in_seconds'] /
@@ -746,6 +751,19 @@ class CacheDistributor(object):
                         group=cg.group_id,
                         tx_rate_left=cg.tx_rate_left,
                         required_bw=bw_per_copy,
+                    )
+                )
+                continue
+            cache_group_host_has_key = any(
+                nb.node.host in hosts_with_key
+                for nb in cg.group.node_backends
+            )
+            if cache_group_host_has_key:
+                logger.debug(
+                    'Key {key}: skipping cache group {group}, host already has '
+                    'a key copy'.format(
+                        key=key['id'],
+                        group=cg.group_id,
                     )
                 )
                 continue
