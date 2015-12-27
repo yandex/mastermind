@@ -690,14 +690,10 @@ class CacheDistributor(object):
             return
         key_size = max([key_by_dc[dc]['size'] for dc in key_by_dc])
 
-        dc_weights = dict((k, 1) for k in key_by_dc.keys())
         candidates_by_dc = {}
 
-        for dc, weight in dc_weights.iteritems():
-            if dc not in key_by_dc:
-                continue
-            candidates_by_dc[dc] = DcKeyCacheCandidates(
-                dc, weight, key_by_dc[dc]['group'])
+        for dc in key_by_dc:
+            candidates_by_dc[dc] = DcKeyCacheCandidates(dc, key_by_dc[dc]['group'])
 
         busy_cache_groups = set()
         # search only by key id because all cache groups
@@ -711,7 +707,7 @@ class CacheDistributor(object):
                     cg = self.cache_groups[cgid]
                     if cg.dc not in candidates_by_dc:
                         continue
-                    candidates_by_dc[cg.dc].account_key_copy(cg)
+                    candidates_by_dc[cg.dc].account_key_copy()
 
         copies_num = len(key['cache_groups']) + len(key['data_groups']) + count
         bw_per_copy = (float(key_stat['size']) / key_stat['period_in_seconds'] /
@@ -759,10 +755,11 @@ class CacheDistributor(object):
             dc_candidates.sort_candidates()
 
         copies = 0
-        for cg in self._best_cache_groups(candidates_by_dc, count):
+        for dc_candidate, cg in self._get_cache_candidates(candidates_by_dc, count):
             self._add_key_to_group(key, cg.group_id,
                                    [key_by_dc[cg.dc]['group']], bw_per_copy,
                                    key_size)
+            dc_candidate.account_key_copy()
             copies += 1
         if copies < count:
             logger.warn(
@@ -775,37 +772,36 @@ class CacheDistributor(object):
                 )
             )
 
-    def _best_cache_groups(self, candidates_by_dc, count):
+    def _get_cache_candidates(self, candidates_by_dc, count):
+        """
+        Returns up to ```count``` candidates for cache key distribution
 
-        def vector_normalize(v):
-            length = math.sqrt(sum(x ** 2 for x in v))
-            return [x / length for x in v]
+        Selects dc which has the least number of key copies and
+        at least one suitable cache group.
+        Generator stops if no dc has suitable cache groups.
 
-        def weight(weights, counts):
-            norm_c = vector_normalize(counts)
-            norm_w = vector_normalize(weights)
-            deltas = sorted(norm_c[i] - norm_w[i]
-                            for i in xrange(len(weights)))
-            return sum(d ** 2 for d in deltas)
-
-        candidates = candidates_by_dc.values()
-
-        weights = [d.weight for d in candidates]
+        Yields:
+            (dc_key_candidates, cache_group) tuple, where ```dc_key_candidates``` is
+            DcKeyCacheCandidates instance from which ```cache_group``` was obtained.
+        """
         for _ in xrange(count):
-            cand_weights = []
-            dc_counts = [d.key_copies for d in candidates]
-            for idx in xrange(len(dc_counts)):
-                cand = dc_counts[:]
-                cand[idx] += 1
-                cand_weights.append((weight(weights, cand), idx))
-            cand_weights.sort()
-            for _, idx in cand_weights:
-                cg = candidates[idx].pop_candidate()
-                if cg:
-                    yield cg
-                    break
-            else:
-                raise StopIteration
+            dc_candidate = self._best_fitting_dc(candidates_by_dc)
+            cg = dc_candidate.pop_candidate()
+            yield cg
+
+    def _best_fitting_dc(self, candidates_by_dc):
+
+        def weight(counts):
+            avg_count = float(sum(c for c in counts)) / len(counts)
+            return sum((c - avg_count) ** 2 for c in counts)
+
+        dc_candidates = candidates_by_dc.itervalues()
+
+        for dc_candidate in sorted(dc_candidates, key=lambda d: d.key_copies):
+            if len(dc_candidate):
+                return dc_candidate
+        else:
+            raise StopIteration
 
     def _add_key_to_group(self, key, group_id, data_groups, tx_rate, size):
         """
@@ -1116,9 +1112,8 @@ class CacheGroup(object):
 
 
 class DcKeyCacheCandidates(object):
-    def __init__(self, dc, weight, src_group_id):
+    def __init__(self, dc, src_group_id):
         self.dc = dc
-        self.weight = weight
         self.src_group_id = src_group_id
         self.key_copies = 0
         self.candidates = []
@@ -1127,11 +1122,17 @@ class DcKeyCacheCandidates(object):
     def add_candidate(self, cg):
         self.candidates.append(cg)
 
-    def account_key_copy(self, cg):
+    def account_key_copy(self):
         self.key_copies += 1
 
     def pop_candidate(self):
         return self.candidates and self.candidates.pop(0) or None
+
+    def __len__(self):
+        return len(self.candidates)
+
+    def __nonzero__(self):
+        return len(self.candidates) > 0
 
     @staticmethod
     def units_diff(u1, u2):
