@@ -13,7 +13,6 @@ import balancer
 from cache_transport import cache_task_manager
 from config import config
 from db.mongo.pool import Collection
-from errors import CacheUpstreamError
 import helpers as h
 import inventory
 from infrastructure import infrastructure
@@ -618,7 +617,7 @@ class CacheDistributor(object):
             try:
                 h.process_elliptics_async_result(
                     result, set_group_lookup, group_id, raise_on_error=False)
-            except Exception as e:
+            except Exception:
                 logger.exception(
                     'Failed to lookup key {0} on group {1}'.format(
                         eid, group_id))
@@ -683,8 +682,11 @@ class CacheDistributor(object):
         key_by_dc = self._key_by_dc(key)
         if not key_by_dc:
             logger.error(
-                'Key {0}: failed to lookup key in any of '
-                'couple dcs'.format(key['id']))
+                'Key {key}: failed to lookup key in any of '
+                'couple dcs'.format(
+                    key=key['id']
+                )
+            )
             return
         key_size = max([key_by_dc[dc]['size'] for dc in key_by_dc])
 
@@ -722,21 +724,34 @@ class CacheDistributor(object):
                 continue
             if cg.tx_rate is None:
                 logger.debug(
-                    'Key {0}: tx rate for cache group {1} is unavailable '
-                    'at the moment'.format(key['id'], cg.group_id))
+                    'Key {key}: tx rate for cache group {group} is unavailable '
+                    'at the moment'.format(
+                        key=key['id'],
+                        group=cg.group_id
+                    )
+                )
                 continue
             if cg.effective_free_space < key_size:
                 logger.debug(
-                    'Key {0}: not enough free space on cache group '
-                    '{1}: {2} < {3}'.format(
-                        key['id'], cg.group_id, cg.effective_free_space,
-                        key_size))
+                    'Key {key}: not enough free space on cache group {group}: '
+                    '{free_space} < {needed_space}'.format(
+                        key=key['id'],
+                        group=cg.group_id,
+                        free_space=cg.effective_free_space,
+                        needed_space=key_size,
+                    )
+                )
                 continue
             if cg.tx_rate_left < bw_per_copy:
                 logger.debug(
-                    'Key {0}: not enough tx rate on cache group '
-                    '{1}: {2} < {3}'.format(
-                        key['id'], cg.group_id, cg.tx_rate_left, bw_per_copy))
+                    'Key {key}: not enough tx rate on cache group {group}: '
+                    '{tx_rate_left} < {required_bw}'.format(
+                        key=key['id'],
+                        group=cg.group_id,
+                        tx_rate_left=cg.tx_rate_left,
+                        required_bw=bw_per_copy,
+                    )
+                )
                 continue
             candidates_by_dc[cg.dc].add_candidate(cg)
 
@@ -750,8 +765,15 @@ class CacheDistributor(object):
                                    key_size)
             copies += 1
         if copies < count:
-            logger.warn('Key {}, couple {}: added only {}/{} copies'.format(
-                key['id'], key['couple'], copies, count))
+            logger.warn(
+                'Key {key}, couple {couple}: added only '
+                '{copies_added}/{copies_needed} copies'.format(
+                    key=key['id'],
+                    couple=key['couple'],
+                    copies_added=copies,
+                    copies_needed=count,
+                )
+            )
 
     def _best_cache_groups(self, candidates_by_dc, count):
 
@@ -1113,31 +1135,36 @@ class DcKeyCacheCandidates(object):
 
     @staticmethod
     def units_diff(u1, u2):
-            diff = 0
-            for k in u1.keys():
-                diff += int(u1[k] != u2[k])
-            return diff
+        diff = 0
+        for k in u1.keys():
+            diff += int(u1[k] != u2[k])
+        return diff
 
     def group_units(self):
         return infrastructure.groups_units(
-            [cg.group for cg in self.candidates] +
-            [storage.groups[self.src_group_id]],
-            self.node_types)
+            [cg.group for cg in self.candidates] + [storage.groups[self.src_group_id]],
+            self.node_types
+        )
 
     def sort_candidates(self):
-        weights = {}
         gu = self.group_units()
         if self.src_group_id not in gu:
             raise RuntimeError(
-                'Failed to get parents for source group {}'.format(
-                    self.src_group_id))
+                'Failed to get parents for source group {}'.format(self.src_group_id)
+            )
+
+        weights = {}
         for cg in self.candidates:
             if cg.group_id not in gu:
                 continue
-            weights[cg] = (
-                DcKeyCacheCandidates.units_diff(gu[self.src_group_id][0],
-                                                gu[cg.group_id][0]),
-                cg.weight
+            distance = self.units_diff(
+                gu[self.src_group_id][0],
+                gu[cg.group_id][0]
             )
-        self.candidates = [w[0] for w in sorted(
-            weights.iteritems(), key=lambda w: w[1])]
+            weights[cg] = (distance, cg.weight)
+        self.candidates = [
+            w[0] for w in sorted(
+                weights.iteritems(),
+                key=lambda w: w[1]
+            )
+        ]
