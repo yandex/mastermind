@@ -805,7 +805,7 @@ class CacheDistributor(object):
         for _ in xrange(count):
             dc_candidate = self._best_fitting_dc(candidates_by_dc)
             cg = dc_candidate.pop_candidate()
-            yield cg
+            yield (dc_candidate, cg)
 
     def _best_fitting_dc(self, candidates_by_dc):
 
