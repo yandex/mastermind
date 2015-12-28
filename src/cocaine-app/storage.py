@@ -1408,7 +1408,7 @@ class Couple(object):
 
     @property
     def frozen(self):
-        return any(group.meta.get('frozen') for group in self.groups)
+        return any(group.meta.get('frozen') for group in self.groups if group.meta)
 
     @property
     def closed(self):
