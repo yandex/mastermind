@@ -1,3 +1,9 @@
+mastermind (2.25.112) trusty; urgency=medium
+
+  * Fix import dependency
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 28 Dec 2015 16:20:04 +0300
+
 mastermind (2.25.111) trusty; urgency=medium
 
   * Fix frozen couple check
