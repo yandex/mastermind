@@ -1,3 +1,9 @@
+mastermind (2.25.111) trusty; urgency=medium
+
+  * Fix frozen couple check
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 28 Dec 2015 15:45:49 +0300
+
 mastermind (2.25.110) trusty; urgency=medium
 
   * Skip cache groups on hosts that already have a cache key copy
