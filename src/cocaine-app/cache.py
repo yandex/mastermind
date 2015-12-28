@@ -13,7 +13,6 @@ import balancer
 from cache_transport import cache_task_manager
 from config import config
 from db.mongo.pool import Collection
-from errors import CacheUpstreamError
 import helpers as h
 import inventory
 from infrastructure import infrastructure
@@ -618,7 +617,7 @@ class CacheDistributor(object):
             try:
                 h.process_elliptics_async_result(
                     result, set_group_lookup, group_id, raise_on_error=False)
-            except Exception as e:
+            except Exception:
                 logger.exception(
                     'Failed to lookup key {0} on group {1}'.format(
                         eid, group_id))
@@ -657,10 +656,11 @@ class CacheDistributor(object):
                 else:
                     raise lookup.error
 
-            dc = storage.groups[group_id].node_backends[0].node.host.dc
-            key_by_dc[dc] = {
+            host = storage.groups[group_id].node_backends[0].node.host
+            key_by_dc[host.dc] = {
                 'group': group_id,
                 'size': lookup.size,
+                'host': host,
             }
 
         for result, eid, group_id in lookups:
@@ -683,19 +683,20 @@ class CacheDistributor(object):
         key_by_dc = self._key_by_dc(key)
         if not key_by_dc:
             logger.error(
-                'Key {0}: failed to lookup key in any of '
-                'couple dcs'.format(key['id']))
+                'Key {key}: failed to lookup key in any of '
+                'couple dcs'.format(
+                    key=key['id']
+                )
+            )
             return
         key_size = max([key_by_dc[dc]['size'] for dc in key_by_dc])
 
-        dc_weights = dict((k, 1) for k in key_by_dc.keys())
         candidates_by_dc = {}
 
-        for dc, weight in dc_weights.iteritems():
-            if dc not in key_by_dc:
-                continue
-            candidates_by_dc[dc] = DcKeyCacheCandidates(
-                dc, weight, key_by_dc[dc]['group'])
+        hosts_with_key = set()
+        for dc in key_by_dc:
+            candidates_by_dc[dc] = DcKeyCacheCandidates(dc, key_by_dc[dc]['group'])
+            hosts_with_key.add(key_by_dc[dc]['host'])
 
         busy_cache_groups = set()
         # search only by key id because all cache groups
@@ -709,7 +710,9 @@ class CacheDistributor(object):
                     cg = self.cache_groups[cgid]
                     if cg.dc not in candidates_by_dc:
                         continue
-                    candidates_by_dc[cg.dc].account_key_copy(cg)
+                    candidates_by_dc[cg.dc].account_key_copy()
+                    for nb in cg.group.node_backends:
+                        hosts_with_key.add(nb.node.host)
 
         copies_num = len(key['cache_groups']) + len(key['data_groups']) + count
         bw_per_copy = (float(key_stat['size']) / key_stat['period_in_seconds'] /
@@ -722,21 +725,47 @@ class CacheDistributor(object):
                 continue
             if cg.tx_rate is None:
                 logger.debug(
-                    'Key {0}: tx rate for cache group {1} is unavailable '
-                    'at the moment'.format(key['id'], cg.group_id))
+                    'Key {key}: tx rate for cache group {group} is unavailable '
+                    'at the moment'.format(
+                        key=key['id'],
+                        group=cg.group_id
+                    )
+                )
                 continue
             if cg.effective_free_space < key_size:
                 logger.debug(
-                    'Key {0}: not enough free space on cache group '
-                    '{1}: {2} < {3}'.format(
-                        key['id'], cg.group_id, cg.effective_free_space,
-                        key_size))
+                    'Key {key}: not enough free space on cache group {group}: '
+                    '{free_space} < {needed_space}'.format(
+                        key=key['id'],
+                        group=cg.group_id,
+                        free_space=cg.effective_free_space,
+                        needed_space=key_size,
+                    )
+                )
                 continue
             if cg.tx_rate_left < bw_per_copy:
                 logger.debug(
-                    'Key {0}: not enough tx rate on cache group '
-                    '{1}: {2} < {3}'.format(
-                        key['id'], cg.group_id, cg.tx_rate_left, bw_per_copy))
+                    'Key {key}: not enough tx rate on cache group {group}: '
+                    '{tx_rate_left} < {required_bw}'.format(
+                        key=key['id'],
+                        group=cg.group_id,
+                        tx_rate_left=cg.tx_rate_left,
+                        required_bw=bw_per_copy,
+                    )
+                )
+                continue
+            cache_group_host_has_key = any(
+                nb.node.host in hosts_with_key
+                for nb in cg.group.node_backends
+            )
+            if cache_group_host_has_key:
+                logger.debug(
+                    'Key {key}: skipping cache group {group}, host already has '
+                    'a key copy'.format(
+                        key=key['id'],
+                        group=cg.group_id,
+                    )
+                )
                 continue
             candidates_by_dc[cg.dc].add_candidate(cg)
 
@@ -744,46 +773,53 @@ class CacheDistributor(object):
             dc_candidates.sort_candidates()
 
         copies = 0
-        for cg in self._best_cache_groups(candidates_by_dc, count):
+        for dc_candidate, cg in self._get_cache_candidates(candidates_by_dc, count):
             self._add_key_to_group(key, cg.group_id,
                                    [key_by_dc[cg.dc]['group']], bw_per_copy,
                                    key_size)
+            dc_candidate.account_key_copy()
             copies += 1
         if copies < count:
-            logger.warn('Key {}, couple {}: added only {}/{} copies'.format(
-                key['id'], key['couple'], copies, count))
+            logger.warn(
+                'Key {key}, couple {couple}: added only '
+                '{copies_added}/{copies_needed} copies'.format(
+                    key=key['id'],
+                    couple=key['couple'],
+                    copies_added=copies,
+                    copies_needed=count,
+                )
+            )
 
-    def _best_cache_groups(self, candidates_by_dc, count):
+    def _get_cache_candidates(self, candidates_by_dc, count):
+        """
+        Returns up to ```count``` candidates for cache key distribution
 
-        def vector_normalize(v):
-            length = math.sqrt(sum(x ** 2 for x in v))
-            return [x / length for x in v]
+        Selects dc which has the least number of key copies and
+        at least one suitable cache group.
+        Generator stops if no dc has suitable cache groups.
 
-        def weight(weights, counts):
-            norm_c = vector_normalize(counts)
-            norm_w = vector_normalize(weights)
-            deltas = sorted(norm_c[i] - norm_w[i]
-                            for i in xrange(len(weights)))
-            return sum(d ** 2 for d in deltas)
-
-        candidates = candidates_by_dc.values()
-
-        weights = [d.weight for d in candidates]
+        Yields:
+            (dc_key_candidates, cache_group) tuple, where ```dc_key_candidates``` is
+            DcKeyCacheCandidates instance from which ```cache_group``` was obtained.
+        """
         for _ in xrange(count):
-            cand_weights = []
-            dc_counts = [d.key_copies for d in candidates]
-            for idx in xrange(len(dc_counts)):
-                cand = dc_counts[:]
-                cand[idx] += 1
-                cand_weights.append((weight(weights, cand), idx))
-            cand_weights.sort()
-            for _, idx in cand_weights:
-                cg = candidates[idx].pop_candidate()
-                if cg:
-                    yield cg
-                    break
-            else:
-                raise StopIteration
+            dc_candidate = self._best_fitting_dc(candidates_by_dc)
+            cg = dc_candidate.pop_candidate()
+            yield cg
+
+    def _best_fitting_dc(self, candidates_by_dc):
+
+        def weight(counts):
+            avg_count = float(sum(c for c in counts)) / len(counts)
+            return sum((c - avg_count) ** 2 for c in counts)
+
+        dc_candidates = candidates_by_dc.itervalues()
+
+        for dc_candidate in sorted(dc_candidates, key=lambda d: d.key_copies):
+            if len(dc_candidate):
+                return dc_candidate
+        else:
+            raise StopIteration
 
     def _add_key_to_group(self, key, group_id, data_groups, tx_rate, size):
         """
@@ -1094,9 +1130,8 @@ class CacheGroup(object):
 
 
 class DcKeyCacheCandidates(object):
-    def __init__(self, dc, weight, src_group_id):
+    def __init__(self, dc, src_group_id):
         self.dc = dc
-        self.weight = weight
         self.src_group_id = src_group_id
         self.key_copies = 0
         self.candidates = []
@@ -1105,39 +1140,50 @@ class DcKeyCacheCandidates(object):
     def add_candidate(self, cg):
         self.candidates.append(cg)
 
-    def account_key_copy(self, cg):
+    def account_key_copy(self):
         self.key_copies += 1
 
     def pop_candidate(self):
         return self.candidates and self.candidates.pop(0) or None
 
+    def __len__(self):
+        return len(self.candidates)
+
+    def __nonzero__(self):
+        return len(self.candidates) > 0
+
     @staticmethod
     def units_diff(u1, u2):
-            diff = 0
-            for k in u1.keys():
-                diff += int(u1[k] != u2[k])
-            return diff
+        diff = 0
+        for k in u1.keys():
+            diff += int(u1[k] != u2[k])
+        return diff
 
     def group_units(self):
         return infrastructure.groups_units(
-            [cg.group for cg in self.candidates] +
-            [storage.groups[self.src_group_id]],
-            self.node_types)
+            [cg.group for cg in self.candidates] + [storage.groups[self.src_group_id]],
+            self.node_types
+        )
 
     def sort_candidates(self):
-        weights = {}
         gu = self.group_units()
         if self.src_group_id not in gu:
             raise RuntimeError(
-                'Failed to get parents for source group {}'.format(
-                    self.src_group_id))
+                'Failed to get parents for source group {}'.format(self.src_group_id)
+            )
+
+        weights = {}
         for cg in self.candidates:
             if cg.group_id not in gu:
                 continue
-            weights[cg] = (
-                DcKeyCacheCandidates.units_diff(gu[self.src_group_id][0],
-                                                gu[cg.group_id][0]),
-                cg.weight
+            distance = self.units_diff(
+                gu[self.src_group_id][0],
+                gu[cg.group_id][0]
             )
-        self.candidates = [w[0] for w in sorted(
-            weights.iteritems(), key=lambda w: w[1])]
+            weights[cg] = (distance, cg.weight)
+        self.candidates = [
+            w[0] for w in sorted(
+                weights.iteritems(),
+                key=lambda w: w[1]
+            )
+        ]
