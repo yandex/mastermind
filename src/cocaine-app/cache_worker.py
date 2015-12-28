@@ -25,6 +25,7 @@ except LocatorResolveError:
         'cocaine.conf, fallback to default logging service')
 
 from config import config
+import storage
 import cache
 from db.mongo.pool import MongoReplicaSetClient
 import infrastructure
