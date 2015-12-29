@@ -178,18 +178,18 @@ class Balancer(object):
         return self._get_couples_list(options)
 
     def _get_couples_list(self, _filter):
-        couples = storage.couples.keys()
         if _filter.get('state', None) is not None and _filter['state'] not in self.COUPLE_STATES:
             raise ValueError('Invalid state: {0}'.format(_filter['state']))
 
-        def filtered_out(couple):
-            if _filter.get('namespace', None):
-                try:
-                    if c.namespace != _filter['namespace']:
-                        return True
-                except ValueError:
-                    return True
+        if _filter.get('namespace', None):
+            ns = _filter['namespace']
+            if ns not in storage.namespaces:
+                return []
+            couples = storage.namespaces[ns].couples
+        else:
+            couples = storage.couples.keys()
 
+        def filtered_out(couple):
             if _filter.get('state', None):
                 if couple.status not in self.COUPLE_STATES[_filter['state']]:
                     return True
