@@ -443,6 +443,22 @@ def couple_list(namespace=('n', '', 'Filter by namespace'),
                       'Output in json format (overrided by --short and --verbose options)'),
                 host=None, app=None):
     '''List couples with various view options.'''
+    return _couple_list(
+        namespace=namespace,
+        state=state,
+        short=short,
+        json=json,
+        host=host,
+        app=app,
+    )
+
+
+def _couple_list(namespace='',
+                 state='',
+                 short=False,
+                 json=False,
+                 host=None,
+                 app=None):
     cl = client(host, app)
 
     options = {'namespace': namespace,
@@ -921,31 +937,6 @@ def ns_delete(namespace, host=None, app=None):
     del cl.namespaces[namespace]
 
 
-# cache commands
-cacheDispatcher = Dispatcher(globaloptions=(host_param, app_param))
-
-
-@cacheDispatcher.command(name='keys')
-@log_action
-def cache_keys(host=None, app=None):
-    '''Fetch cached keys'''
-    s = service(host, app)
-
-    res = s.enqueue('get_cached_keys', msgpack.packb(None)).get()
-    print res
-
-
-@cacheDispatcher.command(name='keys-by-group')
-@log_action
-def cache_keys_by_group(group, host=None, app=None):
-    '''Fetch cached keys for certain group id'''
-    s = service(host, app)
-    group = int(group)
-
-    res = s.enqueue('get_cached_keys_by_group', msgpack.packb(group)).get()
-    print res
-
-
 @coupleDispatcher.command(name='freeze')
 @log_action
 def couple_freeze(couple, host=None, app=None):
@@ -1062,6 +1053,46 @@ def cache_clean(host=None, app=None):
         return 1
 
     print result
+
+
+@cacheDispatcher.command(name='keys')
+@log_action
+def cache_keys(host=None, app=None):
+    '''Fetch cached keys'''
+    s = service(host, app)
+
+    res = s.enqueue('get_cached_keys', msgpack.packb(None)).get()
+    print res
+
+
+@cacheDispatcher.command(name='keys-by-group')
+@log_action
+def cache_keys_by_group(group, host=None, app=None):
+    '''Fetch cached keys for certain group id'''
+    s = service(host, app)
+    group = int(group)
+
+    res = s.enqueue('get_cached_keys_by_group', msgpack.packb(group)).get()
+    print res
+
+
+@cacheDispatcher.command(name='couples-list')
+@log_action
+def cache_couples_list(state=('s', '',
+                              'Filter by state (good|full|frozen|bad|service-stalled|service-active)'),
+                       short=('', False, 'Use short format output'),
+                       json=('', False,
+                             'Output in json format (overrided by --short and --verbose options)'),
+                       host=None, app=None):
+    '''List cache couples with various view options'''
+    return _couple_list(
+        namespace='storage_cache',
+        state=state,
+        short=short,
+        json=json,
+        host=host,
+        app=SERVICE_APP_NAME,
+    )
 
 
 DEFAULT = '\033[0m'
