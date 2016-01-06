@@ -1,5 +1,4 @@
 from collections import defaultdict
-import copy
 import logging
 
 from errors import CacheUpstreamError
@@ -24,13 +23,6 @@ class Statistics(object):
     @staticmethod
     def dict_keys_min(st1, st2):
         return dict((k, min(st1[k], st2[k])) for k in st1)
-
-    @staticmethod
-    def redeem_space(host_space, couple_space):
-        for k in host_space:
-            min_val = min(host_space[k], couple_space[k])
-            host_space[k] -= min_val
-            couple_space[k] -= min_val
 
     @staticmethod
     def account_couples(data, group):
@@ -247,13 +239,15 @@ class Statistics(object):
             for dc, dc_data in stats.iteritems():
                 dc_data['outages'] = by_ns[ns][dc]
 
-    def total_stats(self, per_dc_stat):
+    def total_stats(self, per_dc_stat, per_ns_stat):
         dc_stats = per_dc_stat.values()
         for dc in dc_stats:
             if 'outages' in dc:
                 del dc['outages']
         # TODO: Fix for empty storage case, 'reduce' call fails
-        return dict(reduce(self.dict_keys_sum, dc_stats))
+        res = dict(reduce(self.dict_keys_sum, dc_stats))
+        res['real_data'] = dict(reduce(self.dict_keys_sum, per_ns_stat.itervalues()))
+        return res
 
     def get_couple_stats(self):
         open_couples = self.balancer._good_couples()
@@ -272,77 +266,13 @@ class Statistics(object):
                                   len(frozen_couples) + len(bad_couples)),
                 'uncoupled_groups': len(uncoupled_groups)}
 
-    def get_data_space(self):
-        """Returns the space actually available for writing data, therefore
-        excluding space occupied by replicas, accounts for groups residing
-        on the same file systems, etc."""
-
-        # TODO: Change min_free_space* usage
-        host_fsid_memory_map = {}
-
-        res = {
-            'free_space': 0.0,
-            'total_space': 0.0,
-            'effective_space': 0.0,
-            'effective_free_space': 0.0,
-        }
-
-        for group in storage.groups:
-            for node_backend in group.node_backends:
-                if not node_backend.stat:
-                    continue
-
-                if not (node_backend.node.host.addr, node_backend.stat.fsid) in host_fsid_memory_map:
-                    host_fsid_memory_map[(node_backend.node.host.addr, node_backend.stat.fsid)] = {
-                        'total_space': node_backend.stat.total_space,
-                        'free_space': node_backend.stat.free_space,
-                        'effective_space': node_backend.effective_space,
-                        'effective_free_space': int(max(node_backend.stat.free_space - (node_backend.stat.total_space - node_backend.effective_space), 0)),
-                    }
-
-        for couple in storage.couples:
-
-            stat = couple.get_stat()
-
-            if not stat:
-                continue
-
-            group_top_stats = []
-            for group in couple.groups:
-                # space is summed through all the group node backends
-                group_top_stats.append(
-                    reduce(
-                        self.dict_keys_sum,
-                        [host_fsid_memory_map[(nb.node.host.addr, nb.stat.fsid)]
-                         for nb in group.node_backends if nb.stat]
-                    )
-                )
-
-            # max space available for the couple
-            couple_top_stats = reduce(self.dict_keys_min, group_top_stats)
-
-            # increase storage stats
-            res = reduce(self.dict_keys_sum, [res, couple_top_stats])
-
-            for group in couple.groups:
-                couple_top_stats_copy = copy.copy(couple_top_stats)
-                for node_backend in group.node_backends:
-                    # decrease filesystems space counters
-                    if node_backend.stat is None:
-                        continue
-                    self.redeem_space(host_fsid_memory_map[(node_backend.node.host.addr, node_backend.stat.fsid)],
-                                      couple_top_stats_copy)
-
-        return res
-
     def calculate_flow_stats(self):
         per_dc_stat, per_ns_stat, per_ns_dc_stat = self.per_entity_stat()
 
-        res = self.total_stats(per_dc_stat)
+        res = self.total_stats(per_dc_stat, per_ns_stat)
         res.update({'dc': per_dc_stat,
                     'namespaces': per_ns_dc_stat})
 
-        res.update({'real_data': self.get_data_space()})
         res.update(self.get_couple_stats())
 
         return res
