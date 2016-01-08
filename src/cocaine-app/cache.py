@@ -689,7 +689,7 @@ class CacheDistributor(object):
                 )
             )
             return
-        key_size = max([key_by_dc[dc]['size'] for dc in key_by_dc])
+        key_size = max(key_by_dc[dc]['size'] for dc in key_by_dc)
 
         candidates_by_dc = {}
 

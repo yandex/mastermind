@@ -48,7 +48,7 @@ class ManualLocker(object):
 
     def get_locked_hosts(self):
         locks = sync_manager.get_children_locks(self.HOST_LOCK_PREFIX)
-        hostnames = set([lock[len(self.HOST_LOCK_PREFIX):] for lock in locks])
+        hostnames = set(lock[len(self.HOST_LOCK_PREFIX):] for lock in locks)
         hosts = set()
         logger.debug('hostnames: {0}'.format(hostnames))
         for host in storage.hosts:

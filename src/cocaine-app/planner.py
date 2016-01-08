@@ -528,7 +528,7 @@ class Planner(object):
 
         ts = int(time.time())
 
-        storage_couples = set([str(c) for c in storage.couples.keys()])
+        storage_couples = set(str(c) for c in storage.couples.keys())
 
         logger.info('recover couples: {0}'.format(recover_data_couples))
         logger.info('storage_couples: {0}'.format(storage_couples))

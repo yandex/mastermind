@@ -115,7 +115,7 @@ class ZkSyncManager(object):
             foreign_holders = [(l, h) for l, h in holders if h[0] != data]
             failed_lock, holder_resp = foreign_holders and foreign_holders[0] or holders[0]
             holder = holder_resp[0]
-            holders_ids = list(set([h[0] for _, h in holders]))
+            holders_ids = list(set(h[0] for _, h in holders))
             logger.warn('Persistent lock {0} is already set by {1}'.format(failed_lock, holder))
             raise LockAlreadyAcquiredError(
                 'Lock for {0} is already acquired by job {1}'.format(failed_lock, holder),
@@ -161,8 +161,14 @@ class ZkSyncManager(object):
                 if check:
                     data = self.client.get(self.lock_path_prefix + lockid)
                     if data[0] != check:
-                        logger.error('Lock {0} has inconsistent data: {}, expected {}'.format(
-                            lockid, data[0], check))
+                        logger.error(
+                            'Lock {lock_id} has inconsistent data: {current_data}, '
+                            'expected {expected_data}'.format(
+                                lock_id=lockid,
+                                current_data=data[0],
+                                expected_data=check,
+                            )
+                        )
                         raise InconsistentLockError(lock_id=lockid, holder_id=data[0])
                 self.client.delete(self.lock_path_prefix + lockid)
             except NoNodeError:
