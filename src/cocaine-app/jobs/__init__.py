@@ -90,11 +90,13 @@ class JobProcessor(object):
         ready_jobs = []
         new_jobs = []
 
-        default_res_counter = lambda: {
-            Job.RESOURCE_FS: {},
-            Job.RESOURCE_HOST_IN: {},
-            Job.RESOURCE_HOST_OUT: {},
-        }
+        def default_res_counter():
+            return {
+                Job.RESOURCE_FS: {},
+                Job.RESOURCE_HOST_IN: {},
+                Job.RESOURCE_HOST_OUT: {},
+            }
+
         resources = defaultdict(default_res_counter)
 
         # global job counter by type, accounts only executing jobs
