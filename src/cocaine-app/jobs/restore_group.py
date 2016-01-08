@@ -428,7 +428,7 @@ class RestoreGroupJob(Job):
         group_ids = set([self.group])
         group = storage.groups[self.group]
         if group.couple:
-            group_ids.update([g.group_id for g in group.coupled_groups])
+            group_ids.update(g.group_id for g in group.coupled_groups)
         if self.uncoupled_group:
             group_ids.add(self.uncoupled_group)
         if self.merged_groups:

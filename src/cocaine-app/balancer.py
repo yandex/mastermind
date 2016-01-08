@@ -319,7 +319,7 @@ class Balancer(object):
         couples_by_nss = {}
 
         for c in couples:
-            couple_str = ':'.join([str(i) for i in sorted(c)])
+            couple_str = ':'.join(str(i) for i in sorted(c))
             if couple_str not in storage.couples:
                 logger.info('Couple %s not found' % couple_str)
             couple = storage.couples[couple_str]
@@ -1381,7 +1381,7 @@ class Balancer(object):
         s = elliptics.Session(self.node)
         wait_timeout = config.get('elliptics', {}).get('wait_timeout') or config.get('wait_timeout', 5)
         s.set_timeout(wait_timeout)
-        s.add_groups([group.group_id for group in couple])
+        s.add_groups(group.group_id for group in couple)
 
         _, failed_groups = h.write_retry(s, keys.SYMMETRIC_GROUPS_KEY, packed)
 
@@ -1477,7 +1477,7 @@ class Balancer(object):
             if not group_keys:
                 continue
             group_keys.sort(reverse=True)
-            couples_diff[str(couple)] = sum([group_keys[0] - gk for gk in group_keys[1:]])
+            couples_diff[str(couple)] = sum(group_keys[0] - gk for gk in group_keys[1:])
         return {'couples': couples_diff,
                 'total_keys_diff': sum(couples_diff.itervalues())}
 
@@ -1700,7 +1700,7 @@ def make_symm_group(n, couple, namespace, frozen):
     wait_timeout = config.get('elliptics', {}).get('wait_timeout') or config.get('wait_timeout', 5)
     s.set_timeout(wait_timeout)
 
-    s.add_groups([g.group_id for g in couple.groups])
+    s.add_groups(g.group_id for g in couple.groups)
     packed = msgpack.packb(couple.compose_group_meta(namespace, frozen))
     try:
         consistent_write(s, keys.SYMMETRIC_GROUPS_KEY, packed)

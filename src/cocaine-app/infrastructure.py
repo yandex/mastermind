@@ -829,7 +829,7 @@ class Infrastructure(object):
         if namespace:
             if namespace in storage.namespaces:
                 for couple in storage.namespaces[namespace].couples:
-                    hosts.extend([nb.node.host for g in couple for nb in g.node_backends])
+                    hosts.extend(nb.node.host for g in couple for nb in g.node_backends)
             else:
                 hosts = []
             hosts = list(set(hosts))

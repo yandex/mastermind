@@ -1509,8 +1509,8 @@ class StorageState(object):
 
     @property
     def mean_unc_percentage(self):
-        unc_space = sum([dc_state.uncoupled_space for dc_state in self.state.itervalues()])
-        total_space = sum([dc_state.total_space for dc_state in self.state.itervalues()])
+        unc_space = sum(dc_state.uncoupled_space for dc_state in self.state.itervalues())
+        total_space = sum(dc_state.total_space for dc_state in self.state.itervalues())
 
         return float(unc_space) / total_space
 

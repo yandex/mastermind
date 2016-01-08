@@ -550,7 +550,7 @@ class CacheDistributor(object):
         ok_groups.sort(
             key=lambda cg: cg.effective_free_space / cg.effective_space)
 
-        queue.extend([g.group_id for g in ok_groups])
+        queue.extend(g.group_id for g in ok_groups)
 
         logger.info(
             'Key {0}: will be removed from {1} groups in order '

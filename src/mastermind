@@ -135,8 +135,8 @@ def evil_wrapper(func, decorator):
 
     argstr = ', '.join(arglist) + (', ' if arglist else '')
     wrapper = "def wrapper(%s %s):\n    return wrapped(func, %s %s)\n" % (argstr,
-        ', '.join([kw[0] + '=' + str(kw[1]) for kw in kwarglist]), argstr,
-        ', '.join([kw[0] + '=' + kw[0] for kw in kwarglist]))
+        ', '.join(kw[0] + '=' + str(kw[1]) for kw in kwarglist), argstr,
+        ', '.join(kw[0] + '=' + kw[0] for kw in kwarglist))
     wrapper_code = compile(wrapper, '<string>', 'exec')
     fakeglobals = {}
     eval(wrapper_code, {'wrapped': decorator, 'func': func}, fakeglobals)
@@ -488,7 +488,7 @@ def _couple_list(namespace='',
 
         convert_entities_stats(data)
     else:
-        data = tuple([c['tuple'] for c in data])
+        data = tuple(c['tuple'] for c in data)
 
     if json:
         print dumps(data)
@@ -500,7 +500,7 @@ def view_groups(data, grouped, key_mapper, short=False, verbose=False):
 
     def output(groups, short=False, verbose=False):
         if short:
-            print tuple([g['id'] for g in groups])
+            print tuple(g['id'] for g in groups)
         elif verbose:
             print '-' * 30
             for c in sorted(groups):
@@ -923,7 +923,7 @@ def ns_list(deleted=('d', '', 'Show namespace even if it has been deleted (0|1)'
     namespaces = cl.namespaces.filter(**options)
 
     if json:
-        print dumps([ns.id for ns in namespaces])
+        print dumps(ns.id for ns in namespaces)
     else:
         for ns in namespaces:
             print ns.id
