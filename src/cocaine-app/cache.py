@@ -770,7 +770,7 @@ class CacheDistributor(object):
             candidates_by_dc[cg.dc].add_candidate(cg)
 
         for dc, dc_candidates in candidates_by_dc.iteritems():
-            dc_candidates.sort_candidates()
+            dc_candidates.prepare_candidates()
 
         copies = 0
         for dc_candidate, cg in self._get_cache_candidates(candidates_by_dc, count):
@@ -1165,7 +1165,16 @@ class DcKeyCacheCandidates(object):
             self.node_types
         )
 
-    def sort_candidates(self):
+    def prepare_candidates(self):
+        """
+        Prepares candidates for the subsequent operation
+
+        Prior to being used candidates should be sorted by its' distance
+        to the source group.
+
+        NB: if for some reason cache group's infrastructure units could not
+            be fetched this candidate will be skipped.
+        """
         gu = self.group_units()
         if self.src_group_id not in gu:
             raise RuntimeError(
