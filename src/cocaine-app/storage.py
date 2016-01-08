@@ -1059,7 +1059,7 @@ class Group(object):
 
     @property
     def effective_space(self):
-        return sum([nb.effective_space for nb in self.node_backends])
+        return sum(nb.effective_space for nb in self.node_backends)
 
     @property
     def type(self):
@@ -1454,7 +1454,7 @@ class Couple(object):
 
     @property
     def groups_effective_space(self):
-        return min([g.effective_space for g in self.groups])
+        return min(g.effective_space for g in self.groups)
 
     @property
     def ns_reserved_space_percentage(self):
@@ -1578,8 +1578,8 @@ class Couple(object):
             group_keys.append(group.get_stat().files)
         if not group_keys:
             return None
-        group_keys.sort(reverse=True)
-        return sum([group_keys[0] - gk for gk in group_keys[1:]])
+        max_keys = max(group_keys)
+        return sum(max_keys - gk for gk in group_keys)
 
     def __contains__(self, group):
         return group in self.groups
@@ -1591,7 +1591,7 @@ class Couple(object):
         return len(self.groups)
 
     def __str__(self):
-        return ':'.join([str(group) for group in self.groups])
+        return ':'.join(str(group) for group in self.groups)
 
     def __hash__(self):
         return hash(self.__str__())
@@ -1604,7 +1604,10 @@ class Couple(object):
             return self.groups == other.groups
 
     def __repr__(self):
-        return '<Couple object: status=%s, groups=[%s] >' % (self.status, ', '.join([repr(g) for g in self.groups]))
+        return '<Couple object: status={status}, groups=[{groups}] >'.format(
+            status=self.status,
+            groups=', '.join(repr(g) for g in self.groups),
+        )
 
 
 class DcNodes(object):

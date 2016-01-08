@@ -15,7 +15,7 @@ class LockError(Exception):
     def __init__(self, *args, **kwargs):
         super(LockError, self).__init__(*args)
         for param in self.PARAMS:
-            setattr(self, param, kwargs.get(param, None))
+            setattr(self, param, kwargs.get(param))
 
     @property
     def code(self):

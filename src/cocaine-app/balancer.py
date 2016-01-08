@@ -178,10 +178,15 @@ class Balancer(object):
         return self._get_couples_list(options)
 
     def _get_couples_list(self, _filter):
-        if _filter.get('state', None) is not None and _filter['state'] not in self.COUPLE_STATES:
+        # TODO: think on checking input filter parameters and
+        # cleaning all that have a value of 'None'. This
+        # should be applied to all methods that support filter-like
+        # input with possible 'None' values meaning 'disable filter for this
+        # parameter'.
+        if _filter.get('state') is not None and _filter['state'] not in self.COUPLE_STATES:
             raise ValueError('Invalid state: {0}'.format(_filter['state']))
 
-        if _filter.get('namespace', None):
+        if _filter.get('namespace') is not None:
             ns = _filter['namespace']
             if ns not in storage.namespaces:
                 return []
@@ -190,7 +195,7 @@ class Balancer(object):
             couples = storage.couples.keys()
 
         def filtered_out(couple):
-            if _filter.get('state', None):
+            if _filter.get('state') is not None:
                 if couple.status not in self.COUPLE_STATES[_filter['state']]:
                     return True
 
@@ -219,24 +224,24 @@ class Balancer(object):
 
     def _get_groups_list(self, _filter):
         data = []
-        if _filter.get('state', None) is not None and _filter['state'] not in self.GROUP_STATES:
+        if _filter.get('state') is not None and _filter['state'] not in self.GROUP_STATES:
             raise ValueError('Invalid state: {0}'.format(_filter['state']))
 
         in_service_group_ids = set()
-        if _filter.get('in_jobs', None) is not None and self.infrastructure:
+        if _filter.get('in_jobs') is not None and self.infrastructure:
             in_service_group_ids = set(self.infrastructure.get_group_ids_in_service())
 
         def filtered_out(group):
 
-            if _filter.get('state', None):
+            if _filter.get('state') is not None:
                 if group.status not in self.GROUP_STATES[_filter['state']]:
                     return True
 
-            if _filter.get('uncoupled', None) is not None:
+            if _filter.get('uncoupled') is not None:
                 if bool(group.couple) != (not _filter['uncoupled']):
                     return True
 
-            if _filter.get('in_jobs', None) is not None:
+            if _filter.get('in_jobs') is not None:
                 if (group.group_id in in_service_group_ids) != _filter['in_jobs']:
                     return True
 
@@ -259,7 +264,7 @@ class Balancer(object):
         logger.info('Creating elliptics session')
 
         s = elliptics.Session(self.node)
-        wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or \
+        wait_timeout = config.get('elliptics', {}).get('wait_timeout') or \
             config.get('wait_timeout', 5)
         s.set_timeout(wait_timeout)
         s.add_groups([group.group_id])
@@ -314,7 +319,7 @@ class Balancer(object):
         couples_by_nss = {}
 
         for c in couples:
-            couple_str = ':'.join([str(i) for i in sorted(c)])
+            couple_str = ':'.join(str(i) for i in sorted(c))
             if couple_str not in storage.couples:
                 logger.info('Couple %s not found' % couple_str)
             couple = storage.couples[couple_str]
@@ -1374,9 +1379,9 @@ class Balancer(object):
             couple, str(packed).encode('hex')))
 
         s = elliptics.Session(self.node)
-        wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or config.get('wait_timeout', 5)
+        wait_timeout = config.get('elliptics', {}).get('wait_timeout') or config.get('wait_timeout', 5)
         s.set_timeout(wait_timeout)
-        s.add_groups([group.group_id for group in couple])
+        s.add_groups(group.group_id for group in couple)
 
         _, failed_groups = h.write_retry(s, keys.SYMMETRIC_GROUPS_KEY, packed)
 
@@ -1407,7 +1412,7 @@ class Balancer(object):
             _filter = {}
 
         def filtered_out(ns, settings):
-            if _filter.get('deleted', None) is not None:
+            if _filter.get('deleted') is not None:
                 is_deleted = settings['__service'].get('is_deleted', False)
                 if _filter['deleted'] != is_deleted:
                     return True
@@ -1472,7 +1477,7 @@ class Balancer(object):
             if not group_keys:
                 continue
             group_keys.sort(reverse=True)
-            couples_diff[str(couple)] = sum([group_keys[0] - gk for gk in group_keys[1:]])
+            couples_diff[str(couple)] = sum(group_keys[0] - gk for gk in group_keys[1:])
         return {'couples': couples_diff,
                 'total_keys_diff': sum(couples_diff.itervalues())}
 
@@ -1633,7 +1638,7 @@ def kill_symm_group(n, meta_session, couple):
     groups = [group.group_id for group in couple]
     logger.info('Killing symm groups: %s' % str(groups))
     s = elliptics.Session(n)
-    wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or config.get('wait_timeout', 5)
+    wait_timeout = config.get('elliptics', {}).get('wait_timeout') or config.get('wait_timeout', 5)
     s.set_timeout(wait_timeout)
     s.add_groups(groups)
 
@@ -1654,7 +1659,7 @@ def get_unsuitable_uncoupled_group_ids(n, group_ids):
     wait_timeout = (
         config
         .get('elliptics', {})
-        .get('wait_timeout', None)
+        .get('wait_timeout')
     ) or config.get('wait_timeout', 5)
     s.set_timeout(wait_timeout)
     s.set_exceptions_policy(elliptics.exceptions_policy.no_exceptions)
@@ -1692,10 +1697,10 @@ def make_symm_group(n, couple, namespace, frozen):
     logger.info('Writing meta key for couple {0}, assigning namespace'.format(couple, namespace))
 
     s = elliptics.Session(n)
-    wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or config.get('wait_timeout', 5)
+    wait_timeout = config.get('elliptics', {}).get('wait_timeout') or config.get('wait_timeout', 5)
     s.set_timeout(wait_timeout)
 
-    s.add_groups([g.group_id for g in couple.groups])
+    s.add_groups(g.group_id for g in couple.groups)
     packed = msgpack.packb(couple.compose_group_meta(namespace, frozen))
     try:
         consistent_write(s, keys.SYMMETRIC_GROUPS_KEY, packed)

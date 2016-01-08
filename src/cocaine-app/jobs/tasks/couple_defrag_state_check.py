@@ -37,7 +37,7 @@ class CoupleDefragStateCheckTask(Task):
                 stats.append(nb.stat)
         stats_ts = [int(time.time())]
         if stats:
-            stats_ts.extend([s.ts for s in stats])
+            stats_ts.extend(s.ts for s in stats)
         self.stats_ts = max(stats_ts)
 
     @property
@@ -63,7 +63,7 @@ class CoupleDefragStateCheckTask(Task):
                 if not nb.stat:
                     return False
                 stats.append(nb.stat)
-        cur_stats_ts = min([s.ts for s in stats])
+        cur_stats_ts = min(s.ts for s in stats)
         if cur_stats_ts <= self.stats_ts:
             logger.info('Job {0}, task {1}: defrag status not updated since {2}'.format(
                 self.parent_job.id, self.id, self.stats_ts))

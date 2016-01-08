@@ -36,7 +36,7 @@ class GroupHistory(MongoObject):
     def __init__(self, **init_params):
         super(GroupHistory, self).__init__()
 
-        self.group_id = init_params.get(self.GROUP_ID, None)
+        self.group_id = init_params.get(self.GROUP_ID)
         self.couples = [
             GroupCoupleRecord(**record)
             for record in init_params.get(self.COUPLES, [])

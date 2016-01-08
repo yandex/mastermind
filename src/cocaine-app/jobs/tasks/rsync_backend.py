@@ -38,7 +38,7 @@ class RsyncBackendTask(MinionCmdTask):
             current_group_node_backends = []
             if self.group in storage.groups:
                 group = storage.groups[self.group]
-                current_group_node_backends = set([nb for nb in group.node_backends])
+                current_group_node_backends = set(group.node_backends)
 
             if self.node_backend in storage.node_backends:
                 old_node_backend = storage.node_backends[self.node_backend]

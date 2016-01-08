@@ -46,7 +46,7 @@ class NodeInfoUpdater(object):
         self._flow_stats = {}
         self.__tq = timed_queue.TimedQueue()
         self.__session = elliptics.Session(self.__node)
-        wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or config.get('wait_timeout', 5)
+        wait_timeout = config.get('elliptics', {}).get('wait_timeout') or config.get('wait_timeout', 5)
         self.__session.set_timeout(wait_timeout)
         self.__nodeUpdateTimestamps = (time.time(), time.time())
 
@@ -489,11 +489,11 @@ class NodeInfoUpdater(object):
                             logger.info('Group {} is not found adding fake group for '
                                         'couple {}'.format(gid, couple))
                             storage.groups.add(gid)
-                    c = storage.couples.add([storage.groups[gid] for gid in couple])
+                    c = storage.couples.add(storage.groups[gid] for gid in couple)
                     logger.info('Created couple {0} {1}'.format(c, repr(c)))
                 elif group.type == storage.Group.TYPE_CACHE:
                     logger.info('Creating cache couple {0}'.format(couple_str))
-                    c = storage.cache_couples.add([storage.groups[gid] for gid in couple])
+                    c = storage.cache_couples.add(storage.groups[gid] for gid in couple)
                     logger.info('Created cache couple {0} {1}'.format(c, repr(c)))
                 else:
                     raise ValueError('Unknown group type for group {}: {}'.format(

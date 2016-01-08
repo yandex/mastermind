@@ -528,7 +528,7 @@ class Planner(object):
 
         ts = int(time.time())
 
-        storage_couples = set([str(c) for c in storage.couples.keys()])
+        storage_couples = set(str(c) for c in storage.couples.keys())
 
         logger.info('recover couples: {0}'.format(recover_data_couples))
         logger.info('storage_couples: {0}'.format(storage_couples))
@@ -643,7 +643,7 @@ class Planner(object):
                 '{1}, weight: {2}, possible missed candidate is couple '
                 '{3}, keys diff: {4} (max recover ts diff = {5})'.format(
                     i, min_weight_candidate[0], min_weight_candidate[1],
-                    missed_candidate, keys_diffs.get(missed_candidate, None),
+                    missed_candidate, keys_diffs.get(missed_candidate),
                     max_recover_ts_diff))
 
             if missed_candidate is None:
@@ -1275,8 +1275,8 @@ class Planner(object):
                 if node['type'] == dc_node_type:
                     dc = node['name']
                     dc_change = old_node['name'] != node['name']
-                old_node = old_node.get('parent', None)
-                node = node.get('parent', None)
+                old_node = old_node.get('parent')
+                node = node.get('parent')
 
             weights[tuple(candidate)] = (dc_change, diff, -len(groups_by_dc[dc]))
 
@@ -1509,8 +1509,8 @@ class StorageState(object):
 
     @property
     def mean_unc_percentage(self):
-        unc_space = sum([dc_state.uncoupled_space for dc_state in self.state.itervalues()])
-        total_space = sum([dc_state.total_space for dc_state in self.state.itervalues()])
+        unc_space = sum(dc_state.uncoupled_space for dc_state in self.state.itervalues())
+        total_space = sum(dc_state.total_space for dc_state in self.state.itervalues())
 
         return float(unc_space) / total_space
 

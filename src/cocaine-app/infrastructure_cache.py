@@ -72,11 +72,11 @@ class InfrastructureCache(object):
             strict=strict
         )
 
-        if addresses.get(self.DEFAULT_FAMILY, None):
+        if self.DEFAULT_FAMILY in addresses:
             return addresses[self.DEFAULT_FAMILY][0]
 
         for family in self.FAMILIES_FALLBACK_PRIO.get(self.DEFAULT_FAMILY, []):
-            if addresses.get(family, None):
+            if family in addresses:
                 return addresses[family][0]
 
         if strict:

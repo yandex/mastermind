@@ -14,7 +14,7 @@ class TaskFactory(object):
 
     @staticmethod
     def make_task(data, job):
-        task_type = data.get('type', None)
+        task_type = data.get('type')
         if task_type == TaskTypes.TYPE_NODE_STOP_TASK:
             return NodeStopTask.from_data(data, job)
         if task_type == TaskTypes.TYPE_MINION_CMD:

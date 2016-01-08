@@ -4,7 +4,7 @@ import heapq
 import time
 
 
-class Task:
+class Task(object):
 
     def __init__(self, task_id, function, args, kwargs):
         self.__id = task_id
@@ -26,7 +26,7 @@ class Task:
         return self.__id
 
 
-class TimedQueue:
+class TimedQueue(object):
 
     def __init__(self):
         self.__shutting_down = False
@@ -70,7 +70,7 @@ class TimedQueue:
             if not task.done():
                 try:
                     task.execute()
-                except:
+                except Exception:
                     # Task should handle its exceptions. If it doesn't, will lose it here.
                     # The loop should not stop because of it.
                     pass
