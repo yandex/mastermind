@@ -18,13 +18,12 @@ logger = logging.getLogger('mm.jobs')
 class MoveJob(Job):
 
     # used to write group id
-    GROUP_FILE_PATH = RESTORE_CFG.get('group_file', None)
+    GROUP_FILE_PATH = RESTORE_CFG.get('group_file')
 
     # used to mark source node that content has been moved away from it
-    GROUP_FILE_DIR_MOVE_DST_RENAME = RESTORE_CFG.get('group_file_dir_move_dst_rename', None)
-    MERGE_GROUP_FILE_MARKER_PATH = RESTORE_CFG.get('merge_group_file_marker', None)
-    MERGE_GROUP_FILE_DIR_MOVE_SRC_RENAME = RESTORE_CFG.get(
-        'merge_group_file_dir_move_src_rename', None)
+    GROUP_FILE_DIR_MOVE_DST_RENAME = RESTORE_CFG.get('group_file_dir_move_dst_rename')
+    MERGE_GROUP_FILE_MARKER_PATH = RESTORE_CFG.get('merge_group_file_marker')
+    MERGE_GROUP_FILE_DIR_MOVE_SRC_RENAME = RESTORE_CFG.get('merge_group_file_dir_move_src_rename')
 
     PARAMS = ('group', 'uncoupled_group', 'uncoupled_group_fsid', 'merged_groups',
               'resources',

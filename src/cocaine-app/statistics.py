@@ -292,7 +292,8 @@ class Statistics(object):
         except (TypeError, IndexError):
             options = {}
 
-        namespace, status = options.get('namespace', None), options.get('couple_status', None)
+        namespace = options.get('namespace')
+        status = options.get('couple_status')
 
         tree, nodes = infrastructure.cluster_tree(namespace)
 

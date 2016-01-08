@@ -19,10 +19,10 @@ logger = logging.getLogger('mm.jobs')
 class RestoreGroupJob(Job):
 
     # used to write group id
-    GROUP_FILE_PATH = config.get('restore', {}).get('group_file', None)
-    MERGE_GROUP_FILE_MARKER_PATH = config.get('restore', {}).get('merge_group_file_marker', None)
-    GROUP_FILE_DIR_MOVE_DST_RENAME = config.get('restore', {}).get('group_file_dir_move_dst_rename', None)
-    MERGE_GROUP_FILE_DIR_MOVE_SRC_RENAME = config.get('restore', {}).get('merge_group_file_dir_move_src_rename', None)
+    GROUP_FILE_PATH = config.get('restore', {}).get('group_file')
+    MERGE_GROUP_FILE_MARKER_PATH = config.get('restore', {}).get('merge_group_file_marker')
+    GROUP_FILE_DIR_MOVE_DST_RENAME = config.get('restore', {}).get('group_file_dir_move_dst_rename')
+    MERGE_GROUP_FILE_DIR_MOVE_SRC_RENAME = config.get('restore', {}).get('merge_group_file_dir_move_src_rename')
 
     PARAMS = ('group', 'src_group', 'uncoupled_group', 'uncoupled_group_fsid',
               'merged_groups', 'resources')

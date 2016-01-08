@@ -68,7 +68,7 @@ class MinionCmdTask(Task):
         if self.minion_cmd is None:
             return True
         return (self.minion_cmd['exit_code'] != 0 and
-                self.minion_cmd.get('command_code', None) not in
+                self.minion_cmd.get('command_code') not in
                     self.params.get('success_codes', []))
 
     def __str__(self):

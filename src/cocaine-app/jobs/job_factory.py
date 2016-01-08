@@ -9,7 +9,7 @@ class JobFactory(object):
 
     @staticmethod
     def make_job(data):
-        job_type = data.get('type', None)
+        job_type = data.get('type')
         if job_type == JobTypes.TYPE_MOVE_JOB:
             return MoveJob.from_data(data)
         elif job_type == JobTypes.TYPE_RECOVER_DC_JOB:

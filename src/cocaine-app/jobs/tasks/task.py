@@ -35,7 +35,7 @@ class Task(object):
     def new(cls, job, **kwargs):
         task = cls(job)
         for param in cls.PARAMS:
-            setattr(task, param, kwargs.get(param, None))
+            setattr(task, param, kwargs.get(param))
         return task
 
     @classmethod
@@ -55,7 +55,7 @@ class Task(object):
         self.attempts = data.get('attempts', 0)
 
         for param in self.PARAMS:
-            val = data.get(param, None)
+            val = data.get(param)
             if isinstance(val, unicode):
                 val = val.encode('utf-8')
             setattr(self, param, val)

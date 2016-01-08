@@ -46,7 +46,7 @@ class NodeInfoUpdater(object):
         self._flow_stats = {}
         self.__tq = timed_queue.TimedQueue()
         self.__session = elliptics.Session(self.__node)
-        wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or config.get('wait_timeout', 5)
+        wait_timeout = config.get('elliptics', {}).get('wait_timeout') or config.get('wait_timeout', 5)
         self.__session.set_timeout(wait_timeout)
         self.__nodeUpdateTimestamps = (time.time(), time.time())
 

@@ -53,7 +53,7 @@ class JobProcessor(object):
         logger.info('Starting JobProcessor')
         self.job_finder = job_finder
         self.session = elliptics.Session(node)
-        wait_timeout = config.get('elliptics', {}).get('wait_timeout', None) or \
+        wait_timeout = config.get('elliptics', {}).get('wait_timeout') or \
             config.get('wait_timeout', 5)
         self.session.set_timeout(wait_timeout)
         self.meta_session = node.meta_session
