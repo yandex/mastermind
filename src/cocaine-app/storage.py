@@ -1578,8 +1578,8 @@ class Couple(object):
             group_keys.append(group.get_stat().files)
         if not group_keys:
             return None
-        group_keys.sort(reverse=True)
-        return sum(group_keys[0] - gk for gk in group_keys[1:])
+        max_keys = max(group_keys)
+        return sum(max_keys - gk for gk in group_keys)
 
     def __contains__(self, group):
         return group in self.groups
