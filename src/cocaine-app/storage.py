@@ -396,8 +396,7 @@ class NodeBackendStat(object):
 
         self.blob_size_limit = raw_stat['backend']['config'].get('blob_size_limit', 0)
         if self.blob_size_limit > 0:
-            # vfs_total_space can be less than blob_size_limit in case of misconfiguration
-            self.total_space = min(self.blob_size_limit, self.vfs_total_space)
+            self.total_space = self.blob_size_limit
             self.used_space = raw_stat['backend']['summary_stats'].get('base_size', 0)
             self.free_space = min(max(0, self.total_space - self.used_space), self.vfs_free_space)
         else:
