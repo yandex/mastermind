@@ -88,7 +88,10 @@ class RecoverDcJob(Job):
 
         couple = storage.couples[self.couple]
 
-        recover_cmd = infrastructure._recover_group_cmd(self.group)
+        recover_cmd = infrastructure._recover_group_cmd(
+            self.group,
+            trace_id=self.id[:16],
+        )
         task = RecoverGroupDcTask.new(self,
             group=self.group,
             host=self.host,

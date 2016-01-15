@@ -5,6 +5,7 @@ import re
 import threading
 import time
 import traceback
+import uuid
 
 import msgpack
 
@@ -72,7 +73,8 @@ class Infrastructure(object):
                         '"{dst_path}"')
     DNET_RECOVERY_DC_CMD = (
         'dnet_recovery dc {remotes} -g {groups} -D {tmp_dir} '
-        '-a {attempts} -b {batch} -l {log} -L {log_level} -n {processes_num} -M'
+        '-a {attempts} -b {batch} -l {log} -L {log_level} -n {processes_num} -M '
+        '-T {trace_id}'
     )
     DNET_RECOVERY_DC_REMOTE_TPL = '-r {host}:{port}:{family}'
 
@@ -720,7 +722,7 @@ class Infrastructure(object):
 
         return cmd
 
-    def _recover_group_cmd(self, group_id):
+    def _recover_group_cmd(self, group_id, trace_id=None):
         group = storage.groups[group_id]
         if not group.couple:
             raise ValueError('Group {0} is not coupled'.format(group_id))
@@ -744,7 +746,9 @@ class Infrastructure(object):
             batch=RECOVERY_DC_CNF.get('batch', 2000),
             log=RECOVERY_DC_CNF.get('log', 'dnet_recovery.log').format(group_id=group_id),
             log_level=RECOVERY_DC_CNF.get('log_level', 1),
-            processes_num=len(group.couple.groups) - 1 or 1)
+            processes_num=len(group.couple.groups) - 1 or 1,
+            trace_id=trace_id or uuid.uuid4().hex[:16],
+        )
 
         return cmd
 
