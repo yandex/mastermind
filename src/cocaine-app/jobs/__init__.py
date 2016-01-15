@@ -151,8 +151,17 @@ class JobProcessor(object):
                     'resources_limits', {}).get(res_type, float('inf'))
                 if cur_usage >= max_usage:
                     logger.debug(
-                        'Job {}: will be skipped, resource {} / {} counter {} >= {}'.format(
-                            job.id, res_type, res_val, cur_usage, max_usage))
+                        'Job {job_id}: will be skipped, resource '
+                        '{used_resource_type} / {used_resource} '
+                        'counter {used_resource_counter} >= {used_resource_max} '
+                        'is occupied by jobs of same or less priority'.format(
+                            job_id=job.id,
+                            used_resource_type=res_type,
+                            used_resource=res_val,
+                            used_resource_counter=cur_usage,
+                            used_resource_max=max_usage,
+                        )
+                    )
 
                     no_slots = True
 
