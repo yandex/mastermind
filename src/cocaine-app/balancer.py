@@ -312,31 +312,6 @@ class Balancer(object):
         return groups_by_dcs
 
     @h.concurrent_handler
-    def couples_by_namespace(self, request):
-        couples = request[0]
-        logger.info('Couples: %s' % (couples,))
-
-        couples_by_nss = {}
-
-        for c in couples:
-            couple_str = ':'.join(str(i) for i in sorted(c))
-            if couple_str not in storage.couples:
-                logger.info('Couple %s not found' % couple_str)
-            couple = storage.couples[couple_str]
-
-            couple_data = {
-                'couple': str(couple),
-                'couple_status': couple.status,
-                'node_backends': [nb.info() for g in couple for nb in g.node_backends]
-            }
-            try:
-                couples_by_nss.setdefault(couple.namespace.id, []).append(couple_data)
-            except ValueError:
-                continue
-
-        return couples_by_nss
-
-    @h.concurrent_handler
     def get_group_weights(self, request):
         try:
             ns = request[0]
