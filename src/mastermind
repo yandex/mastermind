@@ -942,9 +942,8 @@ def ns_delete(namespace, host=None, app=None):
 def couple_freeze(couple, host=None, app=None):
     '''Freeze symmetric group (frozen couples are excluded from balancing)'''
     s = service(host, app)
-    groups = [int(g) for g in couple.split(':')]
 
-    res = s.enqueue('freeze_couple', msgpack.packb(groups)).get()
+    res = s.enqueue('freeze_couple', msgpack.packb(couple)).get()
     print res
 
 
@@ -953,9 +952,8 @@ def couple_freeze(couple, host=None, app=None):
 def couple_unfreeze(couple, host=None, app=None):
     '''Unfreeze symmetric group'''
     s = service(host, app)
-    groups = [int(g) for g in couple.split(':')]
 
-    res = s.enqueue('unfreeze_couple', msgpack.packb(groups)).get()
+    res = s.enqueue('unfreeze_couple', msgpack.packb(couple)).get()
     print res
 
 

@@ -980,14 +980,6 @@ class Balancer(object):
     def get_config_remotes(self, request):
         return CONFIG_REMOTES
 
-    def __get_couple(self, groups):
-        couple_str = ':'.join(map(str, sorted(groups, key=lambda x: int(x))))
-        try:
-            couple = storage.couples[couple_str]
-        except KeyError:
-            raise ValueError('Couple %s not found' % couple_str)
-        return couple
-
     ALPHANUM = 'a-zA-Z0-9'
     EXTRA = '\-_'
     NS_RE = re.compile('^[{alphanum}][{alphanum}{extra}]*[{alphanum}]$'.format(
@@ -1322,7 +1314,7 @@ class Balancer(object):
     @h.concurrent_handler
     def freeze_couple(self, request):
         logger.info('freezing couple %s' % str(request))
-        couple = self.__get_couple(request)
+        couple = storage.couples[request]
 
         if couple.frozen:
             raise ValueError('Couple {0} is already frozen'.format(couple))
@@ -1335,7 +1327,7 @@ class Balancer(object):
     @h.concurrent_handler
     def unfreeze_couple(self, request):
         logger.info('unfreezing couple %s' % str(request))
-        couple = self.__get_couple(request)
+        couple = storage.couples[request]
 
         if not couple.frozen:
             raise ValueError('Couple {0} is not frozen'.format(couple))
