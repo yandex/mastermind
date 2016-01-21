@@ -373,33 +373,33 @@ class Balancer(object):
         except IndexError:
             force_namespace = None
 
-        if group_id not in storage.groups:
-            return {'Balancer error': 'Group %d is not found' % group_id}
-
         group = storage.groups[group_id]
 
-        bad_couples = []
-        for couple in storage.couples:
-            if group in couple:
-                if couple.status in storage.NOT_BAD_STATUSES:
-                    logger.error('Balancer error: cannot repair, group %d is in couple %s' % (group_id, str(couple)))
-                    return {'Balancer error': 'cannot repair, group %d is in couple %s' % (group_id, str(couple))}
-                bad_couples.append(couple)
+        if group.couple is None:
+            raise ValueError(
+                'cannot repair, group {group_id} is not a member of any couple'.format(
+                    group_id=group.group_id,
+                )
+            )
 
-        if not bad_couples:
-            logger.error('Balancer error: cannot repair, group %d is not a member of any couple' % group_id)
-            return {'Balancer error': 'cannot repair, group %d is not a member of any couple' % group_id}
+        couple = group.couple
 
-        if len(bad_couples) > 1:
-            logger.error('Balancer error: cannot repair, group %d is a member of several couples: %s' % (group_id, str(bad_couples)))
-            return {'Balancer error': 'cannot repair, group %d is a member of several couples: %s' % (group_id, str(bad_couples))}
-
-        couple = bad_couples[0]
+        if couple.status in storage.NOT_BAD_STATUSES:
+            raise ValueError(
+                'cannot repair, group {group_id}, couple {couple} is in status {status}'.format(
+                    group_id=group.group_id,
+                    couple=couple,
+                    status=couple.status,
+                )
+            )
 
         namespace_to_use = force_namespace or couple.namespace.id
         if not namespace_to_use:
-            logger.error('Balancer error: cannot identify a namespace to use for group %d' % (group_id,))
-            return {'Balancer error': 'cannot identify a namespace to use for group %d' % (group_id,)}
+            raise ValueError(
+                'cannot identify a namespace to use for group {group_id}'.format(
+                    group_id=group.group_id,
+                )
+            )
 
         # TODO: convert this to a separate well-documented function
         frozen = any(
@@ -411,7 +411,7 @@ class Balancer(object):
         make_symm_group(self.node, couple, namespace_to_use, frozen)
         couple.update_status()
 
-        return {'message': 'Successfully repaired couple', 'couple': str(couple)}
+        return True
 
     @h.concurrent_handler
     def get_group_info(self, request):
