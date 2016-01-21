@@ -312,31 +312,6 @@ class Balancer(object):
         return groups_by_dcs
 
     @h.concurrent_handler
-    def couples_by_namespace(self, request):
-        couples = request[0]
-        logger.info('Couples: %s' % (couples,))
-
-        couples_by_nss = {}
-
-        for c in couples:
-            couple_str = ':'.join(str(i) for i in sorted(c))
-            if couple_str not in storage.couples:
-                logger.info('Couple %s not found' % couple_str)
-            couple = storage.couples[couple_str]
-
-            couple_data = {
-                'couple': str(couple),
-                'couple_status': couple.status,
-                'node_backends': [nb.info() for g in couple for nb in g.node_backends]
-            }
-            try:
-                couples_by_nss.setdefault(couple.namespace.id, []).append(couple_data)
-            except ValueError:
-                continue
-
-        return couples_by_nss
-
-    @h.concurrent_handler
     def get_group_weights(self, request):
         try:
             ns = request[0]
@@ -373,33 +348,33 @@ class Balancer(object):
         except IndexError:
             force_namespace = None
 
-        if group_id not in storage.groups:
-            return {'Balancer error': 'Group %d is not found' % group_id}
-
         group = storage.groups[group_id]
 
-        bad_couples = []
-        for couple in storage.couples:
-            if group in couple:
-                if couple.status in storage.NOT_BAD_STATUSES:
-                    logger.error('Balancer error: cannot repair, group %d is in couple %s' % (group_id, str(couple)))
-                    return {'Balancer error': 'cannot repair, group %d is in couple %s' % (group_id, str(couple))}
-                bad_couples.append(couple)
+        if group.couple is None:
+            raise ValueError(
+                'cannot repair, group {group_id} is not a member of any couple'.format(
+                    group_id=group.group_id,
+                )
+            )
 
-        if not bad_couples:
-            logger.error('Balancer error: cannot repair, group %d is not a member of any couple' % group_id)
-            return {'Balancer error': 'cannot repair, group %d is not a member of any couple' % group_id}
+        couple = group.couple
 
-        if len(bad_couples) > 1:
-            logger.error('Balancer error: cannot repair, group %d is a member of several couples: %s' % (group_id, str(bad_couples)))
-            return {'Balancer error': 'cannot repair, group %d is a member of several couples: %s' % (group_id, str(bad_couples))}
-
-        couple = bad_couples[0]
+        if couple.status in storage.NOT_BAD_STATUSES:
+            raise ValueError(
+                'cannot repair, group {group_id}, couple {couple} is in status {status}'.format(
+                    group_id=group.group_id,
+                    couple=couple,
+                    status=couple.status,
+                )
+            )
 
         namespace_to_use = force_namespace or couple.namespace.id
         if not namespace_to_use:
-            logger.error('Balancer error: cannot identify a namespace to use for group %d' % (group_id,))
-            return {'Balancer error': 'cannot identify a namespace to use for group %d' % (group_id,)}
+            raise ValueError(
+                'cannot identify a namespace to use for group {group_id}'.format(
+                    group_id=group.group_id,
+                )
+            )
 
         # TODO: convert this to a separate well-documented function
         frozen = any(
@@ -411,7 +386,7 @@ class Balancer(object):
         make_symm_group(self.node, couple, namespace_to_use, frozen)
         couple.update_status()
 
-        return {'message': 'Successfully repaired couple', 'couple': str(couple)}
+        return True
 
     @h.concurrent_handler
     def get_group_info(self, request):
@@ -1005,14 +980,6 @@ class Balancer(object):
     def get_config_remotes(self, request):
         return CONFIG_REMOTES
 
-    def __get_couple(self, groups):
-        couple_str = ':'.join(map(str, sorted(groups, key=lambda x: int(x))))
-        try:
-            couple = storage.couples[couple_str]
-        except KeyError:
-            raise ValueError('Couple %s not found' % couple_str)
-        return couple
-
     ALPHANUM = 'a-zA-Z0-9'
     EXTRA = '\-_'
     NS_RE = re.compile('^[{alphanum}][{alphanum}{extra}]*[{alphanum}]$'.format(
@@ -1347,7 +1314,7 @@ class Balancer(object):
     @h.concurrent_handler
     def freeze_couple(self, request):
         logger.info('freezing couple %s' % str(request))
-        couple = self.__get_couple(request)
+        couple = storage.couples[request]
 
         if couple.frozen:
             raise ValueError('Couple {0} is already frozen'.format(couple))
@@ -1360,7 +1327,7 @@ class Balancer(object):
     @h.concurrent_handler
     def unfreeze_couple(self, request):
         logger.info('unfreezing couple %s' % str(request))
-        couple = self.__get_couple(request)
+        couple = storage.couples[request]
 
         if not couple.frozen:
             raise ValueError('Couple {0} is not frozen'.format(couple))
