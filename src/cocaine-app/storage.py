@@ -23,7 +23,6 @@ from mastermind.query.groups import Group as GroupInfo
 logger = logging.getLogger('mm.storage')
 
 
-RPS_FORMULA_VARIANT = config.get('rps_formula', 0)
 VFS_RESERVED_SPACE = config.get('reserved_space', 112742891520)  # default is 105 Gb for one vfs
 NODE_BACKEND_STAT_STALE_TIMEOUT = config.get('node_backend_stat_stale_timeout', 120)
 
@@ -434,24 +433,8 @@ class NodeBackendStat(object):
             self._reset_stat_commit_errors()
         return self.cur_stat_commit_err_count - self.start_stat_commit_err_count
 
-    def max_rps(self, rps, load_avg, variant=RPS_FORMULA_VARIANT):
-
-        if variant == 0:
-            return max(rps / max(load_avg, 0.01), 100)
-
-        rps = max(rps, 1)
-        max_avg_norm = 10.0
-        avg = max(min(float(load_avg), 100.0), 0.0) / max_avg_norm
-        avg_inverted = 10.0 - avg
-
-        if variant == 1:
-            max_rps = ((rps + avg_inverted) ** 2) / rps
-        elif variant == 2:
-            max_rps = ((avg_inverted) ** 2) / rps
-        else:
-            raise ValueError('Unknown max_rps option: %s' % variant)
-
-        return max_rps
+    def max_rps(self, rps, load_avg):
+        return max(rps / max(load_avg, 0.01), 100)
 
     def __add__(self, other):
         node_stat = self.node_stat + other.node_stat
