@@ -206,7 +206,7 @@ class Statistics(object):
         for ns, dc_stats in by_ns_stats.iteritems():
             ns_dcs[ns] = set(dc_stats.keys())
 
-        for couple in storage.couples:
+        for couple in storage.replicas_groupsets:
             affected_dcs = set()
             for group in couple.groups:
                 for node_backend in group.node_backends:

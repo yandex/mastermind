@@ -2,6 +2,7 @@
 import datetime
 import errno
 import functools
+import itertools
 import helpers as h
 import logging
 import math
@@ -75,18 +76,21 @@ class Repositary(object):
         self.elements[e] = e
         return e
 
-    def get(self, key):
+    def get(self, key, default=None):
+        return self.elements.get(key, default)
+
+    def remove(self, key):
+        return self.elements.pop(key)
+
+    def __getitem__(self, key):
         try:
             return self.elements[key]
         except KeyError:
             raise ResourceError('{} {} is not found'.format(
                 self.resource_desc, key))
 
-    def remove(self, key):
-        return self.elements.pop(key)
-
-    def __getitem__(self, key):
-        return self.get(key)
+    def __setitem__(self, key, value):
+        self.elements[key] = value
 
     def __contains__(self, key):
         return key in self.elements
@@ -102,6 +106,113 @@ class Repositary(object):
 
     def __len__(self):
         return len(self.elements)
+
+
+class MultiRepository(object):
+    def __init__(self, repositories, resource_desc):
+        self._repositories = repositories
+        self.resource_desc = resource_desc
+        self.types = {}
+        for key, repo in repositories.iteritems():
+            setattr(self, key, repo)
+            self.types[key] = repo
+
+    def __contains__(self, key):
+        return any(key in r for r in self._repositories.itervalues())
+
+    def get(self, key, default=None):
+        for r in self._repositories.itervalues():
+            if key in r:
+                return r[key]
+        return default
+
+    def __getitem__(self, key):
+        for r in self._repositories.itervalues():
+            if key in r:
+                return r[key]
+        raise ResourceError('{} {} is not found'.format(
+            self.resource_desc, key))
+
+    def __setitem__(self, key):
+        raise NotImplemented('Key cannot be inserted directly into multi-repository')
+
+    def __delitem__(self, key):
+        for r in self._repositories.itervalues():
+            if key in r:
+                del r[key]
+                return
+        raise KeyError(key)
+
+    def add(self, *args, **kwargs):
+        raise NotImplemented('Key cannot be inserted directly into multi-repository')
+
+    def __iter__(self):
+        return itertools.chain(*(r.itervalues() for r in self._repositories.itervalues()))
+
+    def keys(self):
+        # list comprehension should be used here to fix keys lists
+        # when call to this method is performed
+        return itertools.chain(*[r.keys() for r in self._repositories.itevalues()])
+
+    def iterkeys(self):
+        return itertools.chain(*(r.iterkeys() for r in self._repositories.itervalues()))
+
+    def values(self):
+        # list comprehension should be used here to fix values lists
+        # when call to this method is performed
+        return itertools.chain(*[r.values() for r in self._repositories.itervalues()])
+
+    def itervalues(self):
+        return itertools.chain(*(r.itervalues() for r in self._repositories.itervalues()))
+
+    def items(self):
+        # list comprehension should be used here to fix items lists
+        # when call to this method is performed
+        return itertools.chain(*[r.items() for r in self._repositories.itervalues()])
+
+    def iteritems(self):
+        return itertools.chain(*(r.iteritems() for r in self._repositories.itervalues()))
+
+
+class Groupsets(MultiRepository):
+    def __init__(self, replicas, resource_desc):
+        super(Groupsets, self).__init__(
+            {
+                'replicas': replicas,
+            },
+            resource_desc=resource_desc,
+        )
+
+    def add(self, groups, group_type):
+        if group_type == Group.TYPE_DATA:
+            couple = self.replicas.add(groups)
+        else:
+            raise TypeError(
+                'Cannot create couple for group type "{}"'.format(group_type)
+            )
+        return couple
+
+    def add_groupset(self, groupset):
+        if isinstance(groupset, Couple):
+            self.replicas[groupset] = groupset
+        else:
+            raise TypeError(
+                'Unsupported groupset type {type} ({object})'.format(
+                    type=type(groupset).__name__,
+                    object=groupset,
+                )
+            )
+
+    def remove_groupset(self, groupset):
+        if isinstance(groupset, Couple):
+            self.replicas.remove(groupset)
+        else:
+            raise TypeError(
+                'Unsupported groupset type {type} ({object})'.format(
+                    type=type(groupset).__name__,
+                    object=groupset,
+                )
+            )
 
 
 class NodeStat(object):
@@ -1432,7 +1543,8 @@ class Couple(object):
             group.meta = None
             group.update_status()
 
-        couples.remove(self)
+        global groupsets
+        groupsets.remove_groupset(self)
         self.groups = []
         self.status = Status.INIT
 
@@ -1664,15 +1776,24 @@ class Namespace(object):
         self.id = id
         self.couples = set()
 
+        self.groupsets = Groupsets(
+            replicas=Repositary(Couple, 'Replicas groupset'),
+            resource_desc='Groupset'
+        )
+
+        # TODO: this is obsolete, used for backward compatibility,
+        # remove when not used anymore
+        self.couples = self.groupsets.replicas
+
     def add_couple(self, couple):
         if couple.namespace:
             raise ValueError('Couple {} already belongs to namespace {}, cannot be assigned to '
                              'namespace {}'.format(couple, self, couple.namespace))
-        self.couples.add(couple)
+        self.groupsets.add_groupset(couple)
         couple.namespace = self
 
     def remove_couple(self, couple):
-        self.couples.remove(couple)
+        self.groupsets.remove_groupset(couple)
         couple.namespace = None
 
     def __str__(self):
@@ -1699,36 +1820,17 @@ hosts = Repositary(Host)
 groups = Repositary(Group)
 nodes = Repositary(Node)
 node_backends = Repositary(NodeBackend, 'Node backend')
-couples = Repositary(Couple)
 namespaces = Repositary(Namespace)
 fs = Repositary(Fs)
 
 dc_host_view = DcHostView()
 
-
+replicas_groupsets = Repositary(Couple, 'Replicas groupset')
 cache_couples = Repositary(Couple, 'Cache couple')
+groupsets = Groupsets(
+    replicas=replicas_groupsets,
+    resource_desc='Couple',
+)
 
-
-'''
-h = hosts.add('95.108.228.31')
-g = groups.add(1)
-n = nodes.add(hosts['95.108.228.31'], 1025, 2)
-g.add_node(n)
-
-g2 = groups.add(2)
-n2 = nodes.add(h, 1026. 2)
-g2.add_node(n2)
-
-couple = couples.add([g, g2])
-
-print '1:2' in couples
-groups[1].parse_meta({'couple': (1,2)})
-groups[2].parse_meta({'couple': (1,2)})
-couple.update_status()
-
-print repr(couples)
-print 1 in groups
-print [g for g in couple]
-couple.destroy()
-print repr(couples)
-'''
+# TODO: backward compatibility, remove
+couples = groupsets

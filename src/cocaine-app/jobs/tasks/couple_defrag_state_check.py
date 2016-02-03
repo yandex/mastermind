@@ -23,9 +23,10 @@ class CoupleDefragStateCheckTask(Task):
         pass
 
     def execute(self):
+        # TODO: use 'couples' container
         couples = (storage.cache_couples
                    if self.parent_job.is_cache_couple else
-                   storage.couples)
+                   storage.replicas_groupsets)
 
         couple = couples[self.couple]
 
@@ -51,9 +52,10 @@ class CoupleDefragStateCheckTask(Task):
                 not self.__couple_defraged())
 
     def __couple_defraged(self):
+        # TODO: use 'couples' container
         couples = (storage.cache_couples
                    if self.parent_job.is_cache_couple else
-                   storage.couples)
+                   storage.replicas_groupsets)
         couple = couples[self.couple]
         stats = []
         for group in couple.groups:

@@ -480,33 +480,38 @@ class NodeInfoUpdater(object):
 
             couple_str = ':'.join((str(gid) for gid in sorted(couple)))
 
-            logger.debug('{0} in storage.couples: {1}'.format(
-                couple_str, couple_str in storage.couples))
+            ns_id = group.meta.get('namespace')
+            if ns_id is None:
+                logger.error(
+                    'Inconsistent meta read from group {group}, missing namespace: {meta}'.format(
+                        group=group,
+                        meta=group.meta,
+                    )
+                )
+                return
 
-            if couple_str not in storage.couples and couple_str not in storage.cache_couples:
+            for gid in couple:
+                if gid not in storage.groups:
+                    logger.info(
+                        'Group {group} is not found, adding fake group for couple {couple}'.format(
+                            group=gid,
+                            couple=couple,
+                        )
+                    )
+                    storage.groups.add(gid)
 
-                ns_id = group.meta.get('namespace')
-                if ns_id is None:
-                    logger.error('Inconsistent meta read from group {}, '
-                                 'missing namespace: {}'.format(group, group.meta))
-                    return
-
-                if group.type == storage.Group.TYPE_DATA:
-                    logger.info('Creating couple {0}'.format(couple_str))
-                    for gid in couple:
-                        if gid not in storage.groups:
-                            logger.info('Group {} is not found adding fake group for '
-                                        'couple {}'.format(gid, couple))
-                            storage.groups.add(gid)
-                    c = storage.couples.add(storage.groups[gid] for gid in couple)
-                    logger.info('Created couple {0} {1}'.format(c, repr(c)))
-                elif group.type == storage.Group.TYPE_CACHE:
-                    logger.info('Creating cache couple {0}'.format(couple_str))
-                    c = storage.cache_couples.add(storage.groups[gid] for gid in couple)
-                    logger.info('Created cache couple {0} {1}'.format(c, repr(c)))
-                else:
-                    raise ValueError('Unknown group type for group {}: {}'.format(
-                        group, group.type))
+            if couple_str not in storage.couples:
+                # TODO: somehow check that couple type matches group.type
+                # for all groups in couple (not very easy when metakey read
+                # fails)
+                logger.info('Creating couple {groups}, type "{type}"'.format(
+                    groups=couple_str,
+                    type=group.type,
+                ))
+                c = storage.couples.add(
+                    groups=(storage.groups[gid] for gid in couple),
+                    type=group.type,
+                )
 
                 for gid in couple:
                     infrastructure.update_group_history(storage.groups[gid])
@@ -628,7 +633,8 @@ class NodeInfoUpdater(object):
             res[ns]['settings'] = settings
 
         # couples
-        for couple in storage.couples:
+        # TODO: should we count lrc groupsets here?
+        for couple in storage.replicas_groupsets:
             try:
                 try:
                     ns = couple.namespace

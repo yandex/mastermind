@@ -658,7 +658,7 @@ class CacheDistributor(object):
         assert len(key_stat.get('groups', [])), \
             'Empty groups list for key {0}'.format(key_stat)
 
-        couple = storage.couples[key_stat['couple']]
+        couple = storage.replicas_groupsets[key_stat['couple']]
         lookups = self._lookup_key(key_stat['id'], couple.as_tuple())
         key_size = max(l.size for l in lookups.itervalues())
         return {
@@ -666,7 +666,7 @@ class CacheDistributor(object):
             'couple': key_stat['couple'],
             'ns': key_stat['ns'],
             'size': key_size,
-            'data_groups': list(storage.couples[key_stat['couple']].as_tuple()),
+            'data_groups': list(storage.replicas_groupsets[key_stat['couple']].as_tuple()),
             'rate': 0,
             'cache_groups': [],
             'add_queue': [],

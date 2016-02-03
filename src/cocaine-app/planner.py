@@ -485,7 +485,7 @@ class Planner(object):
 
             logger.info('Creating recover job for couple {0}'.format(couple_id))
 
-            couple = storage.couples[couple_id]
+            couple = storage.replicas_groupsets[couple_id]
 
             if not _recovery_applicable_couple(couple):
                 logger.info('Couple {0} is no more applicable for recovery job'.format(
@@ -528,10 +528,7 @@ class Planner(object):
 
         ts = int(time.time())
 
-        storage_couples = set(str(c) for c in storage.couples.keys())
-
-        logger.info('recover couples: {0}'.format(recover_data_couples))
-        logger.info('storage_couples: {0}'.format(storage_couples))
+        storage_couples = set(str(c) for c in storage.replicas_groupsets.keys())
 
         add_couples = list(storage_couples - recover_data_couples)
         remove_couples = list(recover_data_couples - storage_couples)
@@ -570,7 +567,7 @@ class Planner(object):
 
         busy_group_ids = self._busy_group_ids(active_jobs)
 
-        for couple in storage.couples.keys():
+        for couple in storage.replicas_groupsets.keys():
             if self._is_locked(couple, busy_group_ids):
                 continue
             if not _recovery_applicable_couple(couple):
@@ -581,9 +578,9 @@ class Planner(object):
         keys_diffs_sorted.sort(key=lambda x: x[1])
 
         cursor = self.collection.find().sort('recover_ts', pymongo.ASCENDING)
-        if cursor.count() < len(storage.couples):
+        if cursor.count() < len(storage.replicas_groupsets):
             logger.info('Sync recover data is required: {0} records/{1} couples'.format(
-                cursor.count(), len(storage.couples)))
+                cursor.count(), len(storage.replicas_groupsets)))
             self.sync_recover_data()
             cursor = self.collection.find().sort('recover_ts',
                                                  pymongo.ASCENDING)
@@ -718,7 +715,7 @@ class Planner(object):
         busy_group_ids = self._busy_group_ids(active_jobs)
 
         couples_to_defrag = []
-        for couple in storage.couples.keys():
+        for couple in storage.replicas_groupsets.keys():
             if self._is_locked(couple, busy_group_ids):
                 continue
             if couple.status not in storage.GOOD_STATUSES:
@@ -908,7 +905,7 @@ class Planner(object):
             'failed': {},
         }
 
-        for couple in storage.couples.keys():
+        for couple in storage.replicas_groupsets.keys():
             for group in couple.groups:
                 if len(group.node_backends) != 1:
                     # skip group if more than one backend
@@ -1542,7 +1539,7 @@ class StorageState(object):
     def __get_full_couples():
         couples = []
 
-        for couple in storage.couples:
+        for couple in storage.replicas_groupsets:
             if couple.status != storage.Status.FULL:
                 continue
 

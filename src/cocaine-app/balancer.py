@@ -113,11 +113,13 @@ class Balancer(object):
         return result
 
     def _good_couples(self):
-        return [couple.as_tuple() for couple in storage.couples if couple.status == storage.Status.OK]
+        # TODO: decide if lrc groupsets should be here
+        return [couple.as_tuple() for couple in storage.replicas_groupsets if couple.status == storage.Status.OK]
 
     @h.concurrent_handler
     def get_bad_groups(self, request):
-        result = [couple.as_tuple() for couple in storage.couples if couple.status not in storage.NOT_BAD_STATUSES]
+        # TODO: decide if lrc groupsets should be here
+        result = [couple.as_tuple() for couple in storage.replicas_groupsets if couple.status not in storage.NOT_BAD_STATUSES]
         logger.debug('bad_symm_groups: ' + str(result))
         return result
 
@@ -128,7 +130,7 @@ class Balancer(object):
         return result
 
     def _frozen_couples(self):
-        return [couple.as_tuple() for couple in storage.couples if couple.status == storage.Status.FROZEN]
+        return [couple.as_tuple() for couple in storage.replicas_groupsets if couple.status == storage.Status.FROZEN]
 
     @h.concurrent_handler
     def get_closed_groups(self, request):
@@ -138,7 +140,7 @@ class Balancer(object):
         return result
 
     def _closed_couples(self):
-        return [couple.as_tuple() for couple in storage.couples
+        return [couple.as_tuple() for couple in storage.replicas_groupsets
                 if couple.status == storage.Status.FULL]
 
     @h.concurrent_handler
@@ -192,7 +194,8 @@ class Balancer(object):
                 return []
             couples = storage.namespaces[ns].couples
         else:
-            couples = storage.couples.keys()
+            # TODO: use 'couples' container here
+            couples = storage.replicas_groupsets.keys()
 
         def filtered_out(couple):
             if _filter.get('state') is not None:
@@ -467,7 +470,8 @@ class Balancer(object):
     @h.concurrent_handler
     def get_couple_info_by_coupleid(self, request):
         couple_id = str(request)
-        couple = storage.couples[couple_id]
+        # TODO: use 'couples' container
+        couple = storage.replicas_groupsets[couple_id]
 
         return couple.info().serialize()
 
@@ -822,8 +826,9 @@ class Balancer(object):
                     )
                     continue
 
-                couple = storage.couples.add([storage.groups[g]
-                                              for g in groups_to_couple])
+                couple = storage.replicas_groupsets.add(
+                    [storage.groups[g] for g in groups_to_couple]
+                )
 
                 if not dry_run:
                     try:
@@ -933,10 +938,11 @@ class Balancer(object):
         with sync_manager.lock(self.CLUSTER_CHANGES_LOCK, blocking=False):
 
             couple_str = ':'.join(map(str, sorted(request[0], key=lambda x: int(x))))
-            if couple_str not in storage.couples:
+            # TODO: use 'couples' container
+            if couple_str not in storage.replicas_groupsets:
                 raise KeyError('Couple %s was not found' % (couple_str))
 
-            couple = storage.couples[couple_str]
+            couple = storage.replicas_groupsets[couple_str]
 
             logger.info('Updating couple groups info')
             self.niu._force_nodes_update(groups=couple.groups)
@@ -1122,7 +1128,7 @@ class Balancer(object):
                     )
                 )
 
-            for c in storage.couples:
+            for c in storage.replicas_groupsets:
                 if c.namespace == namespace and c != ref_couple:
                     raise ValueError(
                         'Namespace "{0}" has several couples, '
@@ -1337,7 +1343,7 @@ class Balancer(object):
     @h.concurrent_handler
     def freeze_couple(self, request):
         logger.info('freezing couple %s' % str(request))
-        couple = storage.couples[request]
+        couple = storage.replicas_groupsets[request]
 
         if couple.frozen:
             raise ValueError('Couple {0} is already frozen'.format(couple))
@@ -1350,7 +1356,7 @@ class Balancer(object):
     @h.concurrent_handler
     def unfreeze_couple(self, request):
         logger.info('unfreezing couple %s' % str(request))
-        couple = storage.couples[request]
+        couple = storage.replicas_groupsets[request]
 
         if not couple.frozen:
             raise ValueError('Couple {0} is not frozen'.format(couple))
@@ -1456,7 +1462,7 @@ class Balancer(object):
     @h.concurrent_handler
     def storage_keys_diff(self, request):
         couples_diff = {}
-        for couple in storage.couples:
+        for couple in storage.replicas_groupsets:
             group_keys = []
             for group in couple.groups:
                 if not len(group.node_backends):

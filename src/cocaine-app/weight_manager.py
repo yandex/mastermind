@@ -38,7 +38,7 @@ class WeightManager(object):
         couples = {}
         couples_by_disk = {}
         couples_by_net = {}
-        for couple in storage.couples:
+        for couple in storage.replicas_groupsets:
             if couple.status != storage.Status.OK:
                 continue
             groups_res = []
