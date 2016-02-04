@@ -19,6 +19,7 @@ from load_manager import load_manager
 from mastermind import helpers as mh
 from mastermind.pool import skip_exceptions
 from mastermind_core.response import CachedGzipResponse
+from mastermind_core import errors
 from monitor_pool import monitor_pool
 import timed_queue
 import storage
@@ -463,6 +464,32 @@ class NodeInfoUpdater(object):
         def _process_group_metadata(response, group, elapsed_time=None, end_time=None):
             logger.debug('Cluster updating: group {0} meta key read time: {1}.{2}'.format(
                 group.group_id, elapsed_time.tsec, elapsed_time.tnsec))
+
+            if response.error.code:
+                if response.error.code == errors.ELLIPTICS_NOT_FOUND:
+                    # This group is some kind of uncoupled group, not an error
+                    group.parse_meta(None)
+                    logger.info(
+                        'Group {group} has no metakey'.format(group=group)
+                    )
+                elif response.error.code in (
+                    # Route list did not contain the group, expected error
+                    errors.ELLIPTICS_GROUP_NOT_IN_ROUTE_LIST,
+                    # Timeout in reading metakey from the group, expected error
+                    errors.ELLIPTICS_TIMEOUT,
+                ):
+                    group.reset_meta()
+                    logger.error(
+                        'Error on updating metakey from group {group}: {error}'.format(
+                            group=group,
+                            error=response.error.message,
+                        )
+                    )
+                else:
+                    raise RuntimeError(response.error.mssage)
+
+                return
+
             meta = response.data
 
             group.parse_meta(meta)
@@ -504,13 +531,13 @@ class NodeInfoUpdater(object):
                 # TODO: somehow check that couple type matches group.type
                 # for all groups in couple (not very easy when metakey read
                 # fails)
-                logger.info('Creating couple {groups}, type "{type}"'.format(
+                logger.info('Creating couple {groups}, group type "{group_type}"'.format(
                     groups=couple_str,
-                    type=group.type,
+                    group_type=group.type,
                 ))
                 c = storage.couples.add(
                     groups=(storage.groups[gid] for gid in couple),
-                    type=group.type,
+                    group_type=group.type,
                 )
 
                 for gid in couple:
@@ -531,6 +558,8 @@ class NodeInfoUpdater(object):
             results = {}
             for group in check_groups:
                 session = self.__session.clone()
+                session.set_exceptions_policy(elliptics.exceptions_policy.no_exceptions)
+                session.set_filter(elliptics.filters.all_with_ack)
                 session.add_groups([group.group_id])
 
                 logger.debug('Request to read {0} for group {1}'.format(
@@ -561,14 +590,16 @@ class NodeInfoUpdater(object):
                 group = storage.groups[group_id]
 
                 try:
-                    h.process_elliptics_async_result(result, _process_group_metadata, group)
-                except elliptics.NotFoundError as e:
-                    logger.warn('Failed to read symmetric_groups from group {0}: {1}'.format(
-                        group_id, e))
-                    group.parse_meta(None)
+                    h.process_elliptics_async_result(
+                        result,
+                        _process_group_metadata,
+                        group,
+                        raise_on_error=False,
+                    )
                 except Exception as e:
-                    logger.exception('Failed to read symmetric_groups from group {0}: {1}'.format(
-                        group_id, e))
+                    logger.exception(
+                        'Critical error on updating metakey from group {}'.format(group_id)
+                    )
                     group.parse_meta(None)
                 finally:
                     try:

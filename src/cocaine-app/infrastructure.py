@@ -1049,7 +1049,7 @@ class Infrastructure(object):
             if Infrastructure.is_uncoupled_group_good(
                     group,
                     locked_hosts,
-                    types or (storage.Group.TYPE_DATA,),
+                    types or (storage.Group.TYPE_UNCOUPLED,),
                     max_node_backends=max_node_backends,
                     in_service=in_service,
                     status=status):

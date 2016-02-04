@@ -1092,14 +1092,15 @@ class Group(object):
     CACHE_NAMESPACE = 'storage_cache'
 
     TYPE_UNKNOWN = 'unknown'
+    TYPE_UNCOUPLED = 'uncoupled'
     TYPE_DATA = 'data'
     TYPE_CACHE = 'cache'
-    TYPE_UNMARKED = 'unmarked'
+    TYPE_UNCOUPLED_CACHE = 'uncoupled_cache'
 
     AVAILABLE_TYPES = set([
         TYPE_DATA,
         TYPE_CACHE,
-        TYPE_UNMARKED,
+        TYPE_UNCOUPLED_CACHE,
     ])
 
     def __init__(self, group_id, node_backends=None):
@@ -1111,8 +1112,39 @@ class Group(object):
         self.status_text = "Group %s is not inititalized yet" % (self)
         self.active_job = None
 
+        self._type = Group.TYPE_UNKNOWN
+
         for node_backend in node_backends or []:
             self.add_node_backend(node_backend)
+
+    @property
+    def type(self):
+        """ Return current group type
+
+        Groups can have different types depending
+        on the type of data they store or state they are in:
+            - unknown - group is known of but metakey was not read;
+            - uncoupled - group has no metakey (but can be assigned to a couple,
+            so don't forget to check status);
+            - data - group has metakey and belongs to a regular data couple;
+            - uncoupled_cache - group has no metakey but its path matches cache
+            groups' path from config (such group should be marked as 'cache');
+            - cache - group stores gatlinggun cache data;
+        """
+        if self._type == Group.TYPE_UNCOUPLED and self.couple:
+            # This is a special case for couples with some groups
+            # with empty meta key.
+            # When group belongs to a couple but is disabled or unavailable,
+            # it can be added to Storage before the group that it is coupled
+            # with or after. In former case mastermind cannot determine that
+            # this group is actually a 'data' group so it considers it
+            # 'uncoupled' one. But when cluster traversal is over mastermind has
+            # enough data for this group to become a 'data' one (since it now
+            # should have 'couple' attribute set up).
+            # NOTE: this condition can be evaluated to true only once after this
+            # group was added to Storage.
+            self._type = self._get_type(self.meta)
+        return self._type
 
     def add_node_backend(self, node_backend):
         self.node_backends.append(node_backend)
@@ -1132,18 +1164,57 @@ class Group(object):
                 return True
         return False
 
-    def parse_meta(self, meta):
-        if meta is None:
-            self.meta = None
-            return
 
-        parsed = msgpack.unpackb(meta)
-        if isinstance(parsed, (tuple, list)):
-            self.meta = {'version': 1, 'couple': parsed, 'namespace': self.DEFAULT_NAMESPACE, 'frozen': False}
-        elif isinstance(parsed, dict) and parsed['version'] == 2:
-            self.meta = parsed
+    def _get_type(self, meta):
+
+        if self.meta:
+            if 'type' in self.meta and self.meta['type'] not in self.AVAILABLE_TYPES:
+                logger.error('Unknown type "{type}" of group {group}'.format(
+                    group=self,
+                    type=self.meta['type'],
+                ))
+                return self.TYPE_UNKNOWN
+
+            return self.meta.get('type', self.TYPE_DATA)
+
         else:
-            raise Exception('Unable to parse meta')
+
+            if self._type != Group.TYPE_UNKNOWN:
+                # when meta is None keep current type if set
+                return self._type
+
+            if self.couple:
+                return Group.TYPE_DATA
+
+            def is_cache_group_backend(nb):
+                if not CACHE_GROUP_PATH_PREFIX:
+                    return False
+                return nb.base_path.startswith(CACHE_GROUP_PATH_PREFIX)
+
+            is_uncoupled_cache_group = any(is_cache_group_backend(nb) for nb in self.node_backends)
+            if is_uncoupled_cache_group:
+                return self.TYPE_UNCOUPLED_CACHE
+
+            return Group.TYPE_UNCOUPLED
+
+    def reset_meta(self):
+        self.meta = None
+
+    def parse_meta(self, raw_meta):
+
+        if raw_meta is None:
+            self.meta = None
+        else:
+            meta = msgpack.unpackb(raw_meta)
+
+            if isinstance(meta, (tuple, list)):
+                self.meta = {'version': 1, 'couple': meta, 'namespace': self.DEFAULT_NAMESPACE, 'frozen': False}
+            elif isinstance(meta, dict) and meta['version'] == 2:
+                self.meta = meta
+            else:
+                raise Exception('Unable to parse meta')
+
+        self._type = self._get_type(self.meta)
 
     def equal_meta(self, other):
         if type(self.meta) != type(other.meta):
@@ -1172,32 +1243,6 @@ class Group(object):
     @property
     def effective_space(self):
         return sum(nb.effective_space for nb in self.node_backends)
-
-    @property
-    def type(self):
-
-        if self.meta:
-            if 'type' in self.meta and self.meta['type'] not in self.AVAILABLE_TYPES:
-                logger.error('Unknown type "{type}" of group {group}'.format(
-                    group=self,
-                    type=self.meta['type'],
-                ))
-                return self.TYPE_UNKNOWN
-
-            return self.meta.get('type', self.TYPE_DATA)
-
-        else:
-
-            def is_cache_group_backend(nb):
-                if not CACHE_GROUP_PATH_PREFIX:
-                    return False
-                return nb.base_path.startswith(CACHE_GROUP_PATH_PREFIX)
-
-            is_unmarked_cache_group = any(is_cache_group_backend(nb) for nb in self.node_backends)
-            if is_unmarked_cache_group:
-                return self.TYPE_UNMARKED
-            else:
-                return self.TYPE_DATA
 
     def update_status(self):
         """Updates group's own status.

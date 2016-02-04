@@ -518,7 +518,7 @@ class CacheManager(object):
 
         # searching for unmarked cache groups to mark them
         for group in infrastructure.get_good_uncoupled_groups(
-                types=[storage.Group.TYPE_UNMARKED]):
+                types=[storage.Group.TYPE_UNCOUPLED_CACHE]):
 
             if not group.node_backends[0].base_path.startswith(
                     CACHE_GROUP_PATH_PREFIX):
