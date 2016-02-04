@@ -444,8 +444,8 @@ def couple_list(namespace=('n', '', 'Filter by namespace'),
                 host=None, app=None):
     '''List couples with various view options.'''
     return _couple_list(
-        namespace=namespace,
-        state=state,
+        namespace=namespace or None,
+        state=state or None,
         short=short,
         json=json,
         host=host,
@@ -453,8 +453,8 @@ def couple_list(namespace=('n', '', 'Filter by namespace'),
     )
 
 
-def _couple_list(namespace='',
-                 state='',
+def _couple_list(namespace=None,
+                 state=None,
                  short=False,
                  json=False,
                  host=None,
@@ -462,7 +462,7 @@ def _couple_list(namespace='',
     cl = client(host, app)
 
     options = {'namespace': namespace,
-               'state': state or None}
+               'state': state}
     couples = cl.couples.filter(**options)
 
     data = [c.serialize() for c in couples]
