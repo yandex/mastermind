@@ -35,6 +35,8 @@ CACHE_GROUP_PATH_PREFIX = CACHE_CFG.get('group_path_prefix')
 class CacheManager(object):
 
     DISTRIBUTE_LOCK = 'cache/distribute'
+    KEY_LOCK_TPL = 'cache/keys/{key_id}'
+
     MONITOR_TOP_STATS = 'monitor_top_stats'
 
     def __init__(self, node, niu, job_processor, db):
@@ -394,7 +396,9 @@ class CacheDistributor(object):
         self.dryrun = CACHE_CFG.get('dryrun', False)
 
     def _get_distributed_keys(self):
-        return self.keys_db.find()
+        for key in self.keys_db.find():
+            key.setdefault('add_queue', [])  # backward compatibility for missing 'add_queue' key
+            yield key
 
     def _new_key(self, key_stat):
         assert len(key_stat.get('groups', [])), \
@@ -411,6 +415,7 @@ class CacheDistributor(object):
             'data_groups': list(storage.couples[key_stat['couple']].as_tuple()),
             'rate': 0,
             'cache_groups': [],
+            'add_queue': [],
             'expand_ts': int(time.time())
         }
 
@@ -424,9 +429,16 @@ class CacheDistributor(object):
                 'period_in_seconds': 1}
 
     def _key_copies_diff(self, key, top):
+        """ Get difference between desirable number of cache copies
+        (that is considered enough at this moment) and current number
+        of cache copies (both uploaded and queued).
+
+        NOTE: it can be negative when we have more distributed copies
+        that are required at the moment.
+        """
         if (key['id'], key['couple']) not in top:
             key_stat = self._new_key_stat(key['id'], key['couple'], key['ns'])
-            copies_diff = -len(key['cache_groups'])
+            copies_diff = - (len(key['cache_groups']) + len(key['add_queue']))
         else:
             key_stat = top[(key['id'], key['couple'])]
             key_copies_num = _key_bw(key_stat) / self.bandwidth_per_copy
@@ -471,18 +483,29 @@ class CacheDistributor(object):
 
             logger.info(
                 'Key {}, couple {}, bandwidth {}; '
-                'cached, expanding to {} more '
+                'cached, missing {} more '
                 'copies'.format(
                     key['id'], key['couple'],
                     mb_per_s(_key_bw(key_stat)), copies_diff))
-            with self._cache_groups_lock:
-                try:
-                    self._update_key(key, key_stat, copies_diff)
-                except Exception:
-                    logger.exception(
-                        'Key {}, couple {}: failed to expand'.format(
-                            key['id'], key['couple']))
-                    continue
+
+            try:
+                with sync_manager.lock(CacheManager.KEY_LOCK_TPL.format(key_id=key['id'])):
+                    with self._cache_groups_lock:
+                        try:
+                            self._update_key(key, key_stat, copies_diff)
+                        except Exception:
+                            logger.exception(
+                                'Key {}, couple {}: failed to expand'.format(
+                                    key['id'], key['couple']))
+                            continue
+            except LockError:
+                logger.error(
+                    'Key {key}, couple {couple}, failed to acquire lock, will be skipped'.format(
+                        key=key['id'],
+                        couple=key['couple'],
+                    )
+                )
+                continue
 
         # process new keys
         logger.info('Distributing new keys')
@@ -574,8 +597,20 @@ class CacheDistributor(object):
         if not self.dryrun:
             cache_task_manager.put_task(
                 self._gatlinggun_task(key, group_id, [], 'remove'))
-        key['cache_groups'].remove(group_id)
-        if len(key['cache_groups']):
+
+        # group_id can be either in 'cache_groups' (for uploaded keys)
+        # or in 'add_queue' (for queued uploads)
+        if group_id in key['cache_groups']:
+            key['cache_groups'].remove(group_id)
+        else:
+            for task in key['add_queue']:
+                if task['cache_group'] == group_id:
+                    key['add_queue'].remove(task)
+                    break
+
+        if key['cache_groups'] or key['add_queue']:
+            # if cache copies still exist or there are upload tasks, update the
+            # key
             self.keys_db.update({'id': key['id'], 'couple': key['couple']}, key)
         else:
             self.keys_db.remove({'id': key['id'], 'couple': key['couple']})
@@ -679,45 +714,17 @@ class CacheDistributor(object):
 
         return key_by_dc
 
-    def _increase_copies(self, key, key_stat, count):
-        key_by_dc = self._key_by_dc(key)
-        if not key_by_dc:
-            logger.error(
-                'Key {key}: failed to lookup key in any of '
-                'couple dcs'.format(
-                    key=key['id']
-                )
-            )
-            return
-        key_size = max(key_by_dc[dc]['size'] for dc in key_by_dc)
-
-        candidates_by_dc = {}
-
-        hosts_with_key = set()
-        for dc in key_by_dc:
-            candidates_by_dc[dc] = DcKeyCacheCandidates(dc, key_by_dc[dc]['group'])
-            hosts_with_key.add(key_by_dc[dc]['host'])
-
-        busy_cache_groups = set()
-        # search only by key id because all cache groups
-        # with given key id should be eliminated
-        for cached_key in self.keys_db.find({'id': key['id']}):
-            busy_cache_groups.update(cached_key['cache_groups'])
-            if key['couple'] == cached_key['couple']:
-                for cgid in cached_key['cache_groups']:
-                    if cgid not in self.cache_groups:
-                        continue
-                    cg = self.cache_groups[cgid]
-                    if cg.dc not in candidates_by_dc:
-                        continue
-                    candidates_by_dc[cg.dc].account_key_copy()
-                    for nb in cg.group.node_backends:
-                        hosts_with_key.add(nb.node.host)
-
-        copies_num = len(key['cache_groups']) + len(key['data_groups']) + count
-        bw_per_copy = (float(key_stat['size']) / key_stat['period_in_seconds'] /
-                       copies_num)
-
+    def _set_candidate_cache_groups(self,
+                                    candidates_by_dc,
+                                    busy_cache_groups,
+                                    hosts_with_key,
+                                    key_id,
+                                    key_size,
+                                    key_bandwidth_per_copy,
+                                    ):
+        """ Set appropriate candidate cache groups to corresponding
+        DcKeyCacheCandidates object
+        """
         for cg in self.cache_groups:
             if cg in busy_cache_groups:
                 continue
@@ -727,7 +734,7 @@ class CacheDistributor(object):
                 logger.debug(
                     'Key {key}: tx rate for cache group {group} is unavailable '
                     'at the moment'.format(
-                        key=key['id'],
+                        key=key_id,
                         group=cg.group_id
                     )
                 )
@@ -736,21 +743,21 @@ class CacheDistributor(object):
                 logger.debug(
                     'Key {key}: not enough free space on cache group {group}: '
                     '{free_space} < {needed_space}'.format(
-                        key=key['id'],
+                        key=key_id,
                         group=cg.group_id,
                         free_space=cg.effective_free_space,
                         needed_space=key_size,
                     )
                 )
                 continue
-            if cg.tx_rate_left < bw_per_copy:
+            if cg.tx_rate_left < key_bandwidth_per_copy:
                 logger.debug(
                     'Key {key}: not enough tx rate on cache group {group}: '
                     '{tx_rate_left} < {required_bw}'.format(
-                        key=key['id'],
+                        key=key_id,
                         group=cg.group_id,
                         tx_rate_left=cg.tx_rate_left,
-                        required_bw=bw_per_copy,
+                        required_bw=key_bandwidth_per_copy,
                     )
                 )
                 continue
@@ -762,30 +769,179 @@ class CacheDistributor(object):
                 logger.debug(
                     'Key {key}: skipping cache group {group}, host already has '
                     'a key copy'.format(
-                        key=key['id'],
+                        key=key_id,
                         group=cg.group_id,
                     )
                 )
                 continue
             candidates_by_dc[cg.dc].add_candidate(cg)
 
-        for dc, dc_candidates in candidates_by_dc.iteritems():
-            dc_candidates.prepare_candidates()
+        candidates_for_key_desc = ', '.join(
+            '{dc}: {count}'.format(
+                dc=dc,
+                count=len(dc_candidate.candidates)
+            )
+            for dc, dc_candidate in candidates_by_dc.iteritems()
+        )
+        logger.info(
+            'Key {key}: candidate cache groups: {desc}'.format(
+                key=key_id,
+                desc=candidates_for_key_desc,
+            )
+        )
 
-        copies = 0
-        for dc_candidate, cg in self._get_cache_candidates(candidates_by_dc, count):
-            self._add_key_to_group(key, cg.group_id,
-                                   [key_by_dc[cg.dc]['group']], bw_per_copy,
-                                   key_size)
-            dc_candidate.account_key_copy()
-            copies += 1
-        if copies < count:
-            logger.warn(
+    def _get_upload_key_candidates(self,
+                                   key,
+                                   key_by_dc,
+                                   key_size,
+                                   key_bandwidth_per_copy):
+        """ Get appropriate DcKeyCacheCandidates objects sorted in preferable
+        order.
+
+        Objects are sorted by the number of already existing key copies
+        in corresponding dc.
+        """
+
+        candidates_by_dc = {
+            dc: DcKeyCacheCandidates(dc, key_dc_info['group'])
+            for dc, key_dc_info in key_by_dc.iteritems()
+        }
+
+        # filter out dcs where gatlinggun already has tasks
+        # to upload the key
+        for processing_task in key['add_queue']:
+            cgid = processing_task['cache_group']
+            if cgid not in self.cache_groups:
+                continue
+            cg = self.cache_groups[cgid]
+            logger.debug(
+                'Key {key}: skipping dc {dc}, cache group {cgid} in this dc '
+                'is already processing key download'.format(
+                    key=key['id'],
+                    dc=cg.dc,
+                    cgid=cgid,
+                )
+            )
+            candidates_by_dc.pop(cg.dc, None)
+
+        # hosts that already have the key, elements are storage.Host objects
+        hosts_with_key = set(
+            key_by_dc[dc]['host']
+            for dc in candidates_by_dc.iterkeys()
+        )
+
+        busy_cache_groups = set()
+
+        # search only by key id because all cache groups
+        # with given key id should be eliminated
+        cache_groups_with_similar_key = self.keys_db.find(
+            {'id': key['id']},
+            fields=['id', 'couple', 'cache_groups'],
+        )
+        for cached_key in cache_groups_with_similar_key:
+            busy_cache_groups.update(cached_key['cache_groups'])
+            if key['couple'] == cached_key['couple']:
+                for cgid in cached_key['cache_groups']:
+                    if cgid not in self.cache_groups:
+                        # cache group 'cgid' is not found in storage at this
+                        # moment, skipping
+                        continue
+                    cg = self.cache_groups[cgid]
+                    if cg.dc not in candidates_by_dc:
+                        # dc of cache group 'cgid' is not considered
+                        # as candidate dc for a new copy, skipping
+                        continue
+                    candidates_by_dc[cg.dc].account_key_copy()
+                    candidates_by_dc[cg.dc].add_source_cache_group(cg)
+                    hosts_with_key.update(nb.node.host for nb in cg.group.node_backends)
+
+        self._set_candidate_cache_groups(
+            candidates_by_dc,
+            busy_cache_groups=busy_cache_groups,
+            hosts_with_key=hosts_with_key,
+            key_id=key['id'],
+            key_size=key_size,
+            key_bandwidth_per_copy=key_bandwidth_per_copy,
+        )
+
+        for dc_candidate in candidates_by_dc.itervalues():
+            dc_candidate.prepare_candidates()
+
+        dc_candidates = sorted(
+            candidates_by_dc.itervalues(),
+            key=lambda c: c.key_copies,
+        )
+
+        return dc_candidates
+
+    def _increase_copies(self, key, key_stat, count):
+
+        key_by_dc = self._key_by_dc(key)
+        if not key_by_dc:
+            logger.error(
+                'Key {key}: failed to lookup key in any of '
+                'couple dcs'.format(
+                    key=key['id']
+                )
+            )
+            return
+
+        logger.info(
+            'Key {key}: source dcs: {dcs}'.format(
+                key=key['id'],
+                dcs=', '.join(key_by_dc.iterkeys())
+            )
+        )
+
+        key_size = max(key_by_dc[dc]['size'] for dc in key_by_dc)
+        copies_num = (
+            len(key['cache_groups']) +
+            len(key['add_queue']) +
+            len(key['data_groups']) +
+            count
+        )
+        key_bandwidth_per_copy = \
+            float(key_stat['size']) / key_stat['period_in_seconds'] / copies_num
+
+        dc_candidates = self._get_upload_key_candidates(
+            key=key,
+            key_by_dc=key_by_dc,
+            key_size=key_size,
+            key_bandwidth_per_copy=key_bandwidth_per_copy,
+        )
+
+        max_new_tasks = min(len(dc_candidates), count)
+        logger.debug(
+            'Key {key}: {max_new_tasks} tasks can be created'.format(
+                key=key['id'],
+                max_new_tasks=max_new_tasks,
+            )
+        )
+
+        copies_added = 0
+        for dc_candidate in dc_candidates:
+            if copies_added >= max_new_tasks:
+                break
+            cg = dc_candidate.pop_candidate()
+            if cg is None:
+                # no appropriate cache groups available in dc of 'dc_candidate'
+                continue
+            self._add_upload_key_task(
+                key,
+                cg.group_id,
+                [key_by_dc[cg.dc]['group']] + dc_candidate.source_cache_groups,
+                key_bandwidth_per_copy,
+                key_size
+            )
+            copies_added += 1
+
+        if max_new_tasks < count:
+            logger.info(
                 'Key {key}, couple {couple}: added only '
                 '{copies_added}/{copies_needed} copies'.format(
                     key=key['id'],
                     couple=key['couple'],
-                    copies_added=copies,
+                    copies_added=copies_added,
                     copies_needed=count,
                 )
             )
@@ -809,10 +965,6 @@ class CacheDistributor(object):
 
     def _best_fitting_dc(self, candidates_by_dc):
 
-        def weight(counts):
-            avg_count = float(sum(c for c in counts)) / len(counts)
-            return sum((c - avg_count) ** 2 for c in counts)
-
         dc_candidates = candidates_by_dc.itervalues()
 
         for dc_candidate in sorted(dc_candidates, key=lambda d: d.key_copies):
@@ -821,7 +973,7 @@ class CacheDistributor(object):
         else:
             raise StopIteration
 
-    def _add_key_to_group(self, key, group_id, data_groups, tx_rate, size):
+    def _add_upload_key_task(self, key, group_id, data_groups, tx_rate, size):
         """
         Creates task for gatling gun on destination group,
         updates key in meta database
@@ -832,8 +984,12 @@ class CacheDistributor(object):
             cache_task_manager.put_task(task)
             logger.debug('Key {}, task for gatlinggun created for cache '
                          'group {}'.format(key['id'], group_id))
-        key['cache_groups'].append(group_id)
-        key['expand_ts'] = int(time.time())
+        current_time = int(time.time())
+        key['add_queue'].append({
+            'cache_group': group_id,
+            'ts': current_time,
+        })
+        key['expand_ts'] = current_time
         self.keys_db.update({'id': key['id'], 'couple': key['couple']},
                             key, upsert=True)
         return task
@@ -844,6 +1000,7 @@ class CacheDistributor(object):
             "int, not {0}".format(type(group).__name__)
         task = {
             'key': key['id'],
+            'couple': key['couple'],
             'group': group,
             'sgroups': data_groups,
             'action': action,
@@ -856,7 +1013,7 @@ class CacheDistributor(object):
 
     def _count_key_copies_diff(self, key, req_copies_num):
         data_groups_num = len(key['data_groups'])
-        copies_num = len(key['cache_groups']) + len(key['data_groups'])
+        copies_num = len(key['cache_groups']) + len(key['data_groups']) + len(key['add_queue'])
 
         req_copies = int(math.ceil(req_copies_num))
         if req_copies < math.ceil(copies_num * self.copies_reduce_factor):
@@ -955,8 +1112,12 @@ class CacheCleaner(object):
                 if copies_diff >= 0:
                     continue
 
-                cg_candidates = [cgid for cgid in key['cache_groups']
-                                 if cgid in dirty_cgs]
+                groups = key['cache_groups'] + [qt['cache_group'] for qt in key['add_queue']]
+                cg_candidates = [
+                    cgid
+                    for cgid in groups
+                    if cgid in dirty_cgs
+                ]
                 if not cg_candidates:
                     logger.info(
                         'Key {}, couple {}, no dirty cache '
@@ -1040,8 +1201,11 @@ class CacheCleaner(object):
         keys_db = self.distributor.keys_db
         expand_threshold = CACHE_CLEANER_CFG.get('expand_threshold', 21600)
         expand_ts_max = int(time.time()) - expand_threshold
-        return keys_db.find({'expand_ts': {'$lt': expand_ts_max}}).sort(
-            'expand_ts', pymongo.ASCENDING)
+        for key in keys_db.\
+                find({'expand_ts': {'$lt': expand_ts_max}}).\
+                sort('expand_ts', pymongo.ASCENDING):
+            key.setdefault('add_queue', [])  # backward compatibility for missing 'add_queue' key
+            yield key
 
 
 def mb_per_s(bytes_per_s):
@@ -1136,12 +1300,16 @@ class DcKeyCacheCandidates(object):
         self.key_copies = 0
         self.candidates = []
         self.node_types = inventory.get_balancer_node_types()
+        self.source_cache_groups = []
 
     def add_candidate(self, cg):
         self.candidates.append(cg)
 
     def account_key_copy(self):
         self.key_copies += 1
+
+    def add_source_cache_group(self, cg):
+        self.source_cache_groups.append(cg.group_id)
 
     def pop_candidate(self):
         return self.candidates and self.candidates.pop(0) or None
