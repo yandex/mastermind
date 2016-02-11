@@ -144,6 +144,8 @@ def init_cache_worker(W, n, niu, j, meta_db):
     h.register_handle(W, c.cache_clean)
     h.register_handle(W, c.cache_groups)
     h.register_handle(W, c.get_cached_keys)
+    h.register_handle(W, c.update_cache_key_upload_status)
+    h.register_handle(W, c.update_cache_key_removal_status)
 
     return c
 

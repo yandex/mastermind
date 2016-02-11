@@ -215,6 +215,250 @@ class CacheManager(object):
     def get_top_keys(self, request):
         return self.top_keys
 
+    CACHE_KEY_UPLOAD_SUCCESS = 'upload_success'
+    CACHE_KEY_UPLOAD_FAILED = 'upload_failed'
+    CACHE_KEY_REMOVAL_SUCCESS = 'removal_success'
+    CACHE_KEY_REMOVAL_FAILED = 'removal_failed'
+
+    CACHE_KEY_UPLOAD_STATUSES = (
+        CACHE_KEY_UPLOAD_SUCCESS,
+        CACHE_KEY_UPLOAD_FAILED,
+    )
+    CACHE_KEY_REMOVAL_STATUSES = (
+        CACHE_KEY_REMOVAL_SUCCESS,
+        CACHE_KEY_REMOVAL_FAILED,
+    )
+
+    @h.concurrent_handler
+    def update_cache_key_upload_status(self, request):
+        """ Update cache key's mastermind state after upload
+
+        Parameters:
+            request: is a dict with following keys:
+                id: cache key id
+                couple: cache key couple
+                cache_group: id of cache group
+                status: cache key status after task execution, can be one of:
+                    'upload_success' - cache key was successfully uploaded to a cache group;
+                    'upload_failed' - cache key upload failed;
+        """
+        if 'id' not in request:
+            raise ValueError('Key is required')
+        if 'couple' not in request:
+            raise ValueError('Key couple is required')
+        if 'cache_group' not in request:
+            raise ValueError('Cache group id is required')
+        if 'status' not in request:
+            raise ValueError('Status is required')
+        if request['status'] not in self.CACHE_KEY_UPLOAD_STATUSES:
+            raise ValueError('Unknown status: "{}"'.format(request['status']))
+
+        logger.info(
+            'Key {key_id}: updating key status on request from gatlinggun, '
+            'status is "{status}"'.format(
+                key_id=request['id'],
+                status=request['status'],
+            )
+        )
+
+        return self._update_cache_key_upload_status(
+            key_id=request['id'],
+            couple=request['couple'],
+            cache_group=request['cache_group'],
+            status=request['status'],
+        )
+
+    def _update_cache_key_upload_status(self, key_id, couple, cache_group, status):
+        """ Update cache key ``key_id`` state according to ``status``
+        after upload.
+
+        Locks the cache key and updates it based on the result from gatlinggun.
+        """
+        try:
+
+            with sync_manager.lock(CacheManager.KEY_LOCK_TPL.format(key_id=key_id), timeout=10):
+                key = self.keys_db.find_one({
+                    'id': key_id,
+                    'couple': couple,
+                })
+                if key is None:
+                    logger.error(
+                        'Key {key_id}: key not found'.format(
+                            key_id=key_id,
+                        )
+                    )
+                    raise ValueError('Cache key with id "{}" is not found'.format(key_id))
+
+                self._on_cache_group_upload_result(
+                    key,
+                    cache_group,
+                    success=status == self.CACHE_KEY_UPLOAD_SUCCESS,
+                )
+
+        except LockError:
+            logger.error(
+                'Key {key_id}: failed to acquire lock'.format(
+                    key_id=key_id
+                )
+            )
+            raise RuntimeError('Failed to acquire cache key lock')
+
+    def _on_cache_group_upload_result(self, key, cache_group, success):
+        """ Update cache key data after gatlinggun's upload task is finished
+
+        Removes corresponding task from 'add_queue' key and
+        add cache group ``cache_group`` to key's 'cache_groups'
+        if upload has been successful.
+        """
+
+        # remove task from queue
+        for task in key['add_queue']:
+            if task['cache_group'] == cache_group:
+                key['add_queue'].remove(task)
+                break
+
+        # add cache group to key's 'cache_groups' on success
+        if success and cache_group not in key['cache_groups']:
+            key['cache_groups'].append(cache_group)
+
+        self._update_cache_key(
+            key=key,
+            document={
+                '$set': {
+                    'add_queue': key['add_queue'],
+                    'cache_groups': key['cache_groups'],
+                }
+            }
+        )
+
+    @h.concurrent_handler
+    def update_cache_key_removal_status(self, request):
+        """ Update cache key's mastermind state after removal
+
+        Parameters:
+            request: is a dict with following keys:
+                id: cache key id
+                couple: cache key couple
+                cache_group: id of cache group
+                status: cache key status after task execution, can be one of:
+                    'removal_success' - cache key was successfully removed from a cache group;
+                    'removal_failed' - cache key removal failed;
+        """
+        if 'id' not in request:
+            raise ValueError('Key is required')
+        if 'couple' not in request:
+            raise ValueError('Key couple is required')
+        if 'cache_group' not in request:
+            raise ValueError('Cache group id is required')
+        if 'status' not in request:
+            raise ValueError('Status is required')
+        if request['status'] not in self.CACHE_KEY_REMOVAL_STATUSES:
+            raise ValueError('Unknown status: "{}"'.format(request['status']))
+
+        logger.info(
+            'Key {key_id}: updating key status on external request, '
+            'status is "{status}"'.format(
+                key_id=request['id'],
+                status=request['status'],
+            )
+        )
+
+        return self._update_cache_key_removal_status(
+            key_id=request['id'],
+            couple=request['couple'],
+            cache_group=request['cache_group'],
+            status=request['status'],
+        )
+
+    def _update_cache_key_removal_status(self, key_id, couple, cache_group, status):
+        """ Update cache key ``key_id`` state according to ``status``
+        after removal.
+
+        Locks the cache key and updates it based on the result from gatlinggun.
+        """
+        try:
+
+            with sync_manager.lock(CacheManager.KEY_LOCK_TPL.format(key_id=key_id), timeout=10):
+                key = self.keys_db.find_one({
+                    'id': key_id,
+                    'couple': couple,
+                })
+                if key is None:
+                    logger.info(
+                        'Key {key_id}: key not found'.format(
+                            key_id=key_id,
+                        )
+                    )
+                    raise ValueError('Cache key with id "{}" is not found'.format(key_id))
+
+                self._on_cache_group_removal_result(
+                    key,
+                    cache_group,
+                    success=status == self.CACHE_KEY_REMOVAL_SUCCESS,
+                )
+
+        except LockError:
+            logger.error(
+                'Key {key_id}: failed to acquire lock'.format(
+                    key_id=key_id
+                )
+            )
+            raise RuntimeError('Failed to acquire cache key lock')
+
+    def _on_cache_group_removal_result(self, key, cache_group, success):
+        """ Update cache key data after gatlinggun's removal task is finished
+
+        Remove cache group ``cache_group`` from key's cache groups.
+
+        TODO: When removal queue will be implemented, decide if task should
+        be removed from this queue on failed removal.
+        """
+        if not success:
+            logger.error(
+                'Key {key}: key removal from cache group {cgid} failed'.format(
+                    key=key['id'],
+                    cgid=cache_group,
+                )
+            )
+
+            # we still remove cache group from 'cache_groups'
+            # even if removal failed, no fail-over is required
+            pass
+
+        try:
+            key['cache_groups'].remove(cache_group)
+        except ValueError:
+            # ``cache_group`` is not found among key's cache groups, it's fine
+            return
+
+        self._update_cache_key(
+            key=key,
+            document={
+                '$set': {
+                    'cache_groups': key['cache_groups'],
+                }
+            }
+        )
+
+    def _update_cache_key(self, key, document):
+        result = self.keys_db.update(
+            spec={
+                'id': key['id'],
+                'couple': key['couple'],
+            },
+            document=document,
+        )
+
+        # TODO: this check should be wrapped inside a common Mongo wrapper
+        # object
+        if result.get('ok') != 1:
+            logger.error(
+                'Key {key_id}: update failed: {result}'.format(
+                    key_id=key['id'],
+                )
+            )
+            raise RuntimeError('Failed to update cache key status')
+
     def nodes_update(self):
         try:
             start_ts = time.time()
