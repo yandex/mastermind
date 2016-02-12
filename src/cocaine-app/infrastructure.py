@@ -973,6 +973,79 @@ class Infrastructure(object):
 
         self.update_groups_list(tree)
 
+    def groups_by_total_space(self, match_group_space=True, **kwargs):
+        """ Get good uncoupled groups bucketed by total space values
+
+        As total space for group can vary a little depending on the hardware,
+        there is a small tolerance value (5% by default) that is used when
+        comparing two groups with each other. If total space of the smaller
+        group lies within tolerance interval (e.g., -5%, +5%) of total space
+        of the larger group, it will be considered to have the same total space.
+
+        Parameters:
+            match_group_space: if False, all groups in the resulting mapping will
+                be bucketed to a key 'any', otherwise tolerance interval will be used
+                to bucket the groups;
+            **kwargs: options for selecting uncoupled groups, will be passed through
+                to get_good_uncoupled_groups;
+
+        Returns: mapping of approximate total space value of groups to a groups list
+           having that value; if match_group_space is False, all groups will be listed
+           under key 'any'.
+
+        Examples:
+
+            when match_group_space == True:
+            {
+                1073741824: [10, 20, 30],  # 1Gb groups
+                5368709120: [15, 25],      # 5Gb groups
+            }
+
+            when match_group_space == False:
+            {
+                'any': [10, 15, 20, 25, 30],
+            }
+        """
+        suitable_groups = self.get_good_uncoupled_groups(**kwargs)
+        groups_by_total_space = {}
+
+        if not match_group_space:
+            groups_by_total_space['any'] = [group.group_id for group in suitable_groups]
+            return groups_by_total_space
+
+        total_spaces = (
+            group.get_stat().total_space
+            for group in suitable_groups
+        )
+
+        # bucketing groups by approximate total space
+        ts_tolerance = config.get('total_space_diff_tolerance', 0.05)
+        cur_ts_key = 0
+        for ts in sorted(total_spaces, reverse=True):
+            if abs(cur_ts_key - ts) > cur_ts_key * ts_tolerance:
+                cur_ts_key = ts
+                groups_by_total_space[cur_ts_key] = []
+
+        total_spaces = sorted(groups_by_total_space.keys(), reverse=True)
+        logger.info('group total space sizes available: {0}'.format(list(total_spaces)))
+
+        for group in suitable_groups:
+            ts = group.get_stat().total_space
+            for ts_key in total_spaces:
+                if ts_key - ts < ts_key * ts_tolerance:
+                    groups_by_total_space[ts_key].append(group.group_id)
+                    break
+            else:
+                raise ValueError(
+                    'Failed to find total space key for group {group}, '
+                    'total space {ts}'.format(
+                        group=group,
+                        ts=ts,
+                    )
+                )
+
+        return groups_by_total_space
+
     def ns_current_state(self, nodes, types):
         ns_current_state = {}
         for node_type in types:

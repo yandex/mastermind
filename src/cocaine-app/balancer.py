@@ -484,71 +484,6 @@ class Balancer(object):
             infrastructure.infrastructure.sync_single_ns_settings(namespace)
         logger.info('Concurrent cluster info update completed')
 
-    def __groups_by_total_space(self, match_group_space):
-        suitable_groups = []
-        total_spaces = []
-
-        for group in infrastructure.infrastructure.get_good_uncoupled_groups():
-
-            if not len(group.node_backends):
-                logger.info('Group {0} cannot be used, it has empty node list'.format(
-                    group.group_id))
-                continue
-
-            if group.status != storage.Status.INIT:
-                logger.info('Group {0} cannot be used, status is {1}, should be {2}'.format(
-                    group.group_id, group.status, storage.Status.INIT))
-                continue
-
-            suitable = True
-            for node_backend in group.node_backends:
-                if node_backend.status != storage.Status.OK:
-                    logger.info(
-                        'Group {0} cannot be used, node backend {1} status is {2} (not OK)'.format(
-                            group.group_id, node_backend, node_backend.status
-                        )
-                    )
-                    suitable = False
-                    break
-
-            if not suitable:
-                continue
-
-            suitable_groups.append(group.group_id)
-            total_spaces.append(group.get_stat().total_space)
-
-        groups_by_total_space = {}
-
-        if match_group_space:
-            # bucketing groups by approximate total space
-            ts_tolerance = config.get('total_space_diff_tolerance', 0.05)
-            cur_ts_key = 0
-            for ts in reversed(sorted(total_spaces)):
-                if abs(cur_ts_key - ts) > cur_ts_key * ts_tolerance:
-                    cur_ts_key = ts
-                    groups_by_total_space[cur_ts_key] = []
-
-            total_spaces = list(reversed(sorted(groups_by_total_space.keys())))
-            logger.info('group total space sizes available: {0}'.format(total_spaces))
-
-            for group_id in suitable_groups:
-                group = storage.groups[group_id]
-                ts = group.get_stat().total_space
-                for ts_key in total_spaces:
-                    if ts_key - ts < ts_key * ts_tolerance:
-                        groups_by_total_space[ts_key].append(group_id)
-                        break
-                else:
-                    raise ValueError(
-                        'Failed to find total space key for group {0}, total space {1}'.format(
-                            group_id, ts
-                        )
-                    )
-        else:
-            groups_by_total_space['any'] = [group_id for group_id in suitable_groups]
-
-        return groups_by_total_space
-
     @staticmethod
     def _remove_unusable_groups(groups_by_total_space, groups):
         for ts, group_ids in groups_by_total_space.iteritems():
@@ -921,8 +856,9 @@ class Balancer(object):
             self.__update_cluster_state(namespace=options['namespace'])
             logger.info('Updating cluster info completed')
 
-            groups_by_total_space = self.__groups_by_total_space(
-                options['match_group_space'])
+            groups_by_total_space = infrastructure.infrastructure.groups_by_total_space(
+                match_group_space=options['match_group_space']
+            )
 
             logger.info('groups by total space: {0}'.format(groups_by_total_space))
 
