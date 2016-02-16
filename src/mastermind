@@ -1085,7 +1085,7 @@ def cache_couples_list(state=('s', '',
     '''List cache couples with various view options'''
     return _couple_list(
         namespace='storage_cache',
-        state=state,
+        state=state or None,
         short=short,
         json=json,
         host=host,
