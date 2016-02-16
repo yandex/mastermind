@@ -268,6 +268,13 @@ class CacheManager(object):
             status=request['status'],
         )
 
+    @staticmethod
+    def _key_lock(key_id, **kwargs):
+        return sync_manager.lock(
+            CacheManager.KEY_LOCK_TPL.format(key_id=key_id),
+            **kwargs
+        )
+
     def _update_cache_key_upload_status(self, key_id, couple, cache_group, status):
         """ Update cache key ``key_id`` state according to ``status``
         after upload.
@@ -276,7 +283,7 @@ class CacheManager(object):
         """
         try:
 
-            with sync_manager.lock(CacheManager.KEY_LOCK_TPL.format(key_id=key_id), timeout=10):
+            with self._key_lock(key_id, timeout=10):
                 key = self.keys_db.find_one({
                     'id': key_id,
                     'couple': couple,
@@ -378,7 +385,7 @@ class CacheManager(object):
         """
         try:
 
-            with sync_manager.lock(CacheManager.KEY_LOCK_TPL.format(key_id=key_id), timeout=10):
+            with self._key_lock(key_id, timeout=10):
                 key = self.keys_db.find_one({
                     'id': key_id,
                     'couple': couple,
@@ -733,15 +740,14 @@ class CacheDistributor(object):
                     mb_per_s(_key_bw(key_stat)), copies_diff))
 
             try:
-                with sync_manager.lock(CacheManager.KEY_LOCK_TPL.format(key_id=key['id'])):
-                    with self._cache_groups_lock:
-                        try:
-                            self._update_key(key, key_stat, copies_diff)
-                        except Exception:
-                            logger.exception(
-                                'Key {}, couple {}: failed to expand'.format(
-                                    key['id'], key['couple']))
-                            continue
+                with self._key_lock(key['id']), self._cache_groups_lock:
+                    try:
+                        self._update_key(key, key_stat, copies_diff)
+                    except Exception:
+                        logger.exception(
+                            'Key {}, couple {}: failed to expand'.format(
+                                key['id'], key['couple']))
+                        continue
             except LockError:
                 logger.error(
                     'Key {key}, couple {couple}, failed to acquire lock, will be skipped'.format(
