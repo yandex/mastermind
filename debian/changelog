@@ -1,3 +1,14 @@
+mastermind (2.25.115) trusty; urgency=medium
+
+  * Add 'update_cache_key_status' handle
+  * Implement cached key upload queue
+  * Fix cache couples list with no 'state' option
+  * Fix couple list filtering
+  * Add trace id to dnet_recovery command
+  * Use blob_size_limit as total space unconditionally
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 16 Feb 2016 23:46:35 +0300
+
 mastermind (2.25.114) trusty; urgency=medium
 
   * Change effective data size accounting
