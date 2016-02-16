@@ -121,6 +121,11 @@ class LockedItem(object):
         self.lock_id = lock_id
         self.data = None
 
+    @property
+    def path(self):
+        """ Returns full lock path """
+        return self._lock_path
+
     def __enter__(self):
         self.acquire()
         return self
