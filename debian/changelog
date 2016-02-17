@@ -1,3 +1,9 @@
+mastermind (2.25.116) trusty; urgency=medium
+
+  * Fix for cache lock acquiring
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 17 Feb 2016 12:25:22 +0300
+
 mastermind (2.25.115) trusty; urgency=medium
 
   * Add 'update_cache_key_status' handle
