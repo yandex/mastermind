@@ -31,11 +31,21 @@ CACHE_CFG = config.get('cache', {})
 CACHE_CLEANER_CFG = CACHE_CFG.get('cleaner', {})
 CACHE_GROUP_PATH_PREFIX = CACHE_CFG.get('group_path_prefix')
 
+KEY_LOCK_TPL = 'cache/keys/{key_id}'
+
+
+def cache_key_lock(key_id, **kwargs):
+    """ Get lock for cache key with id 'key_id'
+    """
+    return sync_manager.lock(
+        KEY_LOCK_TPL.format(key_id=key_id),
+        **kwargs
+    )
+
 
 class CacheManager(object):
 
     DISTRIBUTE_LOCK = 'cache/distribute'
-    KEY_LOCK_TPL = 'cache/keys/{key_id}'
 
     MONITOR_TOP_STATS = 'monitor_top_stats'
 
@@ -268,13 +278,6 @@ class CacheManager(object):
             status=request['status'],
         )
 
-    @staticmethod
-    def _key_lock(key_id, **kwargs):
-        return sync_manager.lock(
-            CacheManager.KEY_LOCK_TPL.format(key_id=key_id),
-            **kwargs
-        )
-
     def _update_cache_key_upload_status(self, key_id, couple, cache_group, status):
         """ Update cache key ``key_id`` state according to ``status``
         after upload.
@@ -283,7 +286,7 @@ class CacheManager(object):
         """
         try:
 
-            with self._key_lock(key_id, timeout=10):
+            with cache_key_lock(key_id, timeout=10):
                 key = self.keys_db.find_one({
                     'id': key_id,
                     'couple': couple,
@@ -385,7 +388,7 @@ class CacheManager(object):
         """
         try:
 
-            with self._key_lock(key_id, timeout=10):
+            with cache_key_lock(key_id, timeout=10):
                 key = self.keys_db.find_one({
                     'id': key_id,
                     'couple': couple,
@@ -740,7 +743,7 @@ class CacheDistributor(object):
                     mb_per_s(_key_bw(key_stat)), copies_diff))
 
             try:
-                with self._key_lock(key['id']), self._cache_groups_lock:
+                with cache_key_lock(key['id']), self._cache_groups_lock:
                     try:
                         self._update_key(key, key_stat, copies_diff)
                     except Exception:
