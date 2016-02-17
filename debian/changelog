@@ -1,3 +1,9 @@
+mastermind (2.25.117) trusty; urgency=medium
+
+  * Increase cache worker startup timeout
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 17 Feb 2016 14:37:28 +0300
+
 mastermind (2.25.116) trusty; urgency=medium
 
   * Fix for cache lock acquiring
