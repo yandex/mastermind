@@ -249,12 +249,21 @@ class NodeInfoUpdater(object):
                 logger.debug('Adding node {}'.format(node_addr))
                 storage.nodes.add(host, ha.port, ha.family)
 
+        responses_collected = 0
         for node, result in self._do_get_monitor_stats(host_addrs):
+            responses_collected += 1
             self.update_statistics(
                 node,
                 result['content'],
                 elapsed_time=result['request_time']
             )
+
+        logger.info(
+            'Number of hosts in route table: {}, responses collected {}'.format(
+                len(host_addrs),
+                responses_collected,
+            )
+        )
 
         # TODO: can we use iterkeys?
         nbs = (groups and
@@ -629,9 +638,12 @@ class NodeInfoUpdater(object):
                 info['hosts'] = couple.couple_hosts()
                 # couples
                 res[ns.id]['couples'].append(info)
-            except Exception as e:
-                logger.error('Failed to include couple {0} in namespace states: {1}'.format(
-                    str(couple), e))
+            except Exception:
+                logger.exception(
+                    'Failed to include couple {couple} in namespace states'.format(
+                        couple=couple
+                    )
+                )
                 continue
 
         # weights
