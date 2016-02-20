@@ -1633,6 +1633,8 @@ class DcHostView(object):
             dc_hosts = dcs_hosts.setdefault(node.host.dc, DcNodes())
             if node.host in hosts:
                 continue
+            if node.stat is None:
+                continue
             dc_hosts.append(node)
         self.dcs_hosts = dcs_hosts
 
