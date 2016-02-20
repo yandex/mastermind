@@ -679,14 +679,20 @@ class FsStat(object):
         self.total_space = new_vfs_stat['blocks'] * new_vfs_stat['bsize']
         self.free_space = new_free_space
 
-    def update(self, raw_stat, collect_ts):
+    def update(self, fs, raw_stat, collect_ts):
         self.ts = collect_ts
         vfs_stat = raw_stat['vfs']
         dstat_stat = raw_stat['dstat']
 
         if 'error' in dstat_stat:
+            # do not update state
             new_dstat = {}
-            self.apply_new_dstat(new_dstat)
+            logger.error(
+                '{fs}: dstat error: {dstat}'.format(
+                    fs=fs,
+                    dstat=dstat_stat,
+                )
+            )
         else:
             new_dstat = dstat_stat
             new_dstat['ts'] = (dstat_stat['timestamp']['tv_sec'] +
@@ -696,8 +702,14 @@ class FsStat(object):
         self.dstat = new_dstat
 
         if 'error' in vfs_stat:
+            # do not update state
             new_vfs_stat = {}
-            self.apply_new_vfs_stat(new_vfs_stat)
+            logger.error(
+                '{fs}: vfs stat error: {vfs_stat}'.format(
+                    fs=fs,
+                    vfs_stat=vfs_stat,
+                )
+            )
         else:
             new_vfs_stat = vfs_stat
             new_vfs_stat['ts'] = (vfs_stat['timestamp']['tv_sec'] +
@@ -732,7 +744,7 @@ class Fs(object):
     def update_statistics(self, new_stat, collect_ts):
         if self.stat is None:
             self.stat = FsStat()
-        self.stat.update(new_stat, collect_ts)
+        self.stat.update(self, new_stat, collect_ts)
 
     def update_commands_stats(self):
         self.stat.update_commands_stats(self.node_backends)
