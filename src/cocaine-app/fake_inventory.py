@@ -140,3 +140,22 @@ def get_host_ip_addresses(hostname):
         ip_address = sockaddr[0]
         ip_addresses.setdefault(family, []).append(ip_address)
     return ip_addresses
+
+
+def get_new_group_files(group_id, total_space):
+    '''
+    Get files required for the new group to be created
+
+    Files will be created on a filesystem in group's base directory by mastermind-minion.
+    They can be helpful if elliptics is configured by automatic scripts
+    that examine the contents of group's base directory.
+    Filename should be relative to group's base directory.
+
+    Returns:
+        {
+            <filename1>: <file content>,
+            <filename2>: <file content>,
+            ...
+        }
+    '''
+    return {}
