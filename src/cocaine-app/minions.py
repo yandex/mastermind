@@ -41,6 +41,8 @@ class Minions(object):
     START_URL_TPL = 'http://{host}:{port}/rsync/start/'
     TERMINATE_URL_TPL = 'http://{host}:{port}/command/terminate/'
 
+    CREATE_GROUP_URL_TPL = 'http://{host}:{port}/command/create_group/'
+    REMOVE_GROUP_URL_TPL = 'http://{host}:{port}/command/remove_group/'
     DNET_CLIENT_CMD_URL_TPL = 'http://{host}:{port}/command/dnet_client/'
 
     def __init__(self, node):
@@ -395,6 +397,37 @@ class Minions(object):
                 self._check_param(k, v)
             dst[params_rename.get(k, k)] = v
         return dst
+
+    def create_group(self, host, params, files):
+        url = self.CREATE_GROUP_URL_TPL.format(host=host, port=self.minion_port)
+        data = self._update_query_parameters(
+            dst={'command': 'create_group'},
+            src=params,
+        )
+        commands_states = self._perform_request(
+            host=host,
+            url=url,
+            params=data,
+            files=files,
+        )
+
+        # a single command execution should return a list with a single command
+        return commands_states.values()[0]
+
+    def remove_group(self, host, params):
+        url = self.REMOVE_GROUP_URL_TPL.format(host=host, port=self.minion_port)
+        data = self._update_query_parameters(
+            dst={'command': 'remove_group'},
+            src=params,
+        )
+        commands_states = self._perform_request(
+            host=host,
+            url=url,
+            params=data,
+        )
+
+        # a single command execution should return a list with a single command
+        return commands_states.values()[0]
 
     def dnet_client_cmd(self, host, params, files):
         url = self.DNET_CLIENT_CMD_URL_TPL.format(host=host, port=self.minion_port)
