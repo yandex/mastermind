@@ -18,3 +18,4 @@ set_net_monitoring_downtime = inv.set_net_monitoring_downtime
 remove_net_monitoring_downtime = inv.remove_net_monitoring_downtime
 get_host_ip_addresses = inv.get_host_ip_addresses
 get_new_group_files = inv.get_new_group_files
+get_node_config_path = inv.get_node_config_path

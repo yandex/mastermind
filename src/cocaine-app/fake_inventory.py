@@ -159,3 +159,13 @@ def get_new_group_files(group_id, total_space):
         }
     '''
     return {}
+
+
+def get_node_config_path(node):
+    '''
+    Get path to config file of node <node>
+
+    This config path can be used by mastermind-minion for fetching
+    any elliptics config parameters.
+    '''
+    return '/etc/elliptics/elliptics.conf'
