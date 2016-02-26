@@ -13,3 +13,4 @@ class TaskTypes(object):
     TYPE_NODE_BACKEND_DEFRAG_TASK = 'node_backend_defrag_task'
     TYPE_COUPLE_DEFRAG_STATE_CHECK_TASK = 'couple_defrag_state_check'
     TYPE_RSYNC_BACKEND_TASK = 'rsync_backend_task'
+    TYPE_DNET_CLIENT_BACKEND_CMD = 'dnet_client_backend_cmd'

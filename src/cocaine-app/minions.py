@@ -11,7 +11,9 @@ import urllib
 
 import elliptics
 import msgpack
-from tornado.httpclient import AsyncHTTPClient, HTTPClient, HTTPError
+import requests
+from requests.exceptions import RequestException
+from tornado.httpclient import AsyncHTTPClient, HTTPError
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from tornado.ioloop import IOLoop
 
@@ -38,6 +40,8 @@ class Minions(object):
     STATE_URL_TPL = 'http://{host}:{port}/rsync/list/?finish_ts_gte={finish_ts_gte}'
     START_URL_TPL = 'http://{host}:{port}/rsync/start/'
     TERMINATE_URL_TPL = 'http://{host}:{port}/command/terminate/'
+
+    DNET_CLIENT_CMD_URL_TPL = 'http://{host}:{port}/command/dnet_client/'
 
     def __init__(self, node):
         self.meta_session = node.meta_session.clone()
@@ -206,6 +210,30 @@ class Minions(object):
 
         return response.body
 
+    def _make_http_request(self, method, url, *args, **kwargs):
+        try:
+            response = requests.request(
+                method=method,
+                url=url,
+                *args,
+                **kwargs
+            )
+        except RequestException as e:
+            logger.error('HTTP request failed: {}'.format(e))
+            raise RuntimeError(e)
+
+        if response.status_code != 200:
+            raise RuntimeError(
+                'Minion http error, url {url}, '
+                'code {code} ({reason})'.format(
+                    url=url,
+                    code=response.status_code,
+                    reason=response.reason,
+                )
+            )
+
+        return response.text
+
     def _unwrap_response(self, response, host):
         if response['status'] != 'success':
             logger.warn('Host: {0}, minion returned error: {1}'.format(
@@ -243,27 +271,10 @@ class Minions(object):
 
     def _execute_cmd(self, host, command, params):
         url = self.START_URL_TPL.format(host=host, port=self.minion_port)
-        data = {'command': command}
-
-        params_rename = {
-            'success_codes': 'success_code'
-        }
-
-        def check_param(key, val):
-            if not isinstance(val, (int, long, basestring)):
-                logger.warn('Failed parameter {0}, value {1}'.format(key, val))
-                raise ValueError('Only strings are accepted as command parameters')
-
-        for k, v in params.iteritems():
-            if k == 'command':
-                raise ValueError('Parameter "command" is not accepted as command parameter')
-
-            if isinstance(v, (list, tuple)):
-                for val in v:
-                    check_param(k, val)
-            else:
-                check_param(k, v)
-            data[params_rename.get(k, k)] = v
+        data = self._update_query_parameters(
+            dst={'command': command},
+            src=params,
+        )
 
         io_loop = IOLoop()
         client = SimpleAsyncHTTPClient(io_loop)
@@ -367,6 +378,62 @@ class Minions(object):
             raise ValueError('Unknown command uid {0}'.format(uid))
 
         return state
+
+    def _update_query_parameters(self, dst, src):
+        params_rename = {
+            'success_codes': 'success_code'
+        }
+
+        for k, v in src.iteritems():
+            if k == 'command':
+                raise ValueError('Parameter "command" is not accepted as command parameter')
+
+            if isinstance(v, (list, tuple)):
+                for val in v:
+                    self._check_param(k, val)
+            else:
+                self._check_param(k, v)
+            dst[params_rename.get(k, k)] = v
+        return dst
+
+    def dnet_client_cmd(self, host, params, files):
+        url = self.DNET_CLIENT_CMD_URL_TPL.format(host=host, port=self.minion_port)
+        data = self._update_query_parameters(
+            dst={'command': 'dnet_client_cmd'},
+            src=params,
+        )
+        commands_states = self._perform_request(
+            host=host,
+            url=url,
+            params=data,
+            files=files,
+        )
+
+        # a single command execution should return a list with a single command
+        return commands_states.values()[0]
+
+    def _perform_request(self, host, url, **kwargs):
+        response = self._make_http_request(
+            method='POST',
+            url=url,
+            headers=self.minion_headers,
+            timeout=MINIONS_CFG.get('request_timeout', 5.0),
+            **kwargs
+        )
+        return self._process_state(host, response, sync=True)
+
+    @staticmethod
+    def _check_param(key, val):
+        if not isinstance(val, (int, long, basestring)):
+            message = (
+                'Invalid parameter {key} of type {type}, '
+                'only strings and numbers are accepted'.format(
+                    key=key,
+                    type=type(val).__name__,
+                )
+            )
+            logger.warn(message)
+            raise ValueError(message)
 
 
 class AsyncHTTPBatch(object):

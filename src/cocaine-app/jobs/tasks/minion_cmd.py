@@ -43,14 +43,26 @@ class MinionCmdTask(Task):
 
     def execute(self, processor):
         try:
-            minion_response = processor.minions._execute_cmd(self.host,
-                self.cmd, self.params)
+            minion_response = processor.minions._execute_cmd(
+                self.host,
+                self.cmd,
+                self.params
+            )
         except HTTPError as e:
             raise RetryError(self.attempts, e)
-        self.minion_cmd = minion_response.values()[0]
-        logger.info('Job {0}, task {1}, minions task execution: {2}'.format(
-            self.parent_job.id, self.id, self.minion_cmd))
+        self._set_minion_task_parameters(minion_response.values()[0])
+
+    def _set_minion_task_parameters(self, minion_cmd):
+        self.minion_cmd = minion_cmd
         self.minion_cmd_id = self.minion_cmd['uid']
+        logger.info(
+            'Job {job_id}, task {task_id}, minions task '
+            'execution: {command}'.format(
+                job_id=self.parent_job.id,
+                task_id=self.id,
+                command=self.minion_cmd
+            )
+        )
 
     def human_dump(self):
         data = super(MinionCmdTask, self).human_dump()

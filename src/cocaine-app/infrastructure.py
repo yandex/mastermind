@@ -47,11 +47,16 @@ logger.info('Rsync module using: %s' % RSYNC_MODULE)
 logger.info('Rsync user: %s' % RSYNC_USER)
 
 
+DNET_CLIENT_BACKEND_CMD_TPL = (
+    'dnet_client backend -r {host}:{port}:{family} '
+    '{dnet_client_command} --backend {backend_id} --wait-timeout=1000'
+)
+
+
 def dnet_client_backend_command(command):
     def wrapper(host, port, family, backend_id):
-        cmd = 'dnet_client backend -r {host}:{port}:{family} {command} --backend {backend_id} --wait-timeout=1000'
-        return cmd.format(
-            command=command,
+        return DNET_CLIENT_BACKEND_CMD_TPL.format(
+            dnet_client_command=command,
             host=host,
             port=port,
             family=family,
