@@ -1,3 +1,17 @@
+mastermind (2.25.120) trusty; urgency=medium
+
+  * Enable dnet_recovery safe mode
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sun, 28 Feb 2016 00:08:51 +0300
+
+mastermind (2.25.119) trusty; urgency=medium
+
+  * Fix bug for dc hosts view
+  * Add logging for monitor stats update
+  * Fix error fs and dstat update
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 23 Feb 2016 13:04:56 +0300
+
 mastermind (2.25.118) trusty; urgency=medium
 
   * Increase startup timeouts

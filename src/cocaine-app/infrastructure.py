@@ -74,7 +74,7 @@ class Infrastructure(object):
     DNET_RECOVERY_DC_CMD = (
         'dnet_recovery dc {remotes} -g {groups} -D {tmp_dir} '
         '-a {attempts} -b {batch} -l {log} -L {log_level} -n {processes_num} -M '
-        '-T {trace_id}'
+        '-T {trace_id} -S'
     )
     DNET_RECOVERY_DC_REMOTE_TPL = '-r {host}:{port}:{family}'
 
