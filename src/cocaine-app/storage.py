@@ -1636,6 +1636,7 @@ class DcHostView(object):
             if node.stat is None:
                 continue
             dc_hosts.append(node)
+            hosts.add(node.host)
         self.dcs_hosts = dcs_hosts
 
     def __getitem__(self, key):
