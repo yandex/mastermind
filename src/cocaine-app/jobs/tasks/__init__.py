@@ -11,6 +11,7 @@ from rsync_backend import RsyncBackendTask
 from create_group import CreateGroupTask
 from remove_group import RemoveGroupTask
 from dnet_client_backend_cmd import DnetClientBackendCmdTask
+from write_meta_key import WriteMetaKeyTask
 
 
 class TaskFactory(object):
@@ -38,4 +39,6 @@ class TaskFactory(object):
             return RemoveGroupTask.from_data(data, job)
         if task_type == TaskTypes.TYPE_DNET_CLIENT_BACKEND_CMD:
             return DnetClientBackendCmdTask.from_data(data, job)
+        if task_type == TaskTypes.TYPE_WRITE_META_KEY:
+            return WriteMetaKeyTask.from_data(data, job)
         raise ValueError('Unknown task type {0}'.format(task_type))

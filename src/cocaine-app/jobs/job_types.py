@@ -23,4 +23,5 @@ class TaskTypes(object):
     TYPE_RSYNC_BACKEND_TASK = 'rsync_backend_task'
     TYPE_CREATE_GROUP = 'create_group'
     TYPE_REMOVE_GROUP = 'remove_group'
+    TYPE_WRITE_META_KEY = 'write_meta_key'
     TYPE_DNET_CLIENT_BACKEND_CMD = 'dnet_client_backend_cmd'
