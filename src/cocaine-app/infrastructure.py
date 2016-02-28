@@ -956,7 +956,7 @@ class Infrastructure(object):
                     # when building cluster tree every host resolve operation
                     # failed for this hdd
                     continue
-                nodes['hdd'][hdd_path]['groups'].add(group.group_id)
+                nodes['hdd'][hdd_path].setdefault('groups', set()).add(group.group_id)
 
     def account_ns_couples(self, tree, nodes, namespace):
 
