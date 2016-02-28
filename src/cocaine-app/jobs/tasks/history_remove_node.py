@@ -73,13 +73,11 @@ class HistoryRemoveNodeTask(Task):
         data['hostname'] = cache.get_hostname_by_addr(data['host'], strict=False)
         return data
 
-    @property
-    def finished(self):
+    def finished(self, processor):
         return (not self.__node_in_group() or
                 time.time() - self.start_ts > self.TASK_TIMEOUT)
 
-    @property
-    def failed(self):
+    def failed(self, processor):
         return (time.time() - self.start_ts > self.TASK_TIMEOUT and
                 self.__node_in_group())
 

@@ -280,7 +280,7 @@ class JobProcessor(object):
                     job._dirty = True
                     break
 
-                if not task.finished:
+                if not task.finished(self):
                     logger.debug('Job {0}, task {1} is not finished'.format(
                         job.id, task.id))
                     break
@@ -291,7 +291,7 @@ class JobProcessor(object):
                 job._dirty = True
 
                 task.status = (Task.STATUS_FAILED
-                               if task.failed else
+                               if task.failed(self) else
                                Task.STATUS_COMPLETED)
 
                 try:

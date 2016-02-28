@@ -69,14 +69,12 @@ class MinionCmdTask(Task):
         data['hostname'] = cache.get_hostname_by_addr(data['host'], strict=False)
         return data
 
-    @property
-    def finished(self):
+    def finished(self, processor):
         return ((self.minion_cmd is None and
                  time.time() - self.start_ts > self.TASK_TIMEOUT) or
                 (self.minion_cmd and self.minion_cmd['progress'] == 1.0))
 
-    @property
-    def failed(self):
+    def failed(self, processor):
         if self.minion_cmd is None:
             return True
         return (self.minion_cmd['exit_code'] != 0 and

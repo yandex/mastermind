@@ -41,13 +41,11 @@ class CoupleDefragStateCheckTask(Task):
             stats_ts.extend(s.ts for s in stats)
         self.stats_ts = max(stats_ts)
 
-    @property
-    def finished(self):
+    def finished(self, processor):
         return (self.__couple_defraged() or
                 time.time() - self.start_ts > self.TASK_TIMEOUT)
 
-    @property
-    def failed(self):
+    def failed(self, processor):
         return (time.time() - self.start_ts > self.TASK_TIMEOUT and
                 not self.__couple_defraged())
 
