@@ -414,11 +414,10 @@ class JobProcessor(object):
 
             job = self._create_job(job_type, params, force=force)
 
-        except LockFailedError as e:
+        except LockFailedError:
             raise
-        except Exception as e:
-            logger.error('Failed to create job: {0}\n{1}'.format(e,
-                traceback.format_exc()))
+        except Exception:
+            logger.exception('Failed to create job')
             raise
 
         return job.dump()
