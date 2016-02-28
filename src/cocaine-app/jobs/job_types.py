@@ -4,12 +4,14 @@ class JobTypes(object):
     TYPE_RECOVER_DC_JOB = 'recover_dc_job'
     TYPE_COUPLE_DEFRAG_JOB = 'couple_defrag_job'
     TYPE_RESTORE_GROUP_JOB = 'restore_group_job'
+    TYPE_MAKE_LRC_GROUPS_JOB = 'make_lrc_groups_job'
 
     AVAILABLE_TYPES = (
         TYPE_MOVE_JOB,
         TYPE_RECOVER_DC_JOB,
         TYPE_COUPLE_DEFRAG_JOB,
         TYPE_RESTORE_GROUP_JOB,
+        TYPE_MAKE_LRC_GROUPS_JOB,
     )
 
 

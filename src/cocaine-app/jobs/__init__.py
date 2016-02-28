@@ -15,6 +15,7 @@ from job import Job
 from couple_defrag import CoupleDefragJob
 from move import MoveJob
 from recover_dc import RecoverDcJob
+from make_lrc_groups import MakeLrcGroupsJob
 from job_factory import JobFactory
 from restore_group import RestoreGroupJob
 from tasks import Task, MinionCmdTask
@@ -47,6 +48,7 @@ class JobProcessor(object):
         JobTypes.TYPE_MOVE_JOB: 20,
         JobTypes.TYPE_RECOVER_DC_JOB: 15,
         JobTypes.TYPE_COUPLE_DEFRAG_JOB: 10,
+        JobTypes.TYPE_MAKE_LRC_GROUPS_JOB: 5,
     }
 
     # job types that should be processed by processor,
@@ -56,6 +58,7 @@ class JobProcessor(object):
         JobTypes.TYPE_MOVE_JOB,
         JobTypes.TYPE_RECOVER_DC_JOB,
         JobTypes.TYPE_COUPLE_DEFRAG_JOB,
+        JobTypes.TYPE_MAKE_LRC_GROUPS_JOB,
     ])
 
     def __init__(self, job_finder, node, db, niu, minions):
@@ -443,6 +446,8 @@ class JobProcessor(object):
             JobType = CoupleDefragJob
         elif job_type == JobTypes.TYPE_RESTORE_GROUP_JOB:
             JobType = RestoreGroupJob
+        elif job_type == JobTypes.TYPE_MAKE_LRC_GROUPS_JOB:
+            JobType = MakeLrcGroupsJob
 
         try:
             job = JobType.new(self.session, **params)
@@ -832,10 +837,14 @@ class JobFinder(object):
         return jobs
 
     def get_uncoupled_groups_in_service(self):
+        # TODO: this list of types should be dynamical,
+        # each job type should have a property to determine
+        # if it uses uncoupled groups.
         jobs = self.jobs(
             types=(
                 JobTypes.TYPE_MOVE_JOB,
                 JobTypes.TYPE_RESTORE_GROUP_JOB,
+                JobTypes.TYPE_MAKE_LRC_GROUPS_JOB,
             ),
             statuses=(Job.STATUS_NOT_APPROVED,
                       Job.STATUS_NEW,

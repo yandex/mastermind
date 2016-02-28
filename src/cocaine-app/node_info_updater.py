@@ -573,7 +573,9 @@ class NodeInfoUpdater(object):
                     if groups:
                         params['groups'] = [g.group_id for g in groups]
                     for job in self.job_finder.jobs(**params):
-                        jobs[job.group] = job
+                        # TODO: this should definitely be done some other way
+                        if hasattr(job, 'group'):
+                            jobs[job.group] = job
                 except Exception as e:
                     logger.exception('Failed to fetch pending jobs: {0}'.format(e))
                     pass

@@ -60,6 +60,10 @@ GOOD_STATUSES = set([Status.OK, Status.FULL])
 NOT_BAD_STATUSES = set([Status.OK, Status.FULL, Status.FROZEN])
 
 
+class Lrc(object):
+    SCHEME_8_2_2_V1 = 'lrc-8-2-2-v1'
+
+
 class ResourceError(KeyError):
     def __str__(self):
         return str(self.args[0])
@@ -1096,11 +1100,13 @@ class Group(object):
     TYPE_DATA = 'data'
     TYPE_CACHE = 'cache'
     TYPE_UNCOUPLED_CACHE = 'uncoupled_cache'
+    TYPE_UNCOUPLED_LRC_8_2_2_V1 = 'uncoupled_lrc-8-2-2-v1'
 
     AVAILABLE_TYPES = set([
         TYPE_DATA,
         TYPE_CACHE,
         TYPE_UNCOUPLED_CACHE,
+        TYPE_UNCOUPLED_LRC_8_2_2_V1,
     ])
 
     def __init__(self, group_id, node_backends=None):
@@ -1380,6 +1386,18 @@ class Group(object):
             'type': self.TYPE_CACHE,
             'namespace': self.CACHE_NAMESPACE,
             'couple': (self.group_id,)
+        }
+
+    @staticmethod
+    def compose_uncoupled_lrc_group_meta(lrc_groups, scheme):
+        if scheme == Lrc.SCHEME_8_2_2_V1:
+            group_type = Group.TYPE_UNCOUPLED_LRC_8_2_2_V1
+        else:
+            raise ValueError('Unknown scheme: {}'.format(scheme))
+        return {
+            'version': 2,
+            'type': group_type,
+            'lrc_groups': lrc_groups,
         }
 
     @property
