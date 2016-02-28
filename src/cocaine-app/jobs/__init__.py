@@ -777,7 +777,14 @@ class JobFinder(object):
 
             jobs_list = jobs_list[offset:offset + limit]
 
-        res = [JobFactory.make_job(j).human_dump() for j in jobs_list]
+        res = []
+        for j in jobs_list:
+            try:
+                res.append(JobFactory.make_job(j).human_dump())
+            except Exception:
+                job_id = j.get('id', '[unknown id]')
+                logger.exception('Failed to dump job {}'.format(job_id))
+                continue
         return {'jobs': res,
                 'total': total_jobs}
 
