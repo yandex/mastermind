@@ -49,6 +49,15 @@ class JobProcessor(object):
         JobTypes.TYPE_COUPLE_DEFRAG_JOB: 10,
     }
 
+    # job types that should be processed by processor,
+    # jobs with other types will be skipped
+    SUPPORTED_JOBS = set([
+        JobTypes.TYPE_RESTORE_GROUP_JOB,
+        JobTypes.TYPE_MOVE_JOB,
+        JobTypes.TYPE_RECOVER_DC_JOB,
+        JobTypes.TYPE_COUPLE_DEFRAG_JOB,
+    ])
+
     def __init__(self, job_finder, node, db, niu, minions):
         logger.info('Starting JobProcessor')
         self.job_finder = job_finder
@@ -107,7 +116,8 @@ class JobProcessor(object):
             if job.status == Job.STATUS_NOT_APPROVED:
                 continue
             if job.status == Job.STATUS_NEW:
-                new_jobs.append(job)
+                if job.type in self.SUPPORTED_JOBS:
+                    new_jobs.append(job)
             else:
                 type_res = resources[job.type]
                 for res_type, res_val in self._unfold_resources(job.resources):
@@ -398,8 +408,7 @@ class JobProcessor(object):
             except IndexError:
                 raise ValueError('Job type is required')
 
-            if job_type not in (JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_RECOVER_DC_JOB,
-                JobTypes.TYPE_COUPLE_DEFRAG_JOB, JobTypes.TYPE_RESTORE_GROUP_JOB):
+            if job_type not in JobTypes.AVAILABLE_TYPES:
                 raise ValueError('Invalid job type: {0}'.format(job_type))
 
             try:

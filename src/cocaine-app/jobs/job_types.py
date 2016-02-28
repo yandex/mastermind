@@ -5,6 +5,14 @@ class JobTypes(object):
     TYPE_COUPLE_DEFRAG_JOB = 'couple_defrag_job'
     TYPE_RESTORE_GROUP_JOB = 'restore_group_job'
 
+    AVAILABLE_TYPES = (
+        TYPE_MOVE_JOB,
+        TYPE_RECOVER_DC_JOB,
+        TYPE_COUPLE_DEFRAG_JOB,
+        TYPE_RESTORE_GROUP_JOB,
+    )
+
+
 class TaskTypes(object):
     TYPE_MINION_CMD = 'minion_cmd'
     TYPE_NODE_STOP_TASK = 'node_stop_task'
