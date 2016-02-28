@@ -98,7 +98,7 @@ class Minions(object):
             # fetch tasks finished in last 24 hours or not finished at all
             min_finish_ts = int(time.time()) - 24 * 60 * 60
             for host in hosts:
-                url = self.STATE_URL_TPL.format(host=host.addr,
+                url = self.STATE_URL_TPL.format(host=self._wrap_host(host.addr),
                                                 port=self.minion_port,
                                                 finish_ts_gte=min_finish_ts)
                 states[url] = host
@@ -272,7 +272,7 @@ class Minions(object):
         return self._execute_cmd(host, command, params)
 
     def _execute_cmd(self, host, command, params):
-        url = self.START_URL_TPL.format(host=host, port=self.minion_port)
+        url = self.START_URL_TPL.format(host=self._wrap_host(host), port=self.minion_port)
         data = self._update_query_parameters(
             dst={'command': command},
             src=params,
@@ -315,7 +315,7 @@ class Minions(object):
         return self._terminate_cmd(host, uid)
 
     def _terminate_cmd(self, host, uid):
-        url = self.TERMINATE_URL_TPL.format(host=host, port=self.minion_port)
+        url = self.TERMINATE_URL_TPL.format(host=self._wrap_host(host), port=self.minion_port)
         data = {'cmd_uid': uid}
 
         io_loop = IOLoop()
@@ -399,7 +399,7 @@ class Minions(object):
         return dst
 
     def create_group(self, host, params, files):
-        url = self.CREATE_GROUP_URL_TPL.format(host=host, port=self.minion_port)
+        url = self.CREATE_GROUP_URL_TPL.format(host=self._wrap_host(host), port=self.minion_port)
         data = self._update_query_parameters(
             dst={'command': 'create_group'},
             src=params,
@@ -415,7 +415,7 @@ class Minions(object):
         return commands_states.values()[0]
 
     def remove_group(self, host, params):
-        url = self.REMOVE_GROUP_URL_TPL.format(host=host, port=self.minion_port)
+        url = self.REMOVE_GROUP_URL_TPL.format(host=self._wrap_host(host), port=self.minion_port)
         data = self._update_query_parameters(
             dst={'command': 'remove_group'},
             src=params,
@@ -429,8 +429,11 @@ class Minions(object):
         # a single command execution should return a list with a single command
         return commands_states.values()[0]
 
-    def dnet_client_cmd(self, host, params, files):
-        url = self.DNET_CLIENT_CMD_URL_TPL.format(host=host, port=self.minion_port)
+    def dnet_client_cmd(self, host, params, files=None):
+        url = self.DNET_CLIENT_CMD_URL_TPL.format(
+            host=self._wrap_host(host),
+            port=self.minion_port,
+        )
         data = self._update_query_parameters(
             dst={'command': 'dnet_client_cmd'},
             src=params,
@@ -467,6 +470,15 @@ class Minions(object):
             )
             logger.warn(message)
             raise ValueError(message)
+
+    @staticmethod
+    def _wrap_host(addr):
+        '''
+        Wrap host ip address with square brackets if ipv6
+        '''
+        if not addr.startswith('[') and ':' in addr:
+            return '[' + addr + ']'
+        return addr
 
 
 class AsyncHTTPBatch(object):
