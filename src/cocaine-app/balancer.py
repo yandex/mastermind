@@ -1082,6 +1082,23 @@ class Balancer(object):
             elif auth_keys_settings['write'] is True:
                 auth_keys_settings['write'] = h.random_hex_string(16)
 
+        if 'attributes' in settings:
+            attributes = settings['attributes']
+
+            if 'capacity' not in attributes:
+                raise ValueError('attributes capacity is required when attributes parameters are used')
+            try:
+                capacity = attributes['capacity'] = int(attributes['capacity'])
+            except (TypeError, ValueError):
+                raise ValueError('attributes capacity should be non-negative integer')
+
+            if capacity < 0:
+                raise ValueError('attributes capacity should be non-negative integer')
+
+            if 'filename' in attributes:
+                if not isinstance(attributes['filename'], bool):
+                    raise ValueError('attributes filename should be boolean')
+
         keys = (settings.get('redirect', {}).get('expire-time'),
                 settings.get('signature', {}).get('token'),
                 settings.get('signature', {}).get('path_prefix'))
@@ -1146,7 +1163,8 @@ class Balancer(object):
         'success-copies-num', 'groups-count',
         'static-couple', 'auth-keys', 'signature', 'redirect',
         'min-units', 'add-units', 'features', 'reserved-space-percentage',
-        'check-for-update', '__service'
+        'check-for-update', '__service',
+        'attributes',
     ])
     ALLOWED_NS_SIGN_KEYS = set(['token', 'path_prefix'])
     ALLOWED_NS_AUTH_KEYS = set(['write', 'read'])
@@ -1157,6 +1175,10 @@ class Balancer(object):
         'add-orig-path-query-arg',
     ])
     ALLOWED_SERVICE_KEYS = set(['is_deleted'])
+    ALLOWED_ATTRIBUTES_KEYS = set([
+        'capacity',
+        'filename',
+    ])
 
     def __merge_dict(self, dst, src):
         for k, val in src.iteritems():
@@ -1246,6 +1268,9 @@ class Balancer(object):
             for k in settings['__service'].keys():
                 if k not in self.ALLOWED_SERVICE_KEYS:
                     del settings['__service'][k]
+            for k in settings.get('attributes', {}).keys():
+                if k not in self.ALLOWED_ATTRIBUTES_KEYS:
+                    del settings['attributes'][k]
 
             try:
                 self.__validate_ns_settings(namespace, settings)
