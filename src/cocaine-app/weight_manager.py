@@ -592,7 +592,7 @@ class DiskResources(object):
 class NetResources(object):
 
     WRITE_RATE_THRESHOLD = WEIGHT_CFG.get('net', {}).get('write_rate_threshold', 70 * (1024 ** 2))
-    MAX_WRITE_RATE = WEIGHT_CFG.get('net', {}).get('write_rate_threshold', 100 * (1024 ** 2))
+    MAX_WRITE_RATE = WEIGHT_CFG.get('net', {}).get('max_write_rate', 100 * (1024 ** 2))
 
     def __init__(self, key, net_load):
         self.key = key
