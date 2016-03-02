@@ -29,7 +29,7 @@ import storage
 import timed_queue
 from timer import periodic_timer
 from sync import sync_manager
-from sync.error import LockAlreadyAcquiredError
+from sync.error import LockError, LockAlreadyAcquiredError
 
 
 logger = logging.getLogger('mm.balancer')
@@ -568,8 +568,17 @@ class Balancer(object):
             try:
                 yield uncoupled_groups
             finally:
-                sync_manager.persistent_locks_release(locks.keys())
-                self._remove_unusable_groups(groups_by_total_space, uncoupled_groups)
+                try:
+                    sync_manager.persistent_locks_release(locks.keys())
+                except LockError as e:
+                    raise RuntimeError(
+                        'Couple {couple} is built but locks release failed: {error}'.format(
+                            couple=uncoupled_groups,
+                            error=e,
+                        )
+                    )
+                finally:
+                    self._remove_unusable_groups(groups_by_total_space, uncoupled_groups)
 
     def __couple_groups(self, size, couples, options, ns, groups_by_total_space):
 

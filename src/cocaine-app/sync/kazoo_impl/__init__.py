@@ -148,7 +148,9 @@ class ZkSyncManager(object):
             retry = self._retry.copy()
             result = retry(self.__inner_persistent_locks_release, locks=locks, check=check)
         except RetryFailedError:
-            raise LockError
+            raise LockError(
+                'Failed to release persistent locks {} after several retries'.format(locks)
+            )
         except KazooException as e:
             logger.error('Failed to remove persistent locks {0}: {1}\n{2}'.format(
                 locks, e, traceback.format_exc()))
