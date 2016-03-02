@@ -1,3 +1,9 @@
+mastermind (2.26.2) trusty; urgency=medium
+
+  * Add namespace attribute setitngs
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 02 Mar 2016 17:34:12 +0300
+
 mastermind (2.26.1) trusty; urgency=medium
 
   * Fix max net write setting for weight manager
