@@ -755,11 +755,6 @@ def ns_setup(namespace,
                  '',
                  'Allows namespace to use expire-time argument for signing url (1|0)'
              ),
-             attributes_capacity=(
-                 '',
-                 '',
-                 'Number of bytes to allocate for json section of a file (key)'
-             ),
              attributes_filename=(
                  '',
                  '',
@@ -798,7 +793,6 @@ def ns_setup(namespace,
             reserved_space_percentage=reserved_space_percentage,
             check_for_update=check_for_update,
             custom_expiration_time=custom_expiration_time,
-            attributes_capacity=attributes_capacity,
             attributes_filename=attributes_filename == '1',
         )
 
@@ -883,8 +877,6 @@ def ns_setup(namespace,
             settings['check-for-update'] = check_for_update != '0'
 
         attributes = {}
-        if attributes_capacity:
-            attributes['capacity'] = int(attributes_capacity)
         if attributes_filename:
             attributes['filename'] = attributes_filename == '1'
 
