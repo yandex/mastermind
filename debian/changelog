@@ -1,3 +1,10 @@
+mastermind (2.26.3) trusty; urgency=medium
+
+  * Remove attributes capacity namespace setting
+  * Add support for completion of unambiguous prefix commands
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 03 Mar 2016 18:01:54 +0300
+
 mastermind (2.26.2) trusty; urgency=medium
 
   * Add namespace attribute setitngs
