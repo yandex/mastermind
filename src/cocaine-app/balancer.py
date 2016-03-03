@@ -1085,16 +1085,6 @@ class Balancer(object):
         if 'attributes' in settings:
             attributes = settings['attributes']
 
-            if 'capacity' not in attributes:
-                raise ValueError('attributes capacity is required when attributes parameters are used')
-            try:
-                capacity = attributes['capacity'] = int(attributes['capacity'])
-            except (TypeError, ValueError):
-                raise ValueError('attributes capacity should be non-negative integer')
-
-            if capacity < 0:
-                raise ValueError('attributes capacity should be non-negative integer')
-
             if 'filename' in attributes:
                 if not isinstance(attributes['filename'], bool):
                     raise ValueError('attributes filename should be boolean')
@@ -1176,7 +1166,6 @@ class Balancer(object):
     ])
     ALLOWED_SERVICE_KEYS = set(['is_deleted'])
     ALLOWED_ATTRIBUTES_KEYS = set([
-        'capacity',
         'filename',
     ])
 
