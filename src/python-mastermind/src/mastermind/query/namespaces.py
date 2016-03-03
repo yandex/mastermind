@@ -68,7 +68,6 @@ class NamespacesQuery(Query):
               reserved_space_percentage=None,
               check_for_update=None,
               custom_expiration_time=None,
-              attributes_capacity=None,
               attributes_filename=None):
         """Performs initial namespace setup.
 
@@ -110,7 +109,6 @@ class NamespacesQuery(Query):
             if does not exists already
           custom_expiration_time: allows namespace to use expire-time argument
             for signing url
-          attributes_capacity: number of bytes to allocate for json section of a file (key)
           attributes_filename: if this flag is True, store filename of a key in key's attributes
 
         Returns:
@@ -182,8 +180,6 @@ class NamespacesQuery(Query):
             settings['check-for-update'] = check_for_update != '0'
 
         attributes = {}
-        if attributes_capacity:
-            attributes['capacity'] = int(attributes_capacity)
         if attributes_filename:
             attributes['filename'] = attributes_filename is True
 
