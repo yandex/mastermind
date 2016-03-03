@@ -1270,6 +1270,21 @@ def command_helper(argv):
             return
 
         command = cmdtable.get(opt, None) and cmdtable[opt][0]
+        if command is None:
+            # trying to match command if command prefix was used (e.g. 'gr' for
+            # 'group')
+            candidates = [
+                k
+                for k in cmdtable.iterkeys()
+                if k.startswith(opt)
+            ]
+            if len(candidates) == 1:
+                # can use this unique match for future resolving
+                command = cmdtable[candidates[0]][0]
+            else:
+                # found 0 (unknown command) or more than 1 (command is
+                # ambiguous) candidates
+                return
         if not isinstance(command, Dispatcher):
             for o in command.opts:
                 if o.name:
