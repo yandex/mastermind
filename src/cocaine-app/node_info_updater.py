@@ -469,7 +469,7 @@ class NodeInfoUpdater(object):
             couple = group.meta.get('couple')
             if couple is None:
                 logger.error('Read symmetric groups from group {} (no couple data): {}'.format(
-                    group.group_id, meta))
+                    group.group_id, group.meta))
                 return
 
             logger.info('Read symmetric groups from group {}: {}'.format(group.group_id, couple))
