@@ -34,8 +34,16 @@ class GroupsQuery(Query):
         """Filter groups list.
 
         Keyword args:
-          uncoupled:
+          uncoupled (deprecated - use 'type' == 'uncoupled'):
             get groups that are not assigned to any couple.
+          type:
+            filter groups by type:
+
+              uncoupled: uncoupled data groups (no metakey);
+              data: simple data groups;
+              cache: cache groups for popular keys;
+              uncoupled_cache: cache groups that are not yet marked by mastermind;
+
           in_jobs:
             get groups that are participating in any active jobs.
           state:
@@ -60,6 +68,8 @@ class GroupsQuery(Query):
             updated_filter['in_jobs'] = kwargs['in_jobs']
         if 'state' in kwargs:
             updated_filter['state'] = kwargs['state']
+        if 'type' in kwargs:
+            updated_filter['type'] = kwargs['type']
         return GroupsQuery(self.client, filter=updated_filter)
 
 

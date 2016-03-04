@@ -232,7 +232,7 @@ def group_list_uncoupled(state=('s', 'init', 'Filter by state (init|broken)'),
     '''Get list of uncoupled groups from balancer'''
     cl = client(host, app)
 
-    options = {'uncoupled': True,
+    options = {'type': 'uncoupled',
                'in_jobs': in_jobs,
                'state': state}
     res = tuple([group.id

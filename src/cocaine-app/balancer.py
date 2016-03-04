@@ -240,7 +240,11 @@ class Balancer(object):
                 if group.status not in self.GROUP_STATES[_filter['state']]:
                     return True
 
-            if _filter.get('uncoupled') is not None:
+            if _filter.get('type') is not None:
+                if group.type != _filter['type']:
+                    return True
+            elif _filter.get('uncoupled') is not None:
+                # support for deprecated 'uncoupled' filter option
                 if bool(group.couple) != (not _filter['uncoupled']):
                     return True
 
