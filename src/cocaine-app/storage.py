@@ -1549,15 +1549,12 @@ class Couple(object):
 
             return self.status
 
-        if Status.INIT in statuses:
-            self.status = Status.INIT
-            self.status_text = 'Couple {0} has uninitialized groups'.format(str(self))
-
-        elif Status.BROKEN in statuses:
+        if Status.BROKEN in statuses:
             self.status = Status.BROKEN
             self.status_text = 'Couple {0} has broken groups'.format(str(self))
+            return self.status
 
-        elif Status.BAD in statuses:
+        if Status.BAD in statuses:
 
             group_status_texts = []
             for group in filter(lambda g: g.status == Status.BAD, self.groups):
