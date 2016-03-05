@@ -1,3 +1,9 @@
+mastermind (2.26.4) trusty; urgency=medium
+
+  * Fix group type detection
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sat, 05 Mar 2016 05:26:33 +0300
+
 mastermind (2.26.3) trusty; urgency=medium
 
   * Remove attributes capacity namespace setting
