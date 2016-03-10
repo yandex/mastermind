@@ -1,3 +1,29 @@
+mastermind (2.26.4) trusty; urgency=medium
+
+  * Fix group type detection
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sat, 05 Mar 2016 05:26:33 +0300
+
+mastermind (2.26.3) trusty; urgency=medium
+
+  * Remove attributes capacity namespace setting
+  * Add support for completion of unambiguous prefix commands
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 03 Mar 2016 18:01:54 +0300
+
+mastermind (2.26.2) trusty; urgency=medium
+
+  * Add namespace attribute setitngs
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 02 Mar 2016 17:34:12 +0300
+
+mastermind (2.26.1) trusty; urgency=medium
+
+  * Fix max net write setting for weight manager
+  * Add explicit runtime error for cases when failed to release locks
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 02 Mar 2016 12:36:24 +0300
+
 mastermind (2.25.120) trusty; urgency=medium
 
   * Enable dnet_recovery safe mode
