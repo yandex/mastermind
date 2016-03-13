@@ -44,6 +44,9 @@ class GroupsQuery(Query):
               data: simple data groups;
               cache: cache groups for popular keys;
               uncoupled_cache: cache groups that are not yet marked by mastermind;
+              lrc-8-2-2-v1: lrc data groups (scheme 8-2-2 version 1);
+              uncoupled_lrc-8-2-2-v1: uncoupled lrc groups prepared
+                for data convert (scheme 8-2-2 version 1);
 
           in_jobs:
             get groups that are participating in any active jobs.
