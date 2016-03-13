@@ -1711,8 +1711,8 @@ class Groupset(object):
     def info(self):
         c = CoupleInfo(str(self))
         data = {'id': str(self),
-                'couple_status': self.status,
-                'couple_status_text': self.status_text,
+                'status': self.status,
+                'status_text': self.status_text,
                 'tuple': self.as_tuple()}
         try:
             data['namespace'] = self.namespace.id
@@ -1720,8 +1720,6 @@ class Groupset(object):
             pass
         stat = self.get_stat()
         if stat:
-            data['free_space'] = int(stat.free_space)
-            data['used_space'] = int(stat.used_space)
             try:
                 data['effective_space'] = self.effective_space
                 data['free_effective_space'] = self.effective_free_space
@@ -1830,6 +1828,35 @@ class Couple(Groupset):
         # should be removed when new "Couple" object is
         # introduced
         self.lrc822v1_groupset = None
+
+    def info(self):
+        info = super(Couple, self).info()
+
+        # imitation of future "Couple"
+        data = info._data
+        data['groupsets'] = {}
+
+        # TODO: stop this nonsense when 'replicas' groupset is implemented
+        # What am I doing? Renaming parameters!!!
+        data['couple_status'] = self.status
+        data['couple_status_text'] = self.status_text
+        del data['status']
+        del data['status_text']
+
+        stat = self.get_stat()
+        if stat:
+            # TODO: make sure no one uses it
+            data['free_space'] = int(stat.free_space)
+            data['used_space'] = int(stat.used_space)
+
+        if self.lrc822v1_groupset:
+            data['groupsets'][Group.TYPE_LRC_8_2_2_V1] = self.lrc822v1_groupset.info().serialize()
+
+        data['read_preference'] = ['replicas']
+        if self.lrc822v1_groupset and self.lrc822v1_groupset.status == Status.ARCHIVED:
+            data['read_preference'].append(Group.TYPE_LRC_8_2_2_V1)
+
+        return info
 
     def _custom_status(self, statuses):
         if self.lrc822v1_groupset:
