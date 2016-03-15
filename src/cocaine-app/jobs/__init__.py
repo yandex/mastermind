@@ -817,7 +817,10 @@ class JobFinder(object):
 
     def get_uncoupled_groups_in_service(self):
         jobs = self.jobs(
-            types=(JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_RESTORE_GROUP_JOB),
+            types=(
+                JobTypes.TYPE_MOVE_JOB,
+                JobTypes.TYPE_RESTORE_GROUP_JOB,
+            ),
             statuses=(Job.STATUS_NOT_APPROVED,
                       Job.STATUS_NEW,
                       Job.STATUS_EXECUTING,
@@ -826,9 +829,6 @@ class JobFinder(object):
 
         uncoupled_groups = []
         for job in jobs:
-            if job.uncoupled_group:
-                uncoupled_groups.append(job.uncoupled_group)
-            if job.merged_groups:
-                uncoupled_groups.extend(job.merged_groups)
+            uncoupled_groups.extend(job.involved_uncoupled_groups)
 
         return uncoupled_groups

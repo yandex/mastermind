@@ -392,6 +392,13 @@ class MoveJob(Job):
             couples.append(str(group.couple))
         return couples
 
+    @property
+    def involved_uncoupled_groups(self):
+        groups = [self.uncoupled_group]
+        if self.merged_groups:
+            groups.extend(self.merged_groups)
+        return groups
+
     def _group_marks(self):
         group = storage.groups[self.group]
         updated_meta = copy.deepcopy(group.meta)

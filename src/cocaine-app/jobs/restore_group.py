@@ -444,3 +444,12 @@ class RestoreGroupJob(Job):
         if group.couple:
             couples.append(str(group.couple))
         return couples
+
+    @property
+    def involved_uncoupled_groups(self):
+        groups = []
+        if self.uncoupled_group:
+            groups.append(self.uncoupled_group)
+        if self.merged_groups:
+            groups.extend(self.merged_groups)
+        return groups
