@@ -7,6 +7,7 @@ import time
 import traceback
 import uuid
 
+import elliptics
 import msgpack
 
 from config import config
@@ -27,6 +28,7 @@ import jobs
 import keys
 from manual_locks import manual_locker
 import storage
+from sync import sync_manager
 import timed_queue
 
 
@@ -1171,5 +1173,18 @@ class Infrastructure(object):
 
         return True
 
+    def reserve_group_ids(self, count, timeout=10):
+        with sync_manager.lock('cluster_max_group', timeout=timeout):
+            session = self.node.meta_session
+            try:
+                request = session.read_latest(keys.MASTERMIND_MAX_GROUP_KEY)
+                max_group = int(request.get()[0].data)
+            except elliptics.NotFoundError:
+                max_group = 0
+
+            new_max_group = max_group + count
+            session.write_data(keys.MASTERMIND_MAX_GROUP_KEY, str(new_max_group)).get()
+
+            return range(max_group + 1, max_group + count + 1)
 
 infrastructure = Infrastructure()
