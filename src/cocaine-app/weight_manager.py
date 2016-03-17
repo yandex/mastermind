@@ -205,6 +205,9 @@ class WeightManager(object):
         for ns in nss:
             if ns.id == storage.Group.CACHE_NAMESPACE:
                 continue
+            if ns.id not in infrastructure.ns_settings:
+                # namespace does not have settings
+                continue
             yield ns
 
 
