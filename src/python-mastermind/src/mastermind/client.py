@@ -28,9 +28,9 @@ class MastermindClient(object):
           handle: API handle name.
           data: request data that will be serialized and sent.
         """
-        data = self.service.enqueue(
+        data = self.service.run_sync(
             handle, msgpack.packb(data),
-            attempts=attempts, timeout=timeout).get()
+            attempts=attempts, timeout=timeout)
         if isinstance(data, dict):
             if 'Error' in data:
                 raise RuntimeError(data['Error'])
@@ -60,7 +60,7 @@ class MastermindClient(object):
 
     @property
     def remotes(self):
-        return self.service.enqueue('get_config_remotes', '')
+        return self.service.run_sync('get_config_remotes', '')
 
 
 class DummyClient(object):

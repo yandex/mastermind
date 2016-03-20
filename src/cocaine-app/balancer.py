@@ -1522,7 +1522,7 @@ class Balancer(object):
         #     '{base_name}-cache'.format(base_name=config.get('app_name', 'mastermind')),
         #     attempts=3, timeout=10, logger=logger)
         # try:
-        #     self._cached_keys = mc.enqueue('get_cached_keys', msgpack.packb(None)).get()
+        #     self._cached_keys = mc.run_sync('get_cached_keys', msgpack.packb(None))
         # except Exception as e:
         #     logger.exception('Cached keys updating: failed')
         #     self._cached_keys = e

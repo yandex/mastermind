@@ -9,20 +9,12 @@ import time
 # tornado ioloop dispatcher issues
 import monitor_pool
 
-from cocaine.asio.exceptions import LocatorResolveError
 from cocaine.worker import Worker
 import elliptics
 
 import log
+log.setup_logger('mm_cache_logging')
 
-try:
-    log.setup_logger('mm_cache_logging')
-    logger = logging.getLogger('mm.init')
-except LocatorResolveError:
-    log.setup_logger()
-    logger = logging.getLogger('mm.init')
-    logger.warn('mm_cache_logging is not set up properly in '
-        'cocaine.conf, fallback to default logging service')
 
 import storage
 import cache
@@ -37,10 +29,12 @@ from mastermind_core.db.mongo.pool import MongoReplicaSetClient
 import helpers as h
 from namespaces import NamespacesSettings
 
+logger = logging.getLogger()
+
 
 def init_elliptics_node():
     nodes = config.get('elliptics', {}).get('nodes', []) or config["elliptics_nodes"]
-    logger.debug("config: %s" % str(nodes))
+    logger.info("config: %s" % str(nodes))
 
     log = elliptics.Logger(str(config["dnet_log"]), config["dnet_log_mask"])
 
@@ -168,7 +162,10 @@ if __name__ == '__main__':
     n = init_elliptics_node()
 
     logger.info("before creating worker")
-    W = Worker(disown_timeout=config.get('disown_timeout', 2))
+    W = Worker(
+        disown_timeout=config.get('disown_timeout', 2),
+        heartbeat_timeout=config.get('heartbeat_timeout', 5),
+    )
     logger.info("after creating worker")
 
     meta_db = init_meta_db()

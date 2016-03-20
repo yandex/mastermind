@@ -10,9 +10,11 @@ import uuid
 
 import elliptics
 from errors import CacheUpstreamError
-from cocaine.futures import chain
-from mastermind import errors
+from cocaine.futures import threaded
 from mastermind_core.config import config
+from mastermind import errors
+from tornado.gen import coroutine, Return
+from tornado.concurrent import Future
 
 
 logger = logging.getLogger('mm.balancer')
@@ -30,15 +32,6 @@ def handler(f):
     return wrapper
 
 
-def source(func):
-    """Marks function or method as source of engine context.
-    """
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        return chain.Chain([lambda: func(*args, **kwargs)])
-    return wrapper
-
-
 def handler_wne(func):
     """Marks handler as supporting native cocaine exceptions.
     """
@@ -50,15 +43,17 @@ def concurrent_handler(f):
 
     def sync_wrapper(*args, **kwargs):
         try:
-            return f(*args, **kwargs)
+            result = f(*args, **kwargs)
         except Exception as e:
             logger.error('Error: ' + str(e) + '\n' + traceback.format_exc())
-            return {'Error': str(e)}
+            result = {'Error': str(e)}
+        return result
 
     @wraps(f)
-    @source
+    @coroutine
     def wrapper(*args, **kwargs):
-        yield chain.concurrent(sync_wrapper)(*args, **kwargs)
+        res = yield threaded(sync_wrapper)(*args, **kwargs)
+        raise Return(res)
 
     return wrapper
 
@@ -123,6 +118,7 @@ def ips_set(hostname):
 
 def register_handle(W, h):
     logger = logging.getLogger('mm.init')
+
     @wraps(h)
     def wrapper(request, response):
         start_ts = time()
@@ -130,26 +126,54 @@ def register_handle(W, h):
         try:
             data = yield request.read()
             data = msgpack.unpackb(data)
-            logger.info(":{req_uid}: Running handler for event {0}, "
-                "data={1}".format(h.__name__, str(data), req_uid=req_uid))
-            #msgpack.pack(h(data), response)
+        except Exception as e:
+            logger.exception(
+                ':{req_uid}: handler for event {}, failed to parse request data'.format(
+                    h.__name__,
+                    req_uid=req_uid,
+                )
+            )
+            response.write(
+                msgpack.packb(
+                    {"Balancer error": 'Failed to parse request data: {}'.format(e)}
+                )
+            )
+            response.close()
+            return
+
+        try:
+            logger.info(
+                ':{req_uid}: Running handler for event {}, data={}'.format(
+                    h.__name__,
+                    str(data),
+                    req_uid=req_uid,
+                )
+            )
             res = h(data)
-            if isinstance(res, chain.Chain):
+            if isinstance(res, Future):
                 res = yield res
             else:
                 logger.error('Synchronous handler for {0} handle'.format(h.__name__))
-            response.write(res)
+            response.write(msgpack.packb(res))
         except Exception as e:
-            logger.error(":{req_uid}: handler for event {0}, "
-                "data={1}: Balancer error: {2}\n{3}".format(
-                    h.__name__, str(data), e,
-                    traceback.format_exc(),
-                    req_uid=req_uid))
-            response.write({"Balancer error": str(e)})
+            logger.exception(
+                ':{req_uid}: handler for event {}, data={}: Balancer error: {}'.format(
+                    h.__name__,
+                    str(data),
+                    e,
+                    req_uid=req_uid,
+                )
+            )
+            response.write(msgpack.packb({"Balancer error": str(e)}))
         finally:
-            logger.info(':{req_uid}: Finished handler for event {0}, '
-                'time: {1:.3f}'.format(h.__name__, time() - start_ts, req_uid=req_uid))
-        response.close()
+            logger.info(
+                ':{req_uid}: Finished handler for event {}, time: {:.3f}'.format(
+                    h.__name__,
+                    time() - start_ts,
+                    req_uid=req_uid,
+                )
+            )
+            response.close()
 
     W.on(h.__name__, wrapper)
     logger.info("Registering handler for event %s" % h.__name__)
@@ -177,8 +201,10 @@ def register_handle_wne(worker, handle):
                     data=str(data),
                 )
             )
-            res = yield handle(data)
-            response.write(res)
+            res = handle(data)
+            if isinstance(res, Future):
+                res = yield res
+            response.write(msgpack.packb(res))
             response.close()
         except Exception as e:
             code, error_msg = ((e.code, e.message)

@@ -212,6 +212,8 @@ def run_worker(task_queue, result_queue, PoolWorker, initkwds=None):
 
     logging._lock = None
 
+    assert not IOLoop.initialized()
+
     ioloop = IOLoop.current()
 
     worker = PoolWorker(

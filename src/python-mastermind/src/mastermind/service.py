@@ -1,11 +1,18 @@
 from datetime import timedelta
 import itertools
 
-from cocaine.asio.exceptions import CommunicationError, DisconnectionError, IllegalStateError
-from cocaine.futures import chain, Deferred
-from cocaine.logging import Logger
+from cocaine.exceptions import (
+    CommunicationError,
+    DisconnectionError,
+    IllegalStateError,
+    ServiceError,
+)
+from cocaine.logger import Logger
 from cocaine.services import Service
+import msgpack
 from tornado import ioloop
+from tornado.concurrent import Future
+from tornado.gen import coroutine, Return
 
 
 class ReconnectableService(object):
@@ -48,61 +55,70 @@ class ReconnectableService(object):
     def _reset(self):
         self._cur_delay = self.delay
 
-    @chain.source
+    def run_sync(self, *args, **kwargs):
+        return ioloop.IOLoop.current().run_sync(lambda: self.enqueue(*args, **kwargs))
+
+    @coroutine
     def enqueue(self, handler, data, attempts=None, timeout=None):
         attempt = 1
         request_attempts = attempts or self.attempts
         while True:
             try:
                 yield self._reconnect_if_needed()
-                yield self.upstream.enqueue(handler, data, timeout=timeout or self.timeout)
+                channel = yield self.upstream.enqueue(handler)
+                channel.tx.write(data)
+                yield channel.tx.close()
+                response = yield channel.rx.get(timeout=timeout or self.timeout)
                 self._reset()
-                break
+                raise Return(msgpack.unpackb(response))
+            except Return:
+                raise
             except Exception as e:
-                error_str = 'Upstream service request failed (attempt {}/{}): {}'.format(
-                    attempt, request_attempts, e)
+                error_str = 'Upstream service request failed (attempt {}/{}): {} ({})'.format(
+                    attempt, request_attempts, e, type(e))
+                self.logger.error(error_str)
                 if isinstance(e, CommunicationError):
-                    self.logger.error(error_str)
                     if isinstance(e, DisconnectionError):
                         self.logger.debug('Disconnection from upstream service, '
                                           'will reconnect on next attempt')
                         self.upstream = None
-                else:
-                    self.logger.error(error_str)
+                elif isinstance(e, ServiceError):
+                    self.upstream = None
                 if attempt >= request_attempts:
                     self._reset()
                     raise
                 attempt += 1
                 yield self._delay()
 
-    @chain.source
+    @coroutine
     def _delay(self):
-        d = Deferred()
+        f = Future()
         ioloop.IOLoop.current().add_timeout(timedelta(seconds=self._cur_delay),
-                                            lambda: d.trigger(None))
+                                            lambda: f.set_result(None))
         self.logger.debug('Delaying for {:.2f} s'.format(self._cur_delay))
-        yield d
+        yield f
         self.logger.debug('Resuming from delay...')
         self._cur_delay = min(self._cur_delay * self.delay_exp, self.max_delay)
 
-    @chain.source
+    @coroutine
     def _reconnect_if_needed(self):
         if not self.upstream:
             host, port = self.addresses.next()
-            self.upstream = Service(self.app_name, blockingConnect=False)
+            self.upstream = Service(
+                name=self.app_name,
+                endpoints=((host, port),),
+                timeout=self.connect_timeout,
+            )
             self.logger.debug('Connecting to upstream service "{}", host={}, '
                               'port={}'.format(self.app_name, host, port))
-            yield self.upstream.connect(host=host, port=port,
-                                        timeout=self.connect_timeout,
-                                        blocking=False)
+            yield self.upstream.connect()
 
-        if not self.upstream.isConnected():
+        if not self.upstream._connected:
             try:
                 self.logger.debug(
                     'Reconnecting to upstream service "{}"'.format(
                         self.app_name))
-                yield self.upstream.reconnect(timeout=self.connect_timeout,
-                                              blocking=False)
+                yield self.upstream.connect()
             except IllegalStateError:
                 # seems to be in connecting state
                 pass

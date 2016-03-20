@@ -1,12 +1,9 @@
 #!/usr/bin/python
 # encoding: utf-8
-from functools import wraps
 import logging
 import signal
 import sys
-from time import sleep, time
-import traceback
-import uuid
+from time import sleep
 
 # NB: pool should be initialized before importing
 # any of cocaine-framework-python modules to avoid
@@ -14,17 +11,13 @@ import uuid
 import monitor_pool
 
 from cocaine.worker import Worker
-from cocaine.futures import chain
 
 sys.path.append('/usr/lib')
-
-import msgpack
 
 import elliptics
 
 import log
-log.setup_logger()
-logger = logging.getLogger('mm.init')
+log.setup_logger('mm_logging')
 
 # storage should be imported before balancer
 # TODO: remove this dependency
@@ -45,7 +38,7 @@ from namespaces import NamespacesSettings
 from mastermind_core.config import config
 from mastermind_core.meta_db import meta_db
 
-
+logger = logging.getLogger()
 i = iter(xrange(100))
 logger.info("trace %d" % (i.next()))
 
@@ -59,7 +52,7 @@ def term_handler(signo, frame):
 signal.signal(signal.SIGTERM, term_handler)
 
 nodes = config.get('elliptics', {}).get('nodes', []) or config["elliptics_nodes"]
-logger.debug("config: %s" % str(nodes))
+logger.info("config: %s" % str(nodes))
 
 logger.info("trace %d" % (i.next()))
 log = elliptics.Logger(str(config["dnet_log"]), config["dnet_log_mask"])
@@ -107,7 +100,10 @@ sleep(wait_timeout)
 
 logger.info("trace %d" % (i.next()))
 logger.info("before creating worker")
-W = Worker(disown_timeout=config.get('disown_timeout', 2))
+W = Worker(
+    disown_timeout=config.get('disown_timeout', 2),
+    heartbeat_timeout=config.get('heartbeat_timeout', 5),
+)
 logger.info("after creating worker")
 
 
@@ -119,62 +115,20 @@ def init_namespaces_settings(meta_db):
 namespaces_settings = init_namespaces_settings(meta_db)
 b = balancer.Balancer(n, meta_db, namespaces_settings)
 
-
-def register_handle(h):
-    @wraps(h)
-    def wrapper(request, response):
-        start_ts = time()
-        req_uid = uuid.uuid4().hex
-        try:
-            data = yield request.read()
-            data = msgpack.unpackb(data)
-            logger.info(
-                ':{req_uid}: Running handler for event {0}, '
-                'data={1}'.format(
-                    h.__name__,
-                    str(data),
-                    req_uid=req_uid
-                )
-            )
-            res = h(data)
-            if isinstance(res, chain.Chain):
-                res = yield res
-            else:
-                logger.error('Synchronous handler for {0} handle'.format(h.__name__))
-            response.write(res)
-        except Exception as e:
-            logger.error(
-                ':{req_uid}: handler for event {0}, data={1}: Balancer error: {2}\n{3}'.format(
-                    h.__name__, str(data), e,
-                    traceback.format_exc().replace('\n', '    '),
-                    req_uid=req_uid
-                )
-            )
-            response.write({"Balancer error": str(e)})
-        finally:
-            logger.info(':{req_uid}: Finished handler for event {0}, time: {1:.3f}'.format(
-                h.__name__,
-                time() - start_ts,
-                req_uid=req_uid)
-            )
-        response.close()
-
-    W.on(h.__name__, wrapper)
-    logger.info("Registering handler for event %s" % h.__name__)
-    return wrapper
+logger.info("after creating balancer")
 
 
 def init_infrastructure(jf, ghf, namespaces_settings):
     infstruct = infrastructure.infrastructure
     infstruct.init(n, jf, ghf, namespaces_settings)
-    register_handle(infstruct.shutdown_node_cmd)
-    register_handle(infstruct.start_node_cmd)
-    register_handle(infstruct.disable_node_backend_cmd)
-    register_handle(infstruct.enable_node_backend_cmd)
-    register_handle(infstruct.reconfigure_node_cmd)
-    register_handle(infstruct.recover_group_cmd)
-    register_handle(infstruct.defrag_node_backend_cmd)
-    register_handle(infstruct.search_history_by_path)
+    helpers.register_handle(W, infstruct.shutdown_node_cmd)
+    helpers.register_handle(W, infstruct.start_node_cmd)
+    helpers.register_handle(W, infstruct.disable_node_backend_cmd)
+    helpers.register_handle(W, infstruct.enable_node_backend_cmd)
+    helpers.register_handle(W, infstruct.reconfigure_node_cmd)
+    helpers.register_handle(W, infstruct.recover_group_cmd)
+    helpers.register_handle(W, infstruct.defrag_node_backend_cmd)
+    helpers.register_handle(W, infstruct.search_history_by_path)
     b._set_infrastructure(infstruct)
     return infstruct
 
@@ -189,36 +143,38 @@ def init_node_info_updater(jf, crf, statistics, namespaces_settings):
         prepare_namespaces_states=True,
         prepare_flow_stats=True,
         statistics=statistics)
+    logger.info('node info updater: starting')
     niu.start()
-    register_handle(niu.force_nodes_update)
-    register_handle(niu.force_update_namespaces_states)
-    register_handle(niu.force_update_flow_stats)
+    logger.info('node info updater: started')
+    helpers.register_handle(W, niu.force_nodes_update)
+    helpers.register_handle(W, niu.force_update_namespaces_states)
+    helpers.register_handle(W, niu.force_update_flow_stats)
 
     return niu
 
 
 def init_statistics():
-    register_handle(b.statistics.get_groups_tree)
-    register_handle(b.statistics.get_couple_statistics)
+    helpers.register_handle(W, b.statistics.get_groups_tree)
+    helpers.register_handle(W, b.statistics.get_couple_statistics)
     return b.statistics
 
 
 def init_minions():
     m = minions_monitor.MinionsMonitor(meta_db)
-    register_handle(m.get_command)
-    register_handle(m.execute_cmd)
-    register_handle(m.terminate_cmd)
+    helpers.register_handle(W, m.get_command)
+    helpers.register_handle(W, m.execute_cmd)
+    helpers.register_handle(W, m.terminate_cmd)
     return m
 
 
 def init_planner(job_processor, niu, namespaces_settings, move_planner):
     planner = Planner(meta_db, niu, job_processor, namespaces_settings)
-    register_handle(planner.restore_group)
-    register_handle(planner.move_group)
-    register_handle(planner.move_groups_from_host)
-    register_handle(planner.convert_external_storage_to_groupset)
-    register_handle(planner.restore_groups_from_path)
-    register_handle(planner.ttl_cleanup)
+    helpers.register_handle(W, planner.restore_group)
+    helpers.register_handle(W, planner.move_group)
+    helpers.register_handle(W, planner.move_groups_from_host)
+    helpers.register_handle(W, planner.convert_external_storage_to_groupset)
+    helpers.register_handle(W, planner.restore_groups_from_path)
+    helpers.register_handle(W, planner.ttl_cleanup)
 
     planner.add_planner(move_planner)
 
@@ -238,9 +194,9 @@ def init_job_finder():
         )
         return None
     jf = jobs.JobFinder(meta_db)
-    register_handle(jf.get_job_list)
-    register_handle(jf.get_job_status)
-    register_handle(jf.get_jobs_status)
+    helpers.register_handle(W, jf.get_job_list)
+    helpers.register_handle(W, jf.get_job_status)
+    helpers.register_handle(W, jf.get_jobs_status)
     return jf
 
 
@@ -252,7 +208,7 @@ def init_external_storage_meta():
         )
         return None
     external_storage_meta = external_storage.ExternalStorageMeta(meta_db)
-    register_handle(external_storage_meta.get_external_storage_mapping)
+    helpers.register_handle(W, external_storage_meta.get_external_storage_mapping)
     return external_storage_meta
 
 
@@ -295,43 +251,56 @@ def init_job_processor(jf, minions_monitor, niu, external_storage_meta, couple_r
         external_storage_meta=external_storage_meta,
         couple_record_finder=couple_record_finder,
     )
-    register_handle(j.create_job)
-    register_handle(j.cancel_job)
-    register_handle(j.approve_job)
-    register_handle(j.stop_jobs)
-    register_handle(j.retry_failed_job_task)
-    register_handle(j.skip_failed_job_task)
-    register_handle(j.restart_failed_to_start_job)
-    register_handle(j.build_lrc_groups)
-    register_handle(j.add_groupset_to_couple)
+    j = jobs.JobProcessor(jf, n, meta_db, niu, minions)
+    helpers.register_handle(W, j.create_job)
+    helpers.register_handle(W, j.cancel_job)
+    helpers.register_handle(W, j.approve_job)
+    helpers.register_handle(W, j.stop_jobs)
+    helpers.register_handle(W, j.retry_failed_job_task)
+    helpers.register_handle(W, j.skip_failed_job_task)
+    helpers.register_handle(W, j.restart_failed_to_start_job)
+    helpers.register_handle(W, j.build_lrc_groups)
+    helpers.register_handle(W, j.add_groupset_to_couple)
     return j
 
 
 def init_manual_locker(manual_locker):
-    register_handle(manual_locker.host_acquire_lock)
-    register_handle(manual_locker.host_release_lock)
+    helpers.register_handle(W, manual_locker.host_acquire_lock)
+    helpers.register_handle(W, manual_locker.host_release_lock)
     return manual_locker
 
 
-jf = init_job_finder()
-
-external_storage_meta = init_external_storage_meta()
-crf = init_couple_record_finder()
-ghf = init_group_history_finder()
-io = init_infrastructure(jf, ghf, namespaces_settings)
-niu = init_node_info_updater(jf, crf, b.statistics, namespaces_settings)
-b.niu = niu
-b.start()
-init_statistics()
-m = init_minions()
-j = init_job_processor(jf, m, niu, external_storage_meta, crf)
-if j:
-    move_planner = init_move_planner(j, niu, namespaces_settings)
-    po = init_planner(j, niu, namespaces_settings, move_planner)
-    j.planner = po
-else:
-    po = None
-ml = init_manual_locker(manual_locker)
+try:
+    jf = init_job_finder()
+    logger.info('Job finder module initialized')
+    external_storage_meta = init_external_storage_meta()
+    logger.info('External storage meta module initialized')
+    crf = init_couple_record_finder()
+    logger.info('Couple record finder module initialized')
+    ghf = init_group_history_finder()
+    logger.info('Group history finder module initialized')
+    io = init_infrastructure(jf, ghf, namespaces_settings)
+    logger.info('Infrastructure module initialized')
+    niu = init_node_info_updater(jf, crf, b.statistics, namespaces_settings)
+    logger.info('Node info updater module initialized')
+    b.niu = niu
+    b.start()
+    init_statistics()
+    logger.info('Statistics module initialized')
+    m = init_minions()
+    logger.info('Minions module initialized')
+    j = init_job_processor(jf, m, niu, external_storage_meta, crf)
+    logger.info('Job processor module initialized')
+    if j:
+        move_planner = init_move_planner(j, niu, namespaces_settings)
+        po = init_planner(j, niu, namespaces_settings, move_planner)
+        j.planner = po
+    else:
+        po = None
+    ml = init_manual_locker(manual_locker)
+except Exception:
+    logger.exception('Module initialization failed')
+    raise
 
 
 for handler in balancer.handlers(b):
@@ -339,7 +308,7 @@ for handler in balancer.handlers(b):
     if getattr(handler, '__wne', False):
         helpers.register_handle_wne(W, handler)
     else:
-        register_handle(handler)
+        helpers.register_handle(W, handler)
 
 logger.info('activating timed queues')
 try:
