@@ -980,9 +980,16 @@ class Group(object):
     DEFAULT_NAMESPACE = 'default'
     CACHE_NAMESPACE = 'storage_cache'
 
+    TYPE_UNKNOWN = 'unknown'
     TYPE_DATA = 'data'
     TYPE_CACHE = 'cache'
     TYPE_UNMARKED = 'unmarked'
+
+    AVAILABLE_TYPES = set([
+        TYPE_DATA,
+        TYPE_CACHE,
+        TYPE_UNMARKED,
+    ])
 
     def __init__(self, group_id, node_backends=None):
         self.group_id = group_id
@@ -1057,20 +1064,29 @@ class Group(object):
 
     @property
     def type(self):
-        if not self.meta:
 
-            if CACHE_GROUP_PATH_PREFIX:
+        if self.meta:
+            if 'type' in self.meta and self.meta['type'] not in self.AVAILABLE_TYPES:
+                logger.error('Unknown type "{type}" of group {group}'.format(
+                    group=self,
+                    type=self.meta['type'],
+                ))
+                return self.TYPE_UNKNOWN
 
-                def is_cache_group_backend(nb):
-                    return nb.base_path.startswith(CACHE_GROUP_PATH_PREFIX)
+            return self.meta.get('type', self.TYPE_DATA)
 
-                if any(is_cache_group_backend(nb) for nb in self.node_backends):
-                    return self.TYPE_UNMARKED
+        else:
 
-            return self.TYPE_DATA
-        if self.meta.get('type') == self.TYPE_CACHE:
-            return self.TYPE_CACHE
-        return self.TYPE_DATA
+            def is_cache_group_backend(nb):
+                if not CACHE_GROUP_PATH_PREFIX:
+                    return False
+                return nb.base_path.startswith(CACHE_GROUP_PATH_PREFIX)
+
+            is_unmarked_cache_group = any(is_cache_group_backend(nb) for nb in self.node_backends)
+            if is_unmarked_cache_group:
+                return self.TYPE_UNMARKED
+            else:
+                return self.TYPE_DATA
 
     def update_status(self):
         """Updates group's own status.
