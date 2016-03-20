@@ -306,8 +306,6 @@ def group_recover_dc(group,
 
     couple_data = s.run_sync('get_couple_info', msgpack.packb(group))
 
-    print couple_data
-
     job_data = s.run_sync('create_job', msgpack.packb([
         'recover_dc_job', {'couple': couple_data['id']}]))
 

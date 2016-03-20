@@ -2,7 +2,6 @@ from collections import defaultdict
 from functools import wraps
 import logging
 import msgpack
-import random
 import socket
 from time import time
 import traceback
@@ -205,6 +204,7 @@ def register_handle_wne(worker, handle):
             if isinstance(res, Future):
                 res = yield res
             response.write(msgpack.packb(res))
+            response.close()
         except Exception as e:
             code, error_msg = ((e.code, e.message)
                                if isinstance(e, errors.MastermindError) else

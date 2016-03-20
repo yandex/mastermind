@@ -31,6 +31,8 @@ from namespaces import NamespacesSettings
 
 logger = logging.getLogger()
 
+logger = logging.getLogger()
+
 
 def init_elliptics_node():
     nodes = config.get('elliptics', {}).get('nodes', []) or config["elliptics_nodes"]
