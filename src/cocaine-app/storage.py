@@ -193,6 +193,10 @@ class Groupsets(MultiRepository):
     def add(self, groups, group_type):
         if group_type == Group.TYPE_DATA:
             couple = self.replicas.add(groups)
+        elif group_type == Group.TYPE_CACHE:
+            # cache groups reside in replicas groupsets of a couple in special
+            # namespace
+            couple = self.replicas.add(groups)
         elif group_type == Group.TYPE_LRC_8_2_2_V1:
             couple = self.lrc.add(groups)
         else:
@@ -2119,8 +2123,11 @@ dc_host_view = DcHostView()
 
 replicas_groupsets = Repositary(Couple, 'Replicas groupset')
 
-# TOOD: use namespace "storage_cache" couples instead of cache couples
-cache_couples = Repositary(Couple, 'Cache couple')
+# TOOD: use namespace "storage_cache" couples instead of cache couples,
+# this is added for backward compatibility
+cache_ns = namespaces.add(Group.CACHE_NAMESPACE)
+cache_couples = cache_ns.groupsets.replicas
+
 lrc_groupsets = Repositary(Lrc822v1Groupset, 'LRC groupset')
 groupsets = Groupsets(
     replicas=replicas_groupsets,

@@ -139,9 +139,6 @@ class Statistics(object):
 
                 ns = group.couple and group.couple.namespace.id or None
 
-                if ns == storage.Group.CACHE_NAMESPACE:
-                    continue
-
                 for node_backend in group.node_backends:
 
                     try:
