@@ -1,3 +1,9 @@
+mastermind (2.26.6) trusty; urgency=medium
+
+  * Increase defrag check timeout to 14 days
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 21 Mar 2016 14:20:39 +0300
+
 mastermind (2.26.5) trusty; urgency=medium
 
   * Make recover planner coefficients configurable
