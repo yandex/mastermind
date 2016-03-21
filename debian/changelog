@@ -1,3 +1,9 @@
+mastermind (2.28.87~cocainev12-1) trusty; urgency=medium
+
+  * Update workers to run on cocaine v12
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 21 Mar 2016 12:17:24 +0300
+
 mastermind (2.28.87) trusty; urgency=medium
 
   * Minor fix
