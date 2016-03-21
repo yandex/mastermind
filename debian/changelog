@@ -1,3 +1,9 @@
+mastermind (2.26.5) trusty; urgency=medium
+
+  * Make recover planner coefficients configurable
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 10 Mar 2016 14:51:27 +0300
+
 mastermind (2.26.4) trusty; urgency=medium
 
   * Fix group type detection
