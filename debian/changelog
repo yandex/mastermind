@@ -244,6 +244,8 @@ mastermind (2.28.51) trusty; urgency=medium
 
  -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 03 Oct 2016 12:32:16 +0300
 
+=======
+>>>>>>> Changelog, version 2.28.37~cocainev12-1
 mastermind (2.28.50) trusty; urgency=medium
 
   * Tolerate unknown command errors when failed to fetch from metadb
