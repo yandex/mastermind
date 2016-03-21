@@ -580,9 +580,6 @@ class Planner(object):
             keys_diffs[str(couple)] = c_diff
         keys_diffs_sorted.sort(key=lambda x: x[1])
 
-        KEYS_CF = 86400  # one key loss is equal to one day without recovery
-        TS_CF = 1
-
         cursor = self.collection.find().sort('recover_ts', pymongo.ASCENDING)
         if cursor.count() < len(storage.couples):
             logger.info('Sync recover data is required: {0} records/{1} couples'.format(
@@ -593,8 +590,12 @@ class Planner(object):
 
         ts = int(time.time())
 
+        # by default one key loss is equal to one day without recovery
+        keys_cf = self.params.get('recover_dc', {}).get('keys_cf', 86400)
+        ts_cf = self.params.get('recover_dc', {}).get('timestamp_cf', 1)
+
         def weight(keys_diff, ts_diff):
-            return keys_diff * KEYS_CF + ts_diff * TS_CF
+            return keys_diff * keys_cf + ts_diff * ts_cf
 
         weights = {}
         candidates = []

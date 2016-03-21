@@ -12,7 +12,7 @@ logger = logging.getLogger('mm.jobs')
 class CoupleDefragStateCheckTask(Task):
 
     PARAMS = ('couple', 'stats_ts')
-    TASK_TIMEOUT = 60 * 60 * 24 * 2  # 2 days
+    TASK_TIMEOUT = 60 * 60 * 24 * 14  # 14 days
 
     def __init__(self, job):
         super(CoupleDefragStateCheckTask, self).__init__(job)
