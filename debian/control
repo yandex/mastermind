@@ -10,7 +10,7 @@ Build-Depends:
  python-pytest,
  python-msgpack | msgpack-python,
  python-tornado (>= 4.0),
- cocaine-framework-python,
+ cocaine-v12-framework-python,
  python-simplejson,
 Standards-Version: 3.9.2
 Homepage: https://github.com/toshic/mastermind
@@ -22,13 +22,13 @@ Architecture: amd64
 Depends:
  ${shlibs:Depends},
  ${misc:Depends},
- cocaine-framework-python (<< 0.12),
+ cocaine-v12-framework-python,
  python-tornado (>= 4.0),
- cocaine-tools (<< 0.12),
+ cocaine-v12-tools,
  python-pymongo (<< 3),
  python-bson (<< 3),
- cocaine-runtime (<< 0.12),
  python-requests,
+ cocaine-v12-runtime,
  python-mastermind (= ${binary:Version}),
 Recommends: python-kazoo
 Description: Metabalancer for elliptics storage
@@ -39,7 +39,7 @@ Depends:
  ${shlibs:Depends},
  ${misc:Depends},
  python-opster (>= 4.0),
- cocaine-framework-python (<< 0.12),
+ cocaine-v12-framework-python,
  python-msgpack | msgpack-python,
  python-tornado (>= 4.0),
  python-mastermind (= ${binary:Version}),
@@ -53,6 +53,6 @@ Depends:
  ${misc:Depends},
  ${python:Depends},
  python-tornado (>= 4.0),
- cocaine-framework-python (<< 0.12),
+ cocaine-v12-framework-python,
  python-simplejson,
 Description: Common components and a client library for Mastermind
