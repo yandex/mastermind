@@ -13,6 +13,7 @@ import helpers as h
 from job_types import JobTypes, TaskTypes
 from job import Job
 from couple_defrag import CoupleDefragJob
+import lrc_builder
 from move import MoveJob
 from recover_dc import RecoverDcJob
 from make_lrc_groups import MakeLrcGroupsJob
@@ -757,6 +758,16 @@ class JobProcessor(object):
         logger.info('Job {}: job status was reset to {}'.format(
             job.id, job.status))
         return job
+
+    @h.concurrent_handler
+    def build_lrc_couples(self, request):
+        count = request['count']
+        mandatory_dcs = request.get('mandatory_dcs', [])
+        builder = lrc_builder.LRC_8_2_2_V1_Builder(self)
+        return builder.build(
+            count=count,
+            mandatory_dcs=mandatory_dcs,
+        )
 
 
 class JobFinder(object):

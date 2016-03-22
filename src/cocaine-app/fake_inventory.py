@@ -53,6 +53,16 @@ def get_balancer_node_types():
     return BALANCER_NODE_TYPES
 
 
+def get_node_types():
+    '''
+    A list of infrastructure node types.
+    Node types represent hardware hierarchy and are used to build cluster tree.
+    Each node type represent a corresponding level of the cluster tree.
+    NOTE: node types should be sorted in top-to-bottom order, e.g ['dc', 'router', 'host'].
+    '''
+    return [DC_NODE_TYPE]
+
+
 def get_dc_node_type():
     '''
     Returns dc node type.

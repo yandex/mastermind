@@ -914,17 +914,7 @@ class Balancer(object):
         if groups_count < 0 or groups_count > 100:
             raise Exception('Incorrect groups count')
 
-        try:
-            max_group = int(self.node.meta_session.read_latest(
-                keys.MASTERMIND_MAX_GROUP_KEY).get()[0].data)
-        except elliptics.NotFoundError:
-            max_group = 0
-
-        new_max_group = max_group + groups_count
-        self.node.meta_session.write_data(
-            keys.MASTERMIND_MAX_GROUP_KEY, str(new_max_group)).get()
-
-        return range(max_group + 1, max_group + 1 + groups_count)
+        return self.infrastructure.reserve_group_ids(groups_count)
 
     # @h.concurrent_handler
     @h.handler_wne

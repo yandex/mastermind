@@ -284,6 +284,7 @@ def init_job_processor(jf, minions, niu):
     register_handle(j.retry_failed_job_task)
     register_handle(j.skip_failed_job_task)
     register_handle(j.restart_failed_to_start_job)
+    register_handle(j.build_lrc_couples)
     return j
 
 
