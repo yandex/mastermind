@@ -805,14 +805,24 @@ class JobFinder(object):
             type=types).count()
 
     def jobs(self, types=None, statuses=None, ids=None, groups=None):
-        jobs = [JobFactory.make_job(j) for j in Job.list(self.collection,
-                                                         status=statuses,
-                                                         type=types,
-                                                         group=groups,
-                                                         id=ids)]
-        for j in jobs:
-            j.collection = self.collection
-            j._dirty = False
+        jobs = []
+        job_list = Job.list(
+            self.collection,
+            status=statuses,
+            type=types,
+            group=groups,
+            id=ids,
+        )
+        for j in job_list:
+            try:
+                job = JobFactory.make_job(j)
+            except Exception:
+                job_id = j.get('id', '[unknown id]')
+                logger.exception('Failed to dump job {}'.format(job_id))
+                continue
+            job.collection = self.collection
+            job._dirty = False
+            jobs.append(job)
         return jobs
 
     def get_uncoupled_groups_in_service(self):
