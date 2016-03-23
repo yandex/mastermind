@@ -1373,11 +1373,20 @@ class Group(object):
 
     def info(self):
         g = GroupInfo(self.group_id)
-        data = {'id': self.group_id,
-                'status': self.status,
-                'status_text': self.status_text,
-                'node_backends': [nb.info() for nb in self.node_backends],
-                'couple': str(self.couple) if self.couple else None}
+        data = {
+            'id': self.group_id,
+            'status': self.status,
+            'status_text': self.status_text,
+            'node_backends': [nb.info() for nb in self.node_backends]
+        }
+
+        groupset_id = str(self.couple) if self.couple else None
+        # TODO: remove backward compatibility when new 'Couple' is introduced
+        if isinstance(self.couple, Couple):
+            data['couple'] = groupset_id
+
+        data['groupset'] = groupset_id
+
         if self.meta:
             data['namespace'] = self.meta.get('namespace')
         if self.active_job:

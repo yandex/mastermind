@@ -175,6 +175,53 @@ class Balancer(object):
     }
 
     @h.concurrent_handler
+    def get_groupsets_list(self, request):
+        filter = request.get('filter', {})
+        return self._get_groupsets_list(filter=filter)
+
+    def _get_groupsets_list(self, filter):
+        # TODO: think on checking input filter parameters and
+        # cleaning all that have a value of 'None'. This
+        # should be applied to all methods that support filter-like
+        # input with possible 'None' values meaning 'disable filter for this
+        # parameter'.
+        if filter.get('state') is not None and filter['state'] not in self.COUPLE_STATES:
+            raise ValueError('Invalid state: {0}'.format(filter['state']))
+
+        groupsets = storage.groupsets
+
+        if filter.get('namespace') is not None:
+            ns = filter['namespace']
+            if ns not in storage.namespaces:
+                return []
+            groupsets = storage.namespaces[ns].groupsets
+
+        if filter.get('type') is not None:
+            if filter['type'] not in groupsets.types:
+                raise ValueError('Unexpected groupsets type: "{}"'.format(filter['type']))
+            groupsets = groupsets.types[filter['type']]
+
+        def filtered_out(groupset):
+            if filter.get('state') is not None:
+                if groupset.status not in self.COUPLE_STATES[filter['state']]:
+                    return True
+
+            return False
+
+        return [
+            gs.info().serialize()
+            for gs in groupsets
+            if not filtered_out(gs)
+        ]
+
+    @h.concurrent_handler
+    def get_groupset_by_id(self, request):
+        groupset_id = str(request)
+        groupset = storage.groupsets[groupset_id]
+
+        return groupset.info().serialize()
+
+    @h.concurrent_handler
     def get_couples_list(self, request):
         options = request[0]
         return self._get_couples_list(options)
