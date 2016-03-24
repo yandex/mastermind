@@ -1,3 +1,9 @@
+mastermind (2.27.2) trusty; urgency=medium
+
+  * Add python-requests dependency
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 24 Mar 2016 20:19:40 +0300
+
 mastermind (2.27.1) trusty; urgency=medium
 
   * Add lrc commands to mastermind-cli
