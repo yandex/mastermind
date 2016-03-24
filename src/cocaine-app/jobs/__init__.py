@@ -760,8 +760,8 @@ class JobProcessor(object):
         return job
 
     @h.concurrent_handler
-    def build_lrc_couples(self, request):
-        count = request['count']
+    def build_lrc_groups(self, request):
+        count = request.get('count', 1)
         mandatory_dcs = request.get('mandatory_dcs', [])
         builder = lrc_builder.LRC_8_2_2_V1_Builder(self)
         return builder.build(
