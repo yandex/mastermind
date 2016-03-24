@@ -492,8 +492,13 @@ class JobProcessor(object):
         inv_group_ids = job._involved_groups
         try:
             logger.info('Job {0}: updating groups {1} status'.format(job.id, inv_group_ids))
-            inv_groups = [storage.groups[ig] for ig in inv_group_ids]
-            self.node_info_updater.update_status(groups=inv_groups)
+            self.node_info_updater.update_status(
+                groups=[
+                    storage.groups[ig]
+                    for ig in inv_group_ids
+                    if ig in storage.groups
+                ]
+            )
         except Exception as e:
             logger.info('Job {0}: failed to update groups status: {1}\n{2}'.format(
                 job.id, e, traceback.format_exc()))
@@ -760,10 +765,15 @@ class JobProcessor(object):
         return job
 
     @h.concurrent_handler
-    def build_lrc_couples(self, request):
-        count = request['count']
+    def build_lrc_groups(self, request):
+        if 'scheme' not in request:
+            raise ValueError('Parameter "scheme" is required to build LRC groups')
+        scheme = storage.Lrc.make_scheme(request['scheme'])
+
+        count = request.get('count', 1)
         mandatory_dcs = request.get('mandatory_dcs', [])
-        builder = lrc_builder.LRC_8_2_2_V1_Builder(self)
+
+        builder = scheme.builder(self)
         return builder.build(
             count=count,
             mandatory_dcs=mandatory_dcs,

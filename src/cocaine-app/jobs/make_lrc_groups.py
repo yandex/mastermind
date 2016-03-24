@@ -152,7 +152,7 @@ class MakeLrcGroupsJob(Job):
         return task
 
     def _create_new_lrc_groups_tasks(self, node_backend, lrc_group_ids):
-        tasks = []
+        job_tasks = []
 
         group_base_path_root_dir = os.path.dirname(node_backend.base_path.rstrip('/'))
 
@@ -168,7 +168,7 @@ class MakeLrcGroupsJob(Job):
                     'group_base_path_root_dir': group_base_path_root_dir,
                 },
             )
-            tasks.append(task)
+            job_tasks.append(task)
 
         # reconfigure elliptics node
         reconfigure_cmd = infrastructure.infrastructure._reconfigure_node_cmd(
@@ -183,12 +183,12 @@ class MakeLrcGroupsJob(Job):
             cmd=reconfigure_cmd,
             params={'node_backend': str(node_backend).encode('utf-8')},
         )
-        tasks.append(task)
+        job_tasks.append(task)
 
-        return tasks
+        return job_tasks
 
     def _enable_new_lrc_groups_tasks(self, node_backend, lrc_group_ids):
-        tasks = []
+        job_tasks = []
 
         for lrc_group_id in lrc_group_ids:
             # enable backend of the newly created group
@@ -206,12 +206,12 @@ class MakeLrcGroupsJob(Job):
                     'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS],
                 },
             )
-            tasks.append(task)
+            job_tasks.append(task)
 
-        return tasks
+        return job_tasks
 
     def _write_metakey_to_new_lrc_groups_tasks(self, lrc_group_ids, lrc_groups_sets):
-        tasks = []
+        job_tasks = []
 
         for lrc_groups_set_id, lrc_group_id in enumerate(lrc_group_ids):
             # write metakey to a new group
@@ -220,12 +220,12 @@ class MakeLrcGroupsJob(Job):
                 group=lrc_group_id,
                 metakey=storage.Group.compose_uncoupled_lrc_group_meta(
                     lrc_groups=lrc_groups_sets[lrc_groups_set_id],
-                    scheme=storage.Lrc.SCHEME_8_2_2_V1,
+                    scheme=storage.Lrc.Scheme822v1,
                 ),
             )
-            tasks.append(task)
+            job_tasks.append(task)
 
-        return tasks
+        return job_tasks
 
     @property
     def _involved_groups(self):

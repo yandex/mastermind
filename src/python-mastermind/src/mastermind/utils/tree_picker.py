@@ -188,6 +188,9 @@ class TreePicker(object):
 
         self._leaves.sort()
 
+    def __repr__(self):
+        return '<Tree Picker, leaves count: {leaves}>'.format(leaves=len(self._leaves))
+
     def _random_select(self, candidates):
         import random
         return random.choice(list(candidates))

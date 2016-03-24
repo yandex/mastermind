@@ -51,10 +51,10 @@ class LRC_8_2_2_V1_Builder(object):
         `mandatory_dcs` optional parameter can be used to
         set certain dcs to obtain certain stripe part groups.
         E.g. if you want to use 'dc_parity' for parity parts and 'dc1'
-        for parts 1 to 4, and do not care about dc for parts 5 to 8,
+        for parts 0, 1, 2 and 3, and do not care about dc for parts 4, 5, 6 and 7,
         you can set 'dcs' to ['dc1', None, 'dc_parity'].
         Then the builder will use supplied dcs and additionally
-        choose the dc (for parts 5 to 8).
+        choose the dc (for parts 4 to 7).
 
         Parameters:
             mandatory_dcs: a list of up to 3 dcs to use for placing
@@ -72,13 +72,18 @@ class LRC_8_2_2_V1_Builder(object):
 
         built_couples = 0
 
-        groups_to_couple = self._groups_to_couple(mandatory_dcs)
+        selected_groups = self._select_groups(mandatory_dcs)
 
         jobs = []
         while built_couples < count:
             try:
                 logger.debug('selecting groups')
-                uncoupled_groups = next(groups_to_couple)
+                groups_lists = next(selected_groups)
+                uncoupled_groups = [
+                    group_id
+                    for dc_group_ids in groups_lists
+                    for group_id in dc_group_ids
+                ]
                 logger.debug(
                     'Selected uncoupled groups for lrc groupsets: {}'.format(
                         uncoupled_groups
@@ -101,7 +106,7 @@ class LRC_8_2_2_V1_Builder(object):
                 job = self.job_processor._create_job(
                     JobTypes.TYPE_MAKE_LRC_GROUPS_JOB,
                     params={
-                        'uncoupled_groups': uncoupled_groups,
+                        'uncoupled_groups': storage.Lrc.Scheme822v1.order_groups(groups_lists),
                         'lrc_groups': new_groups_ids,
                         'total_space': lrc_group_total_space,
                     },
@@ -114,6 +119,7 @@ class LRC_8_2_2_V1_Builder(object):
                 jobs.append(error)
                 break
             except Exception as e:
+                logger.exception('Failed to build lrc groups')
                 jobs.append(str(e))
                 break
 
@@ -141,7 +147,7 @@ class LRC_8_2_2_V1_Builder(object):
 
         return tree, nodes
 
-    def _groups_to_couple(self, mandatory_dcs):
+    def _select_groups(self, mandatory_dcs):
         """ Get generator producing groups for lrc groupset
 
         Generator selects 4 groups in each of 3 dcs, total of 12 groups.
@@ -156,7 +162,15 @@ class LRC_8_2_2_V1_Builder(object):
             restrictions (["lrc"]["lrc_groups_per"][...] config sections);
 
         Yields:
-            a list of uncoupled groups ids that can be used for constructing lrc groupsets
+            a list of lists, where each nested list consists of uncoupled groups
+            in a certain dc that should be used for constructing lrc groupsets
+
+        Example:
+            [
+                [1001, 1002, 1003, 1004],  # groups for data parts 0, 1, 4, 5
+                [1005, 1006, 1007, 1008],  # groups for data parts 2, 3, 6, 7
+                [1009, 1010, 1011, 1012],  # groups for l1, l2, g1, g2 parity parts
+            ]
         """
         groups_by_total_space = infrastructure.infrastructure.groups_by_total_space(
             match_group_space=True,
@@ -171,7 +185,12 @@ class LRC_8_2_2_V1_Builder(object):
 
         for ts, group_ids in groups_by_total_space.iteritems():
 
-            logger.debug('Selecting among groups with total space {}'.format(ts))
+            logger.debug(
+                'Selecting among groups with total space {total_space}: {groups}'.format(
+                    total_space=ts,
+                    groups=group_ids,
+                )
+            )
 
             tree, nodes = infrastructure.infrastructure.filtered_cluster_tree(node_types)
 
@@ -212,7 +231,7 @@ class LRC_8_2_2_V1_Builder(object):
                     )
                     raise StopIteration
 
-                return group_ids
+                return groups_ids
 
             try:
                 while True:
@@ -222,11 +241,16 @@ class LRC_8_2_2_V1_Builder(object):
                         for dc, subtree in nodes[self.DC_NODE_TYPE].iteritems()
                     }
 
+                    logger.debug('Pickers: {}'.format(pickers))
+
                     non_mandatory_dcs = [
                         dc
                         for dc in self._dcs_in_preferable_order()
                         if dc not in mandatory_dcs
                     ]
+                    logger.debug('Mandatoty dcs: {}, non-mandatory dcs: {}'.format(
+                        mandatory_dcs, non_mandatory_dcs,
+                    ))
                     selected_groups = []
 
                     for dc in mandatory_dcs:
@@ -258,6 +282,7 @@ class LRC_8_2_2_V1_Builder(object):
                                 )
                                 try:
                                     group_ids = _pick_groups_from_dc(
+                                        dc=dc,
                                         picker=pickers[dc],
                                         count=self.GROUPS_PER_DC,
                                     )
@@ -268,7 +293,7 @@ class LRC_8_2_2_V1_Builder(object):
                                 # no suitable dc found
                                 raise StopIteration
 
-                        selected_groups.extend(group_ids)
+                        selected_groups.append(group_ids)
 
                     yield selected_groups
 
@@ -379,7 +404,11 @@ class LRC_8_2_2_V1_Builder(object):
             2) selected groups are added to the lrc groups tree
             to keep group selection properties;
         """
-        group_ids = set(group_ids)
+        group_ids = set(
+            group_id
+            for dc_group_ids in group_ids
+            for group_id in dc_group_ids
+        )
         for hdd_node in nodes['hdd'].itervalues():
             hdd_node['groups'] = hdd_node.get('groups', set()) - group_ids
 
