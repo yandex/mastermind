@@ -72,13 +72,18 @@ class LRC_8_2_2_V1_Builder(object):
 
         built_couples = 0
 
-        groups_to_couple = self._groups_to_couple(mandatory_dcs)
+        selected_groups = self._select_groups(mandatory_dcs)
 
         jobs = []
         while built_couples < count:
             try:
                 logger.debug('selecting groups')
-                uncoupled_groups = next(groups_to_couple)
+                groups_lists = next(selected_groups)
+                uncoupled_groups = [
+                    group_id
+                    for dc_group_ids in groups_lists
+                    for group_id in dc_group_ids
+                ]
                 logger.debug(
                     'Selected uncoupled groups for lrc groupsets: {}'.format(
                         uncoupled_groups
@@ -101,7 +106,7 @@ class LRC_8_2_2_V1_Builder(object):
                 job = self.job_processor._create_job(
                     JobTypes.TYPE_MAKE_LRC_GROUPS_JOB,
                     params={
-                        'uncoupled_groups': uncoupled_groups,
+                        'uncoupled_groups': storage.Lrc.Scheme822v1.order_groups(groups_lists),
                         'lrc_groups': new_groups_ids,
                         'total_space': lrc_group_total_space,
                     },
@@ -142,7 +147,7 @@ class LRC_8_2_2_V1_Builder(object):
 
         return tree, nodes
 
-    def _groups_to_couple(self, mandatory_dcs):
+    def _select_groups(self, mandatory_dcs):
         """ Get generator producing groups for lrc groupset
 
         Generator selects 4 groups in each of 3 dcs, total of 12 groups.
@@ -157,7 +162,15 @@ class LRC_8_2_2_V1_Builder(object):
             restrictions (["lrc"]["lrc_groups_per"][...] config sections);
 
         Yields:
-            a list of uncoupled groups ids that can be used for constructing lrc groupsets
+            a list of lists, where each nested list consists of uncoupled groups
+            in a certain dc that should be used for constructing lrc groupsets
+
+        Example:
+            [
+                [1001, 1002, 1003, 1004],  # groups for data parts 0, 1, 4, 5
+                [1005, 1006, 1007, 1008],  # groups for data parts 2, 3, 6, 7
+                [1009, 1010, 1011, 1012],  # groups for l1, l2, g1, g2 parity parts
+            ]
         """
         groups_by_total_space = infrastructure.infrastructure.groups_by_total_space(
             match_group_space=True,
@@ -270,7 +283,7 @@ class LRC_8_2_2_V1_Builder(object):
                                 # no suitable dc found
                                 raise StopIteration
 
-                        selected_groups.extend(group_ids)
+                        selected_groups.append(group_ids)
 
                     yield selected_groups
 
@@ -381,7 +394,11 @@ class LRC_8_2_2_V1_Builder(object):
             2) selected groups are added to the lrc groups tree
             to keep group selection properties;
         """
-        group_ids = set(group_ids)
+        group_ids = set(
+            group_id
+            for dc_group_ids in group_ids
+            for group_id in dc_group_ids
+        )
         for hdd_node in nodes['hdd'].itervalues():
             hdd_node['groups'] = hdd_node.get('groups', set()) - group_ids
 
