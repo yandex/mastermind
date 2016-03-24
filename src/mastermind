@@ -1383,7 +1383,7 @@ def lrc_groupset_info(group_or_groupset, host=None, app=None):
     pprint(res['groups'])
 
     print
-    print color('Couple info', YELLOW)
+    print color('Groupset info', YELLOW)
     res['group_statuses'] = []
     for g in res['groups']:
         res['group_statuses'].append({
