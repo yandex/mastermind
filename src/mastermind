@@ -232,7 +232,7 @@ def group_list_uncoupled(state=('s', 'init', 'Filter by state (init|broken)'),
     '''Get list of uncoupled groups from balancer'''
     cl = client(host, app)
 
-    options = {'uncoupled': True,
+    options = {'type': 'uncoupled',
                'in_jobs': in_jobs,
                'state': state}
     res = tuple([group.id
@@ -1242,6 +1242,158 @@ def print_group(group):
     print '-' * 30
 
 
+# lrc commands
+lrcDispatcher = Dispatcher(globaloptions=(host_param, app_param))
+
+lrcGroupDispatcher = Dispatcher(globaloptions=(host_param, app_param))
+lrcDispatcher.nest('group', lrcGroupDispatcher, 'LRC groups commands')
+
+
+@lrcGroupDispatcher.command(name='uncoupled-list')
+@log_action
+def lrc_group_uncoupled_list(
+    state=('s',
+           'good',
+           'Filter by state (good|init|broken)'),
+    in_jobs=('',
+             False,
+             'Include uncoupled groups that are in service (participating in jobs, etc.)'),
+    json=('', None, 'Format as json'),
+    host=None,
+    app=None
+):
+    '''Get list of uncoupled lrc groups'''
+    cl = client(host, app)
+
+    options = {'type': 'uncoupled_lrc-8-2-2-v1',
+               'in_jobs': in_jobs,
+               'state': state}
+    res = tuple(group.id for group in cl.groups.filter(**options))
+
+    # TODO: maybe res should contain lists of lrc groups prepared to be united
+    # into a groupset?
+
+    if json:
+        print dumps(res)
+    else:
+        print res
+
+
+lrcGroupsetDispatcher = Dispatcher(globaloptions=(host_param, app_param))
+lrcDispatcher.nest('groupset', lrcGroupsetDispatcher, 'LRC groupset commands')
+
+
+@lrcGroupsetDispatcher.command(name='list')
+@log_action
+def lrc_groupset_list(
+    namespace=('n', '', 'Filter by namespace'),
+    state=('s', '',
+           'Filter by state (good|full|frozen|bad|service-stalled|service-active|archived)'),
+    short=('', False, 'Use short format output'),
+    json=('', False,
+          'Output in json format (overrided by --short and --verbose options)'),
+    host=None,
+    app=None
+):
+    '''List groupsets with various view options.'''
+    return _groupset_list(
+        type='lrc',
+        namespace=namespace or None,
+        state=state or None,
+        short=short,
+        json=json,
+        host=host,
+        app=app,
+    )
+
+
+def _groupset_list(
+    namespace=None,
+    state=None,
+    type=None,
+    short=False,
+    json=False,
+    host=None,
+    app=None
+):
+    cl = client(host, app)
+
+    options = {
+        'type': type,
+        'namespace': namespace,
+        'state': state,
+    }
+    groupsets = cl.groupsets.filter(**options)
+
+    data = [gs.serialize() for gs in groupsets]
+
+    if not short:
+
+        # convert stats
+        def convert_entities_stats(entities):
+
+            def convert_group_stats(group):
+                for node in group.get('node_backends', []):
+                    convert_stats(node)
+
+            for entity in entities:
+                # entity is couple
+                for group in entity.get('groups', []):
+                    convert_group_stats(group)
+                convert_stats(entity)
+
+        convert_entities_stats(data)
+    else:
+        data = tuple(c['group_ids'] for c in data)
+
+    if json:
+        print dumps(data)
+    else:
+        pprint(data)
+
+
+@lrcGroupsetDispatcher.command(name='info')
+@log_action
+def lrc_groupset_info(group_or_groupset, host=None, app=None):
+    '''Get groupset info'''
+    cl = client(host, app)
+
+    try:
+        group_id = int(group_or_groupset)
+    except (ValueError, TypeError):
+        group_id = None
+
+    groupset = None
+    if group_id:
+        group = cl.groups[group_id]
+        groupset = group.groupset
+
+    if groupset is None:
+        groupset = cl.groupsets[group_or_groupset]
+
+    res = groupset.serialize()
+
+    for group in res.get('groups', []):
+        for node in group.get('node_backends', []):
+            convert_stats(node)
+    if 'id' in res:
+        convert_stats(res)
+
+    print color('Groups info', YELLOW)
+    pprint(res['groups'])
+
+    print
+    print color('Couple info', YELLOW)
+    res['group_statuses'] = []
+    for g in res['groups']:
+        res['group_statuses'].append({
+            'group_id': g['id'],
+            'status': g['status'],
+            'status_text': g['status_text']})
+    del res['groups']
+    pprint(res)
+
+
 d = Dispatcher(globaloptions=(app_param,))
 d.nest('group', groupDispatcher, 'Perform group action')
 d.nest('couple', coupleDispatcher, 'Perform couple action')
@@ -1250,6 +1402,7 @@ d.nest('cache', cacheDispatcher, 'Perform cache action')
 d.nest('job', jobDispatcher, 'Perform jobs action')
 d.nest('lock', lockDispatcher, 'Acquire locks on storage infrastructure nodes')
 d.nest('unlock', unlockDispatcher, 'Release locks on storage infrastructure nodes')
+d.nest('lrc', lrcDispatcher, 'Perform actions with LRC groups or couples')
 
 
 def command_helper(argv):

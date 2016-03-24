@@ -461,6 +461,51 @@ class NodeInfoUpdater(object):
 
         _queue = set()
 
+        def _get_data_groups(group):
+            return group.meta['couple']
+
+        def _get_lrc_groups(group):
+            return group.meta['lrc']['groups']
+
+        def _create_groupset_if_needed(groups, group_type, ns_id):
+
+            for gid in groups:
+                if gid not in storage.groups:
+                    logger.info(
+                        'Group {group} is not found, adding fake group '
+                        'for groupset {groups}'.format(
+                            group=gid,
+                            groups=groups,
+                        )
+                    )
+                    storage.groups.add(gid)
+
+            groupset_str = ':'.join((str(gid) for gid in sorted(groups)))
+            if groupset_str not in storage.groupsets:
+                # TODO: somehow check that couple type matches group.type
+                # for all groups in couple (not very easy when metakey read
+                # fails)
+                logger.info('Creating groupset {groups}, group type "{group_type}"'.format(
+                    groups=groupset_str,
+                    group_type=group_type,
+                ))
+                c = storage.groupsets.add(
+                    groups=(storage.groups[gid] for gid in groups),
+                    group_type=group_type,
+                )
+
+                for gid in groups:
+                    infrastructure.update_group_history(storage.groups[gid])
+
+                if ns_id not in storage.namespaces:
+                    logger.info('Creating storage namespace {}'.format(ns_id))
+                    ns = storage.namespaces.add(ns_id)
+                else:
+                    ns = storage.namespaces[ns_id]
+
+                ns.add_couple(c)
+            return storage.groupsets[groupset_str]
+
         def _process_group_metadata(response, group, elapsed_time=None, end_time=None):
             logger.debug('Cluster updating: group {0} meta key read time: {1}.{2}'.format(
                 group.group_id, elapsed_time.tsec, elapsed_time.tnsec))
@@ -493,19 +538,6 @@ class NodeInfoUpdater(object):
             meta = response.data
 
             group.parse_meta(meta)
-            couple = group.meta.get('couple')
-            if couple is None:
-                logger.error('Read symmetric groups from group {} (no couple data): {}'.format(
-                    group.group_id, group.meta))
-                return
-
-            logger.info('Read symmetric groups from group {}: {}'.format(group.group_id, couple))
-            for gid in couple:
-                if gid != group.group_id:
-                    logger.info('Scheduling update for group {}'.format(gid))
-                    _queue.add(gid)
-
-            couple_str = ':'.join((str(gid) for gid in sorted(couple)))
 
             ns_id = group.meta.get('namespace')
             if ns_id is None:
@@ -517,39 +549,39 @@ class NodeInfoUpdater(object):
                 )
                 return
 
-            for gid in couple:
-                if gid not in storage.groups:
-                    logger.info(
-                        'Group {group} is not found, adding fake group for couple {couple}'.format(
-                            group=gid,
-                            couple=couple,
-                        )
+            if group.type == storage.Group.TYPE_DATA:
+                groups = _get_data_groups(group)
+            elif group.type == storage.Group.TYPE_LRC_8_2_2_V1:
+                groups = _get_lrc_groups(group)
+            elif group.type == storage.Group.TYPE_CACHE:
+                groups = _get_data_groups(group)
+            else:
+                raise RuntimeError(
+                    'Group {group_id}, unexpected type to process: {type}'.format(
+                        group_id=group.group_id,
+                        type=group.type,
                     )
-                    storage.groups.add(gid)
-
-            if couple_str not in storage.couples:
-                # TODO: somehow check that couple type matches group.type
-                # for all groups in couple (not very easy when metakey read
-                # fails)
-                logger.info('Creating couple {groups}, group type "{group_type}"'.format(
-                    groups=couple_str,
-                    group_type=group.type,
-                ))
-                c = storage.couples.add(
-                    groups=(storage.groups[gid] for gid in couple),
-                    group_type=group.type,
                 )
 
-                for gid in couple:
-                    infrastructure.update_group_history(storage.groups[gid])
+            logger.info('Read symmetric groups from group {}: {}'.format(group.group_id, groups))
 
-                if ns_id not in storage.namespaces:
-                    logger.info('Creating storage namespace {}'.format(ns_id))
-                    ns = storage.namespaces.add(ns_id)
-                else:
-                    ns = storage.namespaces[ns_id]
+            for gid in groups:
+                if gid != group.group_id:
+                    logger.info('Scheduling update for group {}'.format(gid))
+                    _queue.add(gid)
 
-                ns.add_couple(c)
+            groupset = _create_groupset_if_needed(groups, group.type, ns_id)
+
+            if group.type == storage.Group.TYPE_LRC_8_2_2_V1:
+                # TODO: this will become unnecessary when new "Couple" instance
+                # is introduced
+                data_groups = _get_data_groups(group)
+                data_groupset = _create_groupset_if_needed(
+                    data_groups,
+                    storage.Group.TYPE_DATA,
+                    ns_id
+                )
+                data_groupset.lrc822v1_groupset = groupset
             return
 
         try:
@@ -581,6 +613,7 @@ class NodeInfoUpdater(object):
                     pass
 
             while results:
+                # TODO: Think on queue, it does not work well with lrc couples
                 if _queue:
                     group_id = _queue.pop()
                     if group_id not in results:
