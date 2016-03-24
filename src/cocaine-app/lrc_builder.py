@@ -51,10 +51,10 @@ class LRC_8_2_2_V1_Builder(object):
         `mandatory_dcs` optional parameter can be used to
         set certain dcs to obtain certain stripe part groups.
         E.g. if you want to use 'dc_parity' for parity parts and 'dc1'
-        for parts 1 to 4, and do not care about dc for parts 5 to 8,
+        for parts 0, 1, 2 and 3, and do not care about dc for parts 4, 5, 6 and 7,
         you can set 'dcs' to ['dc1', None, 'dc_parity'].
         Then the builder will use supplied dcs and additionally
-        choose the dc (for parts 5 to 8).
+        choose the dc (for parts 4 to 7).
 
         Parameters:
             mandatory_dcs: a list of up to 3 dcs to use for placing
@@ -114,6 +114,7 @@ class LRC_8_2_2_V1_Builder(object):
                 jobs.append(error)
                 break
             except Exception as e:
+                logger.exception('Failed to build lrc groups')
                 jobs.append(str(e))
                 break
 
@@ -212,7 +213,7 @@ class LRC_8_2_2_V1_Builder(object):
                     )
                     raise StopIteration
 
-                return group_ids
+                return groups_ids
 
             try:
                 while True:
@@ -258,6 +259,7 @@ class LRC_8_2_2_V1_Builder(object):
                                 )
                                 try:
                                     group_ids = _pick_groups_from_dc(
+                                        dc=dc,
                                         picker=pickers[dc],
                                         count=self.GROUPS_PER_DC,
                                     )
