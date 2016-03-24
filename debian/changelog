@@ -1,3 +1,14 @@
+mastermind (2.27.1) trusty; urgency=medium
+
+  * Add lrc commands to mastermind-cli
+  * Add group filtering by 'type'
+  * Add LRC builder to select groups for future LRC groupsets
+  * Add lrc groupsets representation object
+  * Add make lrc group job type
+  * Divide groupsets by different types
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 24 Mar 2016 15:11:28 +0300
+
 mastermind (2.26.6) trusty; urgency=medium
 
   * Increase defrag check timeout to 14 days
