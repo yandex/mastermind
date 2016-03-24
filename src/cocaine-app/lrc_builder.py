@@ -185,7 +185,12 @@ class LRC_8_2_2_V1_Builder(object):
 
         for ts, group_ids in groups_by_total_space.iteritems():
 
-            logger.debug('Selecting among groups with total space {}'.format(ts))
+            logger.debug(
+                'Selecting among groups with total space {total_space}: {groups}'.format(
+                    total_space=ts,
+                    groups=group_ids,
+                )
+            )
 
             tree, nodes = infrastructure.infrastructure.filtered_cluster_tree(node_types)
 
@@ -236,11 +241,16 @@ class LRC_8_2_2_V1_Builder(object):
                         for dc, subtree in nodes[self.DC_NODE_TYPE].iteritems()
                     }
 
+                    logger.debug('Pickers: {}'.format(pickers))
+
                     non_mandatory_dcs = [
                         dc
                         for dc in self._dcs_in_preferable_order()
                         if dc not in mandatory_dcs
                     ]
+                    logger.debug('Mandatoty dcs: {}, non-mandatory dcs: {}'.format(
+                        mandatory_dcs, non_mandatory_dcs,
+                    ))
                     selected_groups = []
 
                     for dc in mandatory_dcs:
