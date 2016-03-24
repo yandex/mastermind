@@ -220,7 +220,7 @@ class MakeLrcGroupsJob(Job):
                 group=lrc_group_id,
                 metakey=storage.Group.compose_uncoupled_lrc_group_meta(
                     lrc_groups=lrc_groups_sets[lrc_groups_set_id],
-                    scheme=storage.Lrc.SCHEME_8_2_2_V1,
+                    scheme=storage.Lrc.Scheme822v1,
                 ),
             )
             tasks.append(task)

@@ -18,6 +18,7 @@ from jobs.job_types import JobTypes
 from infrastructure import infrastructure
 from infrastructure_cache import cache
 from config import config
+import lrc_builder
 from mastermind.query.couples import Couple as CoupleInfo
 from mastermind.query.groups import Group as GroupInfo
 
@@ -63,7 +64,44 @@ NOT_BAD_STATUSES = set([Status.OK, Status.FULL, Status.FROZEN])
 
 
 class Lrc(object):
-    SCHEME_8_2_2_V1 = 'lrc-8-2-2-v1'
+
+    class Scheme822v1(object):
+
+        ID = 'lrc-8-2-2-v1'
+
+        @staticmethod
+        def order_groups(groups_lists):
+            """ Order groups from groups_lists using scheme's specific group ordering
+
+            Params:
+                groups_list: a list of lists, where each nested list consists
+                  of groups in a certain dc.
+                Example:
+                [
+                    [1001, 1002, 1003, 1004],  # groups for data parts 0, 1, 4, 5
+                    [1005, 1006, 1007, 1008],  # groups for data parts 2, 3, 6, 7
+                    [1009, 1010, 1011, 1012],  # groups for L1, L2, G1, G2 parity parts
+                ]
+
+            Returns:
+                A list of groups sorted in scheme specific order, e.g.:
+                [1001, 1002, 1005, 1006, 1003, 1004, 1007, 1008, 1009, 1010, 1011, 1012]
+            """
+            return (
+                groups_lists[0][0:2] +  # data parts 0, 1; located in DC 1
+                groups_lists[1][0:2] +  # data parts 2, 3; located in DC 2
+                groups_lists[0][2:4] +  # data parts 4, 5; located in DC 1
+                groups_lists[1][2:4] +  # data parts 6, 7; located in DC 2
+                groups_lists[2][0:4]    # parity parts L1, L2, G1, G2; located in DC 3
+            )
+
+        builder = lrc_builder.LRC_8_2_2_V1_Builder
+
+    @staticmethod
+    def make_scheme(scheme_id):
+        if scheme_id == Lrc.Scheme822v1.ID:
+            return Lrc.Scheme822v1
+        raise ValueError('Unknown LRC scheme "{}"'.format(scheme_id))
 
 
 class ResourceError(KeyError):
@@ -1419,7 +1457,7 @@ class Group(object):
 
     @staticmethod
     def compose_uncoupled_lrc_group_meta(lrc_groups, scheme):
-        if scheme == Lrc.SCHEME_8_2_2_V1:
+        if scheme == Lrc.Scheme822v1:
             group_type = Group.TYPE_UNCOUPLED_LRC_8_2_2_V1
         else:
             raise ValueError('Unknown scheme: {}'.format(scheme))

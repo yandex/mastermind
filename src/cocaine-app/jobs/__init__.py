@@ -761,9 +761,14 @@ class JobProcessor(object):
 
     @h.concurrent_handler
     def build_lrc_groups(self, request):
+        if 'scheme' not in request:
+            raise ValueError('Parameter "scheme" is required to build LRC groups')
+        scheme = storage.Lrc.make_scheme(request['scheme'])
+
         count = request.get('count', 1)
         mandatory_dcs = request.get('mandatory_dcs', [])
-        builder = lrc_builder.LRC_8_2_2_V1_Builder(self)
+
+        builder = scheme.builder(self)
         return builder.build(
             count=count,
             mandatory_dcs=mandatory_dcs,
