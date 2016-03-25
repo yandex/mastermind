@@ -1,3 +1,10 @@
+mastermind (2.27.4) trusty; urgency=medium
+
+  * Add support of groupsets in couple build method of mastermind client
+  * Add 'groupsets' property to couple object
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 25 Mar 2016 22:20:34 +0300
+
 mastermind (2.27.3) trusty; urgency=medium
 
   * Skip internatl namespaces in client APIs
