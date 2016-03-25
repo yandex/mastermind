@@ -148,6 +148,15 @@ class Repositary(object):
     def keys(self):
         return self.elements.keys()
 
+    def values(self):
+        return self.elements.values()
+
+    def iterkeys(self):
+        return self.elements.iterkeys()
+
+    def itervalues(self):
+        return self.elements.itervalues()
+
     def __len__(self):
         return len(self.elements)
 
