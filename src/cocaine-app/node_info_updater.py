@@ -731,6 +731,9 @@ class NodeInfoUpdater(object):
         for ns, stats in self.statistics.per_ns_statistics().iteritems():
             res[ns]['statistics'] = stats
 
+        # removing internal namespaces that clients should not know about
+        res.pop(storage.Group.CACHE_NAMESPACE, None)
+
         self._namespaces_states.set_result(dict(res))
 
     @h.concurrent_handler
