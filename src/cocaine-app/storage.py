@@ -104,6 +104,13 @@ class Lrc(object):
             return Lrc.Scheme822v1
         raise ValueError('Unknown LRC scheme "{}"'.format(scheme_id))
 
+    @staticmethod
+    def check_scheme(scheme_id):
+        try:
+            return bool(Lrc.make_scheme(scheme_id))
+        except ValueError:
+            return False
+
 
 class ResourceError(KeyError):
     def __str__(self):
@@ -2074,6 +2081,20 @@ class Lrc822v1Groupset(Groupset):
         self.status_text = 'Couple {} is archived'.format(self)
         return self.status
 
+    def compose_group_meta(self, namespace, couple, frozen, lrc_groups, part_size):
+        return {
+            'version': 2,
+            'couple': couple.as_tuple(),
+            'namespace': namespace,
+            'frozen': bool(frozen),
+            'type': Group.TYPE_LRC_8_2_2_V1,
+            'lrc': {
+                'groups': lrc_groups,
+                'part_size': part_size,
+                'scheme': Lrc.Scheme822v1.ID,
+            },
+        }
+
     def info(self):
         c = GroupsetInfo(str(self))
         c._set_raw_data(self.info_data())
@@ -2136,10 +2157,29 @@ class Namespace(object):
 
     def add_couple(self, couple):
         if couple.namespace:
-            raise ValueError('Couple {} already belongs to namespace {}, cannot be assigned to '
-                             'namespace {}'.format(couple, self, couple.namespace))
+            raise ValueError(
+                'Couple {couple} already belongs to namespace {couple_namespace}, '
+                'cannot be assigned to namespace {namespace}'.format(
+                    couple=couple,
+                    couple_namespace=couple.namespace,
+                    namespace=self,
+                )
+            )
         self.groupsets.add_groupset(couple)
         couple.namespace = self
+
+    def add_groupset(self, groupset):
+        if groupset.namespace:
+            raise ValueError(
+                'Groupset {groupset} already belongs to namespace {groupset_namespace}, '
+                'cannot be assigned to namespace {namespace}'.format(
+                    groupset=groupset,
+                    groupset_namespace=groupset.namespace,
+                    namespace=self,
+                )
+            )
+        self.groupsets.add_groupset(groupset)
+        groupset.namespace = self
 
     def remove_couple(self, couple):
         self.groupsets.remove_groupset(couple)
