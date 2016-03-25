@@ -437,7 +437,12 @@ class Balancer(object):
             if g.meta and g.group_id != group_id
         )
 
-        make_symm_group(self.node, couple, namespace_to_use, frozen)
+        write_groupset_metakey(
+            self.node,
+            groupset=couple,
+            namespace=namespace_to_use,
+            frozen=frozen,
+        )
         couple.update_status()
 
         return True
@@ -538,10 +543,10 @@ class Balancer(object):
     @staticmethod
     def _remove_unusable_groups(groups_by_total_space, groups):
         for ts, group_ids in groups_by_total_space.iteritems():
-            if groups[0] in group_ids:
-                for group in groups:
-                    group_ids.remove(group)
-                break
+            for group_to_remove in groups[:]:
+                if group_to_remove in group_ids:
+                    group_ids.remove(group_to_remove)
+                    groups.remove(group_to_remove)
 
     @contextmanager
     def _locked_uncoupled_groups(self, uncoupled_groups, groups_by_total_space, comment=''):
@@ -621,6 +626,7 @@ class Balancer(object):
                     groups_by_total_space, mandatory_groups,
                     namespace=options['namespace'],
                     init_state=options['init_state'],
+                    groupsets=options.get('groupsets', []),
                     dry_run=options['dry_run'])
 
                 if couple is None:
@@ -779,6 +785,7 @@ class Balancer(object):
                       mandatory_groups,
                       namespace,
                       init_state,
+                      groupsets,
                       dry_run=False):
 
         while True:
@@ -788,25 +795,51 @@ class Balancer(object):
             if not groups_to_couple:
                 return None
 
-            with self._locked_uncoupled_groups(groups_to_couple,
+            groupsets_groups = []
+
+            for groupset in groupsets:
+                if groupset['type'] == 'lrc':
+                    scheme = storage.Lrc.make_scheme(groupset['settings']['scheme'])
+                    builder = scheme.builder()
+                    try:
+                        lrc_uncoupled_group_ids = next(
+                            builder.select_uncoupled_groups(
+                                skip_groups=groups_to_couple,
+                            )
+                        )
+                    except StopIteration:
+                        logger.error(
+                            'Failed to find appropriate groups for LRC groupset construction'
+                        )
+                        return None
+                    groupsets_groups.append(lrc_uncoupled_group_ids)
+
+            involved_groups = groups_to_couple + [
+                group_id
+                for groupset_groups in groupsets_groups
+                for group_id in groupset_groups
+            ]
+
+            with self._locked_uncoupled_groups(involved_groups,
                                                groups_by_total_space,
                                                'couple build') as locked_uncoupled_group_ids:
 
-                if groups_to_couple != locked_uncoupled_group_ids:
+                if involved_groups != locked_uncoupled_group_ids:
                     logger.warn('Failed to lock all uncoupled groups: locked {} / {}'.format(
-                        locked_uncoupled_group_ids, groups_to_couple))
+                        locked_uncoupled_group_ids, involved_groups))
                     continue
 
                 logger.info('Chosen groups to couple: {0}'.format(groups_to_couple))
 
                 unsuitable_group_ids = get_unsuitable_uncoupled_group_ids(
-                    self.node, groups_to_couple
+                    self.node,
+                    involved_groups,
                 )
                 if unsuitable_group_ids:
                     logger.error(
                         'Groups {} cannot be coupled: failed to ensure empty metakey '
                         'for groups {}'.format(
-                            groups_to_couple,
+                            involved_groups,
                             unsuitable_group_ids,
                         )
                     )
@@ -816,13 +849,46 @@ class Balancer(object):
                     [storage.groups[g] for g in groups_to_couple]
                 )
 
+                couple_groupsets = []
+                for groupset, groupset_groups in itertools.izip(groupsets, groupsets_groups):
+                    if groupset['type'] == 'lrc':
+                        scheme = storage.Lrc.make_scheme(groupset['settings']['scheme'])
+                        if scheme == storage.Lrc.Scheme822v1:
+                            couple_groupset = storage.Lrc822v1Groupset(
+                                [storage.groups[g] for g in groupset_groups]
+                            )
+                            storage.groupsets.add_groupset(couple_groupset)
+                            logger.info('Created new groupset {} for couple {}'.format(
+                                couple_groupset,
+                                couple
+                            ))
+                            couple_groupsets.append(couple_groupset)
+                            couple.lrc822v1_groupset = couple_groupset
+
                 if not dry_run:
                     try:
-                        make_symm_group(
-                            self.node, couple, namespace,
-                            init_state == storage.Status.FROZEN)
+                        write_groupset_metakey(
+                            self.node,
+                            groupset=couple,
+                            namespace=namespace,
+                            frozen=init_state == storage.Status.FROZEN,
+                        )
+                        for couple_groupset, groupset in itertools.izip(couple_groupsets, groupsets):
+                            if isinstance(couple_groupset, storage.Lrc822v1Groupset):
+                                write_groupset_metakey(
+                                    self.node,
+                                    groupset=couple_groupset,
+                                    namespace=namespace,
+                                    couple=couple,
+                                    lrc_groups=couple_groupset.as_tuple(),
+                                    part_size=groupset['settings']['part_size'],
+                                    frozen=init_state == storage.Status.FROZEN,
+                                )
+
                     except Exception:
                         couple.destroy()
+                        for couple_groupset in couple_groupsets:
+                            couple_groupset.destroy()
                         raise
 
                 if namespace not in storage.namespaces:
@@ -830,11 +896,15 @@ class Balancer(object):
                 else:
                     ns = storage.namespaces[namespace]
                 ns.add_couple(couple)
+                for groupset in couple_groupsets:
+                    ns.add_groupset(groupset)
 
                 if not dry_run:
                     # update should happen after couple has been added to
                     # namespace
                     couple.update_status()
+                    for couple_groupset in couple_groupsets:
+                        couple_groupset.update_status()
 
             return couple
 
@@ -886,6 +956,7 @@ class Balancer(object):
         except IndexError:
             options = {}
 
+        # TODO: move validation to a separate method
         options.setdefault('namespace', storage.Group.DEFAULT_NAMESPACE)
         options.setdefault('match_group_space', True)
         options.setdefault('init_state', storage.Status.COUPLED)
@@ -895,6 +966,20 @@ class Balancer(object):
         options['init_state'] = options['init_state'].upper()
         if not options['init_state'] in self.VALID_COUPLE_INIT_STATES:
             raise ValueError('Couple "{0}" init state is invalid'.format(options['init_state']))
+
+        for gs_options in options.get('groupsets', []):
+            if 'type' not in gs_options:
+                raise ValueError('Groupset requires "type" field')
+            if 'settings' not in gs_options:
+                raise ValueError('Groupset requires "settings" field')
+
+            if gs_options['type'] == 'lrc':
+                gs_settings = gs_options['settings']
+                if 'scheme' not in gs_settings:
+                    raise ValueError('Lrc groupset requires "scheme" field')
+                scheme_id = gs_settings['scheme']
+                if not storage.Lrc.check_scheme(scheme_id):
+                    raise ValueError('Unknown LRC scheme "{}"'.format(scheme_id))
 
         ns = options['namespace']
         logger.info('namespace from request: {0}'.format(ns))
@@ -1666,28 +1751,31 @@ def get_unsuitable_uncoupled_group_ids(n, group_ids):
     return unsuitable_uncoupled_groups
 
 
-def make_symm_group(n, couple, namespace, frozen):
-    logger.info('Writing meta key for couple {0}, assigning namespace'.format(couple, namespace))
+def write_groupset_metakey(n, groupset, namespace, **kwargs):
+    logger.info(
+        'Writing meta key for groupset {groupset}, assigning namespace {namespace}'.format(
+            groupset=groupset,
+            namespace=namespace,
+        )
+    )
 
     s = elliptics.Session(n)
     wait_timeout = config.get('elliptics', {}).get('wait_timeout') or config.get('wait_timeout', 5)
     s.set_timeout(wait_timeout)
 
-    s.add_groups(g.group_id for g in couple.groups)
-    packed = msgpack.packb(couple.compose_group_meta(namespace, frozen))
+    s.add_groups(g.group_id for g in groupset.groups)
+    packed = msgpack.packb(groupset.compose_group_meta(namespace=namespace, **kwargs))
     try:
         consistent_write(s, keys.SYMMETRIC_GROUPS_KEY, packed)
-    except Exception as e:
-        logger.error('Failed to write meta key for couple {0}: {1}\n{2}'.format(
-                     couple, str(e), traceback.format_exc()))
+    except Exception:
+        logger.exception('Failed to write meta key for groupset {}'.format(groupset))
         raise
 
     try:
-        for group in couple:
+        for group in groupset.groups:
             group.parse_meta(packed)
-    except Exception as e:
-        logging.error('Failed to parse meta key for groups {0}: {1}'.format(
-            [g.group_id for g in couple.groups], e))
+    except Exception:
+        logging.exception('Failed to parse meta key for groups {}'.format([g.group_id for g in groupset.groups]))
         raise
 
     return

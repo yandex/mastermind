@@ -1115,7 +1115,8 @@ class Infrastructure(object):
                                   max_node_backends=None,
                                   including_in_service=False,
                                   status=None,
-                                  types=None):
+                                  types=None,
+                                  skip_groups=None):
 
         suitable_groups = []
         locked_hosts = manual_locker.get_locked_hosts()
@@ -1124,6 +1125,8 @@ class Infrastructure(object):
             in_service = set(self.job_finder.get_uncoupled_groups_in_service())
         logger.debug('Groups in service - total {0}: {1}'.format(
             len(in_service), in_service))
+        if skip_groups:
+            in_service |= set(skip_groups)
         for group in storage.groups.keys():
 
             if Infrastructure.is_uncoupled_group_good(

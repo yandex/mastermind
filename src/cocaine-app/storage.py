@@ -20,6 +20,7 @@ from infrastructure_cache import cache
 from config import config
 import lrc_builder
 from mastermind.query.couples import Couple as CoupleInfo
+from mastermind.query.groupsets import Groupset as GroupsetInfo
 from mastermind.query.groups import Group as GroupInfo
 
 logger = logging.getLogger('mm.storage')
@@ -103,6 +104,13 @@ class Lrc(object):
             return Lrc.Scheme822v1
         raise ValueError('Unknown LRC scheme "{}"'.format(scheme_id))
 
+    @staticmethod
+    def check_scheme(scheme_id):
+        try:
+            return bool(Lrc.make_scheme(scheme_id))
+        except ValueError:
+            return False
+
 
 class ResourceError(KeyError):
     def __str__(self):
@@ -147,6 +155,15 @@ class Repositary(object):
 
     def keys(self):
         return self.elements.keys()
+
+    def values(self):
+        return self.elements.values()
+
+    def iterkeys(self):
+        return self.elements.iterkeys()
+
+    def itervalues(self):
+        return self.elements.itervalues()
 
     def __len__(self):
         return len(self.elements)
@@ -1680,14 +1697,6 @@ class Groupset(object):
         self.groups = []
         self.status = Status.INIT
 
-    def compose_group_meta(self, namespace, frozen):
-        return {
-            'version': 2,
-            'couple': self.as_tuple(),
-            'namespace': namespace,
-            'frozen': bool(frozen),
-        }
-
     RESERVED_SPACE_KEY = 'reserved-space-percentage'
 
     def is_full(self):
@@ -1750,8 +1759,7 @@ class Groupset(object):
     def as_tuple(self):
         return tuple(group.group_id for group in self.groups)
 
-    def info(self):
-        c = CoupleInfo(str(self))
+    def info_data(self):
         data = {'id': str(self),
                 'status': self.status,
                 'status_text': self.status_text,
@@ -1775,9 +1783,7 @@ class Groupset(object):
         data['hosts'] = {
             'primary': []
         }
-
-        c._set_raw_data(data)
-        return c
+        return data
 
     FALLBACK_HOSTS_PER_DC = config.get('fallback_hosts_per_dc', 10)
 
@@ -1871,11 +1877,10 @@ class Couple(Groupset):
         # introduced
         self.lrc822v1_groupset = None
 
-    def info(self):
-        info = super(Couple, self).info()
+    def info_data(self):
+        data = super(Couple, self).info_data()
 
         # imitation of future "Couple"
-        data = info._data
         data['groupsets'] = {}
 
         # TODO: stop this nonsense when 'replicas' groupset is implemented
@@ -1898,7 +1903,7 @@ class Couple(Groupset):
         if self.lrc822v1_groupset and self.lrc822v1_groupset.status == Status.ARCHIVED:
             data['read_preference'].append(Group.TYPE_LRC_8_2_2_V1)
 
-        return info
+        return data
 
     def _custom_status(self, statuses):
         if self.lrc822v1_groupset:
@@ -1970,6 +1975,19 @@ class Couple(Groupset):
         self.status_text = 'Couple {} is archived'.format(self)
         return self.status
 
+    def compose_group_meta(self, namespace, frozen):
+        return {
+            'version': 2,
+            'couple': self.as_tuple(),
+            'namespace': namespace,
+            'frozen': bool(frozen),
+        }
+
+    def info(self):
+        c = CoupleInfo(str(self))
+        c._set_raw_data(self.info_data())
+        return c
+
 
 class Lrc822v1Groupset(Groupset):
     def __init__(self, groups):
@@ -1977,10 +1995,9 @@ class Lrc822v1Groupset(Groupset):
         self.scheme = Group.TYPE_LRC_8_2_2_V1
         self.part_size = None
 
-    def info(self):
-        info = super(Lrc822v1Groupset, self).info()
+    def info_data(self):
+        data = super(Lrc822v1Groupset, self).info_data()
 
-        data = info._data
         data['type'] = 'lrc'
         data['settings'] = {
             'scheme': self.scheme,
@@ -1991,7 +2008,7 @@ class Lrc822v1Groupset(Groupset):
         # a while
         data['group_ids'] = data['tuple']
 
-        return info
+        return data
 
     def _check_dc_sharing(self):
         # LRC groupsets are allowed to share dcs
@@ -2064,6 +2081,25 @@ class Lrc822v1Groupset(Groupset):
         self.status_text = 'Couple {} is archived'.format(self)
         return self.status
 
+    def compose_group_meta(self, namespace, couple, frozen, lrc_groups, part_size):
+        return {
+            'version': 2,
+            'couple': couple.as_tuple(),
+            'namespace': namespace,
+            'frozen': bool(frozen),
+            'type': Group.TYPE_LRC_8_2_2_V1,
+            'lrc': {
+                'groups': lrc_groups,
+                'part_size': part_size,
+                'scheme': Lrc.Scheme822v1.ID,
+            },
+        }
+
+    def info(self):
+        c = GroupsetInfo(str(self))
+        c._set_raw_data(self.info_data())
+        return c
+
 
 class DcNodes(object):
     def __init__(self):
@@ -2121,10 +2157,29 @@ class Namespace(object):
 
     def add_couple(self, couple):
         if couple.namespace:
-            raise ValueError('Couple {} already belongs to namespace {}, cannot be assigned to '
-                             'namespace {}'.format(couple, self, couple.namespace))
+            raise ValueError(
+                'Couple {couple} already belongs to namespace {couple_namespace}, '
+                'cannot be assigned to namespace {namespace}'.format(
+                    couple=couple,
+                    couple_namespace=couple.namespace,
+                    namespace=self,
+                )
+            )
         self.groupsets.add_groupset(couple)
         couple.namespace = self
+
+    def add_groupset(self, groupset):
+        if groupset.namespace:
+            raise ValueError(
+                'Groupset {groupset} already belongs to namespace {groupset_namespace}, '
+                'cannot be assigned to namespace {namespace}'.format(
+                    groupset=groupset,
+                    groupset_namespace=groupset.namespace,
+                    namespace=self,
+                )
+            )
+        self.groupsets.add_groupset(groupset)
+        groupset.namespace = self
 
     def remove_couple(self, couple):
         self.groupsets.remove_groupset(couple)

@@ -293,9 +293,16 @@ class NamespaceDataObject(LazyDataObject):
 
 class NamespaceQuery(Query):
     @Query.not_idempotent
-    def build_couples(self, couple_size, init_state,
-                      couples=1, groups=None, ignore_space=False, dry_run=False,
-                      attempts=None, timeout=None):
+    def build_couples(self,
+                      couple_size,
+                      init_state,
+                      couples=1,
+                      groups=None,
+                      ignore_space=False,
+                      groupsets=None,
+                      dry_run=False,
+                      attempts=None,
+                      timeout=None):
         """
         Builds a number of couples to extend a namespace.
 
@@ -317,6 +324,19 @@ class NamespaceQuery(Query):
           ignore_space:
             if this flag is set to True mastermind will couple only the groups
             having equal total space
+          groupsets:
+            a list of settings for each required groupset, where each setting object is
+            of the following form:
+                {
+                    'type': <groupset_type>,  # e.g. 'lrc'
+                    'settings': {
+                    ...                       # type-specific settings,
+                                              # e.g. {
+                                              #     'scheme': 'lrc-8-2-2-v1',
+                                              #     'part_size': 1024,
+                                              # }
+                    }
+                }
           dry_run:
             build couple in dry-run mode.
             Mastermind will not write corresponding metakeys to selected groups,
@@ -329,6 +349,7 @@ class NamespaceQuery(Query):
         params = [couple_size, couples, {'namespace': self.id,
                                          'match_group_space': not ignore_space,
                                          'init_state': init_state,
+                                         'groupsets': groupsets,
                                          'dry_run': dry_run,
                                          'mandatory_groups': groups or []}]
         created_couples = []
