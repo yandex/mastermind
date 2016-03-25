@@ -3,6 +3,7 @@ import copy
 from mastermind import query
 from mastermind.query import Query, LazyDataObject
 from mastermind.query.groups import Group
+from mastermind.query.groupsets import Groupset
 
 
 class CouplesQuery(Query):
@@ -113,17 +114,35 @@ class CoupleDataObject(LazyDataObject):
         """
         return self._data['groups']
 
+    @property
+    @LazyDataObject._lazy_load
+    def groupsets(self):
+        """ Couple groupsets.
+        """
+        return self._data['groupsets']
+
     def _preprocess_raw_data(self, data):
         groups = []
         for g_data in data['groups'][:]:
             groups.append(Group.from_data(g_data, self.client))
         data['groups'] = groups
+
+        groupsets = {
+            groupset_id: Groupset.from_data(gs_data, self.client)
+            for groupset_id, gs_data in data['groupsets'].iteritems()
+        }
+        data['groupsets'] = groupsets
         return data
 
     def serialize(self):
         data = super(CoupleDataObject, self).serialize()
         groups = [group.serialize() for group in data['groups']]
         data['groups'] = groups
+        groupsets = {
+            groupset_id: groupset.serialize()
+            for groupset_id, groupset in data['groupsets'].iteritems()
+        }
+        data['groupsets'] = groupsets
         return data
 
 

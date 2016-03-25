@@ -40,7 +40,7 @@ class LRC_8_2_2_V1_Builder(object):
     # to "lrc_groups_per" object.
     CLUSTER_NODE_LRC_GROUPS_LIMITS = CFG.get('lrc_groups_per', {})
 
-    def __init__(self, job_processor):
+    def __init__(self, job_processor=None):
         self.lrc_tree = None
         self.lrc_nodes = None
         self.job_processor = job_processor
@@ -68,27 +68,17 @@ class LRC_8_2_2_V1_Builder(object):
                 - job that is created for prepraing lrc groups;
                 - error string with description of the exception that happened;
         """
-        self.lrc_tree, self.lrc_nodes = self._build_lrc_tree()
+        if not self.job_processor:
+            raise RuntimeError('Builder requires job processor to build jobs')
 
         built_couples = 0
 
-        selected_groups = self._select_groups(mandatory_dcs)
+        selected_groups = self.select_uncoupled_groups(mandatory_dcs)
 
         jobs = []
         while built_couples < count:
             try:
-                logger.debug('selecting groups')
-                groups_lists = next(selected_groups)
-                uncoupled_groups = [
-                    group_id
-                    for dc_group_ids in groups_lists
-                    for group_id in dc_group_ids
-                ]
-                logger.debug(
-                    'Selected uncoupled groups for lrc groupsets: {}'.format(
-                        uncoupled_groups
-                    )
-                )
+                uncoupled_groups = next(selected_groups)
                 total_space = min(
                     storage.groups[gid].node_backends[0].stat.total_space
                     for gid in uncoupled_groups
@@ -106,7 +96,7 @@ class LRC_8_2_2_V1_Builder(object):
                 job = self.job_processor._create_job(
                     JobTypes.TYPE_MAKE_LRC_GROUPS_JOB,
                     params={
-                        'uncoupled_groups': storage.Lrc.Scheme822v1.order_groups(groups_lists),
+                        'uncoupled_groups': uncoupled_groups,
                         'lrc_groups': new_groups_ids,
                         'total_space': lrc_group_total_space,
                     },
@@ -124,6 +114,37 @@ class LRC_8_2_2_V1_Builder(object):
                 break
 
         return jobs
+
+    def select_uncoupled_groups(self, mandatory_dcs=None, skip_groups=None):
+        """ Get uncoupled groups that can be used for LRC groupset construction
+
+        Parameters:
+            mandatory_dcs: see 'build' method docs;
+
+        Yields:
+            a list of uncoupled group ids in scheme's specific order that can be used
+            for LRC groupset construction;
+        """
+
+        self.lrc_tree, self.lrc_nodes = self._build_lrc_tree()
+
+        selected_groups = self._select_groups(
+            mandatory_dcs or [],
+            skip_groups=skip_groups,
+        )
+        while True:
+            groups_lists = next(selected_groups)
+            uncoupled_groups = [
+                group_id
+                for dc_group_ids in groups_lists
+                for group_id in dc_group_ids
+            ]
+            logger.debug(
+                'Selected uncoupled groups for lrc groupsets: {}'.format(
+                    uncoupled_groups
+                )
+            )
+            yield storage.Lrc.Scheme822v1.order_groups(groups_lists)
 
     def _build_lrc_tree(self):
         node_types = (self.DC_NODE_TYPE,) + ('host',)
@@ -147,7 +168,7 @@ class LRC_8_2_2_V1_Builder(object):
 
         return tree, nodes
 
-    def _select_groups(self, mandatory_dcs):
+    def _select_groups(self, mandatory_dcs, skip_groups=None):
         """ Get generator producing groups for lrc groupset
 
         Generator selects 4 groups in each of 3 dcs, total of 12 groups.
@@ -175,6 +196,7 @@ class LRC_8_2_2_V1_Builder(object):
         groups_by_total_space = infrastructure.infrastructure.groups_by_total_space(
             match_group_space=True,
             max_node_backends=1,
+            skip_groups=skip_groups,
         )
 
         # TODO: move out to infrastructure
