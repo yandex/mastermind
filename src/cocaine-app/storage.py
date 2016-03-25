@@ -20,6 +20,7 @@ from infrastructure_cache import cache
 from config import config
 import lrc_builder
 from mastermind.query.couples import Couple as CoupleInfo
+from mastermind.query.groupsets import Groupset as GroupsetInfo
 from mastermind.query.groups import Group as GroupInfo
 
 logger = logging.getLogger('mm.storage')
@@ -1689,14 +1690,6 @@ class Groupset(object):
         self.groups = []
         self.status = Status.INIT
 
-    def compose_group_meta(self, namespace, frozen):
-        return {
-            'version': 2,
-            'couple': self.as_tuple(),
-            'namespace': namespace,
-            'frozen': bool(frozen),
-        }
-
     RESERVED_SPACE_KEY = 'reserved-space-percentage'
 
     def is_full(self):
@@ -1759,8 +1752,7 @@ class Groupset(object):
     def as_tuple(self):
         return tuple(group.group_id for group in self.groups)
 
-    def info(self):
-        c = CoupleInfo(str(self))
+    def info_data(self):
         data = {'id': str(self),
                 'status': self.status,
                 'status_text': self.status_text,
@@ -1784,9 +1776,7 @@ class Groupset(object):
         data['hosts'] = {
             'primary': []
         }
-
-        c._set_raw_data(data)
-        return c
+        return data
 
     FALLBACK_HOSTS_PER_DC = config.get('fallback_hosts_per_dc', 10)
 
@@ -1880,11 +1870,10 @@ class Couple(Groupset):
         # introduced
         self.lrc822v1_groupset = None
 
-    def info(self):
-        info = super(Couple, self).info()
+    def info_data(self):
+        data = super(Couple, self).info_data()
 
         # imitation of future "Couple"
-        data = info._data
         data['groupsets'] = {}
 
         # TODO: stop this nonsense when 'replicas' groupset is implemented
@@ -1907,7 +1896,7 @@ class Couple(Groupset):
         if self.lrc822v1_groupset and self.lrc822v1_groupset.status == Status.ARCHIVED:
             data['read_preference'].append(Group.TYPE_LRC_8_2_2_V1)
 
-        return info
+        return data
 
     def _custom_status(self, statuses):
         if self.lrc822v1_groupset:
@@ -1979,6 +1968,19 @@ class Couple(Groupset):
         self.status_text = 'Couple {} is archived'.format(self)
         return self.status
 
+    def compose_group_meta(self, namespace, frozen):
+        return {
+            'version': 2,
+            'couple': self.as_tuple(),
+            'namespace': namespace,
+            'frozen': bool(frozen),
+        }
+
+    def info(self):
+        c = CoupleInfo(str(self))
+        c._set_raw_data(self.info_data())
+        return c
+
 
 class Lrc822v1Groupset(Groupset):
     def __init__(self, groups):
@@ -1986,10 +1988,9 @@ class Lrc822v1Groupset(Groupset):
         self.scheme = Group.TYPE_LRC_8_2_2_V1
         self.part_size = None
 
-    def info(self):
-        info = super(Lrc822v1Groupset, self).info()
+    def info_data(self):
+        data = super(Lrc822v1Groupset, self).info_data()
 
-        data = info._data
         data['type'] = 'lrc'
         data['settings'] = {
             'scheme': self.scheme,
@@ -2000,7 +2001,7 @@ class Lrc822v1Groupset(Groupset):
         # a while
         data['group_ids'] = data['tuple']
 
-        return info
+        return data
 
     def _check_dc_sharing(self):
         # LRC groupsets are allowed to share dcs
@@ -2072,6 +2073,11 @@ class Lrc822v1Groupset(Groupset):
         self.status = Status.ARCHIVED
         self.status_text = 'Couple {} is archived'.format(self)
         return self.status
+
+    def info(self):
+        c = GroupsetInfo(str(self))
+        c._set_raw_data(self.info_data())
+        return c
 
 
 class DcNodes(object):
