@@ -105,6 +105,11 @@ class GroupDataObject(LazyDataObject):
     def groupset_id(self):
         return self._data['groupset']
 
+    @property
+    @LazyDataObject._lazy_load
+    def couple_id(self):
+        return self._data['couple']
+
 
 class GroupQuery(Query):
     @property
@@ -147,6 +152,12 @@ class GroupQuery(Query):
         if self.groupset_id is None:
             return None
         return mastermind.query.groupsets.Groupset(self.groupset_id, client=self.client)
+
+    @property
+    def couple(self):
+        if self.couple_id is None:
+            return None
+        return mastermind.query.couples.Couple(self.couple_id, client=self.client)
 
 
 class Group(GroupQuery, GroupDataObject):
