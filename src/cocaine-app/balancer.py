@@ -884,6 +884,7 @@ class Balancer(object):
                                     part_size=groupset['settings']['part_size'],
                                     frozen=init_state == storage.Status.FROZEN,
                                 )
+                                couple_groupset.couple = couple
 
                     except Exception:
                         couple.destroy()
