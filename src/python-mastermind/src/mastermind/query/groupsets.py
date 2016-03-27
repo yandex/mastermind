@@ -55,9 +55,23 @@ class GroupsetDataObject(LazyDataObject):
     @property
     @LazyDataObject._lazy_load
     def groups(self):
-        """Coupled groups.
+        """ Groups in a groupset
         """
         return self._data['groups']
+
+    @property
+    @LazyDataObject._lazy_load
+    def type(self):
+        """ Groupset type
+        """
+        return self._data['type']
+
+    @property
+    @LazyDataObject._lazy_load
+    def settings(self):
+        """ Groupset settings
+        """
+        return self._data['settings']
 
     def _preprocess_raw_data(self, data):
         groups = []

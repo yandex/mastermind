@@ -4,6 +4,7 @@ from mastermind import query
 from mastermind.query import Query, LazyDataObject
 from mastermind.query.groups import Group
 from mastermind.query.groupsets import Groupset
+from mastermind.query.stats import Stats
 
 
 class CouplesQuery(Query):
@@ -64,6 +65,10 @@ class CouplesQuery(Query):
 
 
 class CoupleDataObject(LazyDataObject):
+    def __init__(self, *args, **kwargs):
+        super(CoupleDataObject, self).__init__(*args, **kwargs)
+        self._stats = None
+
     def _fetch_data(self):
         return self.client.request('get_couple_info_by_coupleid', self.id)
 
@@ -121,6 +126,27 @@ class CoupleDataObject(LazyDataObject):
         """
         return self._data['groupsets']
 
+    @property
+    @LazyDataObject._lazy_load
+    def read_preference(self):
+        """ Couple's groupset read preference
+        """
+        return self._data['read_preference']
+
+    @property
+    @LazyDataObject._lazy_load
+    def hosts(self):
+        """ Couple's involved hosts
+        """
+        return self._data['hosts']
+
+    @property
+    @LazyDataObject._lazy_load
+    def stats(self):
+        """ Couple's statistics - space, etc.
+        """
+        return self._stats
+
     def _preprocess_raw_data(self, data):
         groups = []
         for g_data in data['groups'][:]:
@@ -132,6 +158,9 @@ class CoupleDataObject(LazyDataObject):
             for groupset_id, gs_data in data['groupsets'].iteritems()
         }
         data['groupsets'] = groupsets
+
+        self._stats = Stats(data)
+
         return data
 
     def serialize(self):

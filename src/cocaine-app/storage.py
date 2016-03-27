@@ -1325,6 +1325,10 @@ class Group(object):
     def effective_space(self):
         return sum(nb.effective_space for nb in self.node_backends)
 
+    @property
+    def effective_free_space(self):
+        return sum(nb.free_effective_space for nb in self.node_backends)
+
     def update_status(self):
         """Updates group's own status.
         WARNING: This method should not take into consideration any of the
@@ -1439,11 +1443,11 @@ class Group(object):
             'node_backends': [nb.info() for nb in self.node_backends]
         }
 
-        groupset_id = str(self.couple) if self.couple else None
-        # TODO: remove backward compatibility when new 'Couple' is introduced
-        if isinstance(self.couple, Couple):
-            data['couple'] = groupset_id
+        data['couple'] = None
+        if isinstance(self.couple, Groupset):
+            data['couple'] = str(self.couple.couple)
 
+        groupset_id = str(self.couple) if self.couple else None
         data['groupset'] = groupset_id
 
         if self.meta:
@@ -1696,6 +1700,7 @@ class Groupset(object):
         groupsets.remove_groupset(self)
         self.groups = []
         self.status = Status.INIT
+        self.couple = None
 
     RESERVED_SPACE_KEY = 'reserved-space-percentage'
 
@@ -1763,6 +1768,8 @@ class Groupset(object):
         data = {'id': str(self),
                 'status': self.status,
                 'status_text': self.status_text,
+                'type': 'replicas',
+                'settings': {},
                 'tuple': self.as_tuple()}
         try:
             data['namespace'] = self.namespace.id
@@ -1783,6 +1790,11 @@ class Groupset(object):
         data['hosts'] = {
             'primary': []
         }
+
+        # Renaming 'tuple' to 'group_ids' and keeping it backward-compatible for
+        # a while
+        data['group_ids'] = data['tuple']
+
         return data
 
     FALLBACK_HOSTS_PER_DC = config.get('fallback_hosts_per_dc', 10)
@@ -1877,6 +1889,9 @@ class Couple(Groupset):
         # introduced
         self.lrc822v1_groupset = None
 
+        # TODO: this should be a link to a new "Couple" instance
+        self.couple = self
+
     def info_data(self):
         data = super(Couple, self).info_data()
 
@@ -1887,8 +1902,6 @@ class Couple(Groupset):
         # What am I doing? Renaming parameters!!!
         data['couple_status'] = self.status
         data['couple_status_text'] = self.status_text
-        del data['status']
-        del data['status_text']
 
         stat = self.get_stat()
         if stat:
@@ -1992,6 +2005,8 @@ class Couple(Groupset):
 class Lrc822v1Groupset(Groupset):
     def __init__(self, groups):
         super(Lrc822v1Groupset, self).__init__(groups)
+        # TODO: this should be a link to a new "Couple" instance
+        self.couple = None
         self.scheme = Group.TYPE_LRC_8_2_2_V1
         self.part_size = None
 
@@ -2003,10 +2018,6 @@ class Lrc822v1Groupset(Groupset):
             'scheme': self.scheme,
             'part_size': self.part_size,
         }
-
-        # Renaming 'tuple' to 'group_ids' and keeping it backward-compatible for
-        # a while
-        data['group_ids'] = data['tuple']
 
         return data
 

@@ -582,6 +582,8 @@ class NodeInfoUpdater(object):
                     ns_id
                 )
                 data_groupset.lrc822v1_groupset = groupset
+                # TODO: this should point to a new "Couple" object
+                groupset.couple = data_groupset
             return
 
         try:
