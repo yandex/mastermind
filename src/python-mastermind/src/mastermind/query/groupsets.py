@@ -66,6 +66,13 @@ class GroupsetDataObject(LazyDataObject):
         """
         return self._data['type']
 
+    @property
+    @LazyDataObject._lazy_load
+    def settings(self):
+        """ Groupset settings
+        """
+        return self._data['settings']
+
     def _preprocess_raw_data(self, data):
         groups = []
         for g_data in data['groups']:

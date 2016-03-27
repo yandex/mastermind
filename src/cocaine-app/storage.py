@@ -1765,6 +1765,7 @@ class Groupset(object):
                 'status': self.status,
                 'status_text': self.status_text,
                 'type': 'replicas',
+                'settings': {},
                 'tuple': self.as_tuple()}
         try:
             data['namespace'] = self.namespace.id
