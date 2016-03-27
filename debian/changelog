@@ -1,3 +1,11 @@
+mastermind (2.27.5) trusty; urgency=medium
+
+  * Add 'couple' attribute to binding Groupset object
+  * Account new cache key distribute tasks
+  * Add various binding features
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sun, 27 Mar 2016 21:11:22 +0300
+
 mastermind (2.27.4) trusty; urgency=medium
 
   * Add support of groupsets in couple build method of mastermind client
