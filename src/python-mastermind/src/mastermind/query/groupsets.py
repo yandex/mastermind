@@ -73,6 +73,11 @@ class GroupsetDataObject(LazyDataObject):
         """
         return self._data['settings']
 
+    @property
+    @LazyDataObject._lazy_load
+    def couple_id(self):
+        return self._data['couple']
+
     def _preprocess_raw_data(self, data):
         groups = []
         for g_data in data['groups']:
@@ -91,7 +96,11 @@ GOOD_STATUSES = set(['OK', 'FULL', 'FROZEN'])
 
 
 class GroupsetQuery(Query):
-    pass
+    @property
+    def couple(self):
+        if self.couple_id is None:
+            return None
+        return mastermind.query.couples.Couple(self.couple_id, client=self.client)
 
 
 class Groupset(GroupsetQuery, GroupsetDataObject):
