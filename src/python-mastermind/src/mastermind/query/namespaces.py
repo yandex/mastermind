@@ -2,6 +2,7 @@ import copy
 
 from mastermind.query import Query, LazyDataObject
 from mastermind.query.couples import CouplesQuery, Couple
+from mastermind.query.groupsets import GroupsetsQuery
 
 
 class NamespacesQuery(Query):
@@ -367,6 +368,10 @@ class NamespaceQuery(Query):
     @property
     def couples(self):
         return CouplesQuery(self.client).filter(namespace=self)
+
+    @property
+    def groupsets(self):
+        return GroupsetsQuery(self.client).filter(namespace=self)
 
 
 class Namespace(NamespaceQuery, NamespaceDataObject):
