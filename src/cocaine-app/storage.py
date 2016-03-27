@@ -1891,6 +1891,9 @@ class Couple(Groupset):
     def info_data(self):
         data = super(Couple, self).info_data()
 
+        # Replicas groupset should have 'couple' key
+        data['couple'] = str(self.couple)
+
         # imitation of future "Couple"
         data['groupsets'] = {}
 
@@ -2014,6 +2017,10 @@ class Lrc822v1Groupset(Groupset):
             'scheme': self.scheme,
             'part_size': self.part_size,
         }
+        if self.couple:
+            data['couple'] = str(self.couple)
+        else:
+            data['couple'] = None
 
         return data
 
