@@ -1179,13 +1179,14 @@ class CacheDistributor(object):
             if cg is None:
                 # no appropriate cache groups available in dc of 'dc_candidate'
                 continue
-            self._add_upload_key_task(
+            task = self._add_upload_key_task(
                 key,
                 cg.group_id,
                 [key_by_dc[cg.dc]['group']] + dc_candidate.source_cache_groups,
                 key_bandwidth_per_copy,
                 key_size
             )
+            cg.account_task(task)
             copies_added += 1
 
         if max_new_tasks < count:
@@ -1483,8 +1484,10 @@ class CacheGroup(object):
 
     @property
     def effective_free_space(self):
-        return max(self.group.effective_space - self.stat.used_space -
-                   self.reserved_space, 0)
+        return max(
+            self.group.effective_free_space - self.reserved_space,
+            0
+        )
 
     @property
     def effective_space(self):
@@ -1492,10 +1495,15 @@ class CacheGroup(object):
 
     @property
     def dirty_coef(self):
+        free_space = (
+            self.effective_free_space +  # actual free space
+            self.stat.files_removed_size +  # will be free after defragmentation
+            self.removed_keys_size  # keys scheduled to be removed
+        )
         return 1.0 - min(
             1.0,
-            (self.effective_free_space + self.stat.files_removed_size +
-             self.removed_keys_size) / max(self.effective_space, 1))
+            free_space / max(self.effective_space, 1)
+        )
 
     def account_removed_key(self, key_size):
         self.removed_keys_size += key_size
