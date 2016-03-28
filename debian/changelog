@@ -1,3 +1,9 @@
+mastermind (2.27.6) trusty; urgency=medium
+
+  * Fix couple build parameters
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 28 Mar 2016 18:38:14 +0300
+
 mastermind (2.27.5) trusty; urgency=medium
 
   * Add 'couple' attribute to binding Groupset object
