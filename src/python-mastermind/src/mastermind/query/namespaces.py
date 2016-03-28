@@ -350,7 +350,7 @@ class NamespaceQuery(Query):
         params = [couple_size, couples, {'namespace': self.id,
                                          'match_group_space': not ignore_space,
                                          'init_state': init_state,
-                                         'groupsets': groupsets,
+                                         'groupsets': groupsets or [],
                                          'dry_run': dry_run,
                                          'mandatory_groups': groups or []}]
         created_couples = []
