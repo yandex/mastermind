@@ -626,7 +626,7 @@ class Balancer(object):
                     groups_by_total_space, mandatory_groups,
                     namespace=options['namespace'],
                     init_state=options['init_state'],
-                    groupsets=options.get('groupsets', []),
+                    groupsets=options['groupsets'],
                     dry_run=options['dry_run'])
 
                 if couple is None:
@@ -963,12 +963,13 @@ class Balancer(object):
         options.setdefault('init_state', storage.Status.COUPLED)
         options.setdefault('dry_run', False)
         options.setdefault('mandatory_groups', [])
+        options.setdefault('groupsets', [])
 
         options['init_state'] = options['init_state'].upper()
         if not options['init_state'] in self.VALID_COUPLE_INIT_STATES:
             raise ValueError('Couple "{0}" init state is invalid'.format(options['init_state']))
 
-        for gs_options in options.get('groupsets', []):
+        for gs_options in options['groupsets']:
             if 'type' not in gs_options:
                 raise ValueError('Groupset requires "type" field')
             if 'settings' not in gs_options:
