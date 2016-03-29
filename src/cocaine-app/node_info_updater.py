@@ -36,6 +36,7 @@ class NodeInfoUpdater(object):
     def __init__(self,
                  node,
                  job_finder,
+                 couple_record_finder=None,
                  prepare_namespaces_states=False,
                  prepare_flow_stats=False,
                  statistics=None):
@@ -43,6 +44,7 @@ class NodeInfoUpdater(object):
         self.__node = node
         self.statistics = statistics
         self.job_finder = job_finder
+        self.couple_record_finder = couple_record_finder
         self._namespaces_states = CachedGzipResponse()
         self._flow_stats = {}
         self.__tq = timed_queue.TimedQueue()
@@ -651,6 +653,7 @@ class NodeInfoUpdater(object):
                         pass
 
             if groups is None:
+                self.update_couple_settings()
                 load_manager.update(storage)
                 weight_manager.update(storage)
 
@@ -658,6 +661,26 @@ class NodeInfoUpdater(object):
 
         except Exception as e:
             logger.exception('Critical error during symmetric group update')
+
+    def update_couple_settings(self):
+        if not self.couple_record_finder:
+            # case for side worker that don't need access to couple settings
+            return
+        for cr in self.couple_record_finder.couple_records():
+            if cr.couple_id not in storage.groups:
+                logger.error('Couple record exists, but couple {couple} is not found'.format(
+                    couple=cr.couple_id,
+                ))
+            group = storage.groups[cr.couple_id]
+            if not group.couple:
+                logger.error(
+                    'Couple record exists and group {group} is found, '
+                    'but does not participate in any couple'.format(
+                        group=group.group_id,
+                    )
+                )
+            couple = group.couple
+            couple.settings = cr.settings
 
     @h.concurrent_handler
     def force_update_namespaces_states(self, request):
