@@ -35,6 +35,7 @@ import helpers
 import history
 import infrastructure
 import jobs
+import couple_records
 import minions
 import node_info_updater
 from planner import Planner
@@ -205,11 +206,12 @@ def init_infrastructure(jf, ghf):
     return infstruct
 
 
-def init_node_info_updater(jf, statistics):
+def init_node_info_updater(jf, crf, statistics):
     logger.info("trace node info updater %d" % (i.next()))
     niu = node_info_updater.NodeInfoUpdater(
         node=n,
         job_finder=jf,
+        couple_record_finder=crf,
         prepare_namespaces_states=True,
         prepare_flow_stats=True,
         statistics=statistics)
@@ -258,6 +260,18 @@ def init_job_finder():
     return jf
 
 
+def init_couple_record_finder():
+    if not config['metadata'].get('couples', {}).get('db'):
+        msg = (
+            'Couple finder metadb is not set up '
+            '("metadata.couples.db" key), will not be initialized'
+        )
+        logger.error(msg)
+        raise RuntimeError(msg)
+    crf = couple_records.CoupleRecordFinder(meta_db)
+    return crf
+
+
 def init_group_history_finder():
     if not config['metadata'].get('history', {}).get('db'):
         logger.error(
@@ -295,9 +309,10 @@ def init_manual_locker(manual_locker):
 
 
 jf = init_job_finder()
+crf = init_couple_record_finder()
 ghf = init_group_history_finder()
 io = init_infrastructure(jf, ghf)
-niu = init_node_info_updater(jf, b.statistics)
+niu = init_node_info_updater(jf, crf, b.statistics)
 b.niu = niu
 b.start()
 init_statistics()

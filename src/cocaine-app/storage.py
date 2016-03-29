@@ -235,7 +235,15 @@ class MultiRepository(object):
         return itertools.chain(*(r.iteritems() for r in self._repositories.itervalues()))
 
 
+GROUPSET_REPLICAS = 'replicas'
+GROUPSET_IDS = set([
+    GROUPSET_REPLICAS,
+    Lrc.Scheme822v1.ID,
+])
+
+
 class Groupsets(MultiRepository):
+
     def __init__(self, replicas, lrc, resource_desc):
         super(Groupsets, self).__init__(
             {
@@ -1768,13 +1776,18 @@ class Groupset(object):
         data = {'id': str(self),
                 'status': self.status,
                 'status_text': self.status_text,
-                'type': 'replicas',
+                'type': GROUPSET_REPLICAS,
                 'settings': {},
                 'tuple': self.as_tuple()}
         try:
             data['namespace'] = self.namespace.id
         except ValueError:
             pass
+
+        data['effective_space'] = 0
+        data['free_effective_space'] = 0
+        data['free_reserved_space'] = 0
+
         stat = self.get_stat()
         if stat:
             try:
@@ -1783,8 +1796,7 @@ class Groupset(object):
                 data['free_reserved_space'] = self.free_reserved_space
             except ValueError:
                 # failed to determine couple's namespace
-                data['effective_space'], data['free_effective_space'] = 0, 0
-                data['free_reserved_space'] = 0
+                pass
 
         data['groups'] = [g.info().serialize() for g in self.groups]
         data['hosts'] = {
@@ -1881,6 +1893,13 @@ class Groupset(object):
 
 
 class Couple(Groupset):
+
+    READ_PREFERENCE = 'read_preference'
+
+    DEFAULT_SETTINGS = {
+        READ_PREFERENCE: [GROUPSET_REPLICAS],
+    }
+
     def __init__(self, groups):
         super(Couple, self).__init__(groups)
         # TODO: temporary variable to provide connection
@@ -1891,6 +1910,8 @@ class Couple(Groupset):
 
         # TODO: this should be a link to a new "Couple" instance
         self.couple = self
+
+        self.settings = self.DEFAULT_SETTINGS
 
     def info_data(self):
         data = super(Couple, self).info_data()
@@ -1915,9 +1936,10 @@ class Couple(Groupset):
         if self.lrc822v1_groupset:
             data['groupsets'][Group.TYPE_LRC_8_2_2_V1] = self.lrc822v1_groupset.info().serialize()
 
-        data['read_preference'] = ['replicas']
-        if self.lrc822v1_groupset and self.lrc822v1_groupset.status == Status.ARCHIVED:
-            data['read_preference'].append(Group.TYPE_LRC_8_2_2_V1)
+        data['settings'] = self.settings
+        # TODO: temporary backward compatibility, remove after libmastermind
+        # refactoring
+        data['read_preference'] = self.settings['read_preference']
 
         return data
 

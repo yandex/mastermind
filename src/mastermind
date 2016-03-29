@@ -424,6 +424,39 @@ def couple_info(group, host=None, app=None):
     pprint(res)
 
 
+@coupleDispatcher.command(name='settings')
+@log_action
+def couple_settings(couple_id,
+                    overwrite=('o', False, 'Flag to setup couple settings from scratch'),
+                    read_preference=(
+                        '',
+                        [],
+                        'Read preference for couple (can be used multiple times to set '
+                        'read preference list, e.g "--read-preference replicas '
+                        '--read-preference lrc-8-2-2v1")'),
+                    host=None,
+                    app=None):
+    '''Update couple settings'''
+    cl = client(host, app)
+
+    settings = {}
+    if read_preference:
+        settings['read_preference'] = read_preference
+
+    try:
+        group_id = int(couple_id)
+    except (ValueError, TypeError):
+        group_id = None
+
+    couple = cl.groups[group_id].couple
+    if overwrite:
+        couple.settings = settings
+    else:
+        couple.settings.update(settings)
+
+    print True
+
+
 STATES = {
     'OK': 'good',
     'FULL': 'full',
