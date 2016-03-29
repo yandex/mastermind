@@ -531,6 +531,41 @@ class Balancer(object):
 
         return couple.info().serialize()
 
+    @h.concurrent_handler
+    def update_couple_settings(self, request):
+        if 'couple' not in request:
+            raise ValueError('Request should contain "couple" field')
+        couple_id = request['couple']
+        if isinstance(couple_id, int):
+            # TODO: this is a "new" couple id, we should be able to index
+            # couples by this id. Right now couple is checked against replicas
+            # groupset
+            group_id = couple_id
+            if group_id not in storage.groups:
+                raise ValueError('Couple {} is not found'.format(couple_id))
+            group = storage.groups[group_id]
+            if not group.couple:
+                raise ValueError('Couple {} is not found'.format(couple_id))
+            couple = group.couple
+        else:
+            couple = storage.replicas_groupsets[couple_id]
+
+        if 'settings' not in request:
+            raise ValueError('Request should contain "settings" field')
+        settings = request['settings']
+
+        couple_record = self.niu.couple_record_finder.couple_record(couple)
+        couple_record.set_settings(
+            settings=settings,
+            update=request.get('update', True),
+        )
+        couple_record.save()
+
+        # this is required to allow get_couple_info request be able to respond
+        # with new setting right away and not wait till the end of the next
+        # cluster update cycle
+        couple.settings = couple_record.settings
+
     VALID_COUPLE_INIT_STATES = (storage.Status.COUPLED, storage.Status.FROZEN)
 
     def __update_cluster_state(self, namespace=None):
