@@ -1,3 +1,9 @@
+mastermind (2.27.7) trusty; urgency=medium
+
+  * Add couple settings
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 29 Mar 2016 15:39:09 +0300
+
 mastermind (2.27.6) trusty; urgency=medium
 
   * Fix couple build parameters
