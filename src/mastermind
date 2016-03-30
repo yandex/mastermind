@@ -1427,6 +1427,86 @@ def lrc_groupset_info(group_or_groupset, host=None, app=None):
     pprint(res)
 
 
+@lrcGroupsetDispatcher.command(name='attach')
+@log_action
+def lrc_groupset_attach(group_or_groupset,
+                        couple=(
+                            'c',
+                            '',
+                            'Destination couple to which groupset is being attached'
+                        ),
+                        scheme=(
+                            '',
+                            'lrc-8-2-2-v1',
+                            'Scheme of lrc groupset'
+                        ),
+                        part_size=(
+                            'p',
+                            '',
+                            'Lrc groupset part size (bytes)'
+                        ),
+                        host=None,
+                        app=None):
+    '''Create new groupset using 'group_or_groupset' parameter and attach it to couple 'couple'
+    '''
+    s = service(host, app)
+
+    if not part_size:
+        print warn('"--part-size" parameter is required')
+        return 1
+
+    if not couple:
+        print warn('"--couple" parameter is required')
+        return 1
+
+    try:
+        part_size = int(part_size)
+        if part_size <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        print warn('"--part-size" should be a positive integer')
+        return 1
+
+    if not part_size:
+        print warn('"--part-size" parameter is required')
+        return 1
+
+    if ':' not in group_or_groupset:
+        # this is a group, fetch lrc groupset for this group
+        cl = client(host, app)
+        try:
+            meta = cl.groups[int(group_or_groupset)].meta
+        except Exception:
+            meta = None
+        if not (meta and 'lrc_groups' in meta):
+            print warn('Group {} is not an uncoupled lrc group'.format(group_or_groupset))
+            return 1
+        lrc_groups = meta['lrc_groups']
+        groupset = ':'.join(str(g) for g in lrc_groups)
+    else:
+        groupset = group_or_groupset
+
+    res = s.enqueue(
+        'attach_groupset_to_couple',
+        msgpack.packb({
+            'couple': couple,
+            'groupset': groupset,
+            'type': 'lrc',
+            'settings': {
+                'scheme': scheme,
+                'part_size': int(part_size),
+            },
+        })
+    ).get()
+
+    if 'Error' in res:
+        print warn(res['Error'])
+        return 1
+
+    lrc_groupset_info(groupset)
+    return
+
+
 d = Dispatcher(globaloptions=(app_param,))
 d.nest('group', groupDispatcher, 'Perform group action')
 d.nest('couple', coupleDispatcher, 'Perform couple action')

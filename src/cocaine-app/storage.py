@@ -236,6 +236,7 @@ class MultiRepository(object):
 
 
 GROUPSET_REPLICAS = 'replicas'
+GROUPSET_LRC = 'lrc'
 GROUPSET_IDS = set([
     GROUPSET_REPLICAS,
     Lrc.Scheme822v1.ID,
@@ -247,8 +248,8 @@ class Groupsets(MultiRepository):
     def __init__(self, replicas, lrc, resource_desc):
         super(Groupsets, self).__init__(
             {
-                'replicas': replicas,
-                'lrc': lrc,
+                GROUPSET_REPLICAS: replicas,
+                GROUPSET_LRC: lrc,
             },
             resource_desc=resource_desc,
         )
@@ -293,6 +294,53 @@ class Groupsets(MultiRepository):
                     object=groupset,
                 )
             )
+
+    # TODO: move to Couple class when new "Couple" instance is introduced
+    @staticmethod
+    def get_couple(couple_id):
+        if isinstance(couple_id, int):
+            # TODO: this is a "new" couple id, we should be able to index
+            # couples by this id. Right now couple is checked against replicas
+            # groupset
+            group_id = couple_id
+            if group_id not in groups:
+                raise ValueError('Couple {} is not found'.format(couple_id))
+            group = groups[group_id]
+            if not group.couple:
+                raise ValueError('Couple {} is not found'.format(couple_id))
+            return group.couple.couple
+        else:
+            return replicas_groupsets[couple_id]
+
+    @staticmethod
+    def get_groupset(group_or_groupset_id):
+        if isinstance(group_or_groupset_id, int):
+            if group_or_groupset_id not in groups:
+                raise ValueError('Group {} is not found'.format(group_or_groupset_id))
+            group = groups[group_or_groupset_id]
+            if group.couple is None:
+                raise ValueError('Group {} does not participate in any groupset'.format(
+                    group_or_groupset_id
+                ))
+            return group.couple
+        else:
+            return groupsets[group_or_groupset_id]
+
+    @staticmethod
+    def make_groupset(type, settings):
+        if type == GROUPSET_REPLICAS:
+            return Couple
+        elif type == GROUPSET_LRC:
+            scheme = settings['scheme']
+            if scheme == Lrc.Scheme822v1.ID:
+                return Lrc822v1Groupset
+        raise ValueError(
+            'Groupset of type "{type}" cannot be constructed '
+            'using settings {settings}'.format(
+                type=type,
+                settings=settings,
+            )
+        )
 
 
 class NodeStat(object):
@@ -1350,6 +1398,8 @@ class Group(object):
                                 'no node backends serving this group'.format(self))
             return self.status
 
+        # TODO: add status INIT for group if .couple is None
+
         if FORBIDDEN_DHT_GROUPS and len(self.node_backends) > 1:
             self.status = Status.BROKEN
             self.status_text = ('Group {} is in BROKEN state because '
@@ -2013,18 +2063,24 @@ class Couple(Groupset):
         self.status_text = 'Couple {} is archived'.format(self)
         return self.status
 
-    def compose_group_meta(self, namespace, frozen):
+    def compose_group_meta(self, couple, settings):
         return {
             'version': 2,
             'couple': self.as_tuple(),
-            'namespace': namespace,
-            'frozen': bool(frozen),
+            'namespace': couple.namespace.id,
+            'frozen': bool(settings['frozen']),
         }
 
     def info(self):
         c = CoupleInfo(str(self))
         c._set_raw_data(self.info_data())
         return c
+
+    @property
+    def groupset_settings(self):
+        return {
+            'frozen': self.frozen,
+        }
 
 
 class Lrc822v1Groupset(Groupset):
@@ -2038,7 +2094,7 @@ class Lrc822v1Groupset(Groupset):
     def info_data(self):
         data = super(Lrc822v1Groupset, self).info_data()
 
-        data['type'] = 'lrc'
+        data['type'] = GROUPSET_LRC
         data['settings'] = {
             'scheme': self.scheme,
             'part_size': self.part_size,
@@ -2121,16 +2177,16 @@ class Lrc822v1Groupset(Groupset):
         self.status_text = 'Couple {} is archived'.format(self)
         return self.status
 
-    def compose_group_meta(self, namespace, couple, frozen, lrc_groups, part_size):
+    def compose_group_meta(self, couple, settings):
         return {
             'version': 2,
             'couple': couple.as_tuple(),
-            'namespace': namespace,
-            'frozen': bool(frozen),
+            'namespace': couple.namespace.id,
+            'frozen': couple.frozen,
             'type': Group.TYPE_LRC_8_2_2_V1,
             'lrc': {
-                'groups': lrc_groups,
-                'part_size': part_size,
+                'groups': [g.group_id for g in self.groups],
+                'part_size': settings['part_size'],
                 'scheme': Lrc.Scheme822v1.ID,
             },
         }
@@ -2139,6 +2195,13 @@ class Lrc822v1Groupset(Groupset):
         c = GroupsetInfo(str(self))
         c._set_raw_data(self.info_data())
         return c
+
+    @property
+    def groupset_settings(self):
+        return {
+            'scheme': Lrc.Scheme822v1.ID,
+            'part_size': self.part_size,
+        }
 
 
 class DcNodes(object):
