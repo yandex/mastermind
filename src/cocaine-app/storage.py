@@ -295,6 +295,53 @@ class Groupsets(MultiRepository):
                 )
             )
 
+    # TODO: move to Couple class when new "Couple" instance is introduced
+    @staticmethod
+    def get_couple(couple_id):
+        if isinstance(couple_id, int):
+            # TODO: this is a "new" couple id, we should be able to index
+            # couples by this id. Right now couple is checked against replicas
+            # groupset
+            group_id = couple_id
+            if group_id not in groups:
+                raise ValueError('Couple {} is not found'.format(couple_id))
+            group = groups[group_id]
+            if not group.couple:
+                raise ValueError('Couple {} is not found'.format(couple_id))
+            return group.couple.couple
+        else:
+            return replicas_groupsets[couple_id]
+
+    @staticmethod
+    def get_groupset(group_or_groupset_id):
+        if isinstance(group_or_groupset_id, int):
+            if group_or_groupset_id not in groups:
+                raise ValueError('Group {} is not found'.format(group_or_groupset_id))
+            group = groups[group_or_groupset_id]
+            if group.couple is None:
+                raise ValueError('Group {} does not participate in any groupset'.format(
+                    group_or_groupset_id
+                ))
+            return group.couple
+        else:
+            return groupsets[group_or_groupset_id]
+
+    @staticmethod
+    def make_groupset(type, settings):
+        if type == GROUPSET_REPLICAS:
+            return Couple
+        elif type == GROUPSET_LRC:
+            scheme = settings['scheme']
+            if scheme == Lrc.Scheme822v1.ID:
+                return Lrc822v1Groupset
+        raise ValueError(
+            'Groupset of type "{type}" cannot be constructed '
+            'using settings {settings}'.format(
+                type=type,
+                settings=settings,
+            )
+        )
+
 
 class NodeStat(object):
     def __init__(self):

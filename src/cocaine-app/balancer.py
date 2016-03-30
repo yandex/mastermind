@@ -534,20 +534,7 @@ class Balancer(object):
     def update_couple_settings(self, request):
         if 'couple' not in request:
             raise ValueError('Request should contain "couple" field')
-        couple_id = request['couple']
-        if isinstance(couple_id, int):
-            # TODO: this is a "new" couple id, we should be able to index
-            # couples by this id. Right now couple is checked against replicas
-            # groupset
-            group_id = couple_id
-            if group_id not in storage.groups:
-                raise ValueError('Couple {} is not found'.format(couple_id))
-            group = storage.groups[group_id]
-            if not group.couple:
-                raise ValueError('Couple {} is not found'.format(couple_id))
-            couple = group.couple
-        else:
-            couple = storage.replicas_groupsets[couple_id]
+        couple = storage.groupsets.get_couple(request['couple'])
 
         if 'settings' not in request:
             raise ValueError('Request should contain "settings" field')
@@ -564,6 +551,59 @@ class Balancer(object):
         # with new setting right away and not wait till the end of the next
         # cluster update cycle
         couple.settings = couple_record.settings
+
+    @h.concurrent_handler
+    def attach_groupset_to_couple(self, request):
+        if 'couple' not in request:
+            raise ValueError('Request should contain "couple" field')
+        couple = storage.groupsets.get_couple(request['couple'])
+
+        if 'groupset' not in request:
+            raise ValueError('Request should contain "groupset" field')
+        group_ids = [int(g) for g in request['groupset'].split(':')]
+        groups = [storage.groups[gid] for gid in group_ids]
+
+        if 'type' not in request:
+            raise ValueError('Request should contain groupset "type" field')
+
+        if 'settings' not in request:
+            raise ValueError('Request should contain "settings" field')
+
+        if request['type'] == 'lrc':
+            if 'part_size' not in request['settings']:
+                raise ValueError('Lrc groupset requires "part_size" setting')
+            if 'scheme' not in request['settings']:
+                raise ValueError('Lrc groupset requires "scheme" setting')
+
+        Groupset = storage.groupsets.make_groupset(
+            type=request['type'],
+            settings=request['settings'],
+        )
+
+        groupset = Groupset(groups=groups)
+        storage.groupsets.add_groupset(groupset)
+        couple.namespace.add_groupset(groupset)
+
+        try:
+            # TODO: check if options contains extra keys
+            write_groupset_metakey(
+                self.node,
+                couple=couple,
+                groupset=groupset,
+                settings=request['settings'],
+            )
+        except Exception:
+            groupset.destroy()
+            raise
+
+        # TODO: couple should link groupset on its own
+        couple.lrc822v1_groupset = groupsetNone
+
+        for group in groups:
+            self.infrastructure.update_group_history(group)
+
+        groupset.update_status()
+        couple.update_status()
 
     VALID_COUPLE_INIT_STATES = (storage.Status.COUPLED, storage.Status.FROZEN)
 
