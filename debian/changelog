@@ -1,3 +1,11 @@
+mastermind (2.27.8) trusty; urgency=medium
+
+  * Add 'attach_groupset_to_couple' handle
+  * Make groupsets responsible for generating its metakey
+  * Skip uncoupled lrc groups meta processing
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 30 Mar 2016 16:35:07 +0300
+
 mastermind (2.27.7) trusty; urgency=medium
 
   * Add couple settings
