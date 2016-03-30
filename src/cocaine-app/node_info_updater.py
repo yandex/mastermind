@@ -541,6 +541,9 @@ class NodeInfoUpdater(object):
 
             group.parse_meta(meta)
 
+            if group.type == storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1:
+                return
+
             ns_id = group.meta.get('namespace')
             if ns_id is None:
                 logger.error(
