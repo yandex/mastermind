@@ -1398,6 +1398,8 @@ class Group(object):
                                 'no node backends serving this group'.format(self))
             return self.status
 
+        # TODO: add status INIT for group if .couple is None
+
         if FORBIDDEN_DHT_GROUPS and len(self.node_backends) > 1:
             self.status = Status.BROKEN
             self.status_text = ('Group {} is in BROKEN state because '
