@@ -411,18 +411,18 @@ class Balancer(object):
                 )
             )
 
-        couple = group.couple
+        groupset = group.couple
 
-        if couple.status in storage.NOT_BAD_STATUSES:
+        if groupset.status in storage.NOT_BAD_STATUSES:
             raise ValueError(
-                'cannot repair, group {group_id}, couple {couple} is in status {status}'.format(
+                'cannot repair, group {group_id}, groupset {groupset} is in status {status}'.format(
                     group_id=group.group_id,
-                    couple=couple,
-                    status=couple.status,
+                    groupset=groupset,
+                    status=groupset.status,
                 )
             )
 
-        namespace_to_use = force_namespace or couple.namespace.id
+        namespace_to_use = force_namespace or groupset.namespace.id
         if not namespace_to_use:
             raise ValueError(
                 'cannot identify a namespace to use for group {group_id}'.format(
@@ -430,20 +430,19 @@ class Balancer(object):
                 )
             )
 
-        # TODO: convert this to a separate well-documented function
-        frozen = any(
-            g.meta.get('frozen')
-            for g in couple
-            if g.meta and g.group_id != group_id
-        )
+        if namespace_to_use != groupset.namespace.id:
+            if groupset.namespace:
+                groupset.namespace.remove_couple(groupset)
+            ns = storage.namespaces[namespace_to_use]
+            ns.add_couple(groupset)
 
         write_groupset_metakey(
             self.node,
-            groupset=couple,
-            namespace=namespace_to_use,
-            frozen=frozen,
+            couple=groupset.couple,
+            groupset=groupset,
+            settings=groupset.groupset_settings,
         )
-        couple.update_status()
+        groupset.update_status()
 
         return True
 
@@ -535,20 +534,7 @@ class Balancer(object):
     def update_couple_settings(self, request):
         if 'couple' not in request:
             raise ValueError('Request should contain "couple" field')
-        couple_id = request['couple']
-        if isinstance(couple_id, int):
-            # TODO: this is a "new" couple id, we should be able to index
-            # couples by this id. Right now couple is checked against replicas
-            # groupset
-            group_id = couple_id
-            if group_id not in storage.groups:
-                raise ValueError('Couple {} is not found'.format(couple_id))
-            group = storage.groups[group_id]
-            if not group.couple:
-                raise ValueError('Couple {} is not found'.format(couple_id))
-            couple = group.couple
-        else:
-            couple = storage.replicas_groupsets[couple_id]
+        couple = storage.groupsets.get_couple(request['couple'])
 
         if 'settings' not in request:
             raise ValueError('Request should contain "settings" field')
@@ -565,6 +551,59 @@ class Balancer(object):
         # with new setting right away and not wait till the end of the next
         # cluster update cycle
         couple.settings = couple_record.settings
+
+    @h.concurrent_handler
+    def attach_groupset_to_couple(self, request):
+        if 'couple' not in request:
+            raise ValueError('Request should contain "couple" field')
+        couple = storage.groupsets.get_couple(request['couple'])
+
+        if 'groupset' not in request:
+            raise ValueError('Request should contain "groupset" field')
+        group_ids = [int(g) for g in request['groupset'].split(':')]
+        groups = [storage.groups[gid] for gid in group_ids]
+
+        if 'type' not in request:
+            raise ValueError('Request should contain groupset "type" field')
+
+        if 'settings' not in request:
+            raise ValueError('Request should contain "settings" field')
+
+        if request['type'] == 'lrc':
+            if 'part_size' not in request['settings']:
+                raise ValueError('Lrc groupset requires "part_size" setting')
+            if 'scheme' not in request['settings']:
+                raise ValueError('Lrc groupset requires "scheme" setting')
+
+        Groupset = storage.groupsets.make_groupset(
+            type=request['type'],
+            settings=request['settings'],
+        )
+
+        groupset = Groupset(groups=groups)
+        storage.groupsets.add_groupset(groupset)
+        couple.namespace.add_groupset(groupset)
+
+        try:
+            # TODO: check if options contains extra keys
+            write_groupset_metakey(
+                self.node,
+                couple=couple,
+                groupset=groupset,
+                settings=request['settings'],
+            )
+        except Exception:
+            groupset.destroy()
+            raise
+
+        # TODO: couple should link groupset on its own
+        couple.lrc822v1_groupset = groupsetNone
+
+        for group in groups:
+            self.infrastructure.update_group_history(group)
+
+        groupset.update_status()
+        couple.update_status()
 
     VALID_COUPLE_INIT_STATES = (storage.Status.COUPLED, storage.Status.FROZEN)
 
@@ -900,33 +939,6 @@ class Balancer(object):
                             couple_groupsets.append(couple_groupset)
                             couple.lrc822v1_groupset = couple_groupset
 
-                if not dry_run:
-                    try:
-                        write_groupset_metakey(
-                            self.node,
-                            groupset=couple,
-                            namespace=namespace,
-                            frozen=init_state == storage.Status.FROZEN,
-                        )
-                        for couple_groupset, groupset in itertools.izip(couple_groupsets, groupsets):
-                            if isinstance(couple_groupset, storage.Lrc822v1Groupset):
-                                write_groupset_metakey(
-                                    self.node,
-                                    groupset=couple_groupset,
-                                    namespace=namespace,
-                                    couple=couple,
-                                    lrc_groups=couple_groupset.as_tuple(),
-                                    part_size=groupset['settings']['part_size'],
-                                    frozen=init_state == storage.Status.FROZEN,
-                                )
-                                couple_groupset.couple = couple
-
-                    except Exception:
-                        couple.destroy()
-                        for couple_groupset in couple_groupsets:
-                            couple_groupset.destroy()
-                        raise
-
                 if namespace not in storage.namespaces:
                     ns = storage.namespaces.add(namespace)
                 else:
@@ -934,6 +946,39 @@ class Balancer(object):
                 ns.add_couple(couple)
                 for groupset in couple_groupsets:
                     ns.add_groupset(groupset)
+
+                if not dry_run:
+                    try:
+                        write_groupset_metakey(
+                            self.node,
+                            couple=couple,
+                            groupset=couple,
+                            settings={
+                                'frozen': init_state == storage.Status.FROZEN,
+                            }
+                        )
+                        for group in couple.groups:
+                            self.infrastructure.update_group_history(group)
+                        for couple_groupset, groupset in itertools.izip(couple_groupsets, groupsets):
+                            if isinstance(couple_groupset, storage.Lrc822v1Groupset):
+                                write_groupset_metakey(
+                                    self.node,
+                                    couple=couple,
+                                    groupset=couple_groupset,
+                                    settings={
+                                        'part_size': groupset['settings']['part_size'],
+                                        'scheme': storage.Lrc.Scheme822v1.ID,
+                                    }
+                                )
+                                couple_groupset.couple = couple
+                            for group in couple_groupset.groups:
+                                self.infrastructure.update_group_history(group)
+
+                    except Exception:
+                        couple.destroy()
+                        for couple_groupset in couple_groupsets:
+                            couple_groupset.destroy()
+                        raise
 
                 if not dry_run:
                     # update should happen after couple has been added to
@@ -1788,20 +1833,20 @@ def get_unsuitable_uncoupled_group_ids(n, group_ids):
     return unsuitable_uncoupled_groups
 
 
-def write_groupset_metakey(n, groupset, namespace, **kwargs):
-    logger.info(
-        'Writing meta key for groupset {groupset}, assigning namespace {namespace}'.format(
-            groupset=groupset,
-            namespace=namespace,
-        )
-    )
+def write_groupset_metakey(n, couple, groupset, settings):
+    logger.info('Writing meta key for groupset {}'.format(groupset))
 
     s = elliptics.Session(n)
     wait_timeout = config.get('elliptics', {}).get('wait_timeout') or config.get('wait_timeout', 5)
     s.set_timeout(wait_timeout)
 
     s.add_groups(g.group_id for g in groupset.groups)
-    packed = msgpack.packb(groupset.compose_group_meta(namespace=namespace, **kwargs))
+    packed = msgpack.packb(
+        groupset.compose_group_meta(
+            couple=couple,
+            settings=settings,
+        )
+    )
     try:
         consistent_write(s, keys.SYMMETRIC_GROUPS_KEY, packed)
     except Exception:
