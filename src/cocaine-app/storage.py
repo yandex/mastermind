@@ -236,6 +236,7 @@ class MultiRepository(object):
 
 
 GROUPSET_REPLICAS = 'replicas'
+GROUPSET_LRC = 'lrc'
 GROUPSET_IDS = set([
     GROUPSET_REPLICAS,
     Lrc.Scheme822v1.ID,
@@ -247,8 +248,8 @@ class Groupsets(MultiRepository):
     def __init__(self, replicas, lrc, resource_desc):
         super(Groupsets, self).__init__(
             {
-                'replicas': replicas,
-                'lrc': lrc,
+                GROUPSET_REPLICAS: replicas,
+                GROUPSET_LRC: lrc,
             },
             resource_desc=resource_desc,
         )
@@ -2013,18 +2014,24 @@ class Couple(Groupset):
         self.status_text = 'Couple {} is archived'.format(self)
         return self.status
 
-    def compose_group_meta(self, namespace, frozen):
+    def compose_group_meta(self, couple, settings):
         return {
             'version': 2,
             'couple': self.as_tuple(),
-            'namespace': namespace,
-            'frozen': bool(frozen),
+            'namespace': couple.namespace.id,
+            'frozen': bool(settings['frozen']),
         }
 
     def info(self):
         c = CoupleInfo(str(self))
         c._set_raw_data(self.info_data())
         return c
+
+    @property
+    def groupset_settings(self):
+        return {
+            'frozen': self.frozen,
+        }
 
 
 class Lrc822v1Groupset(Groupset):
@@ -2038,7 +2045,7 @@ class Lrc822v1Groupset(Groupset):
     def info_data(self):
         data = super(Lrc822v1Groupset, self).info_data()
 
-        data['type'] = 'lrc'
+        data['type'] = GROUPSET_LRC
         data['settings'] = {
             'scheme': self.scheme,
             'part_size': self.part_size,
@@ -2121,16 +2128,16 @@ class Lrc822v1Groupset(Groupset):
         self.status_text = 'Couple {} is archived'.format(self)
         return self.status
 
-    def compose_group_meta(self, namespace, couple, frozen, lrc_groups, part_size):
+    def compose_group_meta(self, couple, settings):
         return {
             'version': 2,
             'couple': couple.as_tuple(),
-            'namespace': namespace,
-            'frozen': bool(frozen),
+            'namespace': couple.namespace.id,
+            'frozen': couple.frozen,
             'type': Group.TYPE_LRC_8_2_2_V1,
             'lrc': {
-                'groups': lrc_groups,
-                'part_size': part_size,
+                'groups': [g.group_id for g in self.groups],
+                'part_size': settings['part_size'],
                 'scheme': Lrc.Scheme822v1.ID,
             },
         }
@@ -2139,6 +2146,13 @@ class Lrc822v1Groupset(Groupset):
         c = GroupsetInfo(str(self))
         c._set_raw_data(self.info_data())
         return c
+
+    @property
+    def groupset_settings(self):
+        return {
+            'scheme': Lrc.Scheme822v1.ID,
+            'part_size': self.part_size,
+        }
 
 
 class DcNodes(object):
