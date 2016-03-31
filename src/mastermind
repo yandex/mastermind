@@ -1459,6 +1459,10 @@ def lrc_groupset_attach(group_or_groupset,
         print warn('"--couple" parameter is required')
         return 1
 
+    if ':' not in couple:
+        # consider 'couple' to be a group id of type integer
+        couple = int(couple)
+
     try:
         part_size = int(part_size)
         if part_size <= 0:
