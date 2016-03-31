@@ -1,3 +1,9 @@
+mastermind (2.27.9) trusty; urgency=medium
+
+  * Fix couple groupset attachment
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 31 Mar 2016 14:12:23 +0300
+
 mastermind (2.27.8) trusty; urgency=medium
 
   * Add 'attach_groupset_to_couple' handle
