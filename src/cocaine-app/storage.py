@@ -1586,10 +1586,15 @@ class Groupset(object):
         self.meta = None
         for group in self.groups:
             if group.couple:
-                raise Exception('Group %s is already in couple' % (repr(group)))
+                raise ValueError(
+                    'Group {group} is already in couple {group_couple}'.format(
+                        group=group,
+                        group_couple=group.couple,
+                    )
+                )
 
             group.couple = self
-        self.status_text = 'Couple {0} is not inititalized yet'.format(str(self))
+        self.status_text = 'Couple {} is not inititalized yet'.format(self)
         self.active_job = None
 
     def get_stat(self):
