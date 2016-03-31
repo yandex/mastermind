@@ -448,7 +448,11 @@ def couple_settings(couple_id,
     except (ValueError, TypeError):
         group_id = None
 
-    couple = cl.groups[group_id].couple
+    if group_id:
+        couple = cl.groups[group_id].couple
+    else:
+        couple = cl.couples[couple_id]
+
     if overwrite:
         couple.settings = settings
     else:
