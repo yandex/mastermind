@@ -302,7 +302,7 @@ class Groupsets(MultiRepository):
             # TODO: this is a "new" couple id, we should be able to index
             # couples by this id. Right now couple is checked against replicas
             # groupset
-            group_id = couple_id
+            group_id = int(couple_id)
             if group_id not in groups:
                 raise ValueError('Couple {} is not found'.format(couple_id))
             group = groups[group_id]

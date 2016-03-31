@@ -597,7 +597,7 @@ class Balancer(object):
             raise
 
         # TODO: couple should link groupset on its own
-        couple.lrc822v1_groupset = groupsetNone
+        couple.lrc822v1_groupset = groupset
 
         for group in groups:
             self.infrastructure.update_group_history(group)
