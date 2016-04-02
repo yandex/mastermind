@@ -52,7 +52,17 @@ class Status(object):
     STALLED = 'STALLED'
     FROZEN = 'FROZEN'
 
-    ARCHIVED = 'ARCHIVED'  # for couples with lrc groupsets
+    ARCHIVED = 'ARCHIVED'  # for couples with LRC groupsets
+
+    # LRC groupsets: unrecoverable configuration of stripe
+    # parts is unavailable at the moment because corresponding groups
+    # are in not-OK state;
+    BAD_DATA_UNAVAILABLE = 'BAD_DATA_UNAVAILABLE'
+
+    # LRC groupsets: an index shard of three groups
+    # is unavailable at the moment because correspoding groups
+    # are in not-OK state;
+    BAD_INDICES_UNAVAILABLE = 'BAD_INDICES_UNAVAILABLE'
 
     MIGRATING = 'MIGRATING'
 
@@ -68,9 +78,70 @@ GOOD_STATUSES = set([Status.OK, Status.FULL])
 NOT_BAD_STATUSES = set([Status.OK, Status.FULL, Status.FROZEN])
 
 
+def generate_lrc822v1_bad_parts_indices():
+
+    # TODO: add tests to check indices generation
+
+    combinations = itertools.combinations
+    izip = itertools.izip
+
+    local_groups = (
+        (0, 1, 2, 3),  # first local group
+        (4, 5, 6, 7),  # second local group
+    )
+    local_parity = (
+        (8,),  # local parity for first local group
+        (9,),  # local parity for second local group
+    )
+    global_parity = (10, 11)
+
+    indices = []
+
+    # all 4 data parts from local group
+    for local_parts_ids in local_groups:
+        indices.append(local_parts_ids)
+
+    # 3 data parts from a local group + 1 corresponding local parity part
+    for parts_ids, lp_parts_ids in izip(local_groups, local_parity):
+        for data_parts_ids in combinations(parts_ids, 3):
+            indices.append(data_parts_ids + lp_parts_ids)
+
+    # 3 data parts from a local group + 1 global parity part
+    for parts_ids in local_groups:
+        for data_parts_ids in combinations(parts_ids, 3):
+            for gp_parts_ids in combinations(global_parity, 1):
+                indices.append(data_parts_ids + gp_parts_ids)
+
+    # 2 data parts from a local group + 2 global parts
+    for parts_ids in local_groups:
+        for data_parts_ids in combinations(parts_ids, 2):
+            indices.append(data_parts_ids + global_parity)
+
+    # 2 data parts from a local group + 1 corresponding local parity part + 1 global part
+    for parts_ids, lp_parts_ids in izip(local_groups, local_parity):
+        for data_parts_ids in combinations(parts_ids, 2):
+            for gp_parts_ids in combinations(global_parity, 1):
+                indices.append(data_parts_ids + lp_parts_ids + gp_parts_ids)
+
+    # 1 data part from a local group + 1 corresponding local parity part + 2 global parts
+    for parts_ids, lp_parts_ids in izip(local_groups, local_parity):
+        for data_parts_ids in combinations(parts_ids, 1):
+            indices.append(data_parts_ids + lp_parts_ids + global_parity)
+
+    return [
+        tuple(sorted(part_ids))
+        for part_ids in indices
+    ]
+
+
 class Lrc(object):
 
     class Scheme822v1(object):
+        """ LRC scheme 8-2-2 (version 1)
+
+        This object is a collection of routines and constants relevant
+        to LRC scheme 8-2-2 (version 1).
+        """
 
         ID = 'lrc-8-2-2-v1'
 
@@ -99,6 +170,72 @@ class Lrc(object):
                 groups_lists[1][2:4] +  # data parts 6, 7; located in DC 2
                 groups_lists[2][0:4]    # parity parts L1, L2, G1, G2; located in DC 3
             )
+
+        INDEX_SHARD_INDICES = [
+            # index groups shards
+            frozenset([0, 2, 8]),
+            frozenset([1, 3, 9]),
+            frozenset([4, 6, 10]),
+            frozenset([5, 7, 11]),
+        ]
+
+        @staticmethod
+        def get_unavailable_index_shard_indices(unavailable_data_parts_indices):
+            """ Checks if indices are partially unavailable
+
+            Index keys for each data key are sharded among LRC groups
+            in a groupset in a way that each shard contains of three copies
+            in three different DCs. If all three groups of shard are unavailable,
+            indices are considered partially unavailable.
+
+            Each shard occupies three groups of a column of LRC-8-2-2 scheme,
+            so there are 4 index shards:
+
+            0   1   4   5
+            2   3   6   7
+            8   9   10  11
+
+            Parameters:
+                unavailable_data_parts_indices: a list of indices of groups in lrc groupset
+                    that are unavailable for any reason.
+            """
+            unavailable_data_parts_indices = set(unavailable_data_parts_indices)
+            for indices in Lrc.Scheme822v1.INDEX_SHARD_INDICES:
+                if unavailable_data_parts_indices.issuperset(indices):
+                    # sorting is not required, but leads to group ids being
+                    # displayed in a sorted order
+                    return sorted(indices)
+            return None
+
+        BAD_DATA_PARTS_INDICES = set(generate_lrc822v1_bad_parts_indices())
+
+        @staticmethod
+        def is_data_partially_unavailable(unavailable_data_parts_indices):
+            """ Checks if data is partially unavailable
+
+            Data is considered partially unavailable when LRC stripe's
+            data part groups are not available at the moment and their
+            data cannot be restored using LRC restore mechanism.
+
+            LRC 8-2-2 scheme allows to restore not more than 4 data part
+            groups. Among all 4 groups combinations the ones that does not
+            allow data restoring are listed in 'BAD_DATA_PARTS_INDICES'.
+
+            Parameters:
+                unavailable_data_parts_indices: a list of indices of groups in lrc groupset
+                    that are unavailable for any reason.
+            """
+            if len(unavailable_data_parts_indices) > 4:
+                return True
+
+            if len(unavailable_data_parts_indices) < 4:
+                return False
+
+            unavailable_data_parts_indices = tuple(sorted(unavailable_data_parts_indices))
+            if unavailable_data_parts_indices in Lrc.Scheme822v1.BAD_DATA_PARTS_INDICES:
+                return True
+
+            return False
 
         builder = lrc_builder.LRC_8_2_2_V1_Builder
 
@@ -2222,7 +2359,7 @@ class Lrc822v1Groupset(Groupset):
         super(Lrc822v1Groupset, self).__init__(groups)
         # TODO: this should be a link to a new "Couple" instance
         self.couple = None
-        self.scheme = Group.TYPE_LRC_8_2_2_V1
+        self.scheme = Lrc.Scheme822v1.ID
         self.part_size = None
 
     def info_data(self):
@@ -2256,6 +2393,13 @@ class Lrc822v1Groupset(Groupset):
         super(Lrc822v1Groupset, self).update_status()
 
     def _calculate_status(self):
+        lrc_data_parts_status = (
+            self._get_data_unavailable_status() or
+            self._get_indices_unavailable_status()
+        )
+        if lrc_data_parts_status:
+            return lrc_data_parts_status
+
         # TODO: this checks should be evaluated after
         # potentially threatening checks like bad_groups_status, etc.
         meta_status = (
@@ -2291,6 +2435,50 @@ class Lrc822v1Groupset(Groupset):
             text='Groupset {} is bad for some reason'.format(self),
         )
 
+    @property
+    def _unavailable_data_parts_indices(self):
+        return [
+            idx
+            for idx, group in enumerate(self.groups)
+            if group.status != Status.COUPLED
+        ]
+
+    def _get_data_unavailable_status(self):
+        unavailable_data_parts_indices = self._unavailable_data_parts_indices
+        if Lrc.Scheme822v1.is_data_partially_unavailable(unavailable_data_parts_indices):
+            status_text = (
+                'Data is partially unavailable (groups {groups} are not ok)'.format(
+                    groups=', '.join(
+                        str(self.groups[idx])
+                        for idx in unavailable_data_parts_indices
+                    )
+                )
+            )
+            return Status(
+                code=Status.BAD_DATA_UNAVAILABLE,
+                text=status_text,
+            )
+        return None
+
+    def _get_indices_unavailable_status(self):
+        unavailable_data_parts_indices = self._unavailable_data_parts_indices
+        bad_shard_indices = Lrc.Scheme822v1.get_unavailable_index_shard_indices(
+            unavailable_data_parts_indices
+        )
+        if bad_shard_indices:
+            status_text = (
+                'Indices are partially unavailable (groups {groups} are not ok)'.format(
+                    groups=', '.join(
+                        str(self.groups[idx])
+                        for idx in bad_shard_indices
+                    )
+                )
+            )
+            return Status(
+                code=Status.BAD_INDICES_UNAVAILABLE,
+                text=status_text,
+            )
+        return None
 
     def _get_unequal_part_size_status(self):
         # NOTE: this check should be evaluated after '_get_meta_unavailable_status()'
