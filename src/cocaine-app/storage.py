@@ -59,6 +59,10 @@ class Status(object):
     SERVICE_ACTIVE = 'SERVICE_ACTIVE'
     SERVICE_STALLED = 'SERVICE_STALLED'
 
+    def __init__(self, code, text):
+        self.code = code
+        self.text = text
+
 
 GOOD_STATUSES = set([Status.OK, Status.FULL])
 NOT_BAD_STATUSES = set([Status.OK, Status.FULL, Status.FROZEN])
@@ -1603,26 +1607,21 @@ class Groupset(object):
         except TypeError:
             return None
 
-    def account_job_in_status(self):
-        if self.status == Status.BAD:
-            if self.active_job and self.active_job['type'] in (JobTypes.TYPE_MOVE_JOB,
-                                                               JobTypes.TYPE_RESTORE_GROUP_JOB):
-                if self.active_job['status'] in (jobs.job.Job.STATUS_NEW,
-                                                 jobs.job.Job.STATUS_EXECUTING):
-                    self.status = Status.SERVICE_ACTIVE
-                    self.status_text = 'Couple {} has active job {}'.format(
-                        str(self), self.active_job['id'])
-                else:
-                    self.status = Status.SERVICE_STALLED
-                    self.status_text = 'Couple {} has stalled job {}'.format(
-                        str(self), self.active_job['id'])
-        return self.status
-
-    def _check_equal_meta(self):
-        return all(self.groups[0].equal_meta(group) for group in self.groups)
-
-    def _check_frozen(self):
-        return any(group.meta and group.meta.get('frozen') for group in self.groups)
+    def _get_job_service_status(self):
+        service_job_types = (JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_RESTORE_GROUP_JOB)
+        running_job_statuses = (jobs.job.Job.STATUS_NEW, jobs.job.Job.STATUS_EXECUTING)
+        if self.active_job and self.active_job['type'] in service_job_types:
+            if self.active_job['status'] in running_job_statuses:
+                return Status(
+                    code=Status.SERVICE_ACTIVE,
+                    text='Couple {} has active job {}'.format(self, self.active_job['id']),
+                )
+            else:
+                return Status(
+                    code=Status.SERVICE_STALLED,
+                    text='Couple {} has stalled job {}'.format(self, self.active_job['id']),
+                )
+        return None
 
     def _check_dc_sharing(self):
         if FORBIDDEN_DC_SHARING_AMONG_GROUPS:
@@ -1647,29 +1646,10 @@ class Groupset(object):
 
         return True
 
-    def _check_namespace_settings(self):
-        if FORBIDDEN_NS_WITHOUT_SETTINGS:
-            is_cache_couple = self.namespace.id == Group.CACHE_NAMESPACE
-            if not infrastructure.ns_settings.get(self.namespace.id) and not is_cache_couple:
-                return False
-
-        return True
-
     @status_change_log
     def update_status(self):
-        statuses = [group.update_status() for group in self.groups]
-
         for group in self.groups:
-            if not group.meta:
-                self.status = Status.BAD
-                self.status_text = "Couple's group {} has empty meta data".format(group)
-                return self.account_job_in_status()
-            if self.namespace != group.meta.get('namespace'):
-                self.status = Status.BAD
-                self.status_text = "Couple's namespace does not match namespace " \
-                                   "in group's meta data ('{}' != '{}')".format(
-                                       self.namespace, group.meta.get('namespace'))
-                return self.status
+            group.update_status()
 
         self.active_job = None
         for group in self.groups:
@@ -1677,41 +1657,112 @@ class Groupset(object):
                 self.active_job = group.active_job
                 break
 
-        if not self._check_equal_meta():
-            self.status = Status.BAD
-            self.status_text = 'Couple {0} groups has unequal meta data'.format(str(self))
-            return self.account_job_in_status()
+        new_status = self._calculate_status()
+        self.status = new_status.code
+        self.status_text = new_status.text
 
-        if self._check_frozen():
-            self.status = Status.FROZEN
-            self.status_text = 'Couple {0} is frozen'.format(str(self))
-            return self.status
+    def _calculate_status(self):
+        raise NotImplemented('Method should be implemented in a derived class')
 
-        if not self._check_namespace_settings():
-            self.status = Status.BROKEN
-            self.status_text = ('Couple {} is assigned to the namespace {}, which is '
-                                'not set up'.format(self, self.namespace))
-            return self.status
+    def _get_meta_unavailable_status(self):
+        for group in self.groups:
+            if not group.meta:
+                return (
+                    self._get_job_service_status() or
+                    Status(
+                        code=Status.BAD,
+                        text="Couple's group {} has empty meta data".format(group),
+                    )
+                )
+        return None
 
+    def _get_improper_namespace_status(self):
+        # NOTE: this check should be evaluated after '_get_meta_unavailable_status()'
+        # because it relies on group's 'meta' availability
+        for group in self.groups:
+            if self.namespace != group.meta.get('namespace'):
+                status_text = (
+                    "Couple {couple} namespace '{couple_ns}' does not match namespace "
+                    "in group {group} meta data '{group_ns}'".format(
+                        couple=self,
+                        couple_ns=self.namespace,
+                        group=group,
+                        group_ns=group.meta.get('namespace'),
+                    )
+                )
+                return Status(
+                    code=Status.BAD,
+                    text=status_text,
+                )
+        return None
+
+    def _get_unequal_meta_status(self):
+        # NOTE: this check should be evaluated after '_get_meta_unavailable_status()'
+        # because it relies on group's 'meta' availability
+        if not all(self.groups[0].equal_meta(group) for group in self.groups):
+            return (
+                self._get_job_service_status() or
+                Status(
+                    code=Status.BAD,
+                    text='Couple {} groups have unequal meta data'.format(self),
+                )
+            )
+        return None
+
+    def _get_couple_frozen_status(self):
+        # NOTE: this check should be evaluated after '_get_meta_unavailable_status()'
+        # because it relies on group's 'meta' availability
+        if any(group.meta.get('frozen') for group in self.groups):
+            return Status(
+                code=Status.FROZEN,
+                text='Couple {} is frozen'.format(self),
+            )
+        return None
+
+    def _get_unset_namespace_settings_status(self):
+        if FORBIDDEN_NS_WITHOUT_SETTINGS:
+            if self.namespace.id == Group.CACHE_NAMESPACE:
+                return None
+            if not infrastructure.ns_settings.get(self.namespace.id):
+                status_text = (
+                    'Couple {couple} is assigned to the namespace {namespace}, '
+                    'which is not set up'.format(
+                        couple=self,
+                        namespace=self.namespace,
+                    )
+                )
+                return Status(
+                    code=Status.BROKEN,
+                    text=status_text,
+                )
+
+        return None
+
+    def _get_dc_sharing_status(self):
         try:
             if not self._check_dc_sharing():
-                self.status = Status.BROKEN
-                self.status_text = 'Couple {0} has nodes sharing the same DC'.format(str(self))
-                return self.status
+                return Status(
+                    code=Status.BROKEN,
+                    text='Couple {} has nodes sharing the same DC'.format(self),
+                )
         except CacheUpstreamError as e:
-            self.status_text = str(e)
-            self.status = Status.BAD
-            return self.status
+            return Status(
+                code=Status.BAD,
+                text=str(e),
+            )
+        return None
 
-        if Status.BROKEN in statuses:
-            self.status = Status.BROKEN
-            self.status_text = 'Couple {0} has broken groups'.format(str(self))
-            return self.status
+    def _get_broken_groups_status(self):
+        if any(g.status == Status.BROKEN for g in self.groups):
+            return Status(
+                code=Status.BROKEN,
+                text='Couple {} has broken groups'.format(self),
+            )
+        return None
 
-        if Status.BAD in statuses:
-
-            self.status = Status.BAD
-            self.status_text = (
+    def _get_bad_groups_status(self):
+        if any(g.status == Status.BAD for g in self.groups):
+            status_text = (
                 'Couple {couple} has bad groups: [{groups_desc}]'.format(
                     couple=self,
                     groups_desc='; '.join(
@@ -1721,13 +1772,25 @@ class Groupset(object):
                     )
                 )
             )
+            return (
+                self._get_job_service_status() or
+                Status(
+                    code=Status.BAD,
+                    text=status_text,
+                )
+            )
+        return None
 
-            return self.account_job_in_status()
-
-        return self._custom_status(statuses)
-
-    def _custom_status(self, statuses):
-        return self.status
+    def _get_unmatched_total_space_status(self):
+        if FORBIDDEN_UNMATCHED_GROUP_TOTAL_SPACE:
+            group_stats = [g.get_stat() for g in self.groups]
+            total_spaces = [gs.total_space for gs in group_stats if gs]
+            if any(ts != total_spaces[0] for ts in total_spaces):
+                return Status(
+                    code=Status.BROKEN,
+                    text='Couple {} has unequal total space in groups'.format(self),
+                )
+        return None
 
     def check_groups(self, groups):
 
@@ -1998,60 +2061,126 @@ class Couple(Groupset):
 
         return data
 
-    def _custom_status(self, statuses):
+    def _calculate_status(self):
+
+        # TODO: this checks should be evaluated after
+        # potentially threatening checks like bad_groups_status, etc.
+        meta_status = (
+            self._get_meta_unavailable_status() or
+            self._get_improper_namespace_status() or
+            self._get_unequal_meta_status() or
+            self._get_couple_frozen_status()
+        )
+        if meta_status:
+            return meta_status
+
+        settings_status = (
+            self._get_unset_namespace_settings_status() or
+            self._get_dc_sharing_status() or
+            self._get_broken_groups_status()
+        )
+        if settings_status:
+            return settings_status
+
+        bad_groups_status = self._get_bad_groups_status()
+        if bad_groups_status:
+            return bad_groups_status
+
         if self.lrc822v1_groupset:
-            return self.update_status_archived_replicas_groupset(statuses)
-        else:
-            return self.update_status_replicas_groupset(statuses)
-
-    def update_status_replicas_groupset(self, statuses):
-
-        if all(st == Status.COUPLED for st in statuses):
-
-            if FORBIDDEN_UNMATCHED_GROUP_TOTAL_SPACE:
-                group_stats = [g.get_stat() for g in self.groups]
-                total_spaces = [gs.total_space for gs in group_stats if gs]
-                if any(ts != total_spaces[0] for ts in total_spaces):
-                    self.status = Status.BROKEN
-                    self.status_text = 'Couple {0} has unequal total space in groups'.format(self)
-                    return self.status
-
-            if self.is_full():
-                self.status = Status.FULL
-                self.status_text = 'Couple {0} is full'.format(self)
-            else:
-                self.status = Status.OK
-                self.status_text = 'Couple {0} is OK'.format(self)
-
-            return self.status
-
-        elif Status.RO in statuses or Status.MIGRATING in statuses:
-            self.status = Status.BAD
-            self.status_text = 'Couple {0} has read-only groups'.format(self)
-
-        else:
-            self.status = Status.BAD
-            self.status_text = 'Couple {0} is bad for some reason'.format(self)
-
-        return self.account_job_in_status()
-
-    def update_status_archived_replicas_groupset(self, statuses):
-
-        if Status.MIGRATING in statuses:
-            self.status = Status.BAD
-            self.status_text = 'Couple {} has migrating groups'.format(self)
-            return self.account_job_in_status()
-
-        if Status.COUPLED in statuses:
-            self.status = Status.BAD
-            self.status_text = 'Couple {} has COUPLED groups, should be only RO groups'.format(
-                self
+            lrc_groups_status = (
+                self._get_migrating_groups_status() or
+                self._get_lrc_groupset_not_ro_groups_status()
             )
-            return self.status
+            if lrc_groups_status:
+                return lrc_groups_status
 
+            if all(g.status == Status.RO for g in self.groups):
+                # couple with lrc groupset is in good state
+                return Status(
+                    code=Status.ARCHIVED,
+                    text='Couple {} is archived'.format(self),
+                )
+        else:
+            groups_status = (
+                self._get_ro_groups_status() or
+                self._get_migrating_groups_status() or
+                self._get_init_groups_status() or
+                self._get_stalled_groups_status()
+            )
+            if groups_status:
+                return groups_status
+
+            if all(g.status == Status.COUPLED for g in self.groups):
+                # couple without lrc groupset is in good state
+
+                # TODO: move this check to meta_status group checks?
+                settings_status = self._get_unmatched_total_space_status()
+                if settings_status:
+                    return settings_status
+
+                if self.is_full():
+                    return Status(
+                        code=Status.FULL,
+                        text='Couple {} is full'.format(self),
+                    )
+                else:
+                    return Status(
+                        code=Status.OK,
+                        text='Couple {} is OK'.format(self),
+                    )
+
+        return Status(
+            code=Status.BAD,
+            text='Couple {} is bad for some reason'.format(self),
+        )
+
+    def _get_ro_groups_status(self):
+        if any(g.status == Status.RO for g in self.groups):
+            return (
+                self._get_job_service_status() or
+                Status(
+                    code=Status.BAD,
+                    text='Couple {} has read-only groups'.format(self),
+                )
+            )
+        return None
+
+    def _get_migrating_groups_status(self):
+        if any(g.status == Status.MIGRATING for g in self.groups):
+            return (
+                self._get_job_service_status() or
+                Status(
+                    code=Status.BAD,
+                    text='Couple {} has migrating groups'.format(self),
+                )
+            )
+        return None
+
+    def _get_init_groups_status(self):
+        if any(g.status == Status.INIT for g in self.groups):
+            return (
+                self._get_job_service_status() or
+                Status(
+                    code=Status.BAD,
+                    text='Couple {} has groups that are not initialized'.format(self),
+                )
+            )
+        return None
+
+    def _get_stalled_groups_status(self):
+        if any(g.status == Status.STALLED for g in self.groups):
+            return (
+                self._get_job_service_status() or
+                Status(
+                    code=Status.BAD,
+                    text='Couple {} has stalled groups'.format(self),
+                )
+            )
+        return None
+
+    def _get_lrc_groupset_not_ro_groups_status(self):
         if not all(g.status == Status.RO for g in self.groups):
-            self.status = Status.BAD
-            self.status_text = (
+            status_text = (
                 'Couple {couple} has groups with unexpected '
                 'status: [{groups_desc}], should all be RO'.format(
                     couple=self,
@@ -2062,11 +2191,11 @@ class Couple(Groupset):
                     )
                 )
             )
-            return self.status
-
-        self.status = Status.ARCHIVED
-        self.status_text = 'Couple {} is archived'.format(self)
-        return self.status
+            return Status(
+                code=Status.BAD,
+                text=status_text,
+            )
+        return None
 
     def compose_group_meta(self, couple, settings):
         return {
@@ -2120,23 +2249,56 @@ class Lrc822v1Groupset(Groupset):
         metas = [g.meta for g in self.groups if g.meta]
         if metas:
             part_sizes = filter(None, (meta['lrc'].get('part_size') for meta in metas))
-            if part_sizes:
-                self.part_size = part_sizes[0]
+            if not part_sizes:
+                raise ValueError('"part_size" is not set in metakey')
+            self.part_size = part_sizes[0]
 
         super(Lrc822v1Groupset, self).update_status()
 
-    def _custom_status(self, statuses):
+    def _calculate_status(self):
+        # TODO: this checks should be evaluated after
+        # potentially threatening checks like bad_groups_status, etc.
+        meta_status = (
+            self._get_meta_unavailable_status() or
+            self._get_improper_namespace_status() or
+            self._get_unequal_part_size_status() or
+            self._get_improper_lrc_scheme_settings_status() or
+            self._get_unequal_meta_status()
+        )
+        if meta_status:
+            return meta_status
 
+        settings_status = (
+            self._get_unset_namespace_settings_status() or
+            self._get_broken_groups_status()
+        )
+        if settings_status:
+            return settings_status
+
+        groups_status = self._get_not_coupled_lrc_groups_status()
+        if groups_status:
+            return groups_status
+
+        if all(g.status == Status.COUPLED for g in self.groups):
+            # lrc groupset is in good state
+            return Status(
+                code=Status.ARCHIVED,
+                text='Lrc groupset {} is archived'.format(self),
+            )
+
+        return Status(
+            code=Status.BAD,
+            text='Groupset {} is bad for some reason'.format(self),
+        )
+
+
+    def _get_unequal_part_size_status(self):
+        # NOTE: this check should be evaluated after '_get_meta_unavailable_status()'
+        # because it relies on group's 'meta' availability
         for g in self.groups:
-            # groups' meta are guaranteed to be non-empty here
             part_size = g.meta['lrc'].get('part_size')
-            if not part_size:
-                self.status = Status.BROKEN
-                self.status_text = 'Groupset {} has empty part_size set in metakey'.format(self)
-                return self.status
             if part_size != self.part_size:
-                self.status = Status.BROKEN
-                self.status_text = (
+                status_text = (
                     'part_size does not match, groupset {groupset} has part_size = '
                     '{groupset_part_size}, group {group} has part_size = '
                     '{group_part_size}'.format(
@@ -2146,12 +2308,19 @@ class Lrc822v1Groupset(Groupset):
                         group_part_size=part_size,
                     )
                 )
-                return self.status
+                return Status(
+                    code=Status.BROKEN,
+                    text=status_text,
+                )
+        return None
 
+    def _get_improper_lrc_scheme_settings_status(self):
+        # NOTE: this check should be evaluated after '_get_meta_unavailable_status()'
+        # because it relies on group's 'meta' availability
+        for g in self.groups:
             scheme = g.meta['lrc'].get('scheme')
             if scheme != self.scheme:
-                self.status = Status.BROKEN
-                self.status_text = (
+                status_text = (
                     'scheme does not match, groupset {groupset} has scheme = '
                     '{groupset_scheme}, group {group} has scheme = '
                     '{group_scheme}'.format(
@@ -2161,11 +2330,16 @@ class Lrc822v1Groupset(Groupset):
                         group_scheme=scheme,
                     )
                 )
-                return self.status
+                return Status(
+                    code=Status.BROKEN,
+                    text=status_text,
+                )
+        return None
+
+    def _get_not_coupled_lrc_groups_status(self):
 
         if not all(g.status == Status.COUPLED for g in self.groups):
-            self.status = Status.BAD
-            self.status_text = (
+            status_text = (
                 'Couple {couple} has groups with unexpected '
                 'status: [{groups_desc}], should all be COUPLED'.format(
                     couple=self,
@@ -2176,11 +2350,11 @@ class Lrc822v1Groupset(Groupset):
                     )
                 )
             )
-            return self.status
-
-        self.status = Status.ARCHIVED
-        self.status_text = 'Couple {} is archived'.format(self)
-        return self.status
+            return Status(
+                code=Status.BAD,
+                text=status_text,
+            )
+        return None
 
     def compose_group_meta(self, couple, settings):
         return {
