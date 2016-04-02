@@ -1512,7 +1512,12 @@ class Balancer(object):
 
     def __do_set_meta_freeze(self, couple, freeze):
 
-        group_meta = couple.compose_group_meta(couple.namespace.id, frozen=freeze)
+        group_meta = couple.compose_group_meta(
+            couple=couple,
+            settings={
+                'frozen': freeze,
+            },
+        )
 
         packed = msgpack.packb(group_meta)
         logger.info('packed meta for couple {0}: "{1}"'.format(
