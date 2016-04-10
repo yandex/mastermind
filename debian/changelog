@@ -1,3 +1,9 @@
+mastermind (2.27.13) trusty; urgency=medium
+
+  * Add NodeBackend binding object
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sun, 10 Apr 2016 14:15:13 +0300
+
 mastermind (2.27.12) trusty; urgency=medium
 
   * Add new BAD_* statuses for LRC Groupset
