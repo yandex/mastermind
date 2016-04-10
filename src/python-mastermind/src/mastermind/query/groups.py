@@ -2,6 +2,7 @@ import copy
 
 from mastermind.query import Query, LazyDataObject
 import mastermind.query.groupsets
+from mastermind.query.node_backends import NodeBackend
 from mastermind.query.history import GroupHistory
 
 
@@ -109,6 +110,20 @@ class GroupDataObject(LazyDataObject):
     @LazyDataObject._lazy_load
     def couple_id(self):
         return self._data['couple']
+
+    def _preprocess_raw_data(self, data):
+        node_backends = []
+        for nb_data in data['node_backends']:
+            node_backends.append(NodeBackend.from_data(nb_data, self.client))
+        data['node_backends'] = node_backends
+
+        return data
+
+    def serialize(self):
+        data = super(GroupDataObject, self).serialize()
+        node_backends = [nb.serialize() for nb in data['node_backends']]
+        data['node_backends'] = node_backends
+        return data
 
 
 class GroupQuery(Query):

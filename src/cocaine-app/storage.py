@@ -1299,6 +1299,15 @@ class NodeBackend(object):
         res = {}
 
         res['node'] = '{0}:{1}:{2}'.format(self.node.host, self.node.port, self.node.family)
+        res['id'] = '{node}:{port}:{family}/{backend_id}'.format(
+            node=self.node.host.addr,
+            port=self.node.port,
+            family=self.node.family,
+            backend_id=self.backend_id,
+        )
+        res['host'] = self.node.host.addr
+        res['port'] = self.node.port
+        res['family'] = self.node.family
         res['backend_id'] = self.backend_id
         res['addr'] = str(self)
         res['hostname'] = self.node.host.hostname_or_not
@@ -1328,8 +1337,7 @@ class NodeBackend(object):
             res['io_blocking_size'] = self.stat.io_blocking_size
             res['io_nonblocking_size'] = self.stat.io_nonblocking_size
 
-        if self.base_path:
-            res['path'] = self.base_path
+        res['path'] = self.base_path or ''
 
         return res
 
