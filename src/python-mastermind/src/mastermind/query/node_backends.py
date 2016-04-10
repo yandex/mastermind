@@ -63,6 +63,12 @@ class NodeBackendDataObject(LazyDataObject):
         """
         return self._data['path']
 
+    # TODO: backward-compatibility with dictionary object,
+    # remove when all clients use 'node_backends' array as array of
+    # 'NodeBackend' objects
+    def __getitem__(self, key):
+        return self._data[key]
+
 
 class NodeBackend(NodeBackendQuery, NodeBackendDataObject):
     def __init__(self, id, client):
