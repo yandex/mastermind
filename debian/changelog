@@ -1,3 +1,9 @@
+mastermind (2.27.16) trusty; urgency=medium
+
+  * Use family when detaching node backend from group
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 11 Apr 2016 16:25:30 +0300
+
 mastermind (2.27.15) trusty; urgency=medium
 
   * Add defrag startup timeout
