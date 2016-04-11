@@ -87,7 +87,7 @@ class Infrastructure(object):
 
     DNET_DEFRAG_CMD = (
         'dnet_client backend -r {host}:{port}:{family} '
-        'defrag --backend {backend_id}'
+        'defrag --backend {backend_id} --wait-timeout=1000'
     )
 
     def __init__(self):
