@@ -198,11 +198,14 @@ class RestoreGroupJob(Job):
 
                 self.tasks.append(task)
 
-                task = HistoryRemoveNodeTask.new(self,
-                                 group=group_id,
-                                 host=merged_nb.node.host.addr,
-                                 port=merged_nb.node.port,
-                                 backend_id=merged_nb.backend_id)
+                task = HistoryRemoveNodeTask.new(
+                    self,
+                    group=group_id,
+                    host=merged_nb.node.host.addr,
+                    port=merged_nb.node.port,
+                    family=merged_nb.node.family,
+                    backend_id=merged_nb.backend_id,
+                )
                 self.tasks.append(task)
 
 
@@ -369,18 +372,24 @@ class RestoreGroupJob(Job):
         if self.uncoupled_group:
 
             if old_group_node_backends_set:
-                task = HistoryRemoveNodeTask.new(self,
-                                                 group=self.group,
-                                                 host=old_host,
-                                                 port=old_port,
-                                                 backend_id=old_backend_id)
+                task = HistoryRemoveNodeTask.new(
+                    self,
+                    group=self.group,
+                    host=old_host,
+                    port=old_port,
+                    family=old_family,
+                    backend_id=old_backend_id,
+                )
                 self.tasks.append(task)
 
-            task = HistoryRemoveNodeTask.new(self,
-                                 group=self.uncoupled_group,
-                                 host=dst_host,
-                                 port=dst_port,
-                                 backend_id=dst_backend_id)
+            task = HistoryRemoveNodeTask.new(
+                self,
+                group=self.uncoupled_group,
+                host=dst_host,
+                port=dst_port,
+                family=dst_family,
+                backend_id=dst_backend_id,
+            )
             self.tasks.append(task)
 
 

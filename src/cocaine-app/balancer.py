@@ -465,7 +465,12 @@ class Balancer(object):
 
         raise ValueError('History for group {} is not found'.format(group))
 
-    NODE_BACKEND_RE = re.compile('(.+):(\d+)/(\d+)')
+    NODE_BACKEND_RE = re.compile(
+        '(?P<host>.+?)'
+        ':(?P<port>\d+)'
+        '(?::(?P<family>\d+))?'  # support for empty family
+        '/(?P<backend_id>\d+)'
+    )
 
     @h.concurrent_handler
     def group_detach_node(self, request):
@@ -481,8 +486,14 @@ class Balancer(object):
 
         logger.info('Node backend: {0}'.format(node_backend))
         try:
-            host, port, backend_id = self.NODE_BACKEND_RE.match(node_backend_str).groups()
+            m = self.NODE_BACKEND_RE.match(node_backend_str)
+            host = m.group('host')
+            port = m.group('port')
+            family = m.group('family')
+            backend_id = m.group('backend_id')
             port, backend_id = int(port), int(backend_id)
+            if family:
+                family = int(family)
             logger.info('host, port, backend_id: {0}'.format((host, port, backend_id)))
         except (IndexError, ValueError, AttributeError):
             raise ValueError('Node backend should be of form <host>:<port>/<backend_id>')
@@ -495,7 +506,13 @@ class Balancer(object):
 
         logger.info('Removing node backend {0} from group {1} history'.format(node_backend_str, group_id))
         try:
-            self.infrastructure.detach_node(group_id, host, port, backend_id)
+            self.infrastructure.detach_node(
+                group_id=group_id,
+                hostname=host,
+                port=port,
+                family=family,
+                backend_id=backend_id,
+            )
             logger.info('Removed node backend {0} from group {1} history'.format(node_backend_str, group_id))
         except Exception as e:
             logger.error('Failed to remove {0} from group {1} history: {2}'.format(node_backend_str, group_id, str(e)))
