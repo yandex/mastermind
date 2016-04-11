@@ -502,15 +502,24 @@ class Infrastructure(object):
 
         group_history.save()
 
-    def detach_node(self, group_id, hostname, port, backend_id, record_type=None):
+    # TODO: make family non-optional
+    def detach_node(self, group_id, hostname, port, backend_id, family=None, record_type=None):
         group_history = self.get_group_history(group_id)
 
         node_backends_set = group_history.nodes[-1].set[:]
 
         for i, node_backend in enumerate(node_backends_set):
-            if (node_backend.hostname == hostname and
-                    node_backend.port == port and
-                    node_backend.backend_id == backend_id):
+            backend_match = (
+                node_backend.hostname == hostname and
+                node_backend.port == port and
+                node_backend.backend_id == backend_id
+            )
+            if backend_match:
+
+                if family and family != node_backend.family:
+                    # TODO: move family check to 'backend_match' check
+                    # when 'family' is made non-optional
+                    continue
 
                 logger.debug(
                     'Removing node backend {0}:{1}/{2} from group {3} history state'.format(
