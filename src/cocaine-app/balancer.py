@@ -441,6 +441,7 @@ class Balancer(object):
             couple=groupset.couple,
             groupset=groupset,
             settings=groupset.groupset_settings,
+            rollback_on_error=False,
         )
         groupset.update_status()
 
@@ -1763,7 +1764,7 @@ def handlers(b):
     return handlers
 
 
-def consistent_write(session, key, data, retries=3):
+def consistent_write(session, key, data, retries=3, rollback_on_error=True):
     s = session.clone()
 
     key_esc = key.replace('\0', '\\0')
@@ -1778,22 +1779,28 @@ def consistent_write(session, key, data, retries=3):
     if failed_groups:
         # failed to write key to all destination groups
 
-        logger.info('Failed to write key consistently, removing key {0} from groups {1}'.format(
-            key_esc, list(suc_groups)
-        ))
+        if rollback_on_error:
+            logger.info('Failed to write key consistently, removing key {0} from groups {1}'.format(
+                key_esc, list(suc_groups)
+            ))
 
-        s.set_groups(suc_groups)
-        _, left_groups = h.remove_retry(s, key, retries=retries)
+            s.set_groups(suc_groups)
+            _, left_groups = h.remove_retry(s, key, retries=retries)
 
-        if left_groups:
-            logger.error('Failed to remove key {0} from groups {1}'.format(
-                key_esc, list(left_groups)))
-        else:
-            logger.info('Successfully removed key {0} from groups {1}'.format(
-                key_esc, list(suc_groups)))
+            if left_groups:
+                logger.error('Failed to remove key {0} from groups {1}'.format(
+                    key_esc, list(left_groups)))
+            else:
+                logger.info('Successfully removed key {0} from groups {1}'.format(
+                    key_esc, list(suc_groups)))
 
-        raise RuntimeError('Failed to write key {0} to groups {1}'.format(
-            key_esc, list(failed_groups)))
+        raise RuntimeError(
+            'Failed to write key to groups: {f_groups}, '
+            'successful write to groups: {s_groups}'.format(
+                s_groups=list(suc_groups),
+                f_groups=list(failed_groups),
+            )
+        )
 
 
 def kill_symm_group(n, meta_session, couple):
@@ -1855,7 +1862,7 @@ def get_unsuitable_uncoupled_group_ids(n, group_ids):
     return unsuitable_uncoupled_groups
 
 
-def write_groupset_metakey(n, couple, groupset, settings):
+def write_groupset_metakey(n, couple, groupset, settings, rollback_on_error=True):
     logger.info('Writing meta key for groupset {}'.format(groupset))
 
     s = elliptics.Session(n)
@@ -1870,7 +1877,7 @@ def write_groupset_metakey(n, couple, groupset, settings):
         )
     )
     try:
-        consistent_write(s, keys.SYMMETRIC_GROUPS_KEY, packed)
+        consistent_write(s, keys.SYMMETRIC_GROUPS_KEY, packed, rollback_on_error=rollback_on_error)
     except Exception:
         logger.exception('Failed to write meta key for groupset {}'.format(groupset))
         raise
