@@ -212,6 +212,22 @@ class WeightManager(object):
 
 
 class WeightCalculator(object):
+    """
+    Calculates weights for couples
+
+    NOTE: Common linear decrease formula for a parameter:
+        Let 'top_y' be the top (start) coefficient value, let 'delta_y' be the difference
+        between top (start) and bottom (end) coefficient value, let 'delta_x' be the
+        difference between start and end value of measured parameter, let 'offset_x' be
+        the difference between current measured parameter value and its start value, then
+        the formula has the following form:
+            top_y -
+            delta_y *
+            (
+                offset_x /
+                delta_x
+            )
+    """
     DISK_UTIL_COEF = WEIGHT_CFG.get('resource_unit_disk_util', 0.05)
     DISK_NET_RATE_COEF = WEIGHT_CFG.get('resource_unit_net_write_rate', 5 * (1024 ** 2))
 
@@ -238,26 +254,27 @@ class WeightCalculator(object):
         return space_coef
 
     @staticmethod
-    def net_coef(x):
+    def write_net_coef(write_rate):
         base_threshold_min_coef = 0.1
         min_coef = 0.01
-        if x <= NetResources.WRITE_RATE_THRESHOLD * 0.5:
+        if write_rate <= NetResources.WRITE_RATE_THRESHOLD * 0.5:
             return 1.0
-        if x <= NetResources.WRITE_RATE_THRESHOLD:
+        if write_rate <= NetResources.WRITE_RATE_THRESHOLD:
             return (
-                1.0 - (
-                   (1.0 - base_threshold_min_coef) *
-                   (x / (NetResources.WRITE_RATE_THRESHOLD * 0.5) - 1.0)
+                1.0 -                                                                              # top_y
+                (1.0 - base_threshold_min_coef) *                                                  # delta_y
+                (
+                    (write_rate - NetResources.WRITE_RATE_THRESHOLD * 0.5) /                       # offset_x
+                    (NetResources.WRITE_RATE_THRESHOLD - NetResources.WRITE_RATE_THRESHOLD * 0.5)  # delta_x
                 )
             )
         return max(
             (
-                base_threshold_min_coef - (
-                    (base_threshold_min_coef - min_coef) *
-                    (
-                        (x - NetResources.WRITE_RATE_THRESHOLD) /
-                        (NetResources.MAX_WRITE_RATE - NetResources.WRITE_RATE_THRESHOLD)
-                    )
+                base_threshold_min_coef -                                              # top_y
+                (base_threshold_min_coef - min_coef) *                                 # delta_y
+                (
+                    (write_rate - NetResources.WRITE_RATE_THRESHOLD) /                 # offset_x
+                    (NetResources.MAX_WRITE_RATE - NetResources.WRITE_RATE_THRESHOLD)  # delta_x
                 )
             ),
             min_coef
@@ -291,8 +308,8 @@ class WeightCalculator(object):
         return int(1000000 * base_coef * net_coef * disk_coef)
 
     @staticmethod
-    def resource_coef(base_coef, net_coef, disk_coef):
-        return base_coef * net_coef * disk_coef
+    def resource_coef(base_coef, write_net_coef, disk_coef):
+        return base_coef * write_net_coef * disk_coef
 
     @staticmethod
     def calculate_resources(couple_res):
@@ -313,7 +330,7 @@ class WeightCalculator(object):
 
         logger.info(
             'Ns {}, couple {} used_space_pct: {}, base coef {}, '
-            'net_write_rate: {} Mb/s, net_coef {}, '
+            'net_write_rate: {} Mb/s, write_net_coef {}, '
             'disk_util: {}, disk_coef {}, '
             'weight = {}'.format(
                 couple_res.couple.namespace.id,
