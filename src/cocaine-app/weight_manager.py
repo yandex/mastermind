@@ -39,6 +39,7 @@ class WeightManager(object):
         couples_by_disk = {}
         couples_by_net = {}
         for couple in storage.replicas_groupsets:
+            # TODO: add other couples (e.g. FULL) to account their load
             if couple.status != storage.Status.OK:
                 continue
             groups_res = []
