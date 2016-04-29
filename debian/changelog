@@ -1,3 +1,10 @@
+mastermind (2.27.17) trusty; urgency=medium
+
+  * Add weight coefficient for outgoing traffic
+  * Not perform rollback on couple repair
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 29 Apr 2016 03:59:48 +0300
+
 mastermind (2.27.16) trusty; urgency=medium
 
   * Use family when detaching node backend from group
