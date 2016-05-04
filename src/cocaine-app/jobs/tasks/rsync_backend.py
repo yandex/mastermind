@@ -35,7 +35,7 @@ class RsyncBackendTask(MinionCmdTask):
             # Check if old backend is down or if a group is already running on a
             # different node backends
             # This check is not applied to move job
-            current_group_node_backends = []
+            current_group_node_backends = set()
             if self.group in storage.groups:
                 group = storage.groups[self.group]
                 current_group_node_backends = set(group.node_backends)
