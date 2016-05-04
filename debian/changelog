@@ -1,3 +1,9 @@
+mastermind (2.27.18) trusty; urgency=medium
+
+  * Fix constructing jobs' involved groups list
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 04 May 2016 14:47:17 +0300
+
 mastermind (2.27.17) trusty; urgency=medium
 
   * Add weight coefficient for outgoing traffic
