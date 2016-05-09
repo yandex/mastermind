@@ -16,7 +16,7 @@ logger = logging.getLogger('mm.jobs')
 
 class HistoryRemoveNodeTask(Task):
 
-    PARAMS = ('group', 'host', 'port', 'backend_id')
+    PARAMS = ('group', 'host', 'port', 'family', 'backend_id')
     TASK_TIMEOUT = 600
 
     def __init__(self, job):
@@ -40,8 +40,14 @@ class HistoryRemoveNodeTask(Task):
             logger.info('Job {0}, task {1}: removing node backend {2} '
                 'from group {3} history'.format(
                     self.parent_job.id, self.id, nb_hostname_str, self.group))
-            infrastructure.detach_node(self.group, hostname, self.port, self.backend_id,
-                history.GroupStateRecord.HISTORY_RECORD_JOB)
+            infrastructure.detach_node(
+                group_id=self.group,
+                hostname=hostname,
+                port=self.port,
+                family=self.family,
+                backend_id=self.backend_id,
+                record_type=history.GroupStateRecord.HISTORY_RECORD_JOB,
+            )
             logger.info('Job {0}, task {1}: removed node backend {2} '
                 'from group {3} history'.format(
                     self.parent_job.id, self.id, nb_hostname_str, self.group))
@@ -73,13 +79,11 @@ class HistoryRemoveNodeTask(Task):
         data['hostname'] = cache.get_hostname_by_addr(data['host'], strict=False)
         return data
 
-    @property
-    def finished(self):
+    def finished(self, processor):
         return (not self.__node_in_group() or
                 time.time() - self.start_ts > self.TASK_TIMEOUT)
 
-    @property
-    def failed(self):
+    def failed(self, processor):
         return (time.time() - self.start_ts > self.TASK_TIMEOUT and
                 self.__node_in_group())
 
@@ -118,5 +122,14 @@ class HistoryRemoveNodeTask(Task):
         return nb_in_group or nb_in_history
 
     def __str__(self):
-        return 'HistoryRemoveNodeTask[id: {0}]<remove {1}:{2}/{3} from group {4}>'.format(
-            self.id, self.host, self.port, self.backend_id, self.group)
+        return (
+            'HistoryRemoveNodeTask[id: {id}]<remove {host}:{port}:{family}/{backend_id} '
+            'from group {group}>'.format(
+                id=self.id,
+                host=self.host,
+                port=self.port,
+                family=self.family,
+                backend_id=self.backend_id,
+                group=self.group,
+            )
+        )

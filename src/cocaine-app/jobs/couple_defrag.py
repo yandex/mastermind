@@ -24,9 +24,10 @@ class CoupleDefragJob(Job):
     def new(cls, *args, **kwargs):
         job = super(CoupleDefragJob, cls).new(*args, **kwargs)
         try:
+            # TODO: use 'couples' container
             couples = (storage.cache_couples
                        if kwargs.get('is_cache_couple', False) else
-                       storage.couples)
+                       storage.replicas_groupsets)
             couple = couples[kwargs['couple']]
             fragmentation = []
             for g in couple.groups:
@@ -41,9 +42,10 @@ class CoupleDefragJob(Job):
     def _set_resources(self):
         resources = {Job.RESOURCE_FS: []}
 
+        # TODO: use 'couples' container
         couples = (storage.cache_couples
                    if self.is_cache_couple else
-                   storage.couples)
+                   storage.replicas_groupsets)
         couple = couples[self.couple]
 
         for g in couple.groups:
@@ -52,9 +54,10 @@ class CoupleDefragJob(Job):
         self.resources = resources
 
     def create_tasks(self):
+        # TODO: use 'couples' container
         couples = (storage.cache_couples
                    if self.is_cache_couple else
-                   storage.couples)
+                   storage.replicas_groupsets)
         if not self.couple in couples:
             raise JobBrokenError('Couple {0} is not found'.format(self.couple))
 

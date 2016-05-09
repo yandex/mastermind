@@ -300,6 +300,12 @@ class Job(MongoObject):
                 ['{0}{1}'.format(self.COUPLE_LOCK_PREFIX, couple)
                  for couple in self._involved_couples])
 
+    @property
+    def involved_uncoupled_groups(self):
+        '''Returns uncoupled groups' ids that are involved in the job
+        '''
+        return []
+
     def check_node_backends(self, group, node_backends_count=1):
         if len(group.node_backends) != node_backends_count:
             raise JobBrokenError('Group {0} cannot be used for job, '

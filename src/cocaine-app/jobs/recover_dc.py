@@ -36,7 +36,7 @@ class RecoverDcJob(Job):
     def new(cls, *args, **kwargs):
         job = super(RecoverDcJob, cls).new(*args, **kwargs)
         try:
-            couple = storage.couples[kwargs['couple']]
+            couple = storage.replicas_groupsets[kwargs['couple']]
             keys = []
 
             for g in couple.groups:
@@ -66,7 +66,7 @@ class RecoverDcJob(Job):
             Job.RESOURCE_FS: [],
         }
 
-        couple = storage.couples[self.couple]
+        couple = storage.replicas_groupsets[self.couple]
         for g in couple.groups:
             resources[Job.RESOURCE_HOST_IN].append(g.node_backends[0].node.host.addr)
             resources[Job.RESOURCE_HOST_OUT].append(g.node_backends[0].node.host.addr)
@@ -83,10 +83,10 @@ class RecoverDcJob(Job):
 
     def create_tasks(self):
 
-        if not self.couple in storage.couples:
+        if not self.couple in storage.replicas_groupsets:
             raise JobBrokenError('Couple {0} is not found'.format(self.couple))
 
-        couple = storage.couples[self.couple]
+        couple = storage.replicas_groupsets[self.couple]
 
         recover_cmd = infrastructure._recover_group_cmd(
             self.group,

@@ -12,7 +12,7 @@ logger = logging.getLogger('mm.jobs')
 class CoupleDefragStateCheckTask(Task):
 
     PARAMS = ('couple', 'stats_ts')
-    TASK_TIMEOUT = 60 * 60 * 24 * 2  # 2 days
+    TASK_TIMEOUT = 60 * 60 * 24 * 14  # 14 days
 
     def __init__(self, job):
         super(CoupleDefragStateCheckTask, self).__init__(job)
@@ -23,9 +23,10 @@ class CoupleDefragStateCheckTask(Task):
         pass
 
     def execute(self):
+        # TODO: use 'couples' container
         couples = (storage.cache_couples
                    if self.parent_job.is_cache_couple else
-                   storage.couples)
+                   storage.replicas_groupsets)
 
         couple = couples[self.couple]
 
@@ -40,20 +41,19 @@ class CoupleDefragStateCheckTask(Task):
             stats_ts.extend(s.ts for s in stats)
         self.stats_ts = max(stats_ts)
 
-    @property
-    def finished(self):
+    def finished(self, processor):
         return (self.__couple_defraged() or
                 time.time() - self.start_ts > self.TASK_TIMEOUT)
 
-    @property
-    def failed(self):
+    def failed(self, processor):
         return (time.time() - self.start_ts > self.TASK_TIMEOUT and
                 not self.__couple_defraged())
 
     def __couple_defraged(self):
+        # TODO: use 'couples' container
         couples = (storage.cache_couples
                    if self.parent_job.is_cache_couple else
-                   storage.couples)
+                   storage.replicas_groupsets)
         couple = couples[self.couple]
         stats = []
         for group in couple.groups:

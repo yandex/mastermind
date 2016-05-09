@@ -19,6 +19,7 @@ from load_manager import load_manager
 from mastermind import helpers as mh
 from mastermind.pool import skip_exceptions
 from mastermind_core.response import CachedGzipResponse
+from mastermind_core import errors
 from monitor_pool import monitor_pool
 import timed_queue
 import storage
@@ -35,6 +36,7 @@ class NodeInfoUpdater(object):
     def __init__(self,
                  node,
                  job_finder,
+                 couple_record_finder=None,
                  prepare_namespaces_states=False,
                  prepare_flow_stats=False,
                  statistics=None):
@@ -42,6 +44,7 @@ class NodeInfoUpdater(object):
         self.__node = node
         self.statistics = statistics
         self.job_finder = job_finder
+        self.couple_record_finder = couple_record_finder
         self._namespaces_states = CachedGzipResponse()
         self._flow_stats = {}
         self.__tq = timed_queue.TimedQueue()
@@ -460,55 +463,40 @@ class NodeInfoUpdater(object):
 
         _queue = set()
 
-        def _process_group_metadata(response, group, elapsed_time=None, end_time=None):
-            logger.debug('Cluster updating: group {0} meta key read time: {1}.{2}'.format(
-                group.group_id, elapsed_time.tsec, elapsed_time.tnsec))
-            meta = response.data
+        def _get_data_groups(group):
+            return group.meta['couple']
 
-            group.parse_meta(meta)
-            couple = group.meta.get('couple')
-            if couple is None:
-                logger.error('Read symmetric groups from group {} (no couple data): {}'.format(
-                    group.group_id, group.meta))
-                return
+        def _get_lrc_groups(group):
+            return group.meta['lrc']['groups']
 
-            logger.info('Read symmetric groups from group {}: {}'.format(group.group_id, couple))
-            for gid in couple:
-                if gid != group.group_id:
-                    logger.info('Scheduling update for group {}'.format(gid))
-                    _queue.add(gid)
+        def _create_groupset_if_needed(groups, group_type, ns_id):
 
-            couple_str = ':'.join((str(gid) for gid in sorted(couple)))
+            for gid in groups:
+                if gid not in storage.groups:
+                    logger.info(
+                        'Group {group} is not found, adding fake group '
+                        'for groupset {groups}'.format(
+                            group=gid,
+                            groups=groups,
+                        )
+                    )
+                    storage.groups.add(gid)
 
-            logger.debug('{0} in storage.couples: {1}'.format(
-                couple_str, couple_str in storage.couples))
+            groupset_str = ':'.join((str(gid) for gid in sorted(groups)))
+            if groupset_str not in storage.groupsets:
+                # TODO: somehow check that couple type matches group.type
+                # for all groups in couple (not very easy when metakey read
+                # fails)
+                logger.info('Creating groupset {groups}, group type "{group_type}"'.format(
+                    groups=groupset_str,
+                    group_type=group_type,
+                ))
+                c = storage.groupsets.add(
+                    groups=(storage.groups[gid] for gid in groups),
+                    group_type=group_type,
+                )
 
-            if couple_str not in storage.couples and couple_str not in storage.cache_couples:
-
-                ns_id = group.meta.get('namespace')
-                if ns_id is None:
-                    logger.error('Inconsistent meta read from group {}, '
-                                 'missing namespace: {}'.format(group, group.meta))
-                    return
-
-                if group.type == storage.Group.TYPE_DATA:
-                    logger.info('Creating couple {0}'.format(couple_str))
-                    for gid in couple:
-                        if gid not in storage.groups:
-                            logger.info('Group {} is not found adding fake group for '
-                                        'couple {}'.format(gid, couple))
-                            storage.groups.add(gid)
-                    c = storage.couples.add(storage.groups[gid] for gid in couple)
-                    logger.info('Created couple {0} {1}'.format(c, repr(c)))
-                elif group.type == storage.Group.TYPE_CACHE:
-                    logger.info('Creating cache couple {0}'.format(couple_str))
-                    c = storage.cache_couples.add(storage.groups[gid] for gid in couple)
-                    logger.info('Created cache couple {0} {1}'.format(c, repr(c)))
-                else:
-                    raise ValueError('Unknown group type for group {}: {}'.format(
-                        group, group.type))
-
-                for gid in couple:
+                for gid in groups:
                     infrastructure.update_group_history(storage.groups[gid])
 
                 if ns_id not in storage.namespaces:
@@ -518,6 +506,89 @@ class NodeInfoUpdater(object):
                     ns = storage.namespaces[ns_id]
 
                 ns.add_couple(c)
+            return storage.groupsets[groupset_str]
+
+        def _process_group_metadata(response, group, elapsed_time=None, end_time=None):
+            logger.debug('Cluster updating: group {0} meta key read time: {1}.{2}'.format(
+                group.group_id, elapsed_time.tsec, elapsed_time.tnsec))
+
+            if response.error.code:
+                if response.error.code == errors.ELLIPTICS_NOT_FOUND:
+                    # This group is some kind of uncoupled group, not an error
+                    group.parse_meta(None)
+                    logger.info(
+                        'Group {group} has no metakey'.format(group=group)
+                    )
+                elif response.error.code in (
+                    # Route list did not contain the group, expected error
+                    errors.ELLIPTICS_GROUP_NOT_IN_ROUTE_LIST,
+                    # Timeout in reading metakey from the group, expected error
+                    errors.ELLIPTICS_TIMEOUT,
+                ):
+                    group.reset_meta()
+                    logger.error(
+                        'Error on updating metakey from group {group}: {error}'.format(
+                            group=group,
+                            error=response.error.message,
+                        )
+                    )
+                else:
+                    raise RuntimeError(response.error.mssage)
+
+                return
+
+            meta = response.data
+
+            group.parse_meta(meta)
+
+            if group.type == storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1:
+                return
+
+            ns_id = group.meta.get('namespace')
+            if ns_id is None:
+                logger.error(
+                    'Inconsistent meta read from group {group}, missing namespace: {meta}'.format(
+                        group=group,
+                        meta=group.meta,
+                    )
+                )
+                return
+
+            if group.type == storage.Group.TYPE_DATA:
+                groups = _get_data_groups(group)
+            elif group.type == storage.Group.TYPE_LRC_8_2_2_V1:
+                groups = _get_lrc_groups(group)
+            elif group.type == storage.Group.TYPE_CACHE:
+                groups = _get_data_groups(group)
+            else:
+                raise RuntimeError(
+                    'Group {group_id}, unexpected type to process: {type}'.format(
+                        group_id=group.group_id,
+                        type=group.type,
+                    )
+                )
+
+            logger.info('Read symmetric groups from group {}: {}'.format(group.group_id, groups))
+
+            for gid in groups:
+                if gid != group.group_id:
+                    logger.info('Scheduling update for group {}'.format(gid))
+                    _queue.add(gid)
+
+            groupset = _create_groupset_if_needed(groups, group.type, ns_id)
+
+            if group.type == storage.Group.TYPE_LRC_8_2_2_V1:
+                # TODO: this will become unnecessary when new "Couple" instance
+                # is introduced
+                data_groups = _get_data_groups(group)
+                data_groupset = _create_groupset_if_needed(
+                    data_groups,
+                    storage.Group.TYPE_DATA,
+                    ns_id
+                )
+                data_groupset.lrc822v1_groupset = groupset
+                # TODO: this should point to a new "Couple" object
+                groupset.couple = data_groupset
             return
 
         try:
@@ -526,6 +597,8 @@ class NodeInfoUpdater(object):
             results = {}
             for group in check_groups:
                 session = self.__session.clone()
+                session.set_exceptions_policy(elliptics.exceptions_policy.no_exceptions)
+                session.set_filter(elliptics.filters.all_with_ack)
                 session.add_groups([group.group_id])
 
                 logger.debug('Request to read {0} for group {1}'.format(
@@ -539,12 +612,15 @@ class NodeInfoUpdater(object):
                     if groups:
                         params['groups'] = [g.group_id for g in groups]
                     for job in self.job_finder.jobs(**params):
-                        jobs[job.group] = job
+                        # TODO: this should definitely be done some other way
+                        if hasattr(job, 'group'):
+                            jobs[job.group] = job
                 except Exception as e:
                     logger.exception('Failed to fetch pending jobs: {0}'.format(e))
                     pass
 
             while results:
+                # TODO: Think on queue, it does not work well with lrc couples
                 if _queue:
                     group_id = _queue.pop()
                     if group_id not in results:
@@ -556,14 +632,16 @@ class NodeInfoUpdater(object):
                 group = storage.groups[group_id]
 
                 try:
-                    h.process_elliptics_async_result(result, _process_group_metadata, group)
-                except elliptics.NotFoundError as e:
-                    logger.warn('Failed to read symmetric_groups from group {0}: {1}'.format(
-                        group_id, e))
-                    group.parse_meta(None)
+                    h.process_elliptics_async_result(
+                        result,
+                        _process_group_metadata,
+                        group,
+                        raise_on_error=False,
+                    )
                 except Exception as e:
-                    logger.exception('Failed to read symmetric_groups from group {0}: {1}'.format(
-                        group_id, e))
+                    logger.exception(
+                        'Critical error on updating metakey from group {}'.format(group_id)
+                    )
                     group.parse_meta(None)
                 finally:
                     try:
@@ -578,6 +656,7 @@ class NodeInfoUpdater(object):
                         pass
 
             if groups is None:
+                self.update_couple_settings()
                 load_manager.update(storage)
                 weight_manager.update(storage)
 
@@ -585,6 +664,26 @@ class NodeInfoUpdater(object):
 
         except Exception as e:
             logger.exception('Critical error during symmetric group update')
+
+    def update_couple_settings(self):
+        if not self.couple_record_finder:
+            # case for side worker that don't need access to couple settings
+            return
+        for cr in self.couple_record_finder.couple_records():
+            if cr.couple_id not in storage.groups:
+                logger.error('Couple record exists, but couple {couple} is not found'.format(
+                    couple=cr.couple_id,
+                ))
+            group = storage.groups[cr.couple_id]
+            if not group.couple:
+                logger.error(
+                    'Couple record exists and group {group} is found, '
+                    'but does not participate in any couple'.format(
+                        group=group.group_id,
+                    )
+                )
+            couple = group.couple
+            couple.settings = cr.settings
 
     @h.concurrent_handler
     def force_update_namespaces_states(self, request):
@@ -628,7 +727,8 @@ class NodeInfoUpdater(object):
             res[ns]['settings'] = settings
 
         # couples
-        for couple in storage.couples:
+        # TODO: should we count lrc groupsets here?
+        for couple in storage.replicas_groupsets:
             try:
                 try:
                     ns = couple.namespace
@@ -658,6 +758,9 @@ class NodeInfoUpdater(object):
         # statistics
         for ns, stats in self.statistics.per_ns_statistics().iteritems():
             res[ns]['statistics'] = stats
+
+        # removing internal namespaces that clients should not know about
+        res.pop(storage.Group.CACHE_NAMESPACE, None)
 
         self._namespaces_states.set_result(dict(res))
 

@@ -53,6 +53,16 @@ def get_balancer_node_types():
     return BALANCER_NODE_TYPES
 
 
+def get_node_types():
+    '''
+    A list of infrastructure node types.
+    Node types represent hardware hierarchy and are used to build cluster tree.
+    Each node type represent a corresponding level of the cluster tree.
+    NOTE: node types should be sorted in top-to-bottom order, e.g ['dc', 'router', 'host'].
+    '''
+    return [DC_NODE_TYPE]
+
+
 def get_dc_node_type():
     '''
     Returns dc node type.
@@ -140,3 +150,32 @@ def get_host_ip_addresses(hostname):
         ip_address = sockaddr[0]
         ip_addresses.setdefault(family, []).append(ip_address)
     return ip_addresses
+
+
+def get_new_group_files(group_id, total_space):
+    '''
+    Get files required for the new group to be created
+
+    Files will be created on a filesystem in group's base directory by mastermind-minion.
+    They can be helpful if elliptics is configured by automatic scripts
+    that examine the contents of group's base directory.
+    Filename should be relative to group's base directory.
+
+    Returns:
+        {
+            <filename1>: <file content>,
+            <filename2>: <file content>,
+            ...
+        }
+    '''
+    return {}
+
+
+def get_node_config_path(node):
+    '''
+    Get path to config file of node <node>
+
+    This config path can be used by mastermind-minion for fetching
+    any elliptics config parameters.
+    '''
+    return '/etc/elliptics/elliptics.conf'

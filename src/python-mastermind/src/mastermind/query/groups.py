@@ -1,6 +1,8 @@
 import copy
 
 from mastermind.query import Query, LazyDataObject
+import mastermind.query.groupsets
+from mastermind.query.node_backends import NodeBackend
 from mastermind.query.history import GroupHistory
 
 
@@ -34,8 +36,19 @@ class GroupsQuery(Query):
         """Filter groups list.
 
         Keyword args:
-          uncoupled:
+          uncoupled (deprecated - use 'type' == 'uncoupled'):
             get groups that are not assigned to any couple.
+          type:
+            filter groups by type:
+
+              uncoupled: uncoupled data groups (no metakey);
+              data: simple data groups;
+              cache: cache groups for popular keys;
+              uncoupled_cache: cache groups that are not yet marked by mastermind;
+              lrc-8-2-2-v1: lrc data groups (scheme 8-2-2 version 1);
+              uncoupled_lrc-8-2-2-v1: uncoupled lrc groups prepared
+                for data convert (scheme 8-2-2 version 1);
+
           in_jobs:
             get groups that are participating in any active jobs.
           state:
@@ -60,6 +73,8 @@ class GroupsQuery(Query):
             updated_filter['in_jobs'] = kwargs['in_jobs']
         if 'state' in kwargs:
             updated_filter['state'] = kwargs['state']
+        if 'type' in kwargs:
+            updated_filter['type'] = kwargs['type']
         return GroupsQuery(self.client, filter=updated_filter)
 
 
@@ -85,6 +100,30 @@ class GroupDataObject(LazyDataObject):
     @LazyDataObject._lazy_load
     def node_backends(self):
         return self._data['node_backends']
+
+    @property
+    @LazyDataObject._lazy_load
+    def groupset_id(self):
+        return self._data['groupset']
+
+    @property
+    @LazyDataObject._lazy_load
+    def couple_id(self):
+        return self._data['couple']
+
+    def _preprocess_raw_data(self, data):
+        node_backends = []
+        for nb_data in data['node_backends']:
+            node_backends.append(NodeBackend.from_data(nb_data, self.client))
+        data['node_backends'] = node_backends
+
+        return data
+
+    def serialize(self):
+        data = super(GroupDataObject, self).serialize()
+        node_backends = [nb.serialize() for nb in data['node_backends']]
+        data['node_backends'] = node_backends
+        return data
 
 
 class GroupQuery(Query):
@@ -122,6 +161,18 @@ class GroupQuery(Query):
         history_data = self.client.request('get_group_history', [self.id])
         return GroupHistory(couples=history_data['couples'],
                             nodes=history_data['nodes'])
+
+    @property
+    def groupset(self):
+        if self.groupset_id is None:
+            return None
+        return mastermind.query.groupsets.Groupset(self.groupset_id, client=self.client)
+
+    @property
+    def couple(self):
+        if self.couple_id is None:
+            return None
+        return mastermind.query.couples.Couple(self.couple_id, client=self.client)
 
 
 class Group(GroupQuery, GroupDataObject):

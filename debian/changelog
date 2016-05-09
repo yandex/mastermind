@@ -1,3 +1,129 @@
+mastermind (2.27.18) trusty; urgency=medium
+
+  * Fix constructing jobs' involved groups list
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 04 May 2016 14:47:17 +0300
+
+mastermind (2.27.17) trusty; urgency=medium
+
+  * Add weight coefficient for outgoing traffic
+  * Not perform rollback on couple repair
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 29 Apr 2016 03:59:48 +0300
+
+mastermind (2.27.16) trusty; urgency=medium
+
+  * Use family when detaching node backend from group
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 11 Apr 2016 16:25:30 +0300
+
+mastermind (2.27.15) trusty; urgency=medium
+
+  * Add defrag startup timeout
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 11 Apr 2016 13:09:36 +0300
+
+mastermind (2.27.14) trusty; urgency=medium
+
+  * Add backward compatibility of NodeBackend binding object
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sun, 10 Apr 2016 14:25:51 +0300
+
+mastermind (2.27.13) trusty; urgency=medium
+
+  * Add NodeBackend binding object
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sun, 10 Apr 2016 14:15:13 +0300
+
+mastermind (2.27.12) trusty; urgency=medium
+
+  * Add new BAD_* statuses for LRC Groupset
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 08 Apr 2016 16:54:16 +0300
+
+mastermind (2.27.11) trusty; urgency=medium
+
+  * Fix couple freeze meta compose
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 05 Apr 2016 19:20:08 +0300
+
+mastermind (2.27.10) trusty; urgency=medium
+
+  * Fix 'couple settings' in for mastermind-cli
+  * Format log messages
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 31 Mar 2016 18:04:19 +0300
+
+mastermind (2.27.9) trusty; urgency=medium
+
+  * Fix couple groupset attachment
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 31 Mar 2016 14:12:23 +0300
+
+mastermind (2.27.8) trusty; urgency=medium
+
+  * Add 'attach_groupset_to_couple' handle
+  * Make groupsets responsible for generating its metakey
+  * Skip uncoupled lrc groups meta processing
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 30 Mar 2016 16:35:07 +0300
+
+mastermind (2.27.7) trusty; urgency=medium
+
+  * Add couple settings
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 29 Mar 2016 15:39:09 +0300
+
+mastermind (2.27.6) trusty; urgency=medium
+
+  * Fix couple build parameters
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 28 Mar 2016 18:38:14 +0300
+
+mastermind (2.27.5) trusty; urgency=medium
+
+  * Add 'couple' attribute to binding Groupset object
+  * Account new cache key distribute tasks
+  * Add various binding features
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sun, 27 Mar 2016 21:11:22 +0300
+
+mastermind (2.27.4) trusty; urgency=medium
+
+  * Add support of groupsets in couple build method of mastermind client
+  * Add 'groupsets' property to couple object
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 25 Mar 2016 22:20:34 +0300
+
+mastermind (2.27.3) trusty; urgency=medium
+
+  * Skip internatl namespaces in client APIs
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 25 Mar 2016 13:00:34 +0300
+
+mastermind (2.27.2) trusty; urgency=medium
+
+  * Add python-requests dependency
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 24 Mar 2016 20:19:40 +0300
+
+mastermind (2.27.1) trusty; urgency=medium
+
+  * Add lrc commands to mastermind-cli
+  * Add group filtering by 'type'
+  * Add LRC builder to select groups for future LRC groupsets
+  * Add lrc groupsets representation object
+  * Add make lrc group job type
+  * Divide groupsets by different types
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 24 Mar 2016 15:11:28 +0300
+
+mastermind (2.26.6) trusty; urgency=medium
+
+  * Increase defrag check timeout to 14 days
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 21 Mar 2016 14:20:39 +0300
+
 mastermind (2.26.5) trusty; urgency=medium
 
   * Make recover planner coefficients configurable
