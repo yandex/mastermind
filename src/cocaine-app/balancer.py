@@ -587,16 +587,12 @@ class Balancer(object):
         if 'settings' not in request:
             raise ValueError('Request should contain "settings" field')
 
-        if request['type'] == 'lrc':
-            if 'part_size' not in request['settings']:
-                raise ValueError('Lrc groupset requires "part_size" setting')
-            if 'scheme' not in request['settings']:
-                raise ValueError('Lrc groupset requires "scheme" setting')
-
         Groupset = storage.groupsets.make_groupset_type(
             type=request['type'],
             settings=request['settings'],
         )
+
+        Groupset.check_settings(request['settings'])
 
         groupset = Groupset(groups=groups)
         storage.groupsets.add_groupset(groupset)

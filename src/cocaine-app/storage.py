@@ -2360,6 +2360,12 @@ class Couple(Groupset):
             'frozen': self.frozen,
         }
 
+    @staticmethod
+    def check_settings(settings):
+        if 'frozen' in settings:
+            if not isinstance(settings['frozen'], bool):
+                raise ValueError('Replicas groupset "frozen" setting must be bool')
+
 
 class Lrc822v1Groupset(Groupset):
     def __init__(self, groups):
@@ -2576,6 +2582,21 @@ class Lrc822v1Groupset(Groupset):
             'scheme': Lrc.Scheme822v1.ID,
             'part_size': self.part_size,
         }
+
+    @staticmethod
+    def check_settings(settings):
+        if 'scheme' not in settings:
+            raise ValueError('Lrc groupset requires "scheme" setting')
+
+        if not Lrc.check_scheme(settings['scheme']):
+            raise ValueError('Unknown LRC scheme "{}"'.format(settings['scheme']))
+
+        if 'part_size' not in settings:
+            raise ValueError('Lrc groupset requires "part_size" setting')
+
+        part_size = settings['part_size']
+        if not isinstance(part_size, int) or part_size <= 0:
+            raise ValueError('"part_size" must be a positive integer')
 
 
 class DcNodes(object):
