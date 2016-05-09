@@ -2,6 +2,7 @@
 import datetime
 import errno
 import functools
+import itertools
 import helpers as h
 import logging
 import math
@@ -17,7 +18,9 @@ from jobs.job_types import JobTypes
 from infrastructure import infrastructure
 from infrastructure_cache import cache
 from config import config
+import lrc_builder
 from mastermind.query.couples import Couple as CoupleInfo
+from mastermind.query.groupsets import Groupset as GroupsetInfo
 from mastermind.query.groups import Group as GroupInfo
 
 logger = logging.getLogger('mm.storage')
@@ -49,14 +52,205 @@ class Status(object):
     STALLED = 'STALLED'
     FROZEN = 'FROZEN'
 
+    ARCHIVED = 'ARCHIVED'  # for couples with LRC groupsets
+
+    # LRC groupsets: unrecoverable configuration of stripe
+    # parts is unavailable at the moment because corresponding groups
+    # are in not-OK state;
+    BAD_DATA_UNAVAILABLE = 'BAD_DATA_UNAVAILABLE'
+
+    # LRC groupsets: an index shard of three groups
+    # is unavailable at the moment because correspoding groups
+    # are in not-OK state;
+    BAD_INDICES_UNAVAILABLE = 'BAD_INDICES_UNAVAILABLE'
+
     MIGRATING = 'MIGRATING'
 
     SERVICE_ACTIVE = 'SERVICE_ACTIVE'
     SERVICE_STALLED = 'SERVICE_STALLED'
 
+    def __init__(self, code, text):
+        self.code = code
+        self.text = text
+
 
 GOOD_STATUSES = set([Status.OK, Status.FULL])
 NOT_BAD_STATUSES = set([Status.OK, Status.FULL, Status.FROZEN])
+
+
+def generate_lrc822v1_bad_parts_indices():
+
+    # TODO: add tests to check indices generation
+
+    combinations = itertools.combinations
+    izip = itertools.izip
+
+    local_groups = (
+        (0, 1, 2, 3),  # first local group
+        (4, 5, 6, 7),  # second local group
+    )
+    local_parity = (
+        (8,),  # local parity for first local group
+        (9,),  # local parity for second local group
+    )
+    global_parity = (10, 11)
+
+    indices = []
+
+    # all 4 data parts from local group
+    for local_parts_ids in local_groups:
+        indices.append(local_parts_ids)
+
+    # 3 data parts from a local group + 1 corresponding local parity part
+    for parts_ids, lp_parts_ids in izip(local_groups, local_parity):
+        for data_parts_ids in combinations(parts_ids, 3):
+            indices.append(data_parts_ids + lp_parts_ids)
+
+    # 3 data parts from a local group + 1 global parity part
+    for parts_ids in local_groups:
+        for data_parts_ids in combinations(parts_ids, 3):
+            for gp_parts_ids in combinations(global_parity, 1):
+                indices.append(data_parts_ids + gp_parts_ids)
+
+    # 2 data parts from a local group + 2 global parts
+    for parts_ids in local_groups:
+        for data_parts_ids in combinations(parts_ids, 2):
+            indices.append(data_parts_ids + global_parity)
+
+    # 2 data parts from a local group + 1 corresponding local parity part + 1 global part
+    for parts_ids, lp_parts_ids in izip(local_groups, local_parity):
+        for data_parts_ids in combinations(parts_ids, 2):
+            for gp_parts_ids in combinations(global_parity, 1):
+                indices.append(data_parts_ids + lp_parts_ids + gp_parts_ids)
+
+    # 1 data part from a local group + 1 corresponding local parity part + 2 global parts
+    for parts_ids, lp_parts_ids in izip(local_groups, local_parity):
+        for data_parts_ids in combinations(parts_ids, 1):
+            indices.append(data_parts_ids + lp_parts_ids + global_parity)
+
+    return [
+        tuple(sorted(part_ids))
+        for part_ids in indices
+    ]
+
+
+class Lrc(object):
+
+    class Scheme822v1(object):
+        """ LRC scheme 8-2-2 (version 1)
+
+        This object is a collection of routines and constants relevant
+        to LRC scheme 8-2-2 (version 1).
+        """
+
+        ID = 'lrc-8-2-2-v1'
+
+        @staticmethod
+        def order_groups(groups_lists):
+            """ Order groups from groups_lists using scheme's specific group ordering
+
+            Params:
+                groups_list: a list of lists, where each nested list consists
+                  of groups in a certain dc.
+                Example:
+                [
+                    [1001, 1002, 1003, 1004],  # groups for data parts 0, 1, 4, 5
+                    [1005, 1006, 1007, 1008],  # groups for data parts 2, 3, 6, 7
+                    [1009, 1010, 1011, 1012],  # groups for L1, L2, G1, G2 parity parts
+                ]
+
+            Returns:
+                A list of groups sorted in scheme specific order, e.g.:
+                [1001, 1002, 1005, 1006, 1003, 1004, 1007, 1008, 1009, 1010, 1011, 1012]
+            """
+            return (
+                groups_lists[0][0:2] +  # data parts 0, 1; located in DC 1
+                groups_lists[1][0:2] +  # data parts 2, 3; located in DC 2
+                groups_lists[0][2:4] +  # data parts 4, 5; located in DC 1
+                groups_lists[1][2:4] +  # data parts 6, 7; located in DC 2
+                groups_lists[2][0:4]    # parity parts L1, L2, G1, G2; located in DC 3
+            )
+
+        INDEX_SHARD_INDICES = [
+            # index groups shards
+            frozenset([0, 2, 8]),
+            frozenset([1, 3, 9]),
+            frozenset([4, 6, 10]),
+            frozenset([5, 7, 11]),
+        ]
+
+        @staticmethod
+        def get_unavailable_index_shard_indices(unavailable_data_parts_indices):
+            """ Checks if indices are partially unavailable
+
+            Index keys for each data key are sharded among LRC groups
+            in a groupset in a way that each shard contains of three copies
+            in three different DCs. If all three groups of shard are unavailable,
+            indices are considered partially unavailable.
+
+            Each shard occupies three groups of a column of LRC-8-2-2 scheme,
+            so there are 4 index shards:
+
+            0   1   4   5
+            2   3   6   7
+            8   9   10  11
+
+            Parameters:
+                unavailable_data_parts_indices: a list of indices of groups in lrc groupset
+                    that are unavailable for any reason.
+            """
+            unavailable_data_parts_indices = set(unavailable_data_parts_indices)
+            for indices in Lrc.Scheme822v1.INDEX_SHARD_INDICES:
+                if unavailable_data_parts_indices.issuperset(indices):
+                    # sorting is not required, but leads to group ids being
+                    # displayed in a sorted order
+                    return sorted(indices)
+            return None
+
+        BAD_DATA_PARTS_INDICES = set(generate_lrc822v1_bad_parts_indices())
+
+        @staticmethod
+        def is_data_partially_unavailable(unavailable_data_parts_indices):
+            """ Checks if data is partially unavailable
+
+            Data is considered partially unavailable when LRC stripe's
+            data part groups are not available at the moment and their
+            data cannot be restored using LRC restore mechanism.
+
+            LRC 8-2-2 scheme allows to restore not more than 4 data part
+            groups. Among all 4 groups combinations the ones that does not
+            allow data restoring are listed in 'BAD_DATA_PARTS_INDICES'.
+
+            Parameters:
+                unavailable_data_parts_indices: a list of indices of groups in lrc groupset
+                    that are unavailable for any reason.
+            """
+            if len(unavailable_data_parts_indices) > 4:
+                return True
+
+            if len(unavailable_data_parts_indices) < 4:
+                return False
+
+            unavailable_data_parts_indices = tuple(sorted(unavailable_data_parts_indices))
+            if unavailable_data_parts_indices in Lrc.Scheme822v1.BAD_DATA_PARTS_INDICES:
+                return True
+
+            return False
+
+        builder = lrc_builder.LRC_8_2_2_V1_Builder
+
+    @staticmethod
+    def make_scheme(scheme_id):
+        if scheme_id == Lrc.Scheme822v1.ID:
+            return Lrc.Scheme822v1
+        raise ValueError('Unknown LRC scheme "{}"'.format(scheme_id))
+
+    @staticmethod
+    def check_scheme(scheme_id):
+        try:
+            return bool(Lrc.make_scheme(scheme_id))
+        except ValueError:
+            return False
 
 
 class ResourceError(KeyError):
@@ -75,18 +269,21 @@ class Repositary(object):
         self.elements[e] = e
         return e
 
-    def get(self, key):
+    def get(self, key, default=None):
+        return self.elements.get(key, default)
+
+    def remove(self, key):
+        return self.elements.pop(key)
+
+    def __getitem__(self, key):
         try:
             return self.elements[key]
         except KeyError:
             raise ResourceError('{} {} is not found'.format(
                 self.resource_desc, key))
 
-    def remove(self, key):
-        return self.elements.pop(key)
-
-    def __getitem__(self, key):
-        return self.get(key)
+    def __setitem__(self, key, value):
+        self.elements[key] = value
 
     def __contains__(self, key):
         return key in self.elements
@@ -100,8 +297,191 @@ class Repositary(object):
     def keys(self):
         return self.elements.keys()
 
+    def values(self):
+        return self.elements.values()
+
+    def iterkeys(self):
+        return self.elements.iterkeys()
+
+    def itervalues(self):
+        return self.elements.itervalues()
+
     def __len__(self):
         return len(self.elements)
+
+
+class MultiRepository(object):
+    def __init__(self, repositories, resource_desc):
+        self._repositories = repositories
+        self.resource_desc = resource_desc
+        self.types = {}
+        for key, repo in repositories.iteritems():
+            setattr(self, key, repo)
+            self.types[key] = repo
+
+    def __contains__(self, key):
+        return any(key in r for r in self._repositories.itervalues())
+
+    def get(self, key, default=None):
+        for r in self._repositories.itervalues():
+            if key in r:
+                return r[key]
+        return default
+
+    def __getitem__(self, key):
+        for r in self._repositories.itervalues():
+            if key in r:
+                return r[key]
+        raise ResourceError('{} {} is not found'.format(
+            self.resource_desc, key))
+
+    def __setitem__(self, key):
+        raise NotImplemented('Key cannot be inserted directly into multi-repository')
+
+    def __delitem__(self, key):
+        for r in self._repositories.itervalues():
+            if key in r:
+                del r[key]
+                return
+        raise KeyError(key)
+
+    def add(self, *args, **kwargs):
+        raise NotImplemented('Key cannot be inserted directly into multi-repository')
+
+    def __iter__(self):
+        return itertools.chain(*(r.itervalues() for r in self._repositories.itervalues()))
+
+    def keys(self):
+        # list comprehension should be used here to fix keys lists
+        # when call to this method is performed
+        return itertools.chain(*[r.keys() for r in self._repositories.itevalues()])
+
+    def iterkeys(self):
+        return itertools.chain(*(r.iterkeys() for r in self._repositories.itervalues()))
+
+    def values(self):
+        # list comprehension should be used here to fix values lists
+        # when call to this method is performed
+        return itertools.chain(*[r.values() for r in self._repositories.itervalues()])
+
+    def itervalues(self):
+        return itertools.chain(*(r.itervalues() for r in self._repositories.itervalues()))
+
+    def items(self):
+        # list comprehension should be used here to fix items lists
+        # when call to this method is performed
+        return itertools.chain(*[r.items() for r in self._repositories.itervalues()])
+
+    def iteritems(self):
+        return itertools.chain(*(r.iteritems() for r in self._repositories.itervalues()))
+
+
+GROUPSET_REPLICAS = 'replicas'
+GROUPSET_LRC = 'lrc'
+GROUPSET_IDS = set([
+    GROUPSET_REPLICAS,
+    Lrc.Scheme822v1.ID,
+])
+
+
+class Groupsets(MultiRepository):
+
+    def __init__(self, replicas, lrc, resource_desc):
+        super(Groupsets, self).__init__(
+            {
+                GROUPSET_REPLICAS: replicas,
+                GROUPSET_LRC: lrc,
+            },
+            resource_desc=resource_desc,
+        )
+
+    def add(self, groups, group_type):
+        if group_type == Group.TYPE_DATA:
+            couple = self.replicas.add(groups)
+        elif group_type == Group.TYPE_CACHE:
+            # cache groups reside in replicas groupsets of a couple in special
+            # namespace
+            couple = self.replicas.add(groups)
+        elif group_type == Group.TYPE_LRC_8_2_2_V1:
+            couple = self.lrc.add(groups)
+        else:
+            raise TypeError(
+                'Cannot create couple for group type "{}"'.format(group_type)
+            )
+        return couple
+
+    def add_groupset(self, groupset):
+        if isinstance(groupset, Lrc822v1Groupset):
+            self.lrc[groupset] = groupset
+        elif isinstance(groupset, Couple):
+            self.replicas[groupset] = groupset
+        else:
+            raise TypeError(
+                'Unsupported groupset type {type} ({object})'.format(
+                    type=type(groupset).__name__,
+                    object=groupset,
+                )
+            )
+
+    def remove_groupset(self, groupset):
+        if isinstance(groupset, Lrc822v1Groupset):
+            self.lrc.remove(groupset)
+        elif isinstance(groupset, Couple):
+            self.replicas.remove(groupset)
+        else:
+            raise TypeError(
+                'Unsupported groupset type {type} ({object})'.format(
+                    type=type(groupset).__name__,
+                    object=groupset,
+                )
+            )
+
+    # TODO: move to Couple class when new "Couple" instance is introduced
+    @staticmethod
+    def get_couple(couple_id):
+        if isinstance(couple_id, int):
+            # TODO: this is a "new" couple id, we should be able to index
+            # couples by this id. Right now couple is checked against replicas
+            # groupset
+            group_id = int(couple_id)
+            if group_id not in groups:
+                raise ValueError('Couple {} is not found'.format(couple_id))
+            group = groups[group_id]
+            if not group.couple:
+                raise ValueError('Couple {} is not found'.format(couple_id))
+            return group.couple.couple
+        else:
+            return replicas_groupsets[couple_id]
+
+    @staticmethod
+    def get_groupset(group_or_groupset_id):
+        if isinstance(group_or_groupset_id, int):
+            if group_or_groupset_id not in groups:
+                raise ValueError('Group {} is not found'.format(group_or_groupset_id))
+            group = groups[group_or_groupset_id]
+            if group.couple is None:
+                raise ValueError('Group {} does not participate in any groupset'.format(
+                    group_or_groupset_id
+                ))
+            return group.couple
+        else:
+            return groupsets[group_or_groupset_id]
+
+    @staticmethod
+    def make_groupset(type, settings):
+        if type == GROUPSET_REPLICAS:
+            return Couple
+        elif type == GROUPSET_LRC:
+            scheme = settings['scheme']
+            if scheme == Lrc.Scheme822v1.ID:
+                return Lrc822v1Groupset
+        raise ValueError(
+            'Groupset of type "{type}" cannot be constructed '
+            'using settings {settings}'.format(
+                type=type,
+                settings=settings,
+            )
+        )
 
 
 class NodeStat(object):
@@ -919,6 +1299,15 @@ class NodeBackend(object):
         res = {}
 
         res['node'] = '{0}:{1}:{2}'.format(self.node.host, self.node.port, self.node.family)
+        res['id'] = '{node}:{port}:{family}/{backend_id}'.format(
+            node=self.node.host.addr,
+            port=self.node.port,
+            family=self.node.family,
+            backend_id=self.backend_id,
+        )
+        res['host'] = self.node.host.addr
+        res['port'] = self.node.port
+        res['family'] = self.node.family
         res['backend_id'] = self.backend_id
         res['addr'] = str(self)
         res['hostname'] = self.node.host.hostname_or_not
@@ -948,8 +1337,7 @@ class NodeBackend(object):
             res['io_blocking_size'] = self.stat.io_blocking_size
             res['io_nonblocking_size'] = self.stat.io_nonblocking_size
 
-        if self.base_path:
-            res['path'] = self.base_path
+        res['path'] = self.base_path or ''
 
         return res
 
@@ -981,14 +1369,19 @@ class Group(object):
     CACHE_NAMESPACE = 'storage_cache'
 
     TYPE_UNKNOWN = 'unknown'
+    TYPE_UNCOUPLED = 'uncoupled'
     TYPE_DATA = 'data'
     TYPE_CACHE = 'cache'
-    TYPE_UNMARKED = 'unmarked'
+    TYPE_UNCOUPLED_CACHE = 'uncoupled_cache'
+    TYPE_LRC_8_2_2_V1 = 'lrc-8-2-2-v1'
+    TYPE_UNCOUPLED_LRC_8_2_2_V1 = 'uncoupled_lrc-8-2-2-v1'
 
     AVAILABLE_TYPES = set([
         TYPE_DATA,
         TYPE_CACHE,
-        TYPE_UNMARKED,
+        TYPE_UNCOUPLED_CACHE,
+        TYPE_LRC_8_2_2_V1,
+        TYPE_UNCOUPLED_LRC_8_2_2_V1,
     ])
 
     def __init__(self, group_id, node_backends=None):
@@ -1000,8 +1393,39 @@ class Group(object):
         self.status_text = "Group %s is not inititalized yet" % (self)
         self.active_job = None
 
+        self._type = Group.TYPE_UNKNOWN
+
         for node_backend in node_backends or []:
             self.add_node_backend(node_backend)
+
+    @property
+    def type(self):
+        """ Return current group type
+
+        Groups can have different types depending
+        on the type of data they store or state they are in:
+            - unknown - group is known of but metakey was not read;
+            - uncoupled - group has no metakey (but can be assigned to a couple,
+            so don't forget to check status);
+            - data - group has metakey and belongs to a regular data couple;
+            - uncoupled_cache - group has no metakey but its path matches cache
+            groups' path from config (such group should be marked as 'cache');
+            - cache - group stores gatlinggun cache data;
+        """
+        if self._type == Group.TYPE_UNCOUPLED and self.couple:
+            # This is a special case for couples with some groups
+            # with empty meta key.
+            # When group belongs to a couple but is disabled or unavailable,
+            # it can be added to Storage before the group that it is coupled
+            # with or after. In former case mastermind cannot determine that
+            # this group is actually a 'data' group so it considers it
+            # 'uncoupled' one. But when cluster traversal is over mastermind has
+            # enough data for this group to become a 'data' one (since it now
+            # should have 'couple' attribute set up).
+            # NOTE: this condition can be evaluated to true only once after this
+            # group was added to Storage.
+            self._type = self._get_type(self.meta)
+        return self._type
 
     def add_node_backend(self, node_backend):
         self.node_backends.append(node_backend)
@@ -1021,18 +1445,62 @@ class Group(object):
                 return True
         return False
 
-    def parse_meta(self, meta):
-        if meta is None:
-            self.meta = None
-            return
+    def _get_type(self, meta):
 
-        parsed = msgpack.unpackb(meta)
-        if isinstance(parsed, (tuple, list)):
-            self.meta = {'version': 1, 'couple': parsed, 'namespace': self.DEFAULT_NAMESPACE, 'frozen': False}
-        elif isinstance(parsed, dict) and parsed['version'] == 2:
-            self.meta = parsed
+        if self.meta:
+            if 'type' in self.meta and self.meta['type'] not in self.AVAILABLE_TYPES:
+                logger.error('Unknown type "{type}" of group {group}'.format(
+                    group=self,
+                    type=self.meta['type'],
+                ))
+                return self.TYPE_UNKNOWN
+
+            return self.meta.get('type', self.TYPE_DATA)
+
         else:
-            raise Exception('Unable to parse meta')
+
+            if self._type != Group.TYPE_UNKNOWN:
+                # when meta is None keep current type if set
+                return self._type
+
+            if self.couple:
+                return Group.TYPE_DATA
+
+            def is_cache_group_backend(nb):
+                if not CACHE_GROUP_PATH_PREFIX:
+                    return False
+                return nb.base_path.startswith(CACHE_GROUP_PATH_PREFIX)
+
+            is_uncoupled_cache_group = any(is_cache_group_backend(nb) for nb in self.node_backends)
+            if is_uncoupled_cache_group:
+                return self.TYPE_UNCOUPLED_CACHE
+
+            return Group.TYPE_UNCOUPLED
+
+    def reset_meta(self):
+        self.meta = None
+
+    def parse_meta(self, raw_meta):
+
+        if raw_meta is None:
+            self.meta = None
+        else:
+            meta = msgpack.unpackb(raw_meta)
+
+            if isinstance(meta, (tuple, list)):
+                self.meta = {'version': 1, 'couple': meta, 'namespace': self.DEFAULT_NAMESPACE, 'frozen': False}
+            elif isinstance(meta, dict) and meta['version'] == 2:
+                self.meta = meta
+            else:
+                raise Exception('Unable to parse meta')
+
+        self._type = self._get_type(self.meta)
+        logger.debug(
+            'Group {group}: meta parsed, group type is determined as "{type}"'.format(
+                group=self,
+                type=self._type,
+            )
+        )
 
     def equal_meta(self, other):
         if type(self.meta) != type(other.meta):
@@ -1063,30 +1531,8 @@ class Group(object):
         return sum(nb.effective_space for nb in self.node_backends)
 
     @property
-    def type(self):
-
-        if self.meta:
-            if 'type' in self.meta and self.meta['type'] not in self.AVAILABLE_TYPES:
-                logger.error('Unknown type "{type}" of group {group}'.format(
-                    group=self,
-                    type=self.meta['type'],
-                ))
-                return self.TYPE_UNKNOWN
-
-            return self.meta.get('type', self.TYPE_DATA)
-
-        else:
-
-            def is_cache_group_backend(nb):
-                if not CACHE_GROUP_PATH_PREFIX:
-                    return False
-                return nb.base_path.startswith(CACHE_GROUP_PATH_PREFIX)
-
-            is_unmarked_cache_group = any(is_cache_group_backend(nb) for nb in self.node_backends)
-            if is_unmarked_cache_group:
-                return self.TYPE_UNMARKED
-            else:
-                return self.TYPE_DATA
+    def effective_free_space(self):
+        return sum(nb.free_effective_space for nb in self.node_backends)
 
     def update_status(self):
         """Updates group's own status.
@@ -1100,6 +1546,8 @@ class Group(object):
             self.status_text = ('Group {0} is in INIT state because there is '
                                 'no node backends serving this group'.format(self))
             return self.status
+
+        # TODO: add status INIT for group if .couple is None
 
         if FORBIDDEN_DHT_GROUPS and len(self.node_backends) > 1:
             self.status = Status.BROKEN
@@ -1195,11 +1643,20 @@ class Group(object):
 
     def info(self):
         g = GroupInfo(self.group_id)
-        data = {'id': self.group_id,
-                'status': self.status,
-                'status_text': self.status_text,
-                'node_backends': [nb.info() for nb in self.node_backends],
-                'couple': str(self.couple) if self.couple else None}
+        data = {
+            'id': self.group_id,
+            'status': self.status,
+            'status_text': self.status_text,
+            'node_backends': [nb.info() for nb in self.node_backends]
+        }
+
+        data['couple'] = None
+        if isinstance(self.couple, Groupset):
+            data['couple'] = str(self.couple.couple)
+
+        groupset_id = str(self.couple) if self.couple else None
+        data['groupset'] = groupset_id
+
         if self.meta:
             data['namespace'] = self.meta.get('namespace')
         if self.active_job:
@@ -1224,6 +1681,18 @@ class Group(object):
             'type': self.TYPE_CACHE,
             'namespace': self.CACHE_NAMESPACE,
             'couple': (self.group_id,)
+        }
+
+    @staticmethod
+    def compose_uncoupled_lrc_group_meta(lrc_groups, scheme):
+        if scheme == Lrc.Scheme822v1:
+            group_type = Group.TYPE_UNCOUPLED_LRC_8_2_2_V1
+        else:
+            raise ValueError('Unknown scheme: {}'.format(scheme))
+        return {
+            'version': 2,
+            'type': group_type,
+            'lrc_groups': lrc_groups,
         }
 
     @property
@@ -1258,7 +1727,7 @@ def status_change_log(f):
     return wrapper
 
 
-class Couple(object):
+class Groupset(object):
     def __init__(self, groups):
         self.status = Status.INIT
         self.namespace = None
@@ -1266,10 +1735,15 @@ class Couple(object):
         self.meta = None
         for group in self.groups:
             if group.couple:
-                raise Exception('Group %s is already in couple' % (repr(group)))
+                raise ValueError(
+                    'Group {group} is already in couple {group_couple}'.format(
+                        group=group,
+                        group_couple=group.couple,
+                    )
+                )
 
             group.couple = self
-        self.status_text = 'Couple {0} is not inititalized yet'.format(str(self))
+        self.status_text = 'Couple {} is not inititalized yet'.format(self)
         self.active_job = None
 
     def get_stat(self):
@@ -1278,53 +1752,23 @@ class Couple(object):
         except TypeError:
             return None
 
-    def account_job_in_status(self):
-        if self.status == Status.BAD:
-            if self.active_job and self.active_job['type'] in (JobTypes.TYPE_MOVE_JOB,
-                                                               JobTypes.TYPE_RESTORE_GROUP_JOB):
-                if self.active_job['status'] in (jobs.job.Job.STATUS_NEW,
-                                                 jobs.job.Job.STATUS_EXECUTING):
-                    self.status = Status.SERVICE_ACTIVE
-                    self.status_text = 'Couple {} has active job {}'.format(
-                        str(self), self.active_job['id'])
-                else:
-                    self.status = Status.SERVICE_STALLED
-                    self.status_text = 'Couple {} has stalled job {}'.format(
-                        str(self), self.active_job['id'])
-        return self.status
+    def _get_job_service_status(self):
+        service_job_types = (JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_RESTORE_GROUP_JOB)
+        running_job_statuses = (jobs.job.Job.STATUS_NEW, jobs.job.Job.STATUS_EXECUTING)
+        if self.active_job and self.active_job['type'] in service_job_types:
+            if self.active_job['status'] in running_job_statuses:
+                return Status(
+                    code=Status.SERVICE_ACTIVE,
+                    text='Couple {} has active job {}'.format(self, self.active_job['id']),
+                )
+            else:
+                return Status(
+                    code=Status.SERVICE_STALLED,
+                    text='Couple {} has stalled job {}'.format(self, self.active_job['id']),
+                )
+        return None
 
-    @status_change_log
-    def update_status(self):
-        statuses = [group.update_status() for group in self.groups]
-
-        for group in self.groups:
-            if not group.meta:
-                self.status = Status.BAD
-                self.status_text = "Couple's group {} has empty meta data".format(group)
-                return self.account_job_in_status()
-            if self.namespace != group.meta.get('namespace'):
-                self.status = Status.BAD
-                self.status_text = "Couple's namespace does not match namespace " \
-                                   "in group's meta data ('{}' != '{}')".format(
-                                       self.namespace, group.meta.get('namespace'))
-                return self.status
-
-        self.active_job = None
-        for group in self.groups:
-            if group.active_job:
-                self.active_job = group.active_job
-                break
-
-        if any(not self.groups[0].equal_meta(group) for group in self.groups):
-            self.status = Status.BAD
-            self.status_text = 'Couple {0} groups has unequal meta data'.format(str(self))
-            return self.account_job_in_status()
-
-        if any(group.meta and group.meta.get('frozen') for group in self.groups):
-            self.status = Status.FROZEN
-            self.status_text = 'Couple {0} is frozen'.format(str(self))
-            return self.status
-
+    def _check_dc_sharing(self):
         if FORBIDDEN_DC_SHARING_AMONG_GROUPS:
             # checking if any pair of groups has its node backends in same dc
             groups_dcs = []
@@ -1334,73 +1778,164 @@ class Couple(object):
                     try:
                         group_dcs.add(nb.node.host.dc)
                     except CacheUpstreamError:
-                        self.status_text = 'Failed to resolve dc for host {}'.format(nb.node.host)
-                        self.status = Status.BAD
-                        return self.status
+                        raise CacheUpstreamError(
+                            'Failed to resolve dc for host {}'.format(nb.node.host)
+                        )
                 groups_dcs.append(group_dcs)
 
-            dc_set = groups_dcs[0]
-            for group_dcs in groups_dcs[1:]:
+            dc_set = set()
+            for group_dcs in groups_dcs:
                 if dc_set & group_dcs:
-                    self.status = Status.BROKEN
-                    self.status_text = 'Couple {0} has nodes sharing the same DC'.format(str(self))
-                    return self.status
+                    return False
                 dc_set = dc_set | group_dcs
 
+        return True
+
+    @status_change_log
+    def update_status(self):
+        for group in self.groups:
+            group.update_status()
+
+        self.active_job = None
+        for group in self.groups:
+            if group.active_job:
+                self.active_job = group.active_job
+                break
+
+        new_status = self._calculate_status()
+        self.status = new_status.code
+        self.status_text = new_status.text
+
+    def _calculate_status(self):
+        raise NotImplemented('Method should be implemented in a derived class')
+
+    def _get_meta_unavailable_status(self):
+        for group in self.groups:
+            if not group.meta:
+                return (
+                    self._get_job_service_status() or
+                    Status(
+                        code=Status.BAD,
+                        text="Couple's group {} has empty meta data".format(group),
+                    )
+                )
+        return None
+
+    def _get_improper_namespace_status(self):
+        # NOTE: this check should be evaluated after '_get_meta_unavailable_status()'
+        # because it relies on group's 'meta' availability
+        for group in self.groups:
+            if self.namespace != group.meta.get('namespace'):
+                status_text = (
+                    "Couple {couple} namespace '{couple_ns}' does not match namespace "
+                    "in group {group} meta data '{group_ns}'".format(
+                        couple=self,
+                        couple_ns=self.namespace,
+                        group=group,
+                        group_ns=group.meta.get('namespace'),
+                    )
+                )
+                return Status(
+                    code=Status.BAD,
+                    text=status_text,
+                )
+        return None
+
+    def _get_unequal_meta_status(self):
+        # NOTE: this check should be evaluated after '_get_meta_unavailable_status()'
+        # because it relies on group's 'meta' availability
+        if not all(self.groups[0].equal_meta(group) for group in self.groups):
+            return (
+                self._get_job_service_status() or
+                Status(
+                    code=Status.BAD,
+                    text='Couple {} groups have unequal meta data'.format(self),
+                )
+            )
+        return None
+
+    def _get_couple_frozen_status(self):
+        # NOTE: this check should be evaluated after '_get_meta_unavailable_status()'
+        # because it relies on group's 'meta' availability
+        if any(group.meta.get('frozen') for group in self.groups):
+            return Status(
+                code=Status.FROZEN,
+                text='Couple {} is frozen'.format(self),
+            )
+        return None
+
+    def _get_unset_namespace_settings_status(self):
         if FORBIDDEN_NS_WITHOUT_SETTINGS:
-            is_cache_couple = self.namespace.id == Group.CACHE_NAMESPACE
-            if not infrastructure.ns_settings.get(self.namespace.id) and not is_cache_couple:
-                self.status = Status.BROKEN
-                self.status_text = ('Couple {} is assigned to a namespace {}, which is '
-                                    'not set up'.format(self, self.namespace))
-                return self.status
+            if self.namespace.id == Group.CACHE_NAMESPACE:
+                return None
+            if not infrastructure.ns_settings.get(self.namespace.id):
+                status_text = (
+                    'Couple {couple} is assigned to the namespace {namespace}, '
+                    'which is not set up'.format(
+                        couple=self,
+                        namespace=self.namespace,
+                    )
+                )
+                return Status(
+                    code=Status.BROKEN,
+                    text=status_text,
+                )
 
-        if all(st == Status.COUPLED for st in statuses):
+        return None
 
-            if FORBIDDEN_UNMATCHED_GROUP_TOTAL_SPACE:
-                group_stats = [g.get_stat() for g in self.groups]
-                total_spaces = [gs.total_space for gs in group_stats if gs]
-                if any(ts != total_spaces[0] for ts in total_spaces):
-                    self.status = Status.BROKEN
-                    self.status_text = ('Couple {0} has unequal total space in groups'.format(
-                        str(self)))
-                    return self.status
+    def _get_dc_sharing_status(self):
+        try:
+            if not self._check_dc_sharing():
+                return Status(
+                    code=Status.BROKEN,
+                    text='Couple {} has nodes sharing the same DC'.format(self),
+                )
+        except CacheUpstreamError as e:
+            return Status(
+                code=Status.BAD,
+                text=str(e),
+            )
+        return None
 
-            if self.is_full():
-                self.status = Status.FULL
-                self.status_text = 'Couple {0} is full'.format(str(self))
-            else:
-                self.status = Status.OK
-                self.status_text = 'Couple {0} is OK'.format(str(self))
+    def _get_broken_groups_status(self):
+        if any(g.status == Status.BROKEN for g in self.groups):
+            return Status(
+                code=Status.BROKEN,
+                text='Couple {} has broken groups'.format(self),
+            )
+        return None
 
-            return self.status
+    def _get_bad_groups_status(self):
+        if any(g.status == Status.BAD for g in self.groups):
+            status_text = (
+                'Couple {couple} has bad groups: [{groups_desc}]'.format(
+                    couple=self,
+                    groups_desc='; '.join(
+                        '{group}: {status_text}'.format(group=g, status_text=g.status_text)
+                        for g in self.groups
+                        if g.status == Status.BAD
+                    )
+                )
+            )
+            return (
+                self._get_job_service_status() or
+                Status(
+                    code=Status.BAD,
+                    text=status_text,
+                )
+            )
+        return None
 
-        if Status.INIT in statuses:
-            self.status = Status.INIT
-            self.status_text = 'Couple {0} has uninitialized groups'.format(str(self))
-
-        elif Status.BROKEN in statuses:
-            self.status = Status.BROKEN
-            self.status_text = 'Couple {0} has broken groups'.format(str(self))
-
-        elif Status.BAD in statuses:
-
-            group_status_texts = []
-            for group in filter(lambda g: g.status == Status.BAD, self.groups):
-                group_status_texts.append(group.status_text)
-            self.status = Status.BAD
-            self.status_text = 'Couple {} has bad groups: {}'.format(
-                str(self), ', '.join(group_status_texts))
-
-        elif Status.RO in statuses or Status.MIGRATING in statuses:
-            self.status = Status.BAD
-            self.status_text = 'Couple {0} has read-only groups'.format(str(self))
-
-        else:
-            self.status = Status.BAD
-            self.status_text = 'Couple {0} is bad for some reason'.format(str(self))
-
-        return self.account_job_in_status()
+    def _get_unmatched_total_space_status(self):
+        if FORBIDDEN_UNMATCHED_GROUP_TOTAL_SPACE:
+            group_stats = [g.get_stat() for g in self.groups]
+            total_spaces = [gs.total_space for gs in group_stats if gs]
+            if any(ts != total_spaces[0] for ts in total_spaces):
+                return Status(
+                    code=Status.BROKEN,
+                    text='Couple {} has unequal total space in groups'.format(self),
+                )
+        return None
 
     def check_groups(self, groups):
 
@@ -1432,17 +1967,11 @@ class Couple(object):
             group.meta = None
             group.update_status()
 
-        couples.remove(self)
+        global groupsets
+        groupsets.remove_groupset(self)
         self.groups = []
         self.status = Status.INIT
-
-    def compose_group_meta(self, namespace, frozen):
-        return {
-            'version': 2,
-            'couple': self.as_tuple(),
-            'namespace': namespace,
-            'frozen': bool(frozen),
-        }
+        self.couple = None
 
     RESERVED_SPACE_KEY = 'reserved-space-percentage'
 
@@ -1506,36 +2035,42 @@ class Couple(object):
     def as_tuple(self):
         return tuple(group.group_id for group in self.groups)
 
-    def info(self):
-        c = CoupleInfo(str(self))
+    def info_data(self):
         data = {'id': str(self),
-                'couple_status': self.status,
-                'couple_status_text': self.status_text,
+                'status': self.status,
+                'status_text': self.status_text,
+                'type': GROUPSET_REPLICAS,
+                'settings': {},
                 'tuple': self.as_tuple()}
         try:
             data['namespace'] = self.namespace.id
         except ValueError:
             pass
+
+        data['effective_space'] = 0
+        data['free_effective_space'] = 0
+        data['free_reserved_space'] = 0
+
         stat = self.get_stat()
         if stat:
-            data['free_space'] = int(stat.free_space)
-            data['used_space'] = int(stat.used_space)
             try:
                 data['effective_space'] = self.effective_space
                 data['free_effective_space'] = self.effective_free_space
                 data['free_reserved_space'] = self.free_reserved_space
             except ValueError:
                 # failed to determine couple's namespace
-                data['effective_space'], data['free_effective_space'] = 0, 0
-                data['free_reserved_space'] = 0
+                pass
 
         data['groups'] = [g.info().serialize() for g in self.groups]
         data['hosts'] = {
             'primary': []
         }
 
-        c._set_raw_data(data)
-        return c
+        # Renaming 'tuple' to 'group_ids' and keeping it backward-compatible for
+        # a while
+        data['group_ids'] = data['tuple']
+
+        return data
 
     FALLBACK_HOSTS_PER_DC = config.get('fallback_hosts_per_dc', 10)
 
@@ -1620,6 +2155,430 @@ class Couple(object):
         )
 
 
+class Couple(Groupset):
+
+    READ_PREFERENCE = 'read_preference'
+
+    DEFAULT_SETTINGS = {
+        READ_PREFERENCE: [GROUPSET_REPLICAS],
+    }
+
+    def __init__(self, groups):
+        super(Couple, self).__init__(groups)
+        # TODO: temporary variable to provide connection
+        # between replicas groupset and lrc groupset,
+        # should be removed when new "Couple" object is
+        # introduced
+        self.lrc822v1_groupset = None
+
+        # TODO: this should be a link to a new "Couple" instance
+        self.couple = self
+
+        self.settings = self.DEFAULT_SETTINGS
+
+    def info_data(self):
+        data = super(Couple, self).info_data()
+
+        # Replicas groupset should have 'couple' key
+        data['couple'] = str(self.couple)
+
+        # imitation of future "Couple"
+        data['groupsets'] = {}
+
+        # TODO: stop this nonsense when 'replicas' groupset is implemented
+        # What am I doing? Renaming parameters!!!
+        data['couple_status'] = self.status
+        data['couple_status_text'] = self.status_text
+
+        stat = self.get_stat()
+        if stat:
+            # TODO: make sure no one uses it
+            data['free_space'] = int(stat.free_space)
+            data['used_space'] = int(stat.used_space)
+
+        if self.lrc822v1_groupset:
+            data['groupsets'][Group.TYPE_LRC_8_2_2_V1] = self.lrc822v1_groupset.info().serialize()
+
+        data['settings'] = self.settings
+        # TODO: temporary backward compatibility, remove after libmastermind
+        # refactoring
+        data['read_preference'] = self.settings['read_preference']
+
+        return data
+
+    def _calculate_status(self):
+
+        # TODO: this checks should be evaluated after
+        # potentially threatening checks like bad_groups_status, etc.
+        meta_status = (
+            self._get_meta_unavailable_status() or
+            self._get_improper_namespace_status() or
+            self._get_unequal_meta_status() or
+            self._get_couple_frozen_status()
+        )
+        if meta_status:
+            return meta_status
+
+        settings_status = (
+            self._get_unset_namespace_settings_status() or
+            self._get_dc_sharing_status() or
+            self._get_broken_groups_status()
+        )
+        if settings_status:
+            return settings_status
+
+        bad_groups_status = self._get_bad_groups_status()
+        if bad_groups_status:
+            return bad_groups_status
+
+        if self.lrc822v1_groupset:
+            lrc_groups_status = (
+                self._get_migrating_groups_status() or
+                self._get_lrc_groupset_not_ro_groups_status()
+            )
+            if lrc_groups_status:
+                return lrc_groups_status
+
+            if all(g.status == Status.RO for g in self.groups):
+                # couple with lrc groupset is in good state
+                return Status(
+                    code=Status.ARCHIVED,
+                    text='Couple {} is archived'.format(self),
+                )
+        else:
+            groups_status = (
+                self._get_ro_groups_status() or
+                self._get_migrating_groups_status() or
+                self._get_init_groups_status() or
+                self._get_stalled_groups_status()
+            )
+            if groups_status:
+                return groups_status
+
+            if all(g.status == Status.COUPLED for g in self.groups):
+                # couple without lrc groupset is in good state
+
+                # TODO: move this check to meta_status group checks?
+                settings_status = self._get_unmatched_total_space_status()
+                if settings_status:
+                    return settings_status
+
+                if self.is_full():
+                    return Status(
+                        code=Status.FULL,
+                        text='Couple {} is full'.format(self),
+                    )
+                else:
+                    return Status(
+                        code=Status.OK,
+                        text='Couple {} is OK'.format(self),
+                    )
+
+        return Status(
+            code=Status.BAD,
+            text='Couple {} is bad for some reason'.format(self),
+        )
+
+    def _get_ro_groups_status(self):
+        if any(g.status == Status.RO for g in self.groups):
+            return (
+                self._get_job_service_status() or
+                Status(
+                    code=Status.BAD,
+                    text='Couple {} has read-only groups'.format(self),
+                )
+            )
+        return None
+
+    def _get_migrating_groups_status(self):
+        if any(g.status == Status.MIGRATING for g in self.groups):
+            return (
+                self._get_job_service_status() or
+                Status(
+                    code=Status.BAD,
+                    text='Couple {} has migrating groups'.format(self),
+                )
+            )
+        return None
+
+    def _get_init_groups_status(self):
+        if any(g.status == Status.INIT for g in self.groups):
+            return (
+                self._get_job_service_status() or
+                Status(
+                    code=Status.BAD,
+                    text='Couple {} has groups that are not initialized'.format(self),
+                )
+            )
+        return None
+
+    def _get_stalled_groups_status(self):
+        if any(g.status == Status.STALLED for g in self.groups):
+            return (
+                self._get_job_service_status() or
+                Status(
+                    code=Status.BAD,
+                    text='Couple {} has stalled groups'.format(self),
+                )
+            )
+        return None
+
+    def _get_lrc_groupset_not_ro_groups_status(self):
+        if not all(g.status == Status.RO for g in self.groups):
+            status_text = (
+                'Couple {couple} has groups with unexpected '
+                'status: [{groups_desc}], should all be RO'.format(
+                    couple=self,
+                    groups_desc='; '.join(
+                        '{group}: {status}'.format(group=g, status=g.status)
+                        for g in self.groups
+                        if g.status != Status.RO
+                    )
+                )
+            )
+            return Status(
+                code=Status.BAD,
+                text=status_text,
+            )
+        return None
+
+    def compose_group_meta(self, couple, settings):
+        return {
+            'version': 2,
+            'couple': self.as_tuple(),
+            'namespace': couple.namespace.id,
+            'frozen': bool(settings['frozen']),
+        }
+
+    def info(self):
+        c = CoupleInfo(str(self))
+        c._set_raw_data(self.info_data())
+        return c
+
+    @property
+    def groupset_settings(self):
+        return {
+            'frozen': self.frozen,
+        }
+
+
+class Lrc822v1Groupset(Groupset):
+    def __init__(self, groups):
+        super(Lrc822v1Groupset, self).__init__(groups)
+        # TODO: this should be a link to a new "Couple" instance
+        self.couple = None
+        self.scheme = Lrc.Scheme822v1.ID
+        self.part_size = None
+
+    def info_data(self):
+        data = super(Lrc822v1Groupset, self).info_data()
+
+        data['type'] = GROUPSET_LRC
+        data['settings'] = {
+            'scheme': self.scheme,
+            'part_size': self.part_size,
+        }
+        if self.couple:
+            data['couple'] = str(self.couple)
+        else:
+            data['couple'] = None
+
+        return data
+
+    def _check_dc_sharing(self):
+        # LRC groupsets are allowed to share dcs
+        return True
+
+    def update_status(self):
+        # update groupset attributes
+        metas = [g.meta for g in self.groups if g.meta]
+        if metas:
+            part_sizes = filter(None, (meta['lrc'].get('part_size') for meta in metas))
+            if not part_sizes:
+                raise ValueError('"part_size" is not set in metakey')
+            self.part_size = part_sizes[0]
+
+        super(Lrc822v1Groupset, self).update_status()
+
+    def _calculate_status(self):
+        lrc_data_parts_status = (
+            self._get_data_unavailable_status() or
+            self._get_indices_unavailable_status()
+        )
+        if lrc_data_parts_status:
+            return lrc_data_parts_status
+
+        # TODO: this checks should be evaluated after
+        # potentially threatening checks like bad_groups_status, etc.
+        meta_status = (
+            self._get_meta_unavailable_status() or
+            self._get_improper_namespace_status() or
+            self._get_unequal_part_size_status() or
+            self._get_improper_lrc_scheme_settings_status() or
+            self._get_unequal_meta_status()
+        )
+        if meta_status:
+            return meta_status
+
+        settings_status = (
+            self._get_unset_namespace_settings_status() or
+            self._get_broken_groups_status()
+        )
+        if settings_status:
+            return settings_status
+
+        groups_status = self._get_not_coupled_lrc_groups_status()
+        if groups_status:
+            return groups_status
+
+        if all(g.status == Status.COUPLED for g in self.groups):
+            # lrc groupset is in good state
+            return Status(
+                code=Status.ARCHIVED,
+                text='Lrc groupset {} is archived'.format(self),
+            )
+
+        return Status(
+            code=Status.BAD,
+            text='Groupset {} is bad for some reason'.format(self),
+        )
+
+    @property
+    def _unavailable_data_parts_indices(self):
+        return [
+            idx
+            for idx, group in enumerate(self.groups)
+            if group.status != Status.COUPLED
+        ]
+
+    def _get_data_unavailable_status(self):
+        unavailable_data_parts_indices = self._unavailable_data_parts_indices
+        if Lrc.Scheme822v1.is_data_partially_unavailable(unavailable_data_parts_indices):
+            status_text = (
+                'Data is partially unavailable (groups {groups} are not ok)'.format(
+                    groups=', '.join(
+                        str(self.groups[idx])
+                        for idx in unavailable_data_parts_indices
+                    )
+                )
+            )
+            return Status(
+                code=Status.BAD_DATA_UNAVAILABLE,
+                text=status_text,
+            )
+        return None
+
+    def _get_indices_unavailable_status(self):
+        unavailable_data_parts_indices = self._unavailable_data_parts_indices
+        bad_shard_indices = Lrc.Scheme822v1.get_unavailable_index_shard_indices(
+            unavailable_data_parts_indices
+        )
+        if bad_shard_indices:
+            status_text = (
+                'Indices are partially unavailable (groups {groups} are not ok)'.format(
+                    groups=', '.join(
+                        str(self.groups[idx])
+                        for idx in bad_shard_indices
+                    )
+                )
+            )
+            return Status(
+                code=Status.BAD_INDICES_UNAVAILABLE,
+                text=status_text,
+            )
+        return None
+
+    def _get_unequal_part_size_status(self):
+        # NOTE: this check should be evaluated after '_get_meta_unavailable_status()'
+        # because it relies on group's 'meta' availability
+        for g in self.groups:
+            part_size = g.meta['lrc'].get('part_size')
+            if part_size != self.part_size:
+                status_text = (
+                    'part_size does not match, groupset {groupset} has part_size = '
+                    '{groupset_part_size}, group {group} has part_size = '
+                    '{group_part_size}'.format(
+                        groupset=self,
+                        groupset_part_size=self.part_size,
+                        group=g,
+                        group_part_size=part_size,
+                    )
+                )
+                return Status(
+                    code=Status.BROKEN,
+                    text=status_text,
+                )
+        return None
+
+    def _get_improper_lrc_scheme_settings_status(self):
+        # NOTE: this check should be evaluated after '_get_meta_unavailable_status()'
+        # because it relies on group's 'meta' availability
+        for g in self.groups:
+            scheme = g.meta['lrc'].get('scheme')
+            if scheme != self.scheme:
+                status_text = (
+                    'scheme does not match, groupset {groupset} has scheme = '
+                    '{groupset_scheme}, group {group} has scheme = '
+                    '{group_scheme}'.format(
+                        groupset=self,
+                        groupset_scheme=self.scheme,
+                        group=g,
+                        group_scheme=scheme,
+                    )
+                )
+                return Status(
+                    code=Status.BROKEN,
+                    text=status_text,
+                )
+        return None
+
+    def _get_not_coupled_lrc_groups_status(self):
+
+        if not all(g.status == Status.COUPLED for g in self.groups):
+            status_text = (
+                'Couple {couple} has groups with unexpected '
+                'status: [{groups_desc}], should all be COUPLED'.format(
+                    couple=self,
+                    groups_desc='; '.join(
+                        '{group}: {status}'.format(group=g, status=g.status)
+                        for g in groups
+                        if g.status != Status.COUPLED
+                    )
+                )
+            )
+            return Status(
+                code=Status.BAD,
+                text=status_text,
+            )
+        return None
+
+    def compose_group_meta(self, couple, settings):
+        return {
+            'version': 2,
+            'couple': couple.as_tuple(),
+            'namespace': couple.namespace.id,
+            'frozen': couple.frozen,
+            'type': Group.TYPE_LRC_8_2_2_V1,
+            'lrc': {
+                'groups': [g.group_id for g in self.groups],
+                'part_size': settings['part_size'],
+                'scheme': Lrc.Scheme822v1.ID,
+            },
+        }
+
+    def info(self):
+        c = GroupsetInfo(str(self))
+        c._set_raw_data(self.info_data())
+        return c
+
+    @property
+    def groupset_settings(self):
+        return {
+            'scheme': Lrc.Scheme822v1.ID,
+            'part_size': self.part_size,
+        }
+
+
 class DcNodes(object):
     def __init__(self):
         self.nodes = []
@@ -1664,15 +2623,44 @@ class Namespace(object):
         self.id = id
         self.couples = set()
 
+        self.groupsets = Groupsets(
+            replicas=Repositary(Couple, 'Replicas groupset'),
+            lrc=Repositary(Lrc822v1Groupset, 'LRC groupset'),
+            resource_desc='Groupset',
+        )
+
+        # TODO: this is obsolete, used for backward compatibility,
+        # remove when not used anymore
+        self.couples = self.groupsets.replicas
+
     def add_couple(self, couple):
         if couple.namespace:
-            raise ValueError('Couple {} already belongs to namespace {}, cannot be assigned to '
-                             'namespace {}'.format(couple, self, couple.namespace))
-        self.couples.add(couple)
+            raise ValueError(
+                'Couple {couple} already belongs to namespace {couple_namespace}, '
+                'cannot be assigned to namespace {namespace}'.format(
+                    couple=couple,
+                    couple_namespace=couple.namespace,
+                    namespace=self,
+                )
+            )
+        self.groupsets.add_groupset(couple)
         couple.namespace = self
 
+    def add_groupset(self, groupset):
+        if groupset.namespace:
+            raise ValueError(
+                'Groupset {groupset} already belongs to namespace {groupset_namespace}, '
+                'cannot be assigned to namespace {namespace}'.format(
+                    groupset=groupset,
+                    groupset_namespace=groupset.namespace,
+                    namespace=self,
+                )
+            )
+        self.groupsets.add_groupset(groupset)
+        groupset.namespace = self
+
     def remove_couple(self, couple):
-        self.couples.remove(couple)
+        self.groupsets.remove_groupset(couple)
         couple.namespace = None
 
     def __str__(self):
@@ -1699,36 +2687,24 @@ hosts = Repositary(Host)
 groups = Repositary(Group)
 nodes = Repositary(Node)
 node_backends = Repositary(NodeBackend, 'Node backend')
-couples = Repositary(Couple)
 namespaces = Repositary(Namespace)
 fs = Repositary(Fs)
 
 dc_host_view = DcHostView()
 
+replicas_groupsets = Repositary(Couple, 'Replicas groupset')
 
-cache_couples = Repositary(Couple, 'Cache couple')
+# TOOD: use namespace "storage_cache" couples instead of cache couples,
+# this is added for backward compatibility
+cache_ns = namespaces.add(Group.CACHE_NAMESPACE)
+cache_couples = cache_ns.groupsets.replicas
 
+lrc_groupsets = Repositary(Lrc822v1Groupset, 'LRC groupset')
+groupsets = Groupsets(
+    replicas=replicas_groupsets,
+    lrc=lrc_groupsets,
+    resource_desc='Groupset',
+)
 
-'''
-h = hosts.add('95.108.228.31')
-g = groups.add(1)
-n = nodes.add(hosts['95.108.228.31'], 1025, 2)
-g.add_node(n)
-
-g2 = groups.add(2)
-n2 = nodes.add(h, 1026. 2)
-g2.add_node(n2)
-
-couple = couples.add([g, g2])
-
-print '1:2' in couples
-groups[1].parse_meta({'couple': (1,2)})
-groups[2].parse_meta({'couple': (1,2)})
-couple.update_status()
-
-print repr(couples)
-print 1 in groups
-print [g for g in couple]
-couple.destroy()
-print repr(couples)
-'''
+# TODO: backward compatibility, remove
+couples = groupsets

@@ -7,6 +7,7 @@ import time
 import traceback
 import uuid
 
+import elliptics
 import msgpack
 
 from config import config
@@ -27,6 +28,7 @@ import jobs
 import keys
 from manual_locks import manual_locker
 import storage
+from sync import sync_manager
 import timed_queue
 
 
@@ -47,11 +49,16 @@ logger.info('Rsync module using: %s' % RSYNC_MODULE)
 logger.info('Rsync user: %s' % RSYNC_USER)
 
 
+DNET_CLIENT_BACKEND_CMD_TPL = (
+    'dnet_client backend -r {host}:{port}:{family} '
+    '{dnet_client_command} --backend {backend_id} --wait-timeout=1000'
+)
+
+
 def dnet_client_backend_command(command):
     def wrapper(host, port, family, backend_id):
-        cmd = 'dnet_client backend -r {host}:{port}:{family} {command} --backend {backend_id} --wait-timeout=1000'
-        return cmd.format(
-            command=command,
+        return DNET_CLIENT_BACKEND_CMD_TPL.format(
+            dnet_client_command=command,
             host=host,
             port=port,
             family=family,
@@ -80,7 +87,7 @@ class Infrastructure(object):
 
     DNET_DEFRAG_CMD = (
         'dnet_client backend -r {host}:{port}:{family} '
-        'defrag --backend {backend_id}'
+        'defrag --backend {backend_id} --wait-timeout=1000'
     )
 
     def __init__(self):
@@ -495,15 +502,24 @@ class Infrastructure(object):
 
         group_history.save()
 
-    def detach_node(self, group_id, hostname, port, backend_id, record_type=None):
+    # TODO: make family non-optional
+    def detach_node(self, group_id, hostname, port, backend_id, family=None, record_type=None):
         group_history = self.get_group_history(group_id)
 
         node_backends_set = group_history.nodes[-1].set[:]
 
         for i, node_backend in enumerate(node_backends_set):
-            if (node_backend.hostname == hostname and
-                    node_backend.port == port and
-                    node_backend.backend_id == backend_id):
+            backend_match = (
+                node_backend.hostname == hostname and
+                node_backend.port == port and
+                node_backend.backend_id == backend_id
+            )
+            if backend_match:
+
+                if family and family != node_backend.family:
+                    # TODO: move family check to 'backend_match' check
+                    # when 'family' is made non-optional
+                    continue
 
                 logger.debug(
                     'Removing node backend {0}:{1}/{2} from group {3} history state'.format(
@@ -973,6 +989,79 @@ class Infrastructure(object):
 
         self.update_groups_list(tree)
 
+    def groups_by_total_space(self, match_group_space=True, **kwargs):
+        """ Get good uncoupled groups bucketed by total space values
+
+        As total space for group can vary a little depending on the hardware,
+        there is a small tolerance value (5% by default) that is used when
+        comparing two groups with each other. If total space of the smaller
+        group lies within tolerance interval (e.g., -5%, +5%) of total space
+        of the larger group, it will be considered to have the same total space.
+
+        Parameters:
+            match_group_space: if False, all groups in the resulting mapping will
+                be bucketed to a key 'any', otherwise tolerance interval will be used
+                to bucket the groups;
+            **kwargs: options for selecting uncoupled groups, will be passed through
+                to get_good_uncoupled_groups;
+
+        Returns: mapping of approximate total space value of groups to a groups list
+           having that value; if match_group_space is False, all groups will be listed
+           under key 'any'.
+
+        Examples:
+
+            when match_group_space == True:
+            {
+                1073741824: [10, 20, 30],  # 1Gb groups
+                5368709120: [15, 25],      # 5Gb groups
+            }
+
+            when match_group_space == False:
+            {
+                'any': [10, 15, 20, 25, 30],
+            }
+        """
+        suitable_groups = self.get_good_uncoupled_groups(**kwargs)
+        groups_by_total_space = {}
+
+        if not match_group_space:
+            groups_by_total_space['any'] = [group.group_id for group in suitable_groups]
+            return groups_by_total_space
+
+        total_spaces = (
+            group.get_stat().total_space
+            for group in suitable_groups
+        )
+
+        # bucketing groups by approximate total space
+        ts_tolerance = config.get('total_space_diff_tolerance', 0.05)
+        cur_ts_key = 0
+        for ts in sorted(total_spaces, reverse=True):
+            if abs(cur_ts_key - ts) > cur_ts_key * ts_tolerance:
+                cur_ts_key = ts
+                groups_by_total_space[cur_ts_key] = []
+
+        total_spaces = sorted(groups_by_total_space.keys(), reverse=True)
+        logger.info('group total space sizes available: {0}'.format(list(total_spaces)))
+
+        for group in suitable_groups:
+            ts = group.get_stat().total_space
+            for ts_key in total_spaces:
+                if ts_key - ts < ts_key * ts_tolerance:
+                    groups_by_total_space[ts_key].append(group.group_id)
+                    break
+            else:
+                raise ValueError(
+                    'Failed to find total space key for group {group}, '
+                    'total space {ts}'.format(
+                        group=group,
+                        ts=ts,
+                    )
+                )
+
+        return groups_by_total_space
+
     def ns_current_state(self, nodes, types):
         ns_current_state = {}
         for node_type in types:
@@ -1035,7 +1124,8 @@ class Infrastructure(object):
                                   max_node_backends=None,
                                   including_in_service=False,
                                   status=None,
-                                  types=None):
+                                  types=None,
+                                  skip_groups=None):
 
         suitable_groups = []
         locked_hosts = manual_locker.get_locked_hosts()
@@ -1044,12 +1134,14 @@ class Infrastructure(object):
             in_service = set(self.job_finder.get_uncoupled_groups_in_service())
         logger.debug('Groups in service - total {0}: {1}'.format(
             len(in_service), in_service))
+        if skip_groups:
+            in_service |= set(skip_groups)
         for group in storage.groups.keys():
 
             if Infrastructure.is_uncoupled_group_good(
                     group,
                     locked_hosts,
-                    types or (storage.Group.TYPE_DATA,),
+                    types or (storage.Group.TYPE_UNCOUPLED,),
                     max_node_backends=max_node_backends,
                     in_service=in_service,
                     status=status):
@@ -1093,5 +1185,18 @@ class Infrastructure(object):
 
         return True
 
+    def reserve_group_ids(self, count, timeout=10):
+        with sync_manager.lock('cluster_max_group', timeout=timeout):
+            session = self.node.meta_session
+            try:
+                request = session.read_latest(keys.MASTERMIND_MAX_GROUP_KEY)
+                max_group = int(request.get()[0].data)
+            except elliptics.NotFoundError:
+                max_group = 0
+
+            new_max_group = max_group + count
+            session.write_data(keys.MASTERMIND_MAX_GROUP_KEY, str(new_max_group)).get()
+
+            return range(max_group + 1, max_group + count + 1)
 
 infrastructure = Infrastructure()

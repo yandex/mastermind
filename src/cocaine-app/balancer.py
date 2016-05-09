@@ -113,11 +113,13 @@ class Balancer(object):
         return result
 
     def _good_couples(self):
-        return [couple.as_tuple() for couple in storage.couples if couple.status == storage.Status.OK]
+        # TODO: decide if lrc groupsets should be here
+        return [couple.as_tuple() for couple in storage.replicas_groupsets if couple.status == storage.Status.OK]
 
     @h.concurrent_handler
     def get_bad_groups(self, request):
-        result = [couple.as_tuple() for couple in storage.couples if couple.status not in storage.NOT_BAD_STATUSES]
+        # TODO: decide if lrc groupsets should be here
+        result = [couple.as_tuple() for couple in storage.replicas_groupsets if couple.status not in storage.NOT_BAD_STATUSES]
         logger.debug('bad_symm_groups: ' + str(result))
         return result
 
@@ -128,7 +130,7 @@ class Balancer(object):
         return result
 
     def _frozen_couples(self):
-        return [couple.as_tuple() for couple in storage.couples if couple.status == storage.Status.FROZEN]
+        return [couple.as_tuple() for couple in storage.replicas_groupsets if couple.status == storage.Status.FROZEN]
 
     @h.concurrent_handler
     def get_closed_groups(self, request):
@@ -138,7 +140,7 @@ class Balancer(object):
         return result
 
     def _closed_couples(self):
-        return [couple.as_tuple() for couple in storage.couples
+        return [couple.as_tuple() for couple in storage.replicas_groupsets
                 if couple.status == storage.Status.FULL]
 
     @h.concurrent_handler
@@ -173,6 +175,53 @@ class Balancer(object):
     }
 
     @h.concurrent_handler
+    def get_groupsets_list(self, request):
+        filter = request.get('filter', {})
+        return self._get_groupsets_list(filter=filter)
+
+    def _get_groupsets_list(self, filter):
+        # TODO: think on checking input filter parameters and
+        # cleaning all that have a value of 'None'. This
+        # should be applied to all methods that support filter-like
+        # input with possible 'None' values meaning 'disable filter for this
+        # parameter'.
+        if filter.get('state') is not None and filter['state'] not in self.COUPLE_STATES:
+            raise ValueError('Invalid state: {0}'.format(filter['state']))
+
+        groupsets = storage.groupsets
+
+        if filter.get('namespace') is not None:
+            ns = filter['namespace']
+            if ns not in storage.namespaces:
+                return []
+            groupsets = storage.namespaces[ns].groupsets
+
+        if filter.get('type') is not None:
+            if filter['type'] not in groupsets.types:
+                raise ValueError('Unexpected groupsets type: "{}"'.format(filter['type']))
+            groupsets = groupsets.types[filter['type']]
+
+        def filtered_out(groupset):
+            if filter.get('state') is not None:
+                if groupset.status not in self.COUPLE_STATES[filter['state']]:
+                    return True
+
+            return False
+
+        return [
+            gs.info().serialize()
+            for gs in groupsets
+            if not filtered_out(gs)
+        ]
+
+    @h.concurrent_handler
+    def get_groupset_by_id(self, request):
+        groupset_id = str(request)
+        groupset = storage.groupsets[groupset_id]
+
+        return groupset.info().serialize()
+
+    @h.concurrent_handler
     def get_couples_list(self, request):
         options = request[0]
         return self._get_couples_list(options)
@@ -192,7 +241,8 @@ class Balancer(object):
                 return []
             couples = storage.namespaces[ns].couples
         else:
-            couples = storage.couples.keys()
+            # TODO: use 'couples' container here
+            couples = storage.replicas_groupsets.keys()
 
         def filtered_out(couple):
             if _filter.get('state') is not None:
@@ -237,7 +287,11 @@ class Balancer(object):
                 if group.status not in self.GROUP_STATES[_filter['state']]:
                     return True
 
-            if _filter.get('uncoupled') is not None:
+            if _filter.get('type') is not None:
+                if group.type != _filter['type']:
+                    return True
+            elif _filter.get('uncoupled') is not None:
+                # support for deprecated 'uncoupled' filter option
                 if bool(group.couple) != (not _filter['uncoupled']):
                     return True
 
@@ -357,18 +411,18 @@ class Balancer(object):
                 )
             )
 
-        couple = group.couple
+        groupset = group.couple
 
-        if couple.status in storage.NOT_BAD_STATUSES:
+        if groupset.status in storage.NOT_BAD_STATUSES:
             raise ValueError(
-                'cannot repair, group {group_id}, couple {couple} is in status {status}'.format(
+                'cannot repair, group {group_id}, groupset {groupset} is in status {status}'.format(
                     group_id=group.group_id,
-                    couple=couple,
-                    status=couple.status,
+                    groupset=groupset,
+                    status=groupset.status,
                 )
             )
 
-        namespace_to_use = force_namespace or couple.namespace.id
+        namespace_to_use = force_namespace or groupset.namespace.id
         if not namespace_to_use:
             raise ValueError(
                 'cannot identify a namespace to use for group {group_id}'.format(
@@ -376,15 +430,20 @@ class Balancer(object):
                 )
             )
 
-        # TODO: convert this to a separate well-documented function
-        frozen = any(
-            g.meta.get('frozen')
-            for g in couple
-            if g.meta and g.group_id != group_id
-        )
+        if namespace_to_use != groupset.namespace.id:
+            if groupset.namespace:
+                groupset.namespace.remove_couple(groupset)
+            ns = storage.namespaces[namespace_to_use]
+            ns.add_couple(groupset)
 
-        make_symm_group(self.node, couple, namespace_to_use, frozen)
-        couple.update_status()
+        write_groupset_metakey(
+            self.node,
+            couple=groupset.couple,
+            groupset=groupset,
+            settings=groupset.groupset_settings,
+            rollback_on_error=False,
+        )
+        groupset.update_status()
 
         return True
 
@@ -407,7 +466,12 @@ class Balancer(object):
 
         raise ValueError('History for group {} is not found'.format(group))
 
-    NODE_BACKEND_RE = re.compile('(.+):(\d+)/(\d+)')
+    NODE_BACKEND_RE = re.compile(
+        '(?P<host>.+?)'
+        ':(?P<port>\d+)'
+        '(?::(?P<family>\d+))?'  # support for empty family
+        '/(?P<backend_id>\d+)'
+    )
 
     @h.concurrent_handler
     def group_detach_node(self, request):
@@ -423,8 +487,14 @@ class Balancer(object):
 
         logger.info('Node backend: {0}'.format(node_backend))
         try:
-            host, port, backend_id = self.NODE_BACKEND_RE.match(node_backend_str).groups()
+            m = self.NODE_BACKEND_RE.match(node_backend_str)
+            host = m.group('host')
+            port = m.group('port')
+            family = m.group('family')
+            backend_id = m.group('backend_id')
             port, backend_id = int(port), int(backend_id)
+            if family:
+                family = int(family)
             logger.info('host, port, backend_id: {0}'.format((host, port, backend_id)))
         except (IndexError, ValueError, AttributeError):
             raise ValueError('Node backend should be of form <host>:<port>/<backend_id>')
@@ -437,7 +507,13 @@ class Balancer(object):
 
         logger.info('Removing node backend {0} from group {1} history'.format(node_backend_str, group_id))
         try:
-            self.infrastructure.detach_node(group_id, host, port, backend_id)
+            self.infrastructure.detach_node(
+                group_id=group_id,
+                hostname=host,
+                port=port,
+                family=family,
+                backend_id=backend_id,
+            )
             logger.info('Removed node backend {0} from group {1} history'.format(node_backend_str, group_id))
         except Exception as e:
             logger.error('Failed to remove {0} from group {1} history: {2}'.format(node_backend_str, group_id, str(e)))
@@ -467,9 +543,85 @@ class Balancer(object):
     @h.concurrent_handler
     def get_couple_info_by_coupleid(self, request):
         couple_id = str(request)
-        couple = storage.couples[couple_id]
+        # TODO: use 'couples' container
+        couple = storage.replicas_groupsets[couple_id]
 
         return couple.info().serialize()
+
+    @h.concurrent_handler
+    def update_couple_settings(self, request):
+        if 'couple' not in request:
+            raise ValueError('Request should contain "couple" field')
+        couple = storage.groupsets.get_couple(request['couple'])
+
+        if 'settings' not in request:
+            raise ValueError('Request should contain "settings" field')
+        settings = request['settings']
+
+        couple_record = self.niu.couple_record_finder.couple_record(couple)
+        couple_record.set_settings(
+            settings=settings,
+            update=request.get('update', True),
+        )
+        couple_record.save()
+
+        # this is required to allow get_couple_info request be able to respond
+        # with new setting right away and not wait till the end of the next
+        # cluster update cycle
+        couple.settings = couple_record.settings
+
+    @h.concurrent_handler
+    def attach_groupset_to_couple(self, request):
+        if 'couple' not in request:
+            raise ValueError('Request should contain "couple" field')
+        couple = storage.groupsets.get_couple(request['couple'])
+
+        if 'groupset' not in request:
+            raise ValueError('Request should contain "groupset" field')
+        group_ids = [int(g) for g in request['groupset'].split(':')]
+        groups = [storage.groups[gid] for gid in group_ids]
+
+        if 'type' not in request:
+            raise ValueError('Request should contain groupset "type" field')
+
+        if 'settings' not in request:
+            raise ValueError('Request should contain "settings" field')
+
+        if request['type'] == 'lrc':
+            if 'part_size' not in request['settings']:
+                raise ValueError('Lrc groupset requires "part_size" setting')
+            if 'scheme' not in request['settings']:
+                raise ValueError('Lrc groupset requires "scheme" setting')
+
+        Groupset = storage.groupsets.make_groupset(
+            type=request['type'],
+            settings=request['settings'],
+        )
+
+        groupset = Groupset(groups=groups)
+        storage.groupsets.add_groupset(groupset)
+        couple.namespace.add_groupset(groupset)
+
+        try:
+            # TODO: check if options contains extra keys
+            write_groupset_metakey(
+                self.node,
+                couple=couple,
+                groupset=groupset,
+                settings=request['settings'],
+            )
+        except Exception:
+            groupset.destroy()
+            raise
+
+        # TODO: couple should link groupset on its own
+        couple.lrc822v1_groupset = groupset
+
+        for group in groups:
+            self.infrastructure.update_group_history(group)
+
+        groupset.update_status()
+        couple.update_status()
 
     VALID_COUPLE_INIT_STATES = (storage.Status.COUPLED, storage.Status.FROZEN)
 
@@ -480,78 +632,13 @@ class Balancer(object):
             infrastructure.infrastructure.sync_single_ns_settings(namespace)
         logger.info('Concurrent cluster info update completed')
 
-    def __groups_by_total_space(self, match_group_space):
-        suitable_groups = []
-        total_spaces = []
-
-        for group in infrastructure.infrastructure.get_good_uncoupled_groups():
-
-            if not len(group.node_backends):
-                logger.info('Group {0} cannot be used, it has empty node list'.format(
-                    group.group_id))
-                continue
-
-            if group.status != storage.Status.INIT:
-                logger.info('Group {0} cannot be used, status is {1}, should be {2}'.format(
-                    group.group_id, group.status, storage.Status.INIT))
-                continue
-
-            suitable = True
-            for node_backend in group.node_backends:
-                if node_backend.status != storage.Status.OK:
-                    logger.info(
-                        'Group {0} cannot be used, node backend {1} status is {2} (not OK)'.format(
-                            group.group_id, node_backend, node_backend.status
-                        )
-                    )
-                    suitable = False
-                    break
-
-            if not suitable:
-                continue
-
-            suitable_groups.append(group.group_id)
-            total_spaces.append(group.get_stat().total_space)
-
-        groups_by_total_space = {}
-
-        if match_group_space:
-            # bucketing groups by approximate total space
-            ts_tolerance = config.get('total_space_diff_tolerance', 0.05)
-            cur_ts_key = 0
-            for ts in reversed(sorted(total_spaces)):
-                if abs(cur_ts_key - ts) > cur_ts_key * ts_tolerance:
-                    cur_ts_key = ts
-                    groups_by_total_space[cur_ts_key] = []
-
-            total_spaces = list(reversed(sorted(groups_by_total_space.keys())))
-            logger.info('group total space sizes available: {0}'.format(total_spaces))
-
-            for group_id in suitable_groups:
-                group = storage.groups[group_id]
-                ts = group.get_stat().total_space
-                for ts_key in total_spaces:
-                    if ts_key - ts < ts_key * ts_tolerance:
-                        groups_by_total_space[ts_key].append(group_id)
-                        break
-                else:
-                    raise ValueError(
-                        'Failed to find total space key for group {0}, total space {1}'.format(
-                            group_id, ts
-                        )
-                    )
-        else:
-            groups_by_total_space['any'] = [group_id for group_id in suitable_groups]
-
-        return groups_by_total_space
-
     @staticmethod
     def _remove_unusable_groups(groups_by_total_space, groups):
         for ts, group_ids in groups_by_total_space.iteritems():
-            if groups[0] in group_ids:
-                for group in groups:
-                    group_ids.remove(group)
-                break
+            for group_to_remove in groups[:]:
+                if group_to_remove in group_ids:
+                    group_ids.remove(group_to_remove)
+                    groups.remove(group_to_remove)
 
     @contextmanager
     def _locked_uncoupled_groups(self, uncoupled_groups, groups_by_total_space, comment=''):
@@ -631,6 +718,7 @@ class Balancer(object):
                     groups_by_total_space, mandatory_groups,
                     namespace=options['namespace'],
                     init_state=options['init_state'],
+                    groupsets=options['groupsets'],
                     dry_run=options['dry_run'])
 
                 if couple is None:
@@ -789,6 +877,7 @@ class Balancer(object):
                       mandatory_groups,
                       namespace,
                       init_state,
+                      groupsets,
                       dry_run=False):
 
         while True:
@@ -798,52 +887,123 @@ class Balancer(object):
             if not groups_to_couple:
                 return None
 
-            with self._locked_uncoupled_groups(groups_to_couple,
+            groupsets_groups = []
+
+            for groupset in groupsets:
+                if groupset['type'] == 'lrc':
+                    scheme = storage.Lrc.make_scheme(groupset['settings']['scheme'])
+                    builder = scheme.builder()
+                    try:
+                        lrc_uncoupled_group_ids = next(
+                            builder.select_uncoupled_groups(
+                                skip_groups=groups_to_couple,
+                            )
+                        )
+                    except StopIteration:
+                        logger.error(
+                            'Failed to find appropriate groups for LRC groupset construction'
+                        )
+                        return None
+                    groupsets_groups.append(lrc_uncoupled_group_ids)
+
+            involved_groups = groups_to_couple + [
+                group_id
+                for groupset_groups in groupsets_groups
+                for group_id in groupset_groups
+            ]
+
+            with self._locked_uncoupled_groups(involved_groups,
                                                groups_by_total_space,
                                                'couple build') as locked_uncoupled_group_ids:
 
-                if groups_to_couple != locked_uncoupled_group_ids:
+                if involved_groups != locked_uncoupled_group_ids:
                     logger.warn('Failed to lock all uncoupled groups: locked {} / {}'.format(
-                        locked_uncoupled_group_ids, groups_to_couple))
+                        locked_uncoupled_group_ids, involved_groups))
                     continue
 
                 logger.info('Chosen groups to couple: {0}'.format(groups_to_couple))
 
                 unsuitable_group_ids = get_unsuitable_uncoupled_group_ids(
-                    self.node, groups_to_couple
+                    self.node,
+                    involved_groups,
                 )
                 if unsuitable_group_ids:
                     logger.error(
                         'Groups {} cannot be coupled: failed to ensure empty metakey '
                         'for groups {}'.format(
-                            groups_to_couple,
+                            involved_groups,
                             unsuitable_group_ids,
                         )
                     )
                     continue
 
-                couple = storage.couples.add([storage.groups[g]
-                                              for g in groups_to_couple])
+                couple = storage.replicas_groupsets.add(
+                    [storage.groups[g] for g in groups_to_couple]
+                )
 
-                if not dry_run:
-                    try:
-                        make_symm_group(
-                            self.node, couple, namespace,
-                            init_state == storage.Status.FROZEN)
-                    except Exception:
-                        couple.destroy()
-                        raise
+                couple_groupsets = []
+                for groupset, groupset_groups in itertools.izip(groupsets, groupsets_groups):
+                    if groupset['type'] == 'lrc':
+                        scheme = storage.Lrc.make_scheme(groupset['settings']['scheme'])
+                        if scheme == storage.Lrc.Scheme822v1:
+                            couple_groupset = storage.Lrc822v1Groupset(
+                                [storage.groups[g] for g in groupset_groups]
+                            )
+                            storage.groupsets.add_groupset(couple_groupset)
+                            logger.info('Created new groupset {} for couple {}'.format(
+                                couple_groupset,
+                                couple
+                            ))
+                            couple_groupsets.append(couple_groupset)
+                            couple.lrc822v1_groupset = couple_groupset
 
                 if namespace not in storage.namespaces:
                     ns = storage.namespaces.add(namespace)
                 else:
                     ns = storage.namespaces[namespace]
                 ns.add_couple(couple)
+                for groupset in couple_groupsets:
+                    ns.add_groupset(groupset)
+
+                if not dry_run:
+                    try:
+                        write_groupset_metakey(
+                            self.node,
+                            couple=couple,
+                            groupset=couple,
+                            settings={
+                                'frozen': init_state == storage.Status.FROZEN,
+                            }
+                        )
+                        for group in couple.groups:
+                            self.infrastructure.update_group_history(group)
+                        for couple_groupset, groupset in itertools.izip(couple_groupsets, groupsets):
+                            if isinstance(couple_groupset, storage.Lrc822v1Groupset):
+                                write_groupset_metakey(
+                                    self.node,
+                                    couple=couple,
+                                    groupset=couple_groupset,
+                                    settings={
+                                        'part_size': groupset['settings']['part_size'],
+                                        'scheme': storage.Lrc.Scheme822v1.ID,
+                                    }
+                                )
+                                couple_groupset.couple = couple
+                            for group in couple_groupset.groups:
+                                self.infrastructure.update_group_history(group)
+
+                    except Exception:
+                        couple.destroy()
+                        for couple_groupset in couple_groupsets:
+                            couple_groupset.destroy()
+                        raise
 
                 if not dry_run:
                     # update should happen after couple has been added to
                     # namespace
                     couple.update_status()
+                    for couple_groupset in couple_groupsets:
+                        couple_groupset.update_status()
 
             return couple
 
@@ -895,15 +1055,31 @@ class Balancer(object):
         except IndexError:
             options = {}
 
+        # TODO: move validation to a separate method
         options.setdefault('namespace', storage.Group.DEFAULT_NAMESPACE)
         options.setdefault('match_group_space', True)
         options.setdefault('init_state', storage.Status.COUPLED)
         options.setdefault('dry_run', False)
         options.setdefault('mandatory_groups', [])
+        options.setdefault('groupsets', [])
 
         options['init_state'] = options['init_state'].upper()
         if not options['init_state'] in self.VALID_COUPLE_INIT_STATES:
             raise ValueError('Couple "{0}" init state is invalid'.format(options['init_state']))
+
+        for gs_options in options['groupsets']:
+            if 'type' not in gs_options:
+                raise ValueError('Groupset requires "type" field')
+            if 'settings' not in gs_options:
+                raise ValueError('Groupset requires "settings" field')
+
+            if gs_options['type'] == 'lrc':
+                gs_settings = gs_options['settings']
+                if 'scheme' not in gs_settings:
+                    raise ValueError('Lrc groupset requires "scheme" field')
+                scheme_id = gs_settings['scheme']
+                if not storage.Lrc.check_scheme(scheme_id):
+                    raise ValueError('Unknown LRC scheme "{}"'.format(scheme_id))
 
         ns = options['namespace']
         logger.info('namespace from request: {0}'.format(ns))
@@ -916,8 +1092,9 @@ class Balancer(object):
             self.__update_cluster_state(namespace=options['namespace'])
             logger.info('Updating cluster info completed')
 
-            groups_by_total_space = self.__groups_by_total_space(
-                options['match_group_space'])
+            groups_by_total_space = infrastructure.infrastructure.groups_by_total_space(
+                match_group_space=options['match_group_space']
+            )
 
             logger.info('groups by total space: {0}'.format(groups_by_total_space))
 
@@ -933,10 +1110,11 @@ class Balancer(object):
         with sync_manager.lock(self.CLUSTER_CHANGES_LOCK, blocking=False):
 
             couple_str = ':'.join(map(str, sorted(request[0], key=lambda x: int(x))))
-            if couple_str not in storage.couples:
+            # TODO: use 'couples' container
+            if couple_str not in storage.replicas_groupsets:
                 raise KeyError('Couple %s was not found' % (couple_str))
 
-            couple = storage.couples[couple_str]
+            couple = storage.replicas_groupsets[couple_str]
 
             logger.info('Updating couple groups info')
             self.niu._force_nodes_update(groups=couple.groups)
@@ -972,17 +1150,7 @@ class Balancer(object):
         if groups_count < 0 or groups_count > 100:
             raise Exception('Incorrect groups count')
 
-        try:
-            max_group = int(self.node.meta_session.read_latest(
-                keys.MASTERMIND_MAX_GROUP_KEY).get()[0].data)
-        except elliptics.NotFoundError:
-            max_group = 0
-
-        new_max_group = max_group + groups_count
-        self.node.meta_session.write_data(
-            keys.MASTERMIND_MAX_GROUP_KEY, str(new_max_group)).get()
-
-        return range(max_group + 1, max_group + 1 + groups_count)
+        return self.infrastructure.reserve_group_ids(groups_count)
 
     # @h.concurrent_handler
     @h.handler_wne
@@ -1122,7 +1290,7 @@ class Balancer(object):
                     )
                 )
 
-            for c in storage.couples:
+            for c in storage.replicas_groupsets:
                 if c.namespace == namespace and c != ref_couple:
                     raise ValueError(
                         'Namespace "{0}" has several couples, '
@@ -1337,7 +1505,7 @@ class Balancer(object):
     @h.concurrent_handler
     def freeze_couple(self, request):
         logger.info('freezing couple %s' % str(request))
-        couple = storage.couples[request]
+        couple = storage.replicas_groupsets[request]
 
         if couple.frozen:
             raise ValueError('Couple {0} is already frozen'.format(couple))
@@ -1350,7 +1518,7 @@ class Balancer(object):
     @h.concurrent_handler
     def unfreeze_couple(self, request):
         logger.info('unfreezing couple %s' % str(request))
-        couple = storage.couples[request]
+        couple = storage.replicas_groupsets[request]
 
         if not couple.frozen:
             raise ValueError('Couple {0} is not frozen'.format(couple))
@@ -1362,7 +1530,12 @@ class Balancer(object):
 
     def __do_set_meta_freeze(self, couple, freeze):
 
-        group_meta = couple.compose_group_meta(couple.namespace.id, frozen=freeze)
+        group_meta = couple.compose_group_meta(
+            couple=couple,
+            settings={
+                'frozen': freeze,
+            },
+        )
 
         packed = msgpack.packb(group_meta)
         logger.info('packed meta for couple {0}: "{1}"'.format(
@@ -1456,7 +1629,7 @@ class Balancer(object):
     @h.concurrent_handler
     def storage_keys_diff(self, request):
         couples_diff = {}
-        for couple in storage.couples:
+        for couple in storage.replicas_groupsets:
             group_keys = []
             for group in couple.groups:
                 if not len(group.node_backends):
@@ -1591,7 +1764,7 @@ def handlers(b):
     return handlers
 
 
-def consistent_write(session, key, data, retries=3):
+def consistent_write(session, key, data, retries=3, rollback_on_error=True):
     s = session.clone()
 
     key_esc = key.replace('\0', '\\0')
@@ -1606,22 +1779,28 @@ def consistent_write(session, key, data, retries=3):
     if failed_groups:
         # failed to write key to all destination groups
 
-        logger.info('Failed to write key consistently, removing key {0} from groups {1}'.format(
-            key_esc, list(suc_groups)
-        ))
+        if rollback_on_error:
+            logger.info('Failed to write key consistently, removing key {0} from groups {1}'.format(
+                key_esc, list(suc_groups)
+            ))
 
-        s.set_groups(suc_groups)
-        _, left_groups = h.remove_retry(s, key, retries=retries)
+            s.set_groups(suc_groups)
+            _, left_groups = h.remove_retry(s, key, retries=retries)
 
-        if left_groups:
-            logger.error('Failed to remove key {0} from groups {1}'.format(
-                key_esc, list(left_groups)))
-        else:
-            logger.info('Successfully removed key {0} from groups {1}'.format(
-                key_esc, list(suc_groups)))
+            if left_groups:
+                logger.error('Failed to remove key {0} from groups {1}'.format(
+                    key_esc, list(left_groups)))
+            else:
+                logger.info('Successfully removed key {0} from groups {1}'.format(
+                    key_esc, list(suc_groups)))
 
-        raise RuntimeError('Failed to write key {0} to groups {1}'.format(
-            key_esc, list(failed_groups)))
+        raise RuntimeError(
+            'Failed to write key to groups: {f_groups}, '
+            'successful write to groups: {s_groups}'.format(
+                s_groups=list(suc_groups),
+                f_groups=list(failed_groups),
+            )
+        )
 
 
 def kill_symm_group(n, meta_session, couple):
@@ -1683,28 +1862,31 @@ def get_unsuitable_uncoupled_group_ids(n, group_ids):
     return unsuitable_uncoupled_groups
 
 
-def make_symm_group(n, couple, namespace, frozen):
-    logger.info('Writing meta key for couple {0}, assigning namespace'.format(couple, namespace))
+def write_groupset_metakey(n, couple, groupset, settings, rollback_on_error=True):
+    logger.info('Writing meta key for groupset {}'.format(groupset))
 
     s = elliptics.Session(n)
     wait_timeout = config.get('elliptics', {}).get('wait_timeout') or config.get('wait_timeout', 5)
     s.set_timeout(wait_timeout)
 
-    s.add_groups(g.group_id for g in couple.groups)
-    packed = msgpack.packb(couple.compose_group_meta(namespace, frozen))
+    s.add_groups(g.group_id for g in groupset.groups)
+    packed = msgpack.packb(
+        groupset.compose_group_meta(
+            couple=couple,
+            settings=settings,
+        )
+    )
     try:
-        consistent_write(s, keys.SYMMETRIC_GROUPS_KEY, packed)
-    except Exception as e:
-        logger.error('Failed to write meta key for couple {0}: {1}\n{2}'.format(
-                     couple, str(e), traceback.format_exc()))
+        consistent_write(s, keys.SYMMETRIC_GROUPS_KEY, packed, rollback_on_error=rollback_on_error)
+    except Exception:
+        logger.exception('Failed to write meta key for groupset {}'.format(groupset))
         raise
 
     try:
-        for group in couple:
+        for group in groupset.groups:
             group.parse_meta(packed)
-    except Exception as e:
-        logging.error('Failed to parse meta key for groups {0}: {1}'.format(
-            [g.group_id for g in couple.groups], e))
+    except Exception:
+        logging.exception('Failed to parse meta key for groups {}'.format([g.group_id for g in groupset.groups]))
         raise
 
     return

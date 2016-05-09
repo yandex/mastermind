@@ -13,8 +13,10 @@ import helpers as h
 from job_types import JobTypes, TaskTypes
 from job import Job
 from couple_defrag import CoupleDefragJob
+import lrc_builder
 from move import MoveJob
 from recover_dc import RecoverDcJob
+from make_lrc_groups import MakeLrcGroupsJob
 from job_factory import JobFactory
 from restore_group import RestoreGroupJob
 from tasks import Task, MinionCmdTask
@@ -47,7 +49,18 @@ class JobProcessor(object):
         JobTypes.TYPE_MOVE_JOB: 20,
         JobTypes.TYPE_RECOVER_DC_JOB: 15,
         JobTypes.TYPE_COUPLE_DEFRAG_JOB: 10,
+        JobTypes.TYPE_MAKE_LRC_GROUPS_JOB: 5,
     }
+
+    # job types that should be processed by processor,
+    # jobs with other types will be skipped
+    SUPPORTED_JOBS = set([
+        JobTypes.TYPE_RESTORE_GROUP_JOB,
+        JobTypes.TYPE_MOVE_JOB,
+        JobTypes.TYPE_RECOVER_DC_JOB,
+        JobTypes.TYPE_COUPLE_DEFRAG_JOB,
+        JobTypes.TYPE_MAKE_LRC_GROUPS_JOB,
+    ])
 
     def __init__(self, job_finder, node, db, niu, minions):
         logger.info('Starting JobProcessor')
@@ -107,7 +120,8 @@ class JobProcessor(object):
             if job.status == Job.STATUS_NOT_APPROVED:
                 continue
             if job.status == Job.STATUS_NEW:
-                new_jobs.append(job)
+                if job.type in self.SUPPORTED_JOBS:
+                    new_jobs.append(job)
             else:
                 type_res = resources[job.type]
                 for res_type, res_val in self._unfold_resources(job.resources):
@@ -270,7 +284,7 @@ class JobProcessor(object):
                     job._dirty = True
                     break
 
-                if not task.finished:
+                if not task.finished(self):
                     logger.debug('Job {0}, task {1} is not finished'.format(
                         job.id, task.id))
                     break
@@ -281,7 +295,7 @@ class JobProcessor(object):
                 job._dirty = True
 
                 task.status = (Task.STATUS_FAILED
-                               if task.failed else
+                               if task.failed(self) else
                                Task.STATUS_COMPLETED)
 
                 try:
@@ -398,8 +412,7 @@ class JobProcessor(object):
             except IndexError:
                 raise ValueError('Job type is required')
 
-            if job_type not in (JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_RECOVER_DC_JOB,
-                JobTypes.TYPE_COUPLE_DEFRAG_JOB, JobTypes.TYPE_RESTORE_GROUP_JOB):
+            if job_type not in JobTypes.AVAILABLE_TYPES:
                 raise ValueError('Invalid job type: {0}'.format(job_type))
 
             try:
@@ -434,6 +447,8 @@ class JobProcessor(object):
             JobType = CoupleDefragJob
         elif job_type == JobTypes.TYPE_RESTORE_GROUP_JOB:
             JobType = RestoreGroupJob
+        elif job_type == JobTypes.TYPE_MAKE_LRC_GROUPS_JOB:
+            JobType = MakeLrcGroupsJob
 
         try:
             job = JobType.new(self.session, **params)
@@ -477,8 +492,13 @@ class JobProcessor(object):
         inv_group_ids = job._involved_groups
         try:
             logger.info('Job {0}: updating groups {1} status'.format(job.id, inv_group_ids))
-            inv_groups = [storage.groups[ig] for ig in inv_group_ids]
-            self.node_info_updater.update_status(groups=inv_groups)
+            self.node_info_updater.update_status(
+                groups=[
+                    storage.groups[ig]
+                    for ig in inv_group_ids
+                    if ig in storage.groups
+                ]
+            )
         except Exception as e:
             logger.info('Job {0}: failed to update groups status: {1}\n{2}'.format(
                 job.id, e, traceback.format_exc()))
@@ -744,6 +764,21 @@ class JobProcessor(object):
             job.id, job.status))
         return job
 
+    @h.concurrent_handler
+    def build_lrc_groups(self, request):
+        if 'scheme' not in request:
+            raise ValueError('Parameter "scheme" is required to build LRC groups')
+        scheme = storage.Lrc.make_scheme(request['scheme'])
+
+        count = request.get('count', 1)
+        mandatory_dcs = request.get('mandatory_dcs', [])
+
+        builder = scheme.builder(self)
+        return builder.build(
+            count=count,
+            mandatory_dcs=mandatory_dcs,
+        )
+
 
 class JobFinder(object):
 
@@ -768,7 +803,14 @@ class JobFinder(object):
 
             jobs_list = jobs_list[offset:offset + limit]
 
-        res = [JobFactory.make_job(j).human_dump() for j in jobs_list]
+        res = []
+        for j in jobs_list:
+            try:
+                res.append(JobFactory.make_job(j).human_dump())
+            except Exception:
+                job_id = j.get('id', '[unknown id]')
+                logger.exception('Failed to dump job {}'.format(job_id))
+                continue
         return {'jobs': res,
                 'total': total_jobs}
 
@@ -826,8 +868,15 @@ class JobFinder(object):
         return jobs
 
     def get_uncoupled_groups_in_service(self):
+        # TODO: this list of types should be dynamical,
+        # each job type should have a property to determine
+        # if it uses uncoupled groups.
         jobs = self.jobs(
-            types=(JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_RESTORE_GROUP_JOB),
+            types=(
+                JobTypes.TYPE_MOVE_JOB,
+                JobTypes.TYPE_RESTORE_GROUP_JOB,
+                JobTypes.TYPE_MAKE_LRC_GROUPS_JOB,
+            ),
             statuses=(Job.STATUS_NOT_APPROVED,
                       Job.STATUS_NEW,
                       Job.STATUS_EXECUTING,
@@ -836,9 +885,6 @@ class JobFinder(object):
 
         uncoupled_groups = []
         for job in jobs:
-            if job.uncoupled_group:
-                uncoupled_groups.append(job.uncoupled_group)
-            if job.merged_groups:
-                uncoupled_groups.extend(job.merged_groups)
+            uncoupled_groups.extend(job.involved_uncoupled_groups)
 
         return uncoupled_groups

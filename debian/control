@@ -28,6 +28,7 @@ Depends:
  python-pymongo (<< 3),
  python-bson (<< 3),
  cocaine-runtime (<< 0.12),
+ python-requests,
  python-mastermind (= ${binary:Version}),
 Recommends: python-kazoo
 Description: Metabalancer for elliptics storage

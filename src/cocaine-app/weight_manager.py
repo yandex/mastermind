@@ -38,7 +38,8 @@ class WeightManager(object):
         couples = {}
         couples_by_disk = {}
         couples_by_net = {}
-        for couple in storage.couples:
+        for couple in storage.replicas_groupsets:
+            # TODO: add other couples (e.g. FULL) to account their load
             if couple.status != storage.Status.OK:
                 continue
             groups_res = []
@@ -212,6 +213,22 @@ class WeightManager(object):
 
 
 class WeightCalculator(object):
+    """
+    Calculates weights for couples
+
+    NOTE: Common linear decrease formula for a parameter:
+        Let 'top_y' be the top (start) coefficient value, let 'delta_y' be the difference
+        between top (start) and bottom (end) coefficient value, let 'delta_x' be the
+        difference between start and end value of measured parameter, let 'offset_x' be
+        the difference between current measured parameter value and its start value, then
+        the formula has the following form:
+            top_y -
+            delta_y *
+            (
+                offset_x /
+                delta_x
+            )
+    """
     DISK_UTIL_COEF = WEIGHT_CFG.get('resource_unit_disk_util', 0.05)
     DISK_NET_RATE_COEF = WEIGHT_CFG.get('resource_unit_net_write_rate', 5 * (1024 ** 2))
 
@@ -238,26 +255,52 @@ class WeightCalculator(object):
         return space_coef
 
     @staticmethod
-    def net_coef(x):
+    def write_net_coef(write_rate):
         base_threshold_min_coef = 0.1
         min_coef = 0.01
-        if x <= NetResources.WRITE_RATE_THRESHOLD * 0.5:
+        if write_rate <= NetResources.WRITE_RATE_THRESHOLD * 0.5:
             return 1.0
-        if x <= NetResources.WRITE_RATE_THRESHOLD:
+        if write_rate <= NetResources.WRITE_RATE_THRESHOLD:
             return (
-                1.0 - (
-                   (1.0 - base_threshold_min_coef) *
-                   (x / (NetResources.WRITE_RATE_THRESHOLD * 0.5) - 1.0)
+                1.0 -                                                                              # top_y
+                (1.0 - base_threshold_min_coef) *                                                  # delta_y
+                (
+                    (write_rate - NetResources.WRITE_RATE_THRESHOLD * 0.5) /                       # offset_x
+                    (NetResources.WRITE_RATE_THRESHOLD - NetResources.WRITE_RATE_THRESHOLD * 0.5)  # delta_x
                 )
             )
         return max(
             (
-                base_threshold_min_coef - (
-                    (base_threshold_min_coef - min_coef) *
-                    (
-                        (x - NetResources.WRITE_RATE_THRESHOLD) /
-                        (NetResources.MAX_WRITE_RATE - NetResources.WRITE_RATE_THRESHOLD)
-                    )
+                base_threshold_min_coef -                                              # top_y
+                (base_threshold_min_coef - min_coef) *                                 # delta_y
+                (
+                    (write_rate - NetResources.WRITE_RATE_THRESHOLD) /                 # offset_x
+                    (NetResources.MAX_WRITE_RATE - NetResources.WRITE_RATE_THRESHOLD)  # delta_x
+                )
+            ),
+            min_coef
+        )
+
+    @staticmethod
+    def read_net_coef(read_rate):
+        """
+        Calculate read network coefficient.
+
+        For network read rate:
+            from 0 b/s to READ_RATE_THRESHOLD: 1.0
+            from READ_RATE_THRESHOLD to MAX_READ_RATE: linear decrease from 1.0 to 0.01
+            from MAX_READ_RATE to inf: 0.01
+        """
+        min_coef = 0.01
+        if read_rate <= NetResources.READ_RATE_THRESHOLD:
+            return 1.0
+        return max(
+            (
+                1.0 -                                     # top_y
+                (1.0 - min_coef) *                        # delta_y
+                (
+                    read_rate /                           # offset_x
+                    NetResources.MAX_READ_RATE            # delta_x
                 )
             ),
             min_coef
@@ -287,12 +330,12 @@ class WeightCalculator(object):
             )
 
     @staticmethod
-    def weight(base_coef, net_coef, disk_coef):
-        return int(1000000 * base_coef * net_coef * disk_coef)
+    def weight(base_coef, write_net_coef, read_net_coef, disk_coef):
+        return int(1000000 * base_coef * write_net_coef * read_net_coef * disk_coef)
 
     @staticmethod
-    def resource_coef(base_coef, net_coef, disk_coef):
-        return base_coef * net_coef * disk_coef
+    def resource_coef(base_coef, write_net_coef, disk_coef):
+        return base_coef * write_net_coef * disk_coef
 
     @staticmethod
     def calculate_resources(couple_res):
@@ -306,14 +349,15 @@ class WeightCalculator(object):
         used_space_pct = max(1.0 - float(couple.effective_free_space) / couple.effective_space,
                              0.0)
         base_coef = WeightCalculator.used_space_coef(used_space_pct)
-        net_coef = WeightCalculator.net_coef(couple_res.net_write_rate)
+        write_net_coef = WeightCalculator.write_net_coef(couple_res.net_write_rate)
+        read_net_coef = WeightCalculator.read_net_coef(couple_res.net_read_rate)
         disk_coef = WeightCalculator.disk_coef(couple_res.disk_util)
 
-        weight = WeightCalculator.weight(base_coef, net_coef, disk_coef)
+        weight = WeightCalculator.weight(base_coef, write_net_coef, read_net_coef, disk_coef)
 
         logger.info(
             'Ns {}, couple {} used_space_pct: {}, base coef {}, '
-            'net_write_rate: {} Mb/s, net_coef {}, '
+            'net_write_rate: {} Mb/s, write_net_coef {}, '
             'disk_util: {}, disk_coef {}, '
             'weight = {}'.format(
                 couple_res.couple.namespace.id,
@@ -321,14 +365,14 @@ class WeightCalculator(object):
                 used_space_pct,
                 base_coef,
                 couple_res.net_write_rate,
-                net_coef,
+                write_net_coef,
                 couple_res.disk_util,
                 disk_coef,
                 weight
             )
         )
 
-        resource_coef = WeightCalculator.resource_coef(base_coef, net_coef, disk_coef)
+        resource_coef = WeightCalculator.resource_coef(base_coef, write_net_coef, disk_coef)
         return (
             weight,
             ResourceUnit(disk_util=resource_coef * WeightCalculator.DISK_UTIL_COEF,
@@ -363,18 +407,26 @@ class CouplesBuckets(object):
     def utilized(couple_res):
         return (couple_res.disk_util >= DiskResources.DISK_UTIL_THRESHOLD or
                 couple_res.net_write_rate >= NetResources.WRITE_RATE_THRESHOLD or
+                couple_res.net_read_rate >= NetResources.READ_RATE_THRESHOLD or
                 couple_res.io_blocking_queue_size >= 10 or
                 couple_res.io_nonblocking_queue_size >= 10)
 
     @staticmethod
     def is_base(couple_res):
-        logger.debug('Couple {}: disk_util: {}, net_write_rate {}, groups_res {}, nbr_res {}'.format(
-            couple_res.couple,
-            couple_res.disk_util,
-            couple_res.net_write_rate,
-            len(couple_res.groups_res),
-            [nbr.net_write_rate for gr in couple_res.groups_res for nbr in gr.node_backends_res]
-        ))
+        logger.debug(
+            'Couple {couple}: disk_util: {disk_util}, net_write_rate {net_write_rate}, '
+            'net_read_rate {net_read_rate}, nbr_res {nbr_res}'.format(
+                couple=couple_res.couple,
+                disk_util=couple_res.disk_util,
+                net_write_rate=couple_res.net_write_rate,
+                net_read_rate=couple_res.net_read_rate,
+                nbr_res=[
+                    nbr.net_write_rate
+                    for gr in couple_res.groups_res
+                    for nbr in gr.node_backends_res
+                ],
+            )
+        )
         return not CouplesBuckets.utilized(couple_res) and not couple_res.on_defragmenting_disk
 
     @staticmethod
@@ -476,6 +528,10 @@ class CoupleResources(object):
         return max(g_res.net_write_rate for g_res in self.groups_res)
 
     @property
+    def net_read_rate(self):
+        return max(g_res.net_read_rate for g_res in self.groups_res)
+
+    @property
     def io_blocking_queue_size(self):
         return max(g_res.io_blocking_queue_size for g_res in self.groups_res)
 
@@ -516,6 +572,10 @@ class GroupResources(object):
         return sum(nb_res.net_write_rate for nb_res in self.node_backends_res)
 
     @property
+    def net_read_rate(self):
+        return sum(nb_res.net_read_rate for nb_res in self.node_backends_res)
+
+    @property
     def io_blocking_queue_size(self):
         return sum(nb_res.io_blocking_queue_size for nb_res in self.node_backends_res)
 
@@ -542,6 +602,10 @@ class NodeBackendResources(object):
     @property
     def net_write_rate(self):
         return self.node_res.net_write_rate
+
+    @property
+    def net_read_rate(self):
+        return self.node_res.net_read_rate
 
 
 class DiskResources(object):
@@ -595,23 +659,35 @@ class DiskResources(object):
 class NetResources(object):
 
     WRITE_RATE_THRESHOLD = WEIGHT_CFG.get('net', {}).get('write_rate_threshold', 70 * (1024 ** 2))
+    READ_RATE_THRESHOLD = WEIGHT_CFG.get('net', {}).get('read_rate_threshold', 70 * (1024 ** 2))
     MAX_WRITE_RATE = WEIGHT_CFG.get('net', {}).get('max_write_rate', 100 * (1024 ** 2))
+    MAX_READ_RATE = WEIGHT_CFG.get('net', {}).get('max_read_rate', 100 * (1024 ** 2))
 
     def __init__(self, key, net_load):
         self.key = key
+        # elliptics write rate is not taken into account since we assume
+        # that all write load is controlled by our weights calculation
+        # algorithm, therefore we need to consider only external write rate when
+        # beginning to distribute write load
         self.net_write_rate = net_load.write_rate - net_load.ell_write_rate
+        self.net_read_rate = net_load.read_rate
 
     @staticmethod
     def key(nb):
         return nb.node.host.hostname
 
     def claim(self, resource_units):
+        # net_read_rate is not affected by resource claiming
         self.net_write_rate = self.net_write_rate + resource_units.net_rate
 
     def __repr__(self):
-        return '<Net {}: net_write_rate: {:.4f} Mb/s>'.format(
-            self.key,
-            self.net_write_rate / float(1024 ** 2)
+        return (
+            '<Net {key}: net_write_rate: {write_rate:.4f} Mb/s, '
+            'net_read_rate: {read_rate:.4f} Mb/s>'.format(
+                key=self.key,
+                write_rate=self.net_write_rate / float(1024 ** 2),
+                read_rate=self.net_read_rate / float(1024 ** 2),
+            )
         )
 
 
