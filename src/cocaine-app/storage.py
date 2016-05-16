@@ -1969,7 +1969,8 @@ class Groupset(object):
             group.update_status()
 
         global groupsets
-        groupsets.remove_groupset(self)
+        if self in groupsets:
+            groupsets.remove_groupset(self)
         self.groups = []
         self.status = Status.INIT
         self.couple = None
