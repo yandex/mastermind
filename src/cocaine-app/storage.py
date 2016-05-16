@@ -472,6 +472,8 @@ class Groupsets(MultiRepository):
         if type == GROUPSET_REPLICAS:
             return Couple
         elif type == GROUPSET_LRC:
+            if 'scheme' not in settings:
+                raise ValueError('Lrc groupset requires "scheme" setting')
             scheme = settings['scheme']
             if scheme == Lrc.Scheme822v1.ID:
                 return Lrc822v1Groupset
