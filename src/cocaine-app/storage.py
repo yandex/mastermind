@@ -2347,7 +2347,7 @@ class Couple(Groupset):
     def compose_group_meta(self, couple, settings):
         return {
             'version': 2,
-            'couple': self.as_tuple(),
+            'couple': couple.as_tuple(),
             'namespace': couple.namespace.id,
             'frozen': bool(settings['frozen']),
         }
