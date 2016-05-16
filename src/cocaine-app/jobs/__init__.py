@@ -439,16 +439,7 @@ class JobProcessor(object):
         # Forcing manual approval of newly created job
         params.setdefault('need_approving', True)
 
-        if job_type == JobTypes.TYPE_MOVE_JOB:
-            JobType = MoveJob
-        elif job_type == JobTypes.TYPE_RECOVER_DC_JOB:
-            JobType = RecoverDcJob
-        elif job_type == JobTypes.TYPE_COUPLE_DEFRAG_JOB:
-            JobType = CoupleDefragJob
-        elif job_type == JobTypes.TYPE_RESTORE_GROUP_JOB:
-            JobType = RestoreGroupJob
-        elif job_type == JobTypes.TYPE_MAKE_LRC_GROUPS_JOB:
-            JobType = MakeLrcGroupsJob
+        JobType = JobFactory.make_job_type(job_type)
 
         try:
             job = JobType.new(self.session, **params)
