@@ -615,6 +615,8 @@ class NodeInfoUpdater(object):
                         # TODO: this should definitely be done some other way
                         if hasattr(job, 'group'):
                             jobs[job.group] = job
+                        elif hasattr(job, 'couple'):
+                            jobs[job.couple] = job
                 except Exception as e:
                     logger.exception('Failed to fetch pending jobs: {0}'.format(e))
                     pass
@@ -645,7 +647,8 @@ class NodeInfoUpdater(object):
                     group.parse_meta(None)
                 finally:
                     try:
-                        group.set_active_job(jobs.get(group.group_id))
+                        active_job = jobs.get(group.group_id) or jobs.get(group.couple) or None
+                        group.set_active_job(active_job)
                     except Exception as e:
                         logger.exception('Failed to set group active job: {}'.format(e))
                         pass
