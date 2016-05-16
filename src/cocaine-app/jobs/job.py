@@ -223,8 +223,21 @@ class Job(MongoObject):
         data['tasks'] = [task.human_dump() for task in self.tasks]
         return data
 
-    def node_backend(self, host, port, backend_id):
-        return '{0}:{1}/{2}'.format(host, port, backend_id)
+    def node_backend(self, host, port, backend_id, family=None):
+        if not family:
+            # old backend id compatibility
+            return '{host}:{port}/{backend_id}'.format(
+                host=host,
+                port=port,
+                backend_id=backend_id,
+            )
+
+        return '{host}:{port}:{family}/{backend_id}'.format(
+            host=host,
+            port=port,
+            family=family,
+            backend_id=backend_id,
+        )
 
     def create_tasks(self):
         raise RuntimeError('Job creation should be implemented '
