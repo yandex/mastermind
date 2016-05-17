@@ -44,6 +44,7 @@ RSYNC_MODULE = config.get('restore', {}).get('rsync_use_module') and \
 RSYNC_USER = config.get('restore', {}).get('rsync_user', 'rsync')
 
 RECOVERY_DC_CNF = config.get('infrastructure', {}).get('recovery_dc', {})
+LRC_CONVERT_DC_CNF = config.get('infrastructure', {}).get('lrc_convert', {})
 
 logger.info('Rsync module using: %s' % RSYNC_MODULE)
 logger.info('Rsync user: %s' % RSYNC_USER)
@@ -88,6 +89,12 @@ class Infrastructure(object):
     DNET_DEFRAG_CMD = (
         'dnet_client backend -r {host}:{port}:{family} '
         'defrag --backend {backend_id} --wait-timeout=1000'
+    )
+
+    LRC_CONVERT_CMD = (
+        'lrc_convert --remote {host}:{port}:{family} --src-groups {src_groups} '
+        '--dst-groups {dst_groups} --part-size {part_size} --scheme {scheme} --log {log} '
+        '--log-level {log_level} --tmp {tmp_dir} --attempts {attempts} --trace-id {trace_id}'
     )
 
     def __init__(self):
@@ -794,6 +801,36 @@ class Infrastructure(object):
     def _defrag_node_backend_cmd(self, host, port, family, backend_id):
         cmd = self.DNET_DEFRAG_CMD.format(
             host=host, port=port, family=family, backend_id=backend_id)
+        return cmd
+
+    def _lrc_convert_cmd(self,
+                         couple,
+                         host,
+                         port,
+                         family,
+                         src_groups,
+                         dst_groups,
+                         part_size,
+                         scheme,
+                         trace_id=None):
+        cmd = self.LRC_CONVERT_CMD.format(
+            host=host,
+            port=port,
+            family=family,
+            src_groups=','.join(str(g) for g in src_groups),
+            dst_groups=','.join(str(g) for g in dst_groups),
+            part_size=part_size,
+            scheme=scheme,
+            tmp_dir=LRC_CONVERT_DC_CNF.get(
+                'tmp_dir',
+                '/var/tmp/lrc_convert_{couple_id}'
+            ).format(couple_id=couple),
+            attempts=LRC_CONVERT_DC_CNF.get('attempts', 1),
+            log=LRC_CONVERT_DC_CNF.get('log', 'lrc_convert.log').format(couple_id=couple),
+            log_level=LRC_CONVERT_DC_CNF.get('log_level', 1),
+            trace_id=trace_id or uuid.uuid4().hex[:16],
+        )
+
         return cmd
 
     @h.concurrent_handler
