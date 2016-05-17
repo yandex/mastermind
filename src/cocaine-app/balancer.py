@@ -1140,6 +1140,10 @@ class Balancer(object):
                 raise Exception('Incorrect confirmation string')
 
             kill_symm_group(self.node, self.node.meta_session, couple)
+            # force cleaning meta from groups when destroying groupset (otherwise
+            # will have to wait for the next cluster update cycle)
+            for group in couple.groups:
+                group.parse_meta(None)
             couple.destroy()
 
             return True

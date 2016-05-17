@@ -1964,7 +1964,6 @@ class Groupset(object):
             self.namespace.remove_couple(self)
         for group in self.groups:
             group.couple = None
-            group.meta = None
             group.update_status()
 
         global groupsets
