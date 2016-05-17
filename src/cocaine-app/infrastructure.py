@@ -45,6 +45,7 @@ RSYNC_USER = config.get('restore', {}).get('rsync_user', 'rsync')
 
 RECOVERY_DC_CNF = config.get('infrastructure', {}).get('recovery_dc', {})
 LRC_CONVERT_DC_CNF = config.get('infrastructure', {}).get('lrc_convert', {})
+LRC_VALIDATE_DC_CNF = config.get('infrastructure', {}).get('lrc_validate', {})
 
 logger.info('Rsync module using: %s' % RSYNC_MODULE)
 logger.info('Rsync user: %s' % RSYNC_USER)
@@ -93,6 +94,12 @@ class Infrastructure(object):
 
     LRC_CONVERT_CMD = (
         'lrc_convert --remote {host}:{port}:{family} --src-groups {src_groups} '
+        '--dst-groups {dst_groups} --part-size {part_size} --scheme {scheme} --log {log} '
+        '--log-level {log_level} --tmp {tmp_dir} --attempts {attempts} --trace-id {trace_id}'
+    )
+
+    LRC_VALIDATE_CMD = (
+        'lrc_validate --remote {host}:{port}:{family} --src-groups {src_groups} '
         '--dst-groups {dst_groups} --part-size {part_size} --scheme {scheme} --log {log} '
         '--log-level {log_level} --tmp {tmp_dir} --attempts {attempts} --trace-id {trace_id}'
     )
@@ -828,6 +835,36 @@ class Infrastructure(object):
             attempts=LRC_CONVERT_DC_CNF.get('attempts', 1),
             log=LRC_CONVERT_DC_CNF.get('log', 'lrc_convert.log').format(couple_id=couple),
             log_level=LRC_CONVERT_DC_CNF.get('log_level', 1),
+            trace_id=trace_id or uuid.uuid4().hex[:16],
+        )
+
+        return cmd
+
+    def _lrc_validate_cmd(self,
+                          couple,
+                          host,
+                          port,
+                          family,
+                          src_groups,
+                          dst_groups,
+                          part_size,
+                          scheme,
+                          trace_id=None):
+        cmd = self.LRC_VALIDATE_CMD.format(
+            host=host,
+            port=port,
+            family=family,
+            src_groups=','.join(str(g) for g in src_groups),
+            dst_groups=','.join(str(g) for g in dst_groups),
+            part_size=part_size,
+            scheme=scheme,
+            tmp_dir=LRC_VALIDATE_DC_CNF.get(
+                'tmp_dir',
+                '/var/tmp/lrc_validate_{couple_id}'
+            ).format(couple_id=couple),
+            attempts=LRC_VALIDATE_DC_CNF.get('attempts', 1),
+            log=LRC_VALIDATE_DC_CNF.get('log', 'lrc_validate.log').format(couple_id=couple),
+            log_level=LRC_VALIDATE_DC_CNF.get('log_level', 1),
             trace_id=trace_id or uuid.uuid4().hex[:16],
         )
 
