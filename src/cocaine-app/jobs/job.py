@@ -90,6 +90,8 @@ class Job(MongoObject):
         job.update_ts = ts
         job._dirty = True
 
+        job._check_job()
+
         try:
             job._set_resources()
         except Exception as e:
@@ -113,6 +115,14 @@ class Job(MongoObject):
             raise
 
         return job
+
+    def _check_job(self):
+        """Check job parameters and prerequisites.
+
+        This method should make sure that job tasks can be created, resources list can be
+        constructed, etc.
+        """
+        pass
 
     def _set_resources(self):
         raise NotImplemented('_set_resources method for {} should be '
