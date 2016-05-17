@@ -7,6 +7,7 @@ import helpers as h
 import logging
 import math
 import os.path
+import random
 import time
 import types
 
@@ -251,6 +252,70 @@ class Lrc(object):
             return bool(Lrc.make_scheme(scheme_id))
         except ValueError:
             return False
+
+    @staticmethod
+    def select_groups_for_groupset(couple, mandatory_dcs):
+        '''Select appropriate groups for 'lrc' groupset.
+
+        Parameters:
+            couple - a couple to select groupset for;
+            mandatory_dcs - selected groups in such a way that each dc in this list is
+                occupied by at least one group (for 'lrc-8-2-2-v1' scheme -- by at least
+                one 4-group set);
+        '''
+        prepared_groups = []
+
+        # a set of unsuitable groups and groups that are already checked
+        checked_groups = set()
+
+        groups_in_service = set(infrastructure.get_group_ids_in_service())
+        mandatory_dcs = set(mandatory_dcs)
+
+        def check_group(group):
+            if group.type != Group.TYPE_UNCOUPLED_LRC_8_2_2_V1:
+                return False
+            if group in checked_groups:
+                return False
+            if group in groups_in_service:
+                return False
+            if group.status != Status.COUPLED:
+                return False
+            if len(group.node_backends) != 1:
+                return False
+            return True
+
+        def check_groupset(groups):
+            dcs = set(group.node_backends[0].node.host.dc for group in groups)
+            if not mandatory_dcs.issubset(dcs):
+                return False
+            return True
+
+        global groups
+
+        for group in groups:
+            if not check_group(group):
+                continue
+
+            check_linked_groups = all(
+                group_id in groups and check_group(groups[group_id])
+                for group_id in group.meta['lrc_groups']
+            )
+
+            checked_groups.update(group.meta['lrc_groups'])
+
+            if not check_linked_groups:
+                continue
+
+            if not check_groupset(groups[group_id] for group_id in group.meta['lrc_groups']):
+                continue
+
+            # all groups have been checked and can be used for groupset construction
+            prepared_groups.append(group.meta['lrc_groups'])
+
+        if not prepared_groups:
+            raise ValueError('Failed to find suitable groups for groupset')
+
+        return random.choice(prepared_groups)
 
 
 class ResourceError(KeyError):

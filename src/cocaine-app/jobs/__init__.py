@@ -773,6 +773,126 @@ class JobProcessor(object):
             mandatory_dcs=mandatory_dcs,
         )
 
+    def _check_groupset(self, group_ids, type):
+        if type == storage.GROUPSET_LRC:
+            for group_id in group_ids:
+                group = storage.groups[group_id]
+                if group.type != storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1:
+                    raise ValueError(
+                        'Group {group} has unexpected type {group_type}, expected '
+                        '{expected_type}'.format(
+                            group=group,
+                            group_type=group.type,
+                            expected_type=storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1,
+                        )
+                    )
+                if group.status != storage.Status.COUPLED:
+                    raise ValueError(
+                        'Group {group} has unexpected status {group_status}, expected '
+                        '{expected_status}'.format(
+                            group=group,
+                            group_status=group.status,
+                            expected_status=storage.Status.COUPLED,
+                        )
+                    )
+                if tuple(group.meta['lrc_groups']) != tuple(group_ids):
+                    raise ValueError(
+                        'Group {group} cannot be used as a part of groupset {groupset}, '
+                        'linked groups are {linked_groups}'.format(
+                            group=group,
+                            groupset=group_ids,
+                            linked_groups=group.meta['lrc_groups'],
+                        )
+                    )
+
+    def _select_groups_for_groupset(self, couple, type, mandatory_dcs):
+        '''Select appropriate groups for a new groupset of selected 'type' for 'couple'.
+
+        Parameters:
+            couple - a couple to select groupset for;
+            type - new groupset's type;
+            mandatory_dcs -  if supplied, selected groups will be located in these dcs
+                according to groupset type distribution rules. See certain type
+                implementations for further details;
+        '''
+        if type == storage.GROUPSET_LRC:
+            return storage.Lrc.select_groups_for_groupset(
+                couple=couple,
+                mandatory_dcs=mandatory_dcs,
+            )
+        else:
+            raise ValueError('Unsupported groupset type: {}'.format(type))
+
+    def _compose_groupset_metakey(self, groupset_type, groups, couple, settings):
+        """Construct metakey for a new groupset that does not exist at the moment.
+
+        This is a helper function that creates a dummy groupset object to construct
+        metakey and then destroys it.
+        """
+
+        groupset = groupset_type(groups)
+        metakey = groupset.compose_group_meta(
+            couple=couple,
+            settings=settings,
+        )
+        groupset.destroy()
+        return metakey
+
+    @h.concurrent_handler
+    def add_groupset_to_couple(self, request):
+        if 'couple' not in request:
+            raise ValueError('Request should contain "couple" field')
+        couple = storage.groupsets.get_couple(request['couple'])
+
+        if 'type' not in request:
+            raise ValueError('Request should contain "type" field')
+
+        if 'settings' not in request:
+            raise ValueError('Request should contain "settings" field')
+
+        if 'groupset' not in request:
+            groupset = self._select_groups_for_groupset(
+                couple,
+                type=request['type'],
+                mandatory_dcs=request.get('mandatory_dcs', []),
+            )
+        else:
+            groupset = [int(group_id) for group_id in request['groupset'].split(':')]
+
+        logger.info('Selected groups for groupset: {}'.format(groupset))
+
+        self._check_groupset(groupset, type=request['type'])
+
+        settings = request['settings']
+        Groupset = storage.Groupsets.make_groupset_type(
+            type=request['type'],
+            settings=settings,
+        )
+        Groupset.check_settings(settings)
+
+        if request['type'] == storage.GROUPSET_LRC:
+            job_type = JobTypes.TYPE_ADD_LRC_GROUPSET_JOB
+        else:
+            raise ValueError('Unsupported groupset type: {}'.format(request['type']))
+
+        job = self._create_job(
+            job_type=job_type,
+            params={
+                'metakey': self._compose_groupset_metakey(
+                    groupset_type=Groupset,
+                    groups=[storage.groups[g] for g in groupset],
+                    couple=couple,
+                    settings=settings,
+                ),
+                'groups': list(groupset),
+                'couple': str(couple),
+                'part_size': settings['part_size'],
+                'scheme': settings['scheme'],
+            },
+        )
+
+        return job.dump()
+
 
 class JobFinder(object):
 
