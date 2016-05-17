@@ -4,6 +4,7 @@ from recover_dc import RecoverDcJob
 from couple_defrag import CoupleDefragJob
 from restore_group import RestoreGroupJob
 from make_lrc_groups import MakeLrcGroupsJob
+from add_lrc_groupset import AddLrcGroupsetJob
 
 
 class JobFactory(object):
@@ -20,6 +21,8 @@ class JobFactory(object):
             return RestoreGroupJob
         elif job_type == JobTypes.TYPE_MAKE_LRC_GROUPS_JOB:
             return MakeLrcGroupsJob
+        elif job_type == JobTypes.TYPE_ADD_LRC_GROUPSET_JOB:
+            return AddLrcGroupsetJob
         raise ValueError('Unknown job type: {}'.format(job_type))
 
     @staticmethod

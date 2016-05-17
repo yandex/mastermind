@@ -1755,7 +1755,11 @@ class Groupset(object):
             return None
 
     def _get_job_service_status(self):
-        service_job_types = (JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_RESTORE_GROUP_JOB)
+        service_job_types = (
+            JobTypes.TYPE_MOVE_JOB,
+            JobTypes.TYPE_RESTORE_GROUP_JOB,
+            JobTypes.TYPE_ADD_LRC_GROUPSET_JOB,
+        )
         running_job_statuses = (jobs.job.Job.STATUS_NEW, jobs.job.Job.STATUS_EXECUTING)
         if self.active_job and self.active_job['type'] in service_job_types:
             if self.active_job['status'] in running_job_statuses:
