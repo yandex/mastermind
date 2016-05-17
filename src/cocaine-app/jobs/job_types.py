@@ -28,3 +28,4 @@ class TaskTypes(object):
     TYPE_WRITE_META_KEY = 'write_meta_key'
     TYPE_DNET_CLIENT_BACKEND_CMD = 'dnet_client_backend_cmd'
     TYPE_WAIT_GROUPSET_STATE = 'wait_groupset_state'
+    TYPE_CHANGE_COUPLE_FROZEN_STATUS = 'change_couple_frozen_status'
