@@ -593,7 +593,7 @@ class Balancer(object):
             if 'scheme' not in request['settings']:
                 raise ValueError('Lrc groupset requires "scheme" setting')
 
-        Groupset = storage.groupsets.make_groupset(
+        Groupset = storage.groupsets.make_groupset_type(
             type=request['type'],
             settings=request['settings'],
         )

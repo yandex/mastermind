@@ -468,7 +468,7 @@ class Groupsets(MultiRepository):
             return groupsets[group_or_groupset_id]
 
     @staticmethod
-    def make_groupset(type, settings):
+    def make_groupset_type(type, settings):
         if type == GROUPSET_REPLICAS:
             return Couple
         elif type == GROUPSET_LRC:
