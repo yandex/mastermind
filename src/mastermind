@@ -1316,6 +1316,60 @@ def lrc_group_uncoupled_list(
         print res
 
 
+@lrcGroupDispatcher.command(name='prepare-new-groups')
+@log_action
+def lrc_group_prepare_new_groups(
+    scheme=('', '', 'lrc scheme of a groupset the groups will be used for'),
+    count=('', '1', 'minimal number of groupsets for which groups are being prepared'),
+    dc=('', [], 'dc to select groups from (may be used multiple times)'),
+    json=('', None, 'Format data as json'),
+    host=None,
+    app=None
+):
+    '''Create job that prepares new uncoupled lrc groups.
+    Groups are created in place of disassembled uncoupled groups, which are selected
+    based on scheme-specific rules.
+    Each uncoupled group is replaced by a number of new groups of smaller size, which
+    are linked together and are used later to create lrc groupsets for couples.
+    '''
+    s = service(host, app)
+
+    try:
+        count = int(count)
+        if count <= 0:
+            raise ValueError
+    except ValueError:
+        print warn('--count must be a positive integer')
+        return 1
+
+    if not scheme:
+        print warn('--scheme is required')
+        return 1
+
+    params = {
+        'scheme': scheme,
+        'count': count,
+        'mandatory_dcs': dc,
+    }
+
+    res = s.enqueue(
+        'build_lrc_groups',
+        msgpack.packb(params)
+    ).get()
+
+    if 'Error' in res:
+        if json:
+            print dumps(res)
+        else:
+            print warn(res['Error'])
+        return 1
+
+    if json:
+        print dumps(res)
+    else:
+        pprint(res)
+
+
 lrcGroupsetDispatcher = Dispatcher(globaloptions=(host_param, app_param))
 lrcDispatcher.nest('groupset', lrcGroupsetDispatcher, 'LRC groupset commands')
 
