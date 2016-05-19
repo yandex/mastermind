@@ -631,6 +631,103 @@ def couple_build(size,
         return 1
 
 
+@coupleDispatcher.command(name='add-groupset')
+@log_action
+def couple_add_groupset(couple,
+                        type,
+                        dc=('', [], 'dc to select groups from (may be used multiple times)'),
+                        groupset=(
+                            '',
+                            '',
+                            'create groupset from supplied group or groups (e.g: '
+                            '1001:1002:1003:...). If a single group is supplied and this '
+                            'group was prepared to be a part of lrc groupset, linked '
+                            'groups from metakey will be used',
+                        ),
+                        scheme=('', '', '(type "lrc") new groupset\'s lrc scheme'),
+                        part_size=('', '', '(type "lrc") new groupset\'s part size'),
+                        json=('', None, 'Format data as json'),
+                        host=None,
+                        app=None):
+    '''Add new groupset to a 'couple'.
+    Creates job will perform the following actions:
+        - runs recover dc on couple's groups;
+        - switch all couple's groups to read-only mode;
+        - select groups for a new groupset (if they were not supplied with 'groupset'
+            parameter;
+        - write couple's data to the new groupset (convert if required);
+        - write metakey to the groupset's groups;
+        - switch off read-only mode;
+
+    Parameters:
+        couple      couple to add groupset to;
+        type        type of a new groupset. Supported values:
+                        lrc - new lrc groupset (--scheme and --part-size are required);
+    '''
+    s = service(host, app)
+
+    if dc and groupset:
+        raise ValueError('Options --groupset and --dc cannot be used simultaneously')
+
+    settings = {}
+    if type == 'lrc':
+        if not scheme:
+            print warn('--scheme is required for type "lrc"')
+            return 1
+        settings['scheme'] = scheme
+        if not part_size:
+            print warn('--part-size is required for type "lrc"')
+            return 1
+        settings['part_size'] = int(part_size)
+    else:
+        raise ValueError('Unsupported groupset type: {}'.format(type))
+
+    if ':' not in couple:
+        # consider 'couple' to be a group id of type integer
+        couple = int(couple)
+
+    params = {
+        'couple': couple,
+        'type': type,
+        'settings': settings,
+    }
+
+    if groupset:
+        if ':' not in groupset and type == 'lrc':
+            # this is a group, fetch lrc groupset for this group
+            cl = client(host, app)
+            try:
+                meta = cl.groups[int(groupset)].meta
+            except Exception:
+                meta = None
+            if not (meta and 'lrc_groups' in meta):
+                print warn('Group {} is not an uncoupled lrc group'.format(groupset))
+                return 1
+            lrc_groups = meta['lrc_groups']
+            groupset = ':'.join(str(g) for g in lrc_groups)
+        params['groupset'] = groupset
+
+    elif dc:
+        params['mandatory_dcs'] = dc
+
+    res = s.enqueue(
+        'add_groupset_to_couple',
+        msgpack.packb(params)
+    ).get()
+
+    if 'Error' in res:
+        if json:
+            print dumps(res)
+        else:
+            print warn(res['Error'])
+        return 1
+
+    if json:
+        print dumps(res)
+    else:
+        pprint(res)
+
+
 @coupleDispatcher.command(name='break')
 @log_action
 def couple_break(couple, confirm=None,

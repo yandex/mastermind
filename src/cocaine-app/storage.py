@@ -7,6 +7,7 @@ import helpers as h
 import logging
 import math
 import os.path
+import random
 import time
 import types
 
@@ -252,6 +253,70 @@ class Lrc(object):
         except ValueError:
             return False
 
+    @staticmethod
+    def select_groups_for_groupset(couple, mandatory_dcs):
+        '''Select appropriate groups for 'lrc' groupset.
+
+        Parameters:
+            couple - a couple to select groupset for;
+            mandatory_dcs - selected groups in such a way that each dc in this list is
+                occupied by at least one group (for 'lrc-8-2-2-v1' scheme -- by at least
+                one 4-group set);
+        '''
+        prepared_groups = []
+
+        # a set of unsuitable groups and groups that are already checked
+        checked_groups = set()
+
+        groups_in_service = set(infrastructure.get_group_ids_in_service())
+        mandatory_dcs = set(mandatory_dcs)
+
+        def check_group(group):
+            if group.type != Group.TYPE_UNCOUPLED_LRC_8_2_2_V1:
+                return False
+            if group in checked_groups:
+                return False
+            if group in groups_in_service:
+                return False
+            if group.status != Status.COUPLED:
+                return False
+            if len(group.node_backends) != 1:
+                return False
+            return True
+
+        def check_groupset(groups):
+            dcs = set(group.node_backends[0].node.host.dc for group in groups)
+            if not mandatory_dcs.issubset(dcs):
+                return False
+            return True
+
+        global groups
+
+        for group in groups:
+            if not check_group(group):
+                continue
+
+            check_linked_groups = all(
+                group_id in groups and check_group(groups[group_id])
+                for group_id in group.meta['lrc_groups']
+            )
+
+            checked_groups.update(group.meta['lrc_groups'])
+
+            if not check_linked_groups:
+                continue
+
+            if not check_groupset(groups[group_id] for group_id in group.meta['lrc_groups']):
+                continue
+
+            # all groups have been checked and can be used for groupset construction
+            prepared_groups.append(group.meta['lrc_groups'])
+
+        if not prepared_groups:
+            raise ValueError('Failed to find suitable groups for groupset')
+
+        return random.choice(prepared_groups)
+
 
 class ResourceError(KeyError):
     def __str__(self):
@@ -468,10 +533,12 @@ class Groupsets(MultiRepository):
             return groupsets[group_or_groupset_id]
 
     @staticmethod
-    def make_groupset(type, settings):
+    def make_groupset_type(type, settings):
         if type == GROUPSET_REPLICAS:
             return Couple
         elif type == GROUPSET_LRC:
+            if 'scheme' not in settings:
+                raise ValueError('Lrc groupset requires "scheme" setting')
             scheme = settings['scheme']
             if scheme == Lrc.Scheme822v1.ID:
                 return Lrc822v1Groupset
@@ -1753,7 +1820,11 @@ class Groupset(object):
             return None
 
     def _get_job_service_status(self):
-        service_job_types = (JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_RESTORE_GROUP_JOB)
+        service_job_types = (
+            JobTypes.TYPE_MOVE_JOB,
+            JobTypes.TYPE_RESTORE_GROUP_JOB,
+            JobTypes.TYPE_ADD_LRC_GROUPSET_JOB,
+        )
         running_job_statuses = (jobs.job.Job.STATUS_NEW, jobs.job.Job.STATUS_EXECUTING)
         if self.active_job and self.active_job['type'] in service_job_types:
             if self.active_job['status'] in running_job_statuses:
@@ -1964,11 +2035,11 @@ class Groupset(object):
             self.namespace.remove_couple(self)
         for group in self.groups:
             group.couple = None
-            group.meta = None
             group.update_status()
 
         global groupsets
-        groupsets.remove_groupset(self)
+        if self in groupsets:
+            groupsets.remove_groupset(self)
         self.groups = []
         self.status = Status.INIT
         self.couple = None
@@ -2345,7 +2416,7 @@ class Couple(Groupset):
     def compose_group_meta(self, couple, settings):
         return {
             'version': 2,
-            'couple': self.as_tuple(),
+            'couple': couple.as_tuple(),
             'namespace': couple.namespace.id,
             'frozen': bool(settings['frozen']),
         }
@@ -2360,6 +2431,12 @@ class Couple(Groupset):
         return {
             'frozen': self.frozen,
         }
+
+    @staticmethod
+    def check_settings(settings):
+        if 'frozen' in settings:
+            if not isinstance(settings['frozen'], bool):
+                raise ValueError('Replicas groupset "frozen" setting must be bool')
 
 
 class Lrc822v1Groupset(Groupset):
@@ -2577,6 +2654,21 @@ class Lrc822v1Groupset(Groupset):
             'scheme': Lrc.Scheme822v1.ID,
             'part_size': self.part_size,
         }
+
+    @staticmethod
+    def check_settings(settings):
+        if 'scheme' not in settings:
+            raise ValueError('Lrc groupset requires "scheme" setting')
+
+        if not Lrc.check_scheme(settings['scheme']):
+            raise ValueError('Unknown LRC scheme "{}"'.format(settings['scheme']))
+
+        if 'part_size' not in settings:
+            raise ValueError('Lrc groupset requires "part_size" setting')
+
+        part_size = settings['part_size']
+        if not isinstance(part_size, int) or part_size <= 0:
+            raise ValueError('"part_size" must be a positive integer')
 
 
 class DcNodes(object):
