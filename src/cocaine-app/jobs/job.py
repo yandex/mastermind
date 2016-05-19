@@ -90,6 +90,8 @@ class Job(MongoObject):
         job.update_ts = ts
         job._dirty = True
 
+        job._check_job()
+
         try:
             job._set_resources()
         except Exception as e:
@@ -113,6 +115,14 @@ class Job(MongoObject):
             raise
 
         return job
+
+    def _check_job(self):
+        """Check job parameters and prerequisites.
+
+        This method should make sure that job tasks can be created, resources list can be
+        constructed, etc.
+        """
+        pass
 
     def _set_resources(self):
         raise NotImplemented('_set_resources method for {} should be '
@@ -223,8 +233,21 @@ class Job(MongoObject):
         data['tasks'] = [task.human_dump() for task in self.tasks]
         return data
 
-    def node_backend(self, host, port, backend_id):
-        return '{0}:{1}/{2}'.format(host, port, backend_id)
+    def node_backend(self, host, port, backend_id, family=None):
+        if not family:
+            # old backend id compatibility
+            return '{host}:{port}/{backend_id}'.format(
+                host=host,
+                port=port,
+                backend_id=backend_id,
+            )
+
+        return '{host}:{port}:{family}/{backend_id}'.format(
+            host=host,
+            port=port,
+            family=family,
+            backend_id=backend_id,
+        )
 
     def create_tasks(self):
         raise RuntimeError('Job creation should be implemented '

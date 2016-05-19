@@ -5,6 +5,7 @@ class JobTypes(object):
     TYPE_COUPLE_DEFRAG_JOB = 'couple_defrag_job'
     TYPE_RESTORE_GROUP_JOB = 'restore_group_job'
     TYPE_MAKE_LRC_GROUPS_JOB = 'make_lrc_groups_job'
+    TYPE_ADD_LRC_GROUPSET_JOB = 'add_lrc_groupset_job'
 
     AVAILABLE_TYPES = (
         TYPE_MOVE_JOB,
@@ -27,3 +28,5 @@ class TaskTypes(object):
     TYPE_REMOVE_GROUP = 'remove_group'
     TYPE_WRITE_META_KEY = 'write_meta_key'
     TYPE_DNET_CLIENT_BACKEND_CMD = 'dnet_client_backend_cmd'
+    TYPE_WAIT_GROUPSET_STATE = 'wait_groupset_state'
+    TYPE_CHANGE_COUPLE_FROZEN_STATUS = 'change_couple_frozen_status'
