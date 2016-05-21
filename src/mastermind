@@ -1070,11 +1070,13 @@ def ns_list(deleted=('d', '', 'Show namespace even if it has been deleted (0|1)'
 
     namespaces = cl.namespaces.filter(**options)
 
+    res = [ns.id for ns in namespaces]
+
     if json:
-        print dumps(ns.id for ns in namespaces)
+        print dumps(res)
     else:
-        for ns in namespaces:
-            print ns.id
+        for ns_id in res:
+            print ns_id
 
 
 @nsDispatcher.command(name='delete')
