@@ -1,3 +1,9 @@
+mastermind (2.28.4) trusty; urgency=medium
+
+  * Add ttl attribute namespace settings
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 24 May 2016 18:16:09 +0300
+
 mastermind (2.28.3) trusty; urgency=medium
 
   * Disable dnet_recovery safe mode
