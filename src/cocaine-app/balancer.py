@@ -1165,6 +1165,18 @@ class Balancer(object):
     def __valid_namespace(self, namespace):
         return self.NS_RE.match(namespace) is not None
 
+    TIME_UNITS_RE = re.compile('^(\d+)(?:[smhd])$')
+
+    @staticmethod
+    def __valid_time_units(time_units):
+        match = Balancer.TIME_UNITS_RE.match(time_units)
+        if match is None:
+            return False
+        time_units_num_val = int(match.group(1))
+        if time_units_num_val <= 0:
+            return False
+        return True
+
     def __validate_ns_settings(self, namespace, settings):
 
         groups_count = None
@@ -1257,6 +1269,25 @@ class Balancer(object):
                 if not isinstance(attributes['filename'], bool):
                     raise ValueError('attributes filename should be boolean')
 
+            if 'ttl' in attributes:
+                attributes_ttl = attributes['ttl']
+                if 'enable' in attributes_ttl:
+                    if not isinstance(attributes_ttl['enable'], bool):
+                        raise ValueError('ttl "enable" flag should be boolean')
+                if 'minimum' in attributes_ttl:
+                    if not self.__valid_time_units(attributes_ttl['minimum']):
+                        raise ValueError('minimum ttl should be a valid time unit')
+                if 'maximum' in attributes_ttl:
+                    if not self.__valid_time_units(attributes_ttl['maximum']):
+                        raise ValueError('maximum ttl should be a valid time unit')
+
+        is_ttl_enabled = settings.get('attributes', {}).get('ttl', {}).get('enable', False)
+        is_check_for_update_disabled = settings.get('check-for-update', True) is False
+        if is_ttl_enabled and is_check_for_update_disabled:
+            raise ValueError(
+                'ttl attribute cannot be enabled when check-for-update is disabled'
+            )
+
         keys = (settings.get('redirect', {}).get('expire-time'),
                 settings.get('signature', {}).get('token'),
                 settings.get('signature', {}).get('path_prefix'))
@@ -1335,6 +1366,12 @@ class Balancer(object):
     ALLOWED_SERVICE_KEYS = set(['is_deleted'])
     ALLOWED_ATTRIBUTES_KEYS = set([
         'filename',
+        'ttl',
+    ])
+    ALLOWED_ATTRIBUTES_TTL_KEYS = set([
+        'enable',
+        'minimum',
+        'maximum',
     ])
 
     def __merge_dict(self, dst, src):
@@ -1428,6 +1465,9 @@ class Balancer(object):
             for k in settings.get('attributes', {}).keys():
                 if k not in self.ALLOWED_ATTRIBUTES_KEYS:
                     del settings['attributes'][k]
+            for k in settings.get('attributes', {}).get('ttl', {}).keys():
+                if k not in self.ALLOWED_ATTRIBUTES_TTL_KEYS:
+                    del settings['attributes']['ttl'][k]
 
             try:
                 self.__validate_ns_settings(namespace, settings)
