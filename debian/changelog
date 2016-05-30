@@ -1,3 +1,9 @@
+mastermind (2.28.6) trusty; urgency=medium
+
+  * Check task status after its execution is started
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 31 May 2016 01:14:51 +0300
+
 mastermind (2.28.5) trusty; urgency=medium
 
   * Skip checking if all replicas groups are read-only
