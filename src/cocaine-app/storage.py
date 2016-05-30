@@ -1785,12 +1785,12 @@ class Group(object):
 def status_change_log(f):
     @functools.wraps(f)
     def wrapper(self, *args, **kwargs):
-        status = self.status
-        new_status = f(self, *args, **kwargs)
-        if status != new_status:
+        old_status = self.status
+        res = f(self, *args, **kwargs)
+        if old_status != self.status:
             logger.info('Couple {0} status updated from {1} to {2} ({3})'.format(
-                self, status, new_status, self.status_text))
-        return new_status
+                self, old_status, self.status, self.status_text))
+        return res
     return wrapper
 
 
@@ -2304,13 +2304,13 @@ class Couple(Groupset):
 
         if self.lrc822v1_groupset:
             lrc_groups_status = (
-                self._get_migrating_groups_status() or
-                self._get_lrc_groupset_not_ro_groups_status()
+                self._get_ro_groups_status() or
+                self._get_migrating_groups_status()
             )
             if lrc_groups_status:
                 return lrc_groups_status
 
-            if all(g.status == Status.RO for g in self.groups):
+            if all(g.status == Status.COUPLED for g in self.groups):
                 # couple with lrc groupset is in good state
                 return Status(
                     code=Status.ARCHIVED,
@@ -2391,25 +2391,6 @@ class Couple(Groupset):
                     code=Status.BAD,
                     text='Couple {} has stalled groups'.format(self),
                 )
-            )
-        return None
-
-    def _get_lrc_groupset_not_ro_groups_status(self):
-        if not all(g.status == Status.RO for g in self.groups):
-            status_text = (
-                'Couple {couple} has groups with unexpected '
-                'status: [{groups_desc}], should all be RO'.format(
-                    couple=self,
-                    groups_desc='; '.join(
-                        '{group}: {status}'.format(group=g, status=g.status)
-                        for g in self.groups
-                        if g.status != Status.RO
-                    )
-                )
-            )
-            return Status(
-                code=Status.BAD,
-                text=status_text,
             )
         return None
 
