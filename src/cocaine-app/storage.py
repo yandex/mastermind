@@ -1785,12 +1785,12 @@ class Group(object):
 def status_change_log(f):
     @functools.wraps(f)
     def wrapper(self, *args, **kwargs):
-        status = self.status
-        new_status = f(self, *args, **kwargs)
-        if status != new_status:
+        old_status = self.status
+        res = f(self, *args, **kwargs)
+        if old_status != self.status:
             logger.info('Couple {0} status updated from {1} to {2} ({3})'.format(
-                self, status, new_status, self.status_text))
-        return new_status
+                self, old_status, self.status, self.status_text))
+        return res
     return wrapper
 
 
