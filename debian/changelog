@@ -1,3 +1,10 @@
+mastermind (2.28.5) trusty; urgency=medium
+
+  * Skip checking if all replicas groups are read-only
+  * Fix logging of couple status change
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 31 May 2016 00:33:45 +0300
+
 mastermind (2.28.4) trusty; urgency=medium
 
   * Add ttl attribute namespace settings
