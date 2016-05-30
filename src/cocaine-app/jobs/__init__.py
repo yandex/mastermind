@@ -269,59 +269,8 @@ class JobProcessor(object):
                 return
 
         for task in job.tasks:
-            if task.status == Task.STATUS_EXECUTING:
 
-                logger.info('Job {0}, task {1} status update'.format(
-                    job.id, task.id))
-                try:
-                    self.__update_task_status(task)
-                except Exception as e:
-                    logger.error('Job {0}, task {1}: failed to update status: '
-                        '{2}\n{3}'.format(job.id, task.id, e, traceback.format_exc()))
-                    job.add_error_msg(str(e))
-                    task.status = Task.STATUS_FAILED
-                    job.status = Job.STATUS_PENDING
-                    ts = time.time()
-                    job.update_ts = ts
-                    job.finish_ts = ts
-                    job._dirty = True
-                    break
-
-                if not task.finished(self):
-                    logger.debug('Job {0}, task {1} is not finished'.format(
-                        job.id, task.id))
-                    break
-
-                ts = time.time()
-                job.update_ts = ts
-                job.finish_ts = ts
-                job._dirty = True
-
-                task.status = (Task.STATUS_FAILED
-                               if task.failed(self) else
-                               Task.STATUS_COMPLETED)
-
-                try:
-                    task.on_exec_stop(self)
-                except Exception as e:
-                    logger.error('Job {0}, task {1}: failed to execute task '
-                        'stop handler: {2}\n{3}'.format(
-                            job.id, task.id, e, traceback.format_exc()))
-                    raise
-
-                logger.debug('Job {0}, task {1} is finished, status {2}'.format(
-                    job.id, task.id, task.status))
-
-                if task.status == Task.STATUS_FAILED:
-                    job.status = Job.STATUS_PENDING
-                    ts = time.time()
-                    job.update_ts = ts
-                    job.finish_ts = ts
-                    break
-                else:
-                    continue
-
-            elif task.status == Task.STATUS_QUEUED:
+            if task.status == Task.STATUS_QUEUED:
                 logger.info('Job {0}, executing new task {1}'.format(job.id, task))
 
                 try:
@@ -377,7 +326,60 @@ class JobProcessor(object):
                 task.status = Task.STATUS_EXECUTING
                 job.status = Job.STATUS_EXECUTING
                 job._dirty = True
-                break
+
+            # this can be safely run even when task has just been switched to
+            # 'executing' state
+            if task.status == Task.STATUS_EXECUTING:
+
+                logger.info('Job {0}, task {1} status update'.format(
+                    job.id, task.id))
+                try:
+                    self.__update_task_status(task)
+                except Exception as e:
+                    logger.error('Job {0}, task {1}: failed to update status: '
+                        '{2}\n{3}'.format(job.id, task.id, e, traceback.format_exc()))
+                    job.add_error_msg(str(e))
+                    task.status = Task.STATUS_FAILED
+                    job.status = Job.STATUS_PENDING
+                    ts = time.time()
+                    job.update_ts = ts
+                    job.finish_ts = ts
+                    job._dirty = True
+                    break
+
+                if not task.finished(self):
+                    logger.debug('Job {0}, task {1} is not finished'.format(
+                        job.id, task.id))
+                    break
+
+                ts = time.time()
+                job.update_ts = ts
+                job.finish_ts = ts
+                job._dirty = True
+
+                task.status = (Task.STATUS_FAILED
+                               if task.failed(self) else
+                               Task.STATUS_COMPLETED)
+
+                try:
+                    task.on_exec_stop(self)
+                except Exception as e:
+                    logger.error('Job {0}, task {1}: failed to execute task '
+                        'stop handler: {2}\n{3}'.format(
+                            job.id, task.id, e, traceback.format_exc()))
+                    raise
+
+                logger.debug('Job {0}, task {1} is finished, status {2}'.format(
+                    job.id, task.id, task.status))
+
+                if task.status == Task.STATUS_FAILED:
+                    job.status = Job.STATUS_PENDING
+                    ts = time.time()
+                    job.update_ts = ts
+                    job.finish_ts = ts
+                    break
+                else:
+                    continue
 
             elif task.status == Task.STATUS_FAILED:
                 break
