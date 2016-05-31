@@ -1,3 +1,9 @@
+mastermind (2.28.7) trusty; urgency=medium
+
+  * Increase lrc groupset job priority
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 31 May 2016 15:45:40 +0300
+
 mastermind (2.28.6) trusty; urgency=medium
 
   * Check task status after its execution is started
