@@ -1,3 +1,9 @@
+mastermind (2.28.8) trusty; urgency=medium
+
+  * Add remove backend task to prepare lrc groups job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 06 Jun 2016 12:02:49 +0300
+
 mastermind (2.28.7) trusty; urgency=medium
 
   * Increase lrc groupset job priority
