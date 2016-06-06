@@ -621,6 +621,7 @@ class Infrastructure(object):
     _disable_node_backend_cmd = staticmethod(dnet_client_backend_command('disable'))
     _make_readonly_node_backend_cmd = staticmethod(dnet_client_backend_command('make_readonly'))
     _make_writable_node_backend_cmd = staticmethod(dnet_client_backend_command('make_writable'))
+    _remove_node_backend_cmd = staticmethod(dnet_client_backend_command('remove'))
 
     @h.concurrent_handler
     def enable_node_backend_cmd(self, request):
