@@ -110,8 +110,8 @@ class MakeLrcGroupsJob(Job):
         for uncoupled_group_id, lrc_group_ids in lrc_groups_ids_by_uncoupled_group_id.iteritems():
 
             uncoupled_group = storage.groups[uncoupled_group_id]
-            self.tasks.append(
-                self._remove_uncoupled_group_task(uncoupled_group)
+            self.tasks.extend(
+                self._remove_uncoupled_group_tasks(uncoupled_group)
             )
 
             nb = uncoupled_group.node_backends[0]
@@ -136,20 +136,41 @@ class MakeLrcGroupsJob(Job):
                 )
             )
 
-    def _remove_uncoupled_group_task(self, uncoupled_group):
+    def _remove_uncoupled_group_tasks(self, uncoupled_group):
+        job_tasks = []
         nb = uncoupled_group.node_backends[0]
 
-        # remove uncoupled group from a file system
-        task = tasks.RemoveGroupTask.new(
-            self,
-            group=uncoupled_group.group_id,
+        remove_cmd = infrastructure.infrastructure._remove_node_backend_cmd(
             host=nb.node.host.addr,
-            params={
-                'group': str(uncoupled_group.group_id),
-                'group_base_path': nb.base_path,
-            },
+            port=nb.node.port,
+            family=nb.node.family,
+            backend_id=nb.backend_id,
         )
-        return task
+        job_tasks.append(
+            tasks.MinionCmdTask.new(
+                self,
+                host=nb.node.host.addr,
+                cmd=remove_cmd,
+                params={
+                    'node_backend': str(nb).encode('utf-8'),
+                },
+            )
+        )
+
+        # remove uncoupled group from a file system
+        job_tasks.append(
+            tasks.RemoveGroupTask.new(
+                self,
+                group=uncoupled_group.group_id,
+                host=nb.node.host.addr,
+                params={
+                    'group': str(uncoupled_group.group_id),
+                    'group_base_path': nb.base_path,
+                },
+            )
+        )
+
+        return job_tasks
 
     def _create_new_lrc_groups_tasks(self, node_backend, lrc_group_ids):
         job_tasks = []
