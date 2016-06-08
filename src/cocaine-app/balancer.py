@@ -466,6 +466,18 @@ class Balancer(object):
 
         raise ValueError('History for group {} is not found'.format(group))
 
+    @h.concurrent_handler
+    def get_group_histories_list(self, request):
+        _filter = request.get('filter', {})
+        return self._get_group_histories_list(_filter)
+
+    def _get_group_histories_list(self, _filter):
+        data = []
+        group_ids = _filter.get('group_ids')
+        for group_history in self.infrastructure.get_group_histories(group_ids=group_ids):
+            data.append(group_history.dump())
+        return data
+
     NODE_BACKEND_RE = re.compile(
         '(?P<host>.+?)'
         ':(?P<port>\d+)'

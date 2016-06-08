@@ -289,15 +289,17 @@ class GroupHistoryFinder(object):
             logger.exception('History finder failed')
             raise
 
-    def groups_history(self, ids=None):
-        group_histories = [
-            GroupHistory(**gh)
-            for gh in self.collection.list(group_id=ids)
-        ]
-        for gh in group_histories:
+    def group_histories(self, group_ids=None):
+        for gh_data in self.collection.list(group_id=group_ids):
+            try:
+                gh = GroupHistory(**gh_data)
+            except Exception:
+                logger.exception('Failed to parse group history object: {}'.format(gh_data['_id']))
+                continue
+
             gh.collection = self.collection
             gh._dirty = False
-        return group_histories
+            yield gh
 
     def search_by_group_ids(self, group_ids):
         group_history_records = self.collection.find({'group_id': {'$in': group_ids}})

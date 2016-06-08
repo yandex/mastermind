@@ -3,7 +3,7 @@ import copy
 from mastermind.query import Query, LazyDataObject
 import mastermind.query.groupsets
 from mastermind.query.node_backends import NodeBackend
-from mastermind.query.history import GroupHistory
+from mastermind.query.history import GroupHistory, GroupHistoriesQuery
 
 
 class GroupsQuery(Query):
@@ -76,6 +76,10 @@ class GroupsQuery(Query):
         if 'type' in kwargs:
             updated_filter['type'] = kwargs['type']
         return GroupsQuery(self.client, filter=updated_filter)
+
+    @property
+    def histories(self):
+        return GroupHistoriesQuery(self.client)
 
 
 class GroupDataObject(LazyDataObject):
@@ -159,8 +163,11 @@ class GroupQuery(Query):
     @property
     def history(self):
         history_data = self.client.request('get_group_history', [self.id])
-        return GroupHistory(couples=history_data['couples'],
-                            nodes=history_data['nodes'])
+        return GroupHistory(
+            group_id=self.id,
+            couples=history_data['couples'],
+            nodes=history_data['nodes'],
+        )
 
     @property
     def groupset(self):

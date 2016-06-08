@@ -1,11 +1,15 @@
+import copy
 from datetime import datetime
+
+from mastermind.query import Query
 
 
 DT_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 
 class GroupHistory(object):
-    def __init__(self, couples=None, nodes=None):
+    def __init__(self, group_id, couples=None, nodes=None):
+        self.group_id = group_id
         self.couples = [CoupleHistoryRecord(c) for c in couples or []]
         self.nodes = [NodeBackendSetHistoryRecord(c) for c in nodes or []]
 
@@ -55,3 +59,34 @@ class NodeBackendHistoryRecord(object):
 
     def __repr__(self):
         return '<{}: {}>'.format(type(self).__name__, str(self))
+
+
+class GroupHistoriesQuery(Query):
+    def __init__(self, client, filter=None):
+        super(GroupHistoriesQuery, self).__init__(client)
+        self._filter = filter or {}
+
+    def __iter__(self):
+        histories = self.client.request('get_group_histories_list', {'filter': self._filter})
+        for history_data in histories:
+            gh = GroupHistory(
+                history_data['group_id'],
+                couples=history_data['couples'],
+                nodes=history_data['nodes'],
+            )
+            yield gh
+
+    def filter(self, **kwargs):
+        """Filter group histories list.
+
+        Keyword args:
+          group_ids:
+            get history for groups in @group_ids list
+
+        Returns:
+          New group histories query object with selected filter parameters.
+        """
+        updated_filter = copy.copy(self._filter)
+        if 'group_ids' in kwargs:
+            updated_filter['group_ids'] = kwargs['group_ids']
+        return GroupHistoriesQuery(self.client, filter=updated_filter)

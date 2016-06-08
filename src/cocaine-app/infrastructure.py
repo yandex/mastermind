@@ -166,6 +166,10 @@ class Infrastructure(object):
             raise ValueError('History for group {} is not found'.format(group_id))
         return group_history
 
+    def get_group_histories(self, group_ids=None):
+        for gh in self.group_history_finder.group_histories(group_ids=group_ids):
+            yield gh
+
     def node_backend_in_last_history_state(self, group_id, hostname, port, backend_id):
         group_history = self.get_group_history(group_id)
 
