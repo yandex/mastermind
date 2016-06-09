@@ -1,3 +1,9 @@
+mastermind (2.28.10) trusty; urgency=medium
+
+  * Add lrc groupset statuses for couple list handle
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 09 Jun 2016 19:07:47 +0300
+
 mastermind (2.28.9) trusty; urgency=medium
 
   * Add histories query object for fetching group histories
