@@ -168,10 +168,16 @@ class Balancer(object):
         'good': [storage.Status.OK],
         'full': [storage.Status.FULL],
         'frozen': [storage.Status.FROZEN],
-        'bad': [storage.Status.INIT, storage.Status.BAD],
+        'bad': [
+            storage.Status.INIT,
+            storage.Status.BAD,
+            storage.Status.BAD_DATA_UNAVAILABLE,
+            storage.Status.BAD_INDICES_UNAVAILABLE,
+        ],
         'broken': [storage.Status.BROKEN],
         'service-stalled': [storage.Status.SERVICE_STALLED],
         'service-active': [storage.Status.SERVICE_ACTIVE],
+        'archived': [storage.Status.ARCHIVED],
     }
 
     @h.concurrent_handler
