@@ -168,10 +168,16 @@ class Balancer(object):
         'good': [storage.Status.OK],
         'full': [storage.Status.FULL],
         'frozen': [storage.Status.FROZEN],
-        'bad': [storage.Status.INIT, storage.Status.BAD],
+        'bad': [
+            storage.Status.INIT,
+            storage.Status.BAD,
+            storage.Status.BAD_DATA_UNAVAILABLE,
+            storage.Status.BAD_INDICES_UNAVAILABLE,
+        ],
         'broken': [storage.Status.BROKEN],
         'service-stalled': [storage.Status.SERVICE_STALLED],
         'service-active': [storage.Status.SERVICE_ACTIVE],
+        'archived': [storage.Status.ARCHIVED],
     }
 
     @h.concurrent_handler
@@ -509,7 +515,12 @@ class Balancer(object):
                 family = int(family)
             logger.info('host, port, backend_id: {0}'.format((host, port, backend_id)))
         except (IndexError, ValueError, AttributeError):
-            raise ValueError('Node backend should be of form <host>:<port>/<backend_id>')
+            raise ValueError(
+                'Node backend has unexpected value {}, expected form: '
+                '<host>:<port>:<family>/<backend_id>'.format(
+                    node_backend_str
+                )
+            )
 
         if group and node_backend and node_backend in group.node_backends:
             logger.info('Removing node backend {0} from group {1} nodes'.format(node_backend, group))
