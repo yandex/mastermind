@@ -509,7 +509,12 @@ class Balancer(object):
                 family = int(family)
             logger.info('host, port, backend_id: {0}'.format((host, port, backend_id)))
         except (IndexError, ValueError, AttributeError):
-            raise ValueError('Node backend should be of form <host>:<port>/<backend_id>')
+            raise ValueError(
+                'Node backend has unexpected value {}, expected form: '
+                '<host>:<port>:<family>/<backend_id>'.format(
+                    node_backend_str
+                )
+            )
 
         if group and node_backend and node_backend in group.node_backends:
             logger.info('Removing node backend {0} from group {1} nodes'.format(node_backend, group))
