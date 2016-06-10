@@ -1442,13 +1442,25 @@ class DcState(object):
 
 
 class StorageState(object):
-    def __init__(self):
+    def __init__(self, delta=None, state=None, stats=None):
         self.delta = Delta()
-        self.state = {
-            dc: DcState(self)
-            for dc in self.__dcs()
-        }
-        self._stats = {}
+        if delta is not None:
+            self.delta.data_move_size = delta.data_move_size
+
+        if state is None:
+            self.state = {
+                dc: DcState(self)
+                for dc in self.__dcs()
+            }
+        else:
+            self.state = {
+                dc: dc_state.copy(self)
+                for dc, dc_state in state.iteritems()
+            }
+        if stats is None:
+            self._stats = {}
+        else:
+            self._stats = copy(stats)
         self.moved_groups = []
 
     @classmethod
@@ -1494,16 +1506,11 @@ class StorageState(object):
         return obj
 
     def copy(self):
-        obj = StorageState()
-
-        obj._stats = copy(self._stats)
-
-        for dc, dc_state in self.state.iteritems():
-            obj.state[dc] = dc_state.copy(obj)
-
-        obj.delta.data_move_size = self.delta.data_move_size
-
-        return obj
+        return StorageState(
+            delta=self.delta,
+            state=self.state,
+            stats=self._stats,
+        )
 
     @property
     def mean_unc_percentage(self):
