@@ -85,7 +85,7 @@ class Infrastructure(object):
         '-a {attempts} -b {batch} -l {log} -L {log_level} -n {processes_num} -M '
         '-T {trace_id}'
     )
-    DNET_RECOVERY_DC_REMOTE_TPL = '-r {host}:{port}:{family}'
+    REMOTE_TPL = '-r {host}:{port}:{family}'
 
     DNET_DEFRAG_CMD = (
         'dnet_client backend -r {host}:{port}:{family} '
@@ -93,15 +93,15 @@ class Infrastructure(object):
     )
 
     LRC_CONVERT_CMD = (
-        'lrc_convert --remote {host}:{port}:{family} --src-groups {src_groups} '
-        '--dst-groups {dst_groups} --part-size {part_size} --scheme {scheme} --log {log} '
-        '--log-level {log_level} --tmp {tmp_dir} --attempts {attempts} --trace-id {trace_id}'
+        'lrc_convert {remotes} --src-groups {src_groups} --dst-groups {dst_groups} '
+        '--part-size {part_size} --scheme {scheme} --log {log} --log-level {log_level} '
+        '--tmp {tmp_dir} --attempts {attempts} --trace-id {trace_id}'
     )
 
     LRC_VALIDATE_CMD = (
-        'lrc_validate --remote {host}:{port}:{family} --src-groups {src_groups} '
-        '--dst-groups {dst_groups} --part-size {part_size} --scheme {scheme} --log {log} '
-        '--log-level {log_level} --tmp {tmp_dir} --attempts {attempts} --trace-id {trace_id}'
+        'lrc_validate {remotes} --src-groups {src_groups} --dst-groups {dst_groups} '
+        '--part-size {part_size} --scheme {scheme} --log {log} --log-level {log_level} '
+        '--tmp {tmp_dir} --attempts {attempts} --trace-id {trace_id}'
     )
 
     def __init__(self):
@@ -765,7 +765,7 @@ class Infrastructure(object):
         remotes = []
         for g in group.couple.groups:
             for nb in g.node_backends:
-                remotes.append(self.DNET_RECOVERY_DC_REMOTE_TPL.format(
+                remotes.append(self.REMOTE_TPL.format(
                     host=nb.node.host.addr,
                     port=nb.node.port,
                     family=nb.node.family,))
@@ -817,20 +817,27 @@ class Infrastructure(object):
 
     def _lrc_convert_cmd(self,
                          couple,
-                         host,
-                         port,
-                         family,
                          src_groups,
                          dst_groups,
                          part_size,
                          scheme,
                          trace_id=None):
+
+        remotes = []
+        for g in src_groups + dst_groups:
+            for nb in g.node_backends:
+                remotes.append(
+                    self.REMOTE_TPL.format(
+                        host=nb.node.host.addr,
+                        port=nb.node.port,
+                        family=nb.node.family,
+                    )
+                )
+
         cmd = self.LRC_CONVERT_CMD.format(
-            host=host,
-            port=port,
-            family=family,
-            src_groups=','.join(str(g) for g in src_groups),
-            dst_groups=','.join(str(g) for g in dst_groups),
+            remotes=' '.join(set(remotes)),
+            src_groups=','.join(str(g.group_id) for g in src_groups),
+            dst_groups=','.join(str(g.group_id) for g in dst_groups),
             part_size=part_size,
             scheme=scheme,
             tmp_dir=LRC_CONVERT_DC_CNF.get(
@@ -847,20 +854,27 @@ class Infrastructure(object):
 
     def _lrc_validate_cmd(self,
                           couple,
-                          host,
-                          port,
-                          family,
                           src_groups,
                           dst_groups,
                           part_size,
                           scheme,
                           trace_id=None):
+
+        remotes = []
+        for g in src_groups + dst_groups:
+            for nb in g.node_backends:
+                remotes.append(
+                    self.REMOTE_TPL.format(
+                        host=nb.node.host.addr,
+                        port=nb.node.port,
+                        family=nb.node.family,
+                    )
+                )
+
         cmd = self.LRC_VALIDATE_CMD.format(
-            host=host,
-            port=port,
-            family=family,
-            src_groups=','.join(str(g) for g in src_groups),
-            dst_groups=','.join(str(g) for g in dst_groups),
+            remotes=' '.join(set(remotes)),
+            src_groups=','.join(str(g.group_id) for g in src_groups),
+            dst_groups=','.join(str(g.group_id) for g in dst_groups),
             part_size=part_size,
             scheme=scheme,
             tmp_dir=LRC_VALIDATE_DC_CNF.get(

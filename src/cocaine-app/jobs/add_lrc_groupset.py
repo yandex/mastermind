@@ -247,11 +247,8 @@ class AddLrcGroupsetJob(Job):
 
         convert_cmd = infrastructure._lrc_convert_cmd(
             couple=self.couple,
-            host=node_backend.node.host.addr,
-            port=node_backend.node.port,
-            family=node_backend.node.family,
-            src_groups=(g.group_id for g in src_groups),
-            dst_groups=(g.group_id for g in dst_groups),
+            src_groups=src_groups,
+            dst_groups=dst_groups,
             part_size=part_size,
             scheme=scheme,
             trace_id=trace_id,
@@ -275,11 +272,8 @@ class AddLrcGroupsetJob(Job):
 
         validate_cmd = infrastructure._lrc_validate_cmd(
             couple=self.couple,
-            host=node_backend.node.host.addr,
-            port=node_backend.node.port,
-            family=node_backend.node.family,
-            src_groups=(g.group_id for g in src_groups),
-            dst_groups=(g.group_id for g in dst_groups),
+            src_groups=src_groups,
+            dst_groups=dst_groups,
             part_size=part_size,
             scheme=scheme,
             trace_id=trace_id,
