@@ -1,3 +1,9 @@
+mastermind (2.28.12) trusty; urgency=medium
+
+  * Run lrc_* commands with all nodes as remotes
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 10 Jun 2016 20:18:55 +0300
+
 mastermind (2.28.11) trusty; urgency=medium
 
   * Fix StorageState excessive dcs list construction
