@@ -1447,20 +1447,23 @@ class StorageState(object):
         if delta is not None:
             self.delta.data_move_size = delta.data_move_size
 
+        if stats is None:
+            self._stats = {}
+        else:
+            self._stats = copy(stats)
+
         if state is None:
+            # requires self._stats to be initialized
             self.state = {
                 dc: DcState(self)
                 for dc in self.__dcs()
             }
         else:
+            # requires self._stats to be initialized
             self.state = {
                 dc: dc_state.copy(self)
                 for dc, dc_state in state.iteritems()
             }
-        if stats is None:
-            self._stats = {}
-        else:
-            self._stats = copy(stats)
         self.moved_groups = []
 
     @classmethod
