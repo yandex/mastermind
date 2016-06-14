@@ -2599,7 +2599,7 @@ class Lrc822v1Groupset(Groupset):
                     couple=self,
                     groups_desc='; '.join(
                         '{group}: {status}'.format(group=g, status=g.status)
-                        for g in groups
+                        for g in self.groups
                         if g.status != Status.COUPLED
                     )
                 )
