@@ -1,3 +1,9 @@
+mastermind (2.28.14) trusty; urgency=medium
+
+  * Fix couple status text for non-coupled couples
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 14 Jun 2016 15:05:13 +0300
+
 mastermind (2.28.13) trusty; urgency=medium
 
   * Fix StorageState excessive dcs list construction
