@@ -95,13 +95,15 @@ class Infrastructure(object):
     LRC_CONVERT_CMD = (
         'lrc_convert {remotes} --src-groups {src_groups} --dst-groups {dst_groups} '
         '--part-size {part_size} --scheme {scheme} --log {log} --log-level {log_level} '
-        '--tmp {tmp_dir} --attempts {attempts} --trace-id {trace_id}'
+        '--tmp {tmp_dir} --attempts {attempts} --trace-id {trace_id} '
+        '--data-flow-rate {data_flow_rate} --wait-timeout {wait_timeout}'
     )
 
     LRC_VALIDATE_CMD = (
         'lrc_validate {remotes} --src-groups {src_groups} --dst-groups {dst_groups} '
         '--part-size {part_size} --scheme {scheme} --log {log} --log-level {log_level} '
-        '--tmp {tmp_dir} --attempts {attempts} --trace-id {trace_id}'
+        '--tmp {tmp_dir} --attempts {attempts} --trace-id {trace_id} '
+        '--data-flow-rate {data_flow_rate} --wait-timeout {wait_timeout}'
     )
 
     def __init__(self):
@@ -848,6 +850,8 @@ class Infrastructure(object):
             log=LRC_CONVERT_DC_CNF.get('log', 'lrc_convert.log').format(couple_id=couple),
             log_level=LRC_CONVERT_DC_CNF.get('log_level', 1),
             trace_id=trace_id or uuid.uuid4().hex[:16],
+            data_flow_rate=LRC_CONVERT_DC_CNF.get('data_flow_rate', 10),  # MB/s
+            wait_timeout=LRC_CONVERT_DC_CNF.get('wait_timeout', 20),  # seconds
         )
 
         return cmd
@@ -885,6 +889,8 @@ class Infrastructure(object):
             log=LRC_VALIDATE_DC_CNF.get('log', 'lrc_validate.log').format(couple_id=couple),
             log_level=LRC_VALIDATE_DC_CNF.get('log_level', 1),
             trace_id=trace_id or uuid.uuid4().hex[:16],
+            data_flow_rate=LRC_CONVERT_DC_CNF.get('data_flow_rate', 10),  # MB/s
+            wait_timeout=LRC_CONVERT_DC_CNF.get('wait_timeout', 20),  # seconds
         )
 
         return cmd
