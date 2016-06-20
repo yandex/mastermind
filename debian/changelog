@@ -1,3 +1,9 @@
+mastermind (2.28.16) trusty; urgency=medium
+
+  * Fix group's effective_free_space calculation
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 20 Jun 2016 17:29:52 +0300
+
 mastermind (2.28.15) trusty; urgency=medium
 
   * Add data_flow_rate and wait_timeout parameters for lrc-* commands
