@@ -1599,7 +1599,7 @@ class Group(object):
 
     @property
     def effective_free_space(self):
-        return sum(nb.free_effective_space for nb in self.node_backends)
+        return sum(nb.effective_free_space for nb in self.node_backends)
 
     def update_status(self):
         """Updates group's own status.
