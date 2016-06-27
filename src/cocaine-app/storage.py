@@ -1590,6 +1590,12 @@ class Group(object):
     def update_status_recursive(self):
         if self.couple:
             self.couple.update_status()
+            # update status of a couple if group is a part of a groupset
+            if self.couple.couple is not self.couple:
+                # self.couple is actually a groupset, and self.couple.couple is a couple
+                # TODO: replace self.couple with a groupset when new Couple object is
+                # implemented
+                self.couple.couple.update_status()
         else:
             self.update_status()
 
@@ -2278,6 +2284,16 @@ class Couple(Groupset):
         return data
 
     def _calculate_status(self):
+
+        if self.lrc822v1_groupset:
+            # checking if couple has only one groupset - lrc groupset
+            if all(g.status == Status.INIT and len(g.node_backends) == 0
+                   for g in self.groups):
+                # replicas groupset is detached, lrc groupset is present
+                return Status(
+                    code=Status.ARCHIVED,
+                    text='Couple {} is archived'.format(self),
+                )
 
         # TODO: this checks should be evaluated after
         # potentially threatening checks like bad_groups_status, etc.
