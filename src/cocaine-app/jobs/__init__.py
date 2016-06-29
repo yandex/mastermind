@@ -49,6 +49,7 @@ class JobProcessor(object):
         JobTypes.TYPE_RESTORE_GROUP_JOB: 25,
         JobTypes.TYPE_MOVE_JOB: 20,
         JobTypes.TYPE_ADD_LRC_GROUPSET_JOB: 17,
+        JobTypes.TYPE_CONVERT_TO_LRC_GROUPSET_JOB: 16,
         JobTypes.TYPE_RECOVER_DC_JOB: 15,
         JobTypes.TYPE_COUPLE_DEFRAG_JOB: 10,
         JobTypes.TYPE_MAKE_LRC_GROUPS_JOB: 5,
@@ -63,6 +64,7 @@ class JobProcessor(object):
         JobTypes.TYPE_COUPLE_DEFRAG_JOB,
         JobTypes.TYPE_MAKE_LRC_GROUPS_JOB,
         JobTypes.TYPE_ADD_LRC_GROUPSET_JOB,
+        JobTypes.TYPE_CONVERT_TO_LRC_GROUPSET_JOB,
     ])
 
     def __init__(self, job_finder, node, db, niu, minions):
