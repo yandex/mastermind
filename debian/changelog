@@ -1,3 +1,9 @@
+mastermind (2.28.17) trusty; urgency=medium
+
+  * Add convert to lrc groupset from external source job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 29 Jun 2016 23:44:03 +0300
+
 mastermind (2.28.16) trusty; urgency=medium
 
   * Fix group's effective_free_space calculation
