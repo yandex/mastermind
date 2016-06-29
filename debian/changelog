@@ -1,3 +1,9 @@
+mastermind (2.28.18) trusty; urgency=medium
+
+  * Change convert job priority
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 30 Jun 2016 01:13:03 +0300
+
 mastermind (2.28.17) trusty; urgency=medium
 
   * Add convert to lrc groupset from external source job
