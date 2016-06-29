@@ -1669,10 +1669,6 @@ def lrc_groupset_attach(group_or_groupset,
         print warn('"--part-size" should be a positive integer')
         return 1
 
-    if not part_size:
-        print warn('"--part-size" parameter is required')
-        return 1
-
     if ':' not in group_or_groupset:
         # this is a group, fetch lrc groupset for this group
         cl = client(host, app)
