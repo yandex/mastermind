@@ -5,6 +5,7 @@ from couple_defrag import CoupleDefragJob
 from restore_group import RestoreGroupJob
 from make_lrc_groups import MakeLrcGroupsJob
 from add_lrc_groupset import AddLrcGroupsetJob
+from convert_to_lrc_groupset import ConvertToLrcGroupsetJob
 
 
 class JobFactory(object):
@@ -23,6 +24,8 @@ class JobFactory(object):
             return MakeLrcGroupsJob
         elif job_type == JobTypes.TYPE_ADD_LRC_GROUPSET_JOB:
             return AddLrcGroupsetJob
+        elif job_type == JobTypes.TYPE_CONVERT_TO_LRC_GROUPSET_JOB:
+            return ConvertToLrcGroupsetJob
         raise ValueError('Unknown job type: {}'.format(job_type))
 
     @staticmethod
