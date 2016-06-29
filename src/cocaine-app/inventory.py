@@ -25,3 +25,5 @@ get_host_ip_addresses = inv.get_host_ip_addresses
 get_new_group_files = inv.get_new_group_files
 get_node_config_path = inv.get_node_config_path
 get_node_types = inv.get_node_types
+make_external_storage_convert_command = inv.make_external_storage_convert_command
+make_external_storage_validate_command = inv.make_external_storage_validate_command
