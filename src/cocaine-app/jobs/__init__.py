@@ -807,7 +807,7 @@ class JobProcessor(object):
                         )
                     )
 
-    def _select_groups_for_groupset(self, couple, type, mandatory_dcs):
+    def _select_groups_for_groupset(self, type, mandatory_dcs):
         '''Select appropriate groups for a new groupset of selected 'type' for 'couple'.
 
         Parameters:
@@ -819,7 +819,6 @@ class JobProcessor(object):
         '''
         if type == storage.GROUPSET_LRC:
             return storage.Lrc.select_groups_for_groupset(
-                couple=couple,
                 mandatory_dcs=mandatory_dcs,
             )
         else:
@@ -854,7 +853,6 @@ class JobProcessor(object):
 
         if 'groupset' not in request:
             groupset = self._select_groups_for_groupset(
-                couple,
                 type=request['type'],
                 mandatory_dcs=request.get('mandatory_dcs', []),
             )
