@@ -2,6 +2,7 @@
 import copy
 from datetime import datetime
 import inspect
+import itertools
 from json import dumps
 import logging
 from logging.handlers import SysLogHandler
@@ -1669,10 +1670,6 @@ def lrc_groupset_attach(group_or_groupset,
         print warn('"--part-size" should be a positive integer')
         return 1
 
-    if not part_size:
-        print warn('"--part-size" parameter is required')
-        return 1
-
     if ':' not in group_or_groupset:
         # this is a group, fetch lrc groupset for this group
         cl = client(host, app)
@@ -1707,6 +1704,110 @@ def lrc_groupset_attach(group_or_groupset,
 
     lrc_groupset_info(groupset)
     return
+
+
+@lrcGroupsetDispatcher.command(name='convert')
+@log_action
+def lrc_groupset_convert(group_or_groupset=('g',
+                                            '',
+                                            'Uncouple lrc group or groupset to convert '
+                                            'data to'),
+                         namespace=('n',
+                                    '',
+                                    'Namespace of a groupset'),
+                         dc=('', [], 'dc to select groups from (may be used multiple times)'),
+                         scheme=('',
+                                 'lrc-8-2-2-v1',
+                                 'Scheme of lrc groupset'),
+                         part_size=('p',
+                                    '',
+                                    'Lrc groupset part size (bytes)'),
+                         src_storage=('s',
+                                      '',
+                                      'Source storage to convert data from'),
+                         option=('o',
+                                 [],
+                                 'Source storage specific option name, should be '
+                                 'followed by --value with corresponding option value'),
+                         value=('v',
+                                [],
+                                'Source storage specific option value, should be '
+                                'preceded by --option with corresponding option name'),
+                         json=('', None, 'Format data as json'),
+                         host=None,
+                         app=None):
+    '''Create new groupset using 'group_or_groupset' parameter by converting data
+    from a selected source.
+    '''
+    s = service(host, app)
+
+    if not part_size:
+        print warn('"--part-size" parameter is required')
+        return 1
+
+    try:
+        part_size = int(part_size)
+        if part_size <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        print warn('"--part-size" should be a positive integer')
+        return 1
+
+    if not src_storage:
+        print warn('"--src-storage" parameter is required')
+        return 1
+
+    if not namespace:
+        print warn('"--namespace" parameter is required')
+        return 1
+
+    params = {
+        'type': 'lrc',
+        'settings': {
+            'scheme': scheme,
+            'part_size': int(part_size),
+        },
+        'namespace': namespace,
+        'src_storage': src_storage,
+        'src_storage_options': dict({key: value
+                                     for key, value in itertools.izip(option, value)}),
+    }
+
+    if group_or_groupset:
+        if ':' not in group_or_groupset:
+            # this is a group, fetch lrc groupset for this group
+            cl = client(host, app)
+            try:
+                meta = cl.groups[int(group_or_groupset)].meta
+            except Exception:
+                meta = None
+            if not (meta and 'lrc_groups' in meta):
+                print warn('Group {} is not an uncoupled lrc group'.format(group_or_groupset))
+                return 1
+            lrc_groups = meta['lrc_groups']
+            groupset = ':'.join(str(g) for g in lrc_groups)
+        else:
+            groupset = group_or_groupset
+        params['groupset'] = groupset
+    elif dc:
+        params['mandatory_dcs'] = dc
+
+    res = s.enqueue(
+        'convert_external_storage_to_groupset',
+        msgpack.packb(params)
+    ).get()
+
+    if 'Error' in res:
+        print warn(res['Error'])
+        return 1
+
+    if json:
+        print dumps(res)
+    else:
+        pprint(res)
+
+    return
+
 
 
 d = Dispatcher(globaloptions=(app_param,))

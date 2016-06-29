@@ -179,3 +179,53 @@ def get_node_config_path(node):
     any elliptics config parameters.
     '''
     return '/etc/elliptics/elliptics.conf'
+
+
+def make_external_storage_convert_command(couple_id,
+                                          dst_groups,
+                                          groupset_type,
+                                          groupset_settings,
+                                          src_storage,
+                                          src_storage_options,
+                                          trace_id=None):
+    '''
+    Construct command that will be executed by minion to convert @src_storage data unit
+    to a @groupset.
+
+    Parameters:
+        @couple_id (int): id of a couple that will store converted data
+        @dst_groups (storage.Group): destination groups that will store converted data
+        @groupset_type: destination groupset type
+        @groupset_settings (dict): destination groupset settings
+        @src_storage (str): source storage id
+        @src_storage_options (dict): source storage options (data unit to convert, etc.)
+        @trace_id (str): trace id that should be used by the command if tracing is
+            implemented
+
+    '''
+    raise NotImplemented
+
+
+def make_external_storage_validate_command(couple_id,
+                                           dst_groups,
+                                           groupset_type,
+                                           groupset_settings,
+                                           src_storage,
+                                           src_storage_options,
+                                           trace_id=None):
+    '''
+    Construct command that will be executed by minion to validate data converted from
+    @src_storage to a @groupset.
+
+    Parameters:
+        @couple_id (int): id of a couple that will store converted data
+        @dst_groups (storage.Group): destination groups that store converted data
+        @groupset_type: destination groupset type
+        @groupset_settings (dict): destination groupset settings
+        @src_storage (str): source storage id
+        @src_storage_options (dict): source storage options (data unit to convert, etc.)
+        @trace_id (str): trace id that should be used by the command if tracing is
+            implemented
+
+    '''
+    raise NotImplemented

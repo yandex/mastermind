@@ -254,11 +254,10 @@ class Lrc(object):
             return False
 
     @staticmethod
-    def select_groups_for_groupset(couple, mandatory_dcs):
+    def select_groups_for_groupset(mandatory_dcs):
         '''Select appropriate groups for 'lrc' groupset.
 
         Parameters:
-            couple - a couple to select groupset for;
             mandatory_dcs - selected groups in such a way that each dc in this list is
                 occupied by at least one group (for 'lrc-8-2-2-v1' scheme -- by at least
                 one 4-group set);

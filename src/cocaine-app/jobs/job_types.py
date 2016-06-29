@@ -6,6 +6,7 @@ class JobTypes(object):
     TYPE_RESTORE_GROUP_JOB = 'restore_group_job'
     TYPE_MAKE_LRC_GROUPS_JOB = 'make_lrc_groups_job'
     TYPE_ADD_LRC_GROUPSET_JOB = 'add_lrc_groupset_job'
+    TYPE_CONVERT_TO_LRC_GROUPSET_JOB = 'convert_to_lrc_groupset_job'
 
     AVAILABLE_TYPES = (
         TYPE_MOVE_JOB,
