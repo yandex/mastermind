@@ -2,9 +2,8 @@ from datetime import timedelta
 import itertools
 
 from cocaine.exceptions import (
-    CommunicationError,
+    ServiceConnectionError,
     DisconnectionError,
-    IllegalStateError,
     ServiceError,
 )
 from cocaine.logger import Logger
@@ -77,7 +76,7 @@ class ReconnectableService(object):
                 error_str = 'Upstream service request failed (attempt {}/{}): {} ({})'.format(
                     attempt, request_attempts, e, type(e))
                 self.logger.error(error_str)
-                if isinstance(e, CommunicationError):
+                if isinstance(e, ServiceConnectionError):
                     if isinstance(e, DisconnectionError):
                         self.logger.debug('Disconnection from upstream service, '
                                           'will reconnect on next attempt')
@@ -114,11 +113,7 @@ class ReconnectableService(object):
             yield self.upstream.connect()
 
         if not self.upstream._connected:
-            try:
-                self.logger.debug(
-                    'Reconnecting to upstream service "{}"'.format(
-                        self.app_name))
-                yield self.upstream.connect()
-            except IllegalStateError:
-                # seems to be in connecting state
-                pass
+            self.logger.debug(
+                'Reconnecting to upstream service "{}"'.format(
+                    self.app_name))
+            yield self.upstream.connect()
