@@ -51,6 +51,7 @@ class NodeInfoUpdater(object):
         self.__session = elliptics.Session(self.__node)
         wait_timeout = config.get('elliptics', {}).get('wait_timeout') or config.get('wait_timeout', 5)
         self.__session.set_timeout(wait_timeout)
+        self.__session.cflags |= elliptics.command_flags.nolock
         self.__nodeUpdateTimestamps = (time.time(), time.time())
 
         self.__cluster_update_lock = threading.Lock()
