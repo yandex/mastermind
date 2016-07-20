@@ -65,7 +65,7 @@ class ReconnectableService(object):
             try:
                 yield self._reconnect_if_needed()
                 channel = yield self.upstream.enqueue(handler)
-                channel.tx.write(data)
+                yield channel.tx.write(data)
                 yield channel.tx.close()
                 response = yield channel.rx.get(timeout=timeout or self.timeout)
                 self._reset()
