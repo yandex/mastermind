@@ -1813,7 +1813,9 @@ class Groupset(object):
                         group_couple=group.couple,
                     )
                 )
-
+        for group in self.groups:
+            # NOTE: this assignment should not be mixed with previous loop to prevent
+            # storing uninitialized Groupset objects as 'couple' in groups
             group.couple = self
         self.status_text = 'Couple {} is not inititalized yet'.format(self)
         self.active_job = None
@@ -2464,7 +2466,7 @@ class Lrc822v1Groupset(Groupset):
 
     def update_status(self):
         # update groupset attributes
-        metas = [g.meta for g in self.groups if g.meta]
+        metas = [g.meta for g in self.groups if g.meta and 'lrc' in g.meta]
         if metas:
             part_sizes = filter(None, (meta['lrc'].get('part_size') for meta in metas))
             if not part_sizes:
