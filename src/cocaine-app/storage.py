@@ -1813,7 +1813,9 @@ class Groupset(object):
                         group_couple=group.couple,
                     )
                 )
-
+        for group in self.groups:
+            # NOTE: this assignment should not be mixed with previous loop to prevent
+            # storing uninitialized Groupset objects as 'couple' in groups
             group.couple = self
         self.status_text = 'Couple {} is not inititalized yet'.format(self)
         self.active_job = None
