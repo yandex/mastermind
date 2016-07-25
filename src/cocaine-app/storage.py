@@ -2466,7 +2466,7 @@ class Lrc822v1Groupset(Groupset):
 
     def update_status(self):
         # update groupset attributes
-        metas = [g.meta for g in self.groups if g.meta]
+        metas = [g.meta for g in self.groups if g.meta and 'lrc' in g.meta]
         if metas:
             part_sizes = filter(None, (meta['lrc'].get('part_size') for meta in metas))
             if not part_sizes:
