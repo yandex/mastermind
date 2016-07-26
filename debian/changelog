@@ -1,3 +1,9 @@
+mastermind (2.28.20) trusty; urgency=medium
+
+  * Optimize group move planner algorithm
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 26 Jul 2016 18:21:02 +0300
+
 mastermind (2.28.19) trusty; urgency=medium
 
   * Read metakey with nolock flag
