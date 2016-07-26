@@ -8,7 +8,6 @@ import traceback
 
 import pymongo
 
-from coll import SortedCollection
 from config import config
 from db.mongo.pool import Collection
 from errors import CacheUpstreamError
@@ -127,6 +126,7 @@ class Planner(object):
             jobs.Job.STATUS_BROKEN))
 
         hosts = set()
+        # TODO: checking @*_host and @*_group is not universal!
         for job in not_finished_jobs:
             if hasattr(job, 'src_host'):
                 hosts.add(job.src_host)
@@ -172,7 +172,7 @@ class Planner(object):
             need_approving = not self.params.get('move', {}).get('autoapprove', False)
 
             for i, candidate in enumerate(candidates):
-                logger.info('Candidate {0}: data {1}, ms_error delta {2}:'.format(
+                logger.info('Candidate {0}: data {1}, ms_error delta {2}'.format(
                     i, gb(candidate.delta.data_move_size), candidate.delta.ms_error_delta))
 
                 for src_group, src_dc, dst_group, merged_groups, dst_dc in \
@@ -246,15 +246,15 @@ class Planner(object):
 
     def _do_move_candidates(self, max_plan_length, step=0, busy_hosts=None, busy_group_ids=None):
         if step == 0:
-            self.candidates = [[StorageState.current()]]
+            active_jobs = self.job_processor.job_finder.jobs(
+                statuses=jobs.Job.ACTIVE_STATUSES
+            )
+            busy_group_ids = self._busy_group_ids(active_jobs)
+            self.candidates = [[StorageState.current(busy_group_ids=busy_group_ids)]]
         if busy_hosts is None:
             busy_hosts = self.__busy_hosts([jobs.JobTypes.TYPE_MOVE_JOB,
                                             jobs.JobTypes.TYPE_RESTORE_GROUP_JOB])
             logger.debug('Busy hosts from executing jobs: {0}'.format(list(busy_hosts)))
-        if busy_group_ids is None:
-            busy_group_ids = set(self.job_processor.job_finder.get_uncoupled_groups_in_service())
-            logger.debug('Busy uncoupled groups from executing jobs: {0}'.format(
-                list(busy_group_ids)))
 
         if step >= min(self.__max_plan_length, max_plan_length):
             self.__apply_plan()
@@ -277,10 +277,13 @@ class Planner(object):
             (src_group, src_dc, dst_group, uncoupled_groups, dst_dc)
             for src_group, src_dc, dst_group, uncoupled_groups, dst_dc
             in max_error_candidate.moved_groups]))
-        for src_group, src_dc, dst_group, uncoupled_groups, dst_dc in \
-                max_error_candidate.moved_groups:
+
+        for src_group, src_dc, dst_group, uncoupled_groups, dst_dc in max_error_candidate.moved_groups:
             busy_hosts.add(src_group.node_backends[0].node.host.addr)
             busy_hosts.add(dst_group.node_backends[0].node.host.addr)
+            busy_group_ids.add(src_group.group_id)
+            busy_group_ids.add(dst_group.group_id)
+            busy_group_ids.update(g.group_id for g in uncoupled_groups)
 
         self._do_move_candidates(
             max_plan_length,
@@ -297,6 +300,56 @@ class Planner(object):
             by_dc.setdefault(dc, []).append(candidates)
         return by_dc
 
+    def _sample_groups_by_ts(self, state, groups):
+
+        groups_by_space = {}
+
+        groups = sorted(groups, key=lambda x: state.stats(x).total_space, reverse=True)
+
+        total_space = None
+        for group in groups:
+
+            group_total_space = state.stats(group).total_space
+            if total_space and group_total_space >= total_space * 0.95:
+                continue
+
+            groups_by_space[group_total_space] = group
+            total_space = group_total_space
+
+        return groups_by_space
+
+    def _sample_dc_candidates(self, src_group, dc_candidates, storage_state):
+        candidates_ts = []
+        for candidates in dc_candidates:
+            dst_total_space = sum(
+                storage_state.stats(candidate).total_space
+                for candidate in candidates
+            )
+            candidates_ts.append((candidates, dst_total_space))
+
+        total_space = None
+        src_total_space = storage_state.stats(src_group).total_space
+
+        res_candidates = []
+        for candidate, dst_total_space in candidates_ts:
+            if total_space and dst_total_space >= total_space * 0.95:
+                continue
+
+            if dst_total_space <= src_total_space * 1.05:
+                # NOTE: found good enough candidate, no point in further searching
+                return [candidate]
+
+            res_candidates.append(candidate)
+            total_space = dst_total_space
+        return res_candidates
+
+    @staticmethod
+    def _filter_groups_on_busy_hosts(groups, busy_hosts):
+        for g in groups:
+            if g.node_backends[0].node.host.addr in busy_hosts:
+                continue
+            yield g
+
     def _generate_candidates(self, candidate, busy_hosts, busy_group_ids):
         _candidates = []
 
@@ -305,6 +358,7 @@ class Planner(object):
         base_ms = candidate.state_ms_error
 
         uncoupled_groups = infrastructure.get_good_uncoupled_groups(max_node_backends=1)
+        uncoupled_groups = self._filter_groups_on_busy_hosts(uncoupled_groups, busy_hosts)
 
         for c in candidate.iteritems():
             src_dc, src_dc_state = c
@@ -314,13 +368,26 @@ class Planner(object):
                     src_dc))
                 continue
 
-            for src_group in src_dc_state.groups:
+            full_groups = self._sample_groups_by_ts(candidate, src_dc_state.groups).values()
+            full_groups = list(self._filter_groups_on_busy_hosts(full_groups, busy_hosts))
+            logger.debug(
+                'Source dc "{dc}" candidates: decreased number from {total_groups_count} to '
+                '{filtered_groups_count}'.format(
+                    dc=src_dc,
+                    total_groups_count=len(src_dc_state.groups),
+                    filtered_groups_count=len(full_groups),
+                )
+            )
+
+            for src_group in full_groups:
 
                 src_host = src_group.node_backends[0].node.host.addr
                 if src_host in busy_hosts:
                     continue
 
                 try:
+                    # uncoupled_groups should change on each iteration (to skip those that are
+                    # already used on previous steps)
                     suitable_uncoupled_groups = self.get_suitable_uncoupled_groups_list(
                         src_group, uncoupled_groups, busy_group_ids=busy_group_ids)
                 except RuntimeError:
@@ -331,7 +398,22 @@ class Planner(object):
                 candidates_per_dc = self._split_candidates_by_dc(suitable_uncoupled_groups)
 
                 for dst_dc, dc_candidates in candidates_per_dc.iteritems():
-                    for candidates in dc_candidates:
+
+                    sample_dc_candidates = self._sample_dc_candidates(
+                        src_group,
+                        dc_candidates,
+                        storage_state=candidate,
+                    )
+                    logger.debug(
+                        'Source dc "{src_dc}", destination "{dst_dc}" candidates: decreased number '
+                        'from {total_candidates_count} to {filtered_candidates_count}'.format(
+                            src_dc=src_dc,
+                            dst_dc=dst_dc,
+                            total_candidates_count=len(dc_candidates),
+                            filtered_candidates_count=len(sample_dc_candidates),
+                        )
+                    )
+                    for candidates in sample_dc_candidates:
                         logger.debug('checking src_group {} against candidate {} '
                                      '({} -> {})'.format(
                                          src_group.group_id, [g.group_id for g in candidates],
@@ -344,7 +426,9 @@ class Planner(object):
                         dst_dc_state = candidate.state[dst_dc]
                         if src_group.couple in dst_dc_state.couples:
                             # can't move group to dst_dc because a group
-                            # from the same couple is already located there
+                            # from the same couple is already located there.
+                            # This check also skip the cases when several groups
+                            # in the same couple are moved to the same dc.
                             continue
 
                         unc_group_stat = candidate.stats(unc_group)
@@ -391,7 +475,7 @@ class Planner(object):
                         new_candidate._debug()
 
                     time.sleep(0.1)
-            time.sleep(3)
+            time.sleep(1)
 
         return _candidates
 
@@ -1500,15 +1584,13 @@ class DcState(object):
         self.storage_state = storage_state
         self.couples = set()
         self.uncoupled_keys = []
-        self.uncoupled_groups = SortedCollection(key=lambda x: storage_state.stats(x).total_space)
 
     def add_group(self, group):
         self.groups.append(group)
         assert group.couple
         self.couples.add(group.couple)
 
-    def add_uncoupled_group(self, group):
-        self.uncoupled_groups.insert(group)
+    def account_uncoupled_group(self, group):
         self.uncoupled_space += self.storage_state.stats(group).total_space
 
     def copy(self, storage_state):
@@ -1516,9 +1598,6 @@ class DcState(object):
         obj.groups = copy(self.groups)
         obj.total_space, obj.uncoupled_space = self.total_space, self.uncoupled_space
         obj.couples = copy(self.couples)
-        obj.uncoupled_groups = SortedCollection(
-            iterable=self.uncoupled_groups._items,
-            key=lambda x: storage_state.stats(x).total_space)
         return obj
 
     def apply_stat(self, stat):
@@ -1555,9 +1634,12 @@ class StorageState(object):
         self.moved_groups = []
 
     @classmethod
-    def current(cls):
+    def current(cls, busy_group_ids):
         obj = cls()
         for couple in cls.__get_full_couples():
+            if any(g.group_id in busy_group_ids for g in couple.groups):
+                # couple is participating in some job, skipping it
+                continue
             for group in couple.groups:
                 try:
                     dc = group.node_backends[0].node.host.dc
@@ -1576,8 +1658,10 @@ class StorageState(object):
                     group))
                 continue
             obj._stats[group.group_id] = group.get_stat()
-            obj.state[dc].add_uncoupled_group(group)
+            obj.state[dc].account_uncoupled_group(group)
 
+        # TODO: this iteration can be unified with __get_full_couples iteration
+        # to save time
         for group in storage.groups:
             for nb in group.node_backends:
                 if nb.stat is None:
@@ -1605,6 +1689,7 @@ class StorageState(object):
 
     @property
     def mean_unc_percentage(self):
+        # TODO: maybe this should be calculated as an average?
         unc_space = sum(dc_state.uncoupled_space for dc_state in self.state.itervalues())
         total_space = sum(dc_state.total_space for dc_state in self.state.itervalues())
 
@@ -1687,9 +1772,6 @@ class StorageState(object):
         self.state[src_dc].uncoupled_space += self.stats(src_group).total_space
         for group in uncoupled_groups:
             self.state[dst_dc].uncoupled_space -= self.stats(group).total_space
-            self.state[dst_dc].uncoupled_groups.remove(group)
-            # For now src_group is not swapped with dst_group but just replaces it
-            # self.state[src_dc].uncoupled_groups.insert(dst_group)
 
         # updating delta object
         self.delta.data_move_size += self.stats(src_group).used_space

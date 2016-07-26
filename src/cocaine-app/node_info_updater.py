@@ -534,7 +534,7 @@ class NodeInfoUpdater(object):
                         )
                     )
                 else:
-                    raise RuntimeError(response.error.mssage)
+                    raise RuntimeError(response.error.message)
 
                 return
 
