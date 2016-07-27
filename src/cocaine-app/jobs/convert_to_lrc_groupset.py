@@ -17,7 +17,6 @@ class ConvertToLrcGroupsetJob(Job):
     PARAMS = (
         'ns',
         'groups',
-        'couples',
         'mandatory_dcs',
         'part_size',
         'scheme',
@@ -70,7 +69,7 @@ class ConvertToLrcGroupsetJob(Job):
     def create_tasks(self, processor):
         """Create tasks for adding new lrc groupset to a couple
 
-        If @determin_data_size is set:
+        If @determine_data_size is set:
             - create determine data size task;
         otherwise:
             - run 'lrc convert', then 'lrc validate' to check convertion results;
@@ -300,7 +299,6 @@ class ConvertToLrcGroupsetJob(Job):
 
     def _write_metakeys_to_new_groups_tasks(self, couple_ids, groups, processor):
         job_tasks = []
-
         for couple_id, groupset_groups in itertools.izip(couple_ids, groups):
             metakey = self._generate_metakey(couple_id, groupset_groups, processor)
             for group in groupset_groups:
