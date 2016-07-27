@@ -283,11 +283,13 @@ class Planner(object):
         self.__apply_plan(candidates)
 
     @staticmethod
-    def _split_candidates_by_dc(suitable_groups):
+    def _prepare_candidates_by_dc(suitable_groups, unsuitable_dcs):
         by_dc = {}
         for candidates in suitable_groups:
             unc_group = candidates[0]
             dc = unc_group.node_backends[0].node.host.dc
+            if dc in unsuitable_dcs:
+                continue
             by_dc.setdefault(dc, []).append(candidates)
         return by_dc
 
@@ -386,7 +388,20 @@ class Planner(object):
                         src_group))
                     continue
 
-                candidates_per_dc = self._split_candidates_by_dc(suitable_uncoupled_groups)
+                try:
+                    unsuitable_dcs = tuple(
+                        nb.node.host.dc
+                        for g in src_group.couple.groups
+                        for nb in g.node_backends
+                    )
+                except CacheUpstreamError:
+                    logger.error('Failed to get unsuitable dc for group {}'.format(src_group))
+                    continue
+
+                candidates_per_dc = self._prepare_candidates_by_dc(
+                    suitable_uncoupled_groups,
+                    unsuitable_dcs=unsuitable_dcs,
+                )
 
                 for dst_dc, dc_candidates in candidates_per_dc.iteritems():
 
