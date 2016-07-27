@@ -1490,17 +1490,27 @@ class Planner(object):
 
         Groupset.check_settings(settings)
 
-        if 'groupset' not in request:
-            groupset = self.job_processor._select_groups_for_groupset(
-                type=request['type'],
-                mandatory_dcs=request.get('mandatory_dcs', []),
-            )
+        determine_data_size = request.get('determine_data_size', False)
+
+        if determine_data_size or request.get('groupsets', []):
+            # job will use supplied groupsets and choose additional groupsets if
+            # necessary
+            groupsets = [
+                [int(group_id) for group_id in groupset.split(':')]
+                for groupset in request.get('groupsets', [])
+            ]
+            groupsets = request.get('groupsets', [])
         else:
-            groupset = [int(group_id) for group_id in request['groupset'].split(':')]
+            # choose a single groupset for job to use (and to lock before job starts)
+            groupsets = [
+                self.job_processor._select_groups_for_groupset(
+                    type=request['type'],
+                    mandatory_dcs=request.get('mandatory_dcs', []),
+                )
+            ]
 
-        self.job_processor._check_groupset(groupset, type=request['type'])
-
-        couple_id = infrastructure.reserve_group_ids(1)[0]
+        for groupset in groupsets:
+            self.job_processor._check_groupset(groupset, type=request['type'])
 
         namespace_id = request['namespace']
         self.__check_namespace(namespace_id)
@@ -1510,22 +1520,6 @@ class Planner(object):
         else:
             ns = storage.namespaces[namespace_id]
 
-        try:
-            # create dummy couple to construct metakey
-            couple = storage.Couple([storage.Group(couple_id)])
-            ns.add_couple(couple)
-            metakey = self.job_processor._compose_groupset_metakey(
-                groupset_type=Groupset,
-                groups=[storage.groups[g] for g in groupset],
-                couple=couple,
-                settings=settings,
-            )
-            # this also removes couple from namespace @ns
-            couple.destroy()
-        except Exception:
-            logger.exception('Failed to construct metakey')
-            raise
-
         if request['type'] == storage.GROUPSET_LRC:
             job_type = jobs.JobTypes.TYPE_CONVERT_TO_LRC_GROUPSET_JOB
         else:
@@ -1534,11 +1528,12 @@ class Planner(object):
         job = self.job_processor._create_job(
             job_type=job_type,
             params={
-                'couple': couple_id,
-                'groups': list(groupset),
-                'metakey': metakey,
+                'ns': ns.id,
+                'groups': groupsets,
+                'mandatory_dcs': request.get('mandatory_dcs', []),
                 'part_size': settings['part_size'],
                 'scheme': settings['scheme'],
+                'determine_data_size': determine_data_size,
                 'src_storage': request['src_storage'],
                 'src_storage_options': request['src_storage_options'],
             },

@@ -1717,6 +1717,14 @@ def lrc_groupset_convert(groupset=('g',
                                     '',
                                     'Namespace of a groupset'),
                          dc=('', [], 'dc to select groups from (may be used multiple times)'),
+                         determine_data_size=('',
+                                              False,
+                                              'When this flag is set mastermind will run '
+                                              'a separate task to determine source data size '
+                                              'and select appropriate number of destination '
+                                              'groupsets automatically. If any of the groupsets '
+                                              'are supplied using --groupset option, such '
+                                              'groupsets will be used first'),
                          scheme=('',
                                  'lrc-8-2-2-v1',
                                  'Scheme of lrc groupset'),
@@ -1772,6 +1780,7 @@ def lrc_groupset_convert(groupset=('g',
         'src_storage': src_storage,
         'src_storage_options': dict({key: value
                                      for key, value in itertools.izip(option, value)}),
+        'determine_data_size': determine_data_size,
     }
 
     if groupset:
