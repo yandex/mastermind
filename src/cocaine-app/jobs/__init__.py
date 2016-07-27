@@ -522,7 +522,7 @@ class JobProcessor(object):
             pass
 
         try:
-            job.create_tasks()
+            job.create_tasks(self)
             job.save()
             logger.info('Job {0} created: {1}'.format(job.id, job.dump()))
         except Exception:

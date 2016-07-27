@@ -249,7 +249,7 @@ class Job(MongoObject):
             backend_id=backend_id,
         )
 
-    def create_tasks(self):
+    def create_tasks(self, processor):
         raise RuntimeError('Job creation should be implemented '
             'in derived class')
 

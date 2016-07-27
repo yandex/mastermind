@@ -81,7 +81,7 @@ class RecoverDcJob(Job):
     def __min_keys_group(self, couple):
         return sorted(couple.groups, key=lambda g: g.get_stat().files)[0]
 
-    def create_tasks(self):
+    def create_tasks(self, processor):
 
         if not self.couple in storage.replicas_groupsets:
             raise JobBrokenError('Couple {0} is not found'.format(self.couple))

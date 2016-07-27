@@ -134,7 +134,7 @@ class MoveJob(Job):
             dst_base_path=self.dst_base_path,
             dst_backend_id=self.dst_backend_id)
 
-    def create_tasks(self):
+    def create_tasks(self, processor):
 
         for group_id in self.merged_groups or []:
             merged_group = storage.groups[group_id]

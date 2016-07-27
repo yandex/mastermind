@@ -81,7 +81,7 @@ class RestoreGroupJob(Job):
 
         self.resources = resources
 
-    def create_tasks(self):
+    def create_tasks(self, processor):
 
         group = storage.groups[self.group]
         src_group = storage.groups[self.src_group]

@@ -69,7 +69,7 @@ class ConvertToLrcGroupsetJob(Job):
                     )
                 )
 
-    def create_tasks(self):
+    def create_tasks(self, processor):
         """Create tasks for adding new lrc groupset to a couple
 
         - run 'lrc convert', then 'lrc validate' to check convertion results;
