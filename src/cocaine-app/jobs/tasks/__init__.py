@@ -14,6 +14,7 @@ from dnet_client_backend_cmd import DnetClientBackendCmdTask
 from wait_groupset_state import WaitGroupsetStateTask
 from write_meta_key import WriteMetaKeyTask
 from change_couple_frozen_status import ChangeCoupleFrozenStatusTask
+from external_storage_data_size import ExternalStorageDataSizeTask
 
 
 class TaskFactory(object):
@@ -47,4 +48,6 @@ class TaskFactory(object):
             return WriteMetaKeyTask.from_data(data, job)
         if task_type == TaskTypes.TYPE_CHANGE_COUPLE_FROZEN_STATUS:
             return ChangeCoupleFrozenStatusTask.from_data(data, job)
+        if task_type == TaskTypes.TYPE_EXTERNAL_STORAGE_DATA_SIZE:
+            return ExternalStorageDataSizeTask.from_data(data, job)
         raise ValueError('Unknown task type {0}'.format(task_type))
