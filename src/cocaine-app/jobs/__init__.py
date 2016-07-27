@@ -365,10 +365,29 @@ class JobProcessor(object):
 
                 try:
                     task.on_exec_stop(self)
-                except Exception as e:
-                    logger.error('Job {0}, task {1}: failed to execute task '
-                        'stop handler: {2}\n{3}'.format(
-                            job.id, task.id, e, traceback.format_exc()))
+                except JobBrokenError as e:
+                    logger.exception(
+                        'Job {job_id}, task {task_id}: failed to execute task stop handler'.format(
+                            job_id=job.id,
+                            task_id=task.id,
+                        )
+                    )
+                    job.add_error_msg(str(e))
+                    task.status = Task.STATUS_FAILED
+                    job.status = Job.STATUS_PENDING
+                    ts = time.time()
+                    job.update_ts = ts
+                    job.finish_ts = ts
+                    job._dirty = True
+                    break
+
+                except Exception:
+                    logger.exception(
+                        'Job {job_id}, task {task_id}: failed to execute task stop handler'.format(
+                            job_id=job.id,
+                            task_id=task.id,
+                        )
+                    )
                     raise
 
                 logger.debug('Job {0}, task {1} is finished, status {2}'.format(
