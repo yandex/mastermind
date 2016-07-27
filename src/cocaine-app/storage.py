@@ -146,6 +146,12 @@ class Lrc(object):
 
         ID = 'lrc-8-2-2-v1'
 
+        STRIPE_SIZE = 12
+        NUM_DATA_PARTS = 8
+        NUM_PARITIES = 4
+        NUM_LOCAL_PARITIES = 2
+        NUM_GLOBAL_PARITIES = 2
+
         @staticmethod
         def order_groups(groups_lists):
             """ Order groups from groups_lists using scheme's specific group ordering
