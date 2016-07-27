@@ -146,11 +146,9 @@ class Planner(object):
                         hosts.add(dst_group.node_backends[0].node.host.addr)
         return hosts
 
-    def __apply_plan(self):
+    def __apply_plan(self, candidates):
 
-        logger.info('self candidates: {0}'.format(self.candidates))
-
-        candidates = [c[0] for c in self.candidates]
+        logger.info('Applying candidates: {0}'.format(candidates))
 
         try:
 
@@ -244,59 +242,54 @@ class Planner(object):
         except ValueError as e:
             logger.error('Plan cannot be applied: {0}'.format(e))
 
-    def _do_move_candidates(self, max_plan_length, step=0, busy_hosts=None, busy_group_ids=None):
-        if step == 0:
-            active_jobs = self.job_processor.job_finder.jobs(
-                statuses=jobs.Job.ACTIVE_STATUSES
+    def _do_move_candidates(self, max_jobs_count):
+
+        active_jobs = self.job_processor.job_finder.jobs(
+            statuses=jobs.Job.ACTIVE_STATUSES
+        )
+        busy_group_ids = self._busy_group_ids(active_jobs)
+
+        busy_hosts = self.__busy_hosts([jobs.JobTypes.TYPE_MOVE_JOB,
+                                        jobs.JobTypes.TYPE_RESTORE_GROUP_JOB])
+        logger.debug('Busy hosts from executing jobs: {0}'.format(list(busy_hosts)))
+
+        candidates = []
+        cur_candidate = StorageState.current(busy_group_ids=busy_group_ids)
+
+        for _ in xrange(min(self.__max_plan_length, max_jobs_count)):
+
+            new_candidates = self._generate_candidates(
+                cur_candidate,
+                busy_hosts=busy_hosts,
+                busy_group_ids=busy_group_ids,
             )
-            busy_group_ids = self._busy_group_ids(active_jobs)
-            self.candidates = [[StorageState.current(busy_group_ids=busy_group_ids)]]
-        if busy_hosts is None:
-            busy_hosts = self.__busy_hosts([jobs.JobTypes.TYPE_MOVE_JOB,
-                                            jobs.JobTypes.TYPE_RESTORE_GROUP_JOB])
-            logger.debug('Busy hosts from executing jobs: {0}'.format(list(busy_hosts)))
 
-        if step >= min(self.__max_plan_length, max_plan_length):
-            self.__apply_plan()
-            return
+            if not new_candidates:
+                break
 
-        logger.info('Candidates: {0}, step {1}'.format(len(self.candidates[-1]), step))
+            max_error_candidate = max(new_candidates, key=lambda c: c.delta.weight)
+            logger.info('Max error candidate: {}'.format(max_error_candidate))
 
-        tmp_candidates = self._generate_candidates(
-            self.candidates[-1][0], busy_hosts, busy_group_ids)
+            candidates.append(max_error_candidate)
 
-        if not tmp_candidates:
-            self.__apply_plan()
-            return
+            # updating busy hosts and busy groups
+            for src_group, src_dc, dst_group, uncoupled_groups, dst_dc in max_error_candidate.moved_groups:
+                busy_hosts.add(src_group.node_backends[0].node.host.addr)
+                busy_hosts.add(dst_group.node_backends[0].node.host.addr)
+                busy_group_ids.add(src_group.group_id)
+                busy_group_ids.add(dst_group.group_id)
+                busy_group_ids.update(g.group_id for g in uncoupled_groups)
 
-        max_error_candidate = max(tmp_candidates, key=lambda c: c.delta.weight)
-
-        self.candidates.append([max_error_candidate])
-        logger.info('Max error candidate: {0}'.format(max_error_candidate))
-        logger.info('Max error candidate moved groups: {0}'.format([
-            (src_group, src_dc, dst_group, uncoupled_groups, dst_dc)
-            for src_group, src_dc, dst_group, uncoupled_groups, dst_dc
-            in max_error_candidate.moved_groups]))
-
-        for src_group, src_dc, dst_group, uncoupled_groups, dst_dc in max_error_candidate.moved_groups:
-            busy_hosts.add(src_group.node_backends[0].node.host.addr)
-            busy_hosts.add(dst_group.node_backends[0].node.host.addr)
-            busy_group_ids.add(src_group.group_id)
-            busy_group_ids.add(dst_group.group_id)
-            busy_group_ids.update(g.group_id for g in uncoupled_groups)
-
-        self._do_move_candidates(
-            max_plan_length,
-            step=step + 1,
-            busy_hosts=busy_hosts,
-            busy_group_ids=busy_group_ids)
+        self.__apply_plan(candidates)
 
     @staticmethod
-    def _split_candidates_by_dc(suitable_groups):
+    def _prepare_candidates_by_dc(suitable_groups, unsuitable_dcs):
         by_dc = {}
         for candidates in suitable_groups:
             unc_group = candidates[0]
             dc = unc_group.node_backends[0].node.host.dc
+            if dc in unsuitable_dcs:
+                continue
             by_dc.setdefault(dc, []).append(candidates)
         return by_dc
 
@@ -382,8 +375,7 @@ class Planner(object):
             for src_group in full_groups:
 
                 src_host = src_group.node_backends[0].node.host.addr
-                if src_host in busy_hosts:
-                    continue
+                assert src_host not in busy_hosts, 'Group src host is not expected to be in busy_hosts'
 
                 try:
                     # uncoupled_groups should change on each iteration (to skip those that are
@@ -395,7 +387,20 @@ class Planner(object):
                         src_group))
                     continue
 
-                candidates_per_dc = self._split_candidates_by_dc(suitable_uncoupled_groups)
+                try:
+                    unsuitable_dcs = tuple(
+                        nb.node.host.dc
+                        for g in src_group.couple.groups
+                        for nb in g.node_backends
+                    )
+                except CacheUpstreamError:
+                    logger.error('Failed to get unsuitable dc for group {}'.format(src_group))
+                    continue
+
+                candidates_per_dc = self._prepare_candidates_by_dc(
+                    suitable_uncoupled_groups,
+                    unsuitable_dcs=unsuitable_dcs,
+                )
 
                 for dst_dc, dc_candidates in candidates_per_dc.iteritems():
 
@@ -422,6 +427,7 @@ class Planner(object):
                         unc_group, merged_groups = candidates[0], candidates[1:]
 
                         dst_host = unc_group.node_backends[0].node.host.addr
+                        assert dst_host not in busy_hosts, 'Group dst host is not expected to be in busy_hosts'
 
                         dst_dc_state = candidate.state[dst_dc]
                         if src_group.couple in dst_dc_state.couples:
@@ -435,11 +441,6 @@ class Planner(object):
 
                         # TODO: check merged groups for files
                         if unc_group_stat.files + unc_group_stat.files_removed > 0:
-                            continue
-
-                        if dst_host in busy_hosts:
-                            logger.debug('dst group {0} is skipped, {1} is in busy hosts'.format(
-                                unc_group.group_id, dst_host))
                             continue
 
                         break
@@ -1782,6 +1783,24 @@ class StorageState(object):
         self.delta.lost_space -= self.stats(src_group).used_space
 
         self.moved_groups.append((src_group, src_dc, dst_group, merged_groups, dst_dc))
+
+    def __str__(self):
+        moved_group_descs = []
+        for groups in self.moved_groups:
+            src_group, src_dc, dst_group, merged_groups, dst_dc = groups
+            moved_group_desc = 'group {src_group} ({src_dc}) -> {dst_group} ({dst_dc})'
+            if merged_groups:
+                moved_group_desc += ', merging groups {merged_groups}'
+            moved_group_descs.append(
+                moved_group_desc.format(
+                    src_group=src_group,
+                    src_dc=src_dc,
+                    dst_group=dst_group,
+                    dst_dc=dst_dc,
+                    merged_groups=merged_groups,
+                )
+            )
+        return '<StorageState: [{}]>'.format('; '.join(moved_group_descs))
 
 
 def gb(bytes):
