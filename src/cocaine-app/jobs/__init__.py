@@ -828,7 +828,7 @@ class JobProcessor(object):
                         )
                     )
 
-    def _select_groups_for_groupset(self, type, mandatory_dcs):
+    def _select_groups_for_groupset(self, type, mandatory_dcs, skip_groups=None):
         '''Select appropriate groups for a new groupset of selected 'type' for 'couple'.
 
         Parameters:
@@ -837,10 +837,12 @@ class JobProcessor(object):
             mandatory_dcs -  if supplied, selected groups will be located in these dcs
                 according to groupset type distribution rules. See certain type
                 implementations for further details;
+            skip_groups - a list of groups to skip when selecting new groups;
         '''
         if type == storage.GROUPSET_LRC:
             return storage.Lrc.select_groups_for_groupset(
                 mandatory_dcs=mandatory_dcs,
+                skip_groups=skip_groups,
             )
         else:
             raise ValueError('Unsupported groupset type: {}'.format(type))

@@ -260,13 +260,17 @@ class Lrc(object):
             return False
 
     @staticmethod
-    def select_groups_for_groupset(mandatory_dcs):
+    def select_groups_for_groupset(mandatory_dcs, skip_groups=None):
         '''Select appropriate groups for 'lrc' groupset.
+
+        Returns:
+            a list of selected group ids
 
         Parameters:
             mandatory_dcs - selected groups in such a way that each dc in this list is
                 occupied by at least one group (for 'lrc-8-2-2-v1' scheme -- by at least
                 one 4-group set);
+            skip_groups - a list of groups to skip when selecting new groups;
         '''
         prepared_groups = []
 
@@ -275,11 +279,14 @@ class Lrc(object):
 
         groups_in_service = set(infrastructure.get_group_ids_in_service())
         mandatory_dcs = set(mandatory_dcs)
+        skip_groups = set(skip_groups or [])
 
         def check_group(group):
             if group.type != Group.TYPE_UNCOUPLED_LRC_8_2_2_V1:
                 return False
             if group in checked_groups:
+                return False
+            if group in skip_groups:
                 return False
             if group in groups_in_service:
                 return False
