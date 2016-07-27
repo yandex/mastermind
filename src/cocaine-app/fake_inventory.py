@@ -194,7 +194,9 @@ def make_external_storage_convert_command(couple_id,
 
     Parameters:
         @couple_id (int): id of a couple that will store converted data
-        @dst_groups (storage.Group): destination groups that will store converted data
+        @dst_groups (list of lists of storage.Group): a list of destination groups that
+            will store converted data, where each nested list contains groups for some
+            new groupset.
         @groupset_type: destination groupset type
         @groupset_settings (dict): destination groupset settings
         @src_storage (str): source storage id
@@ -219,7 +221,29 @@ def make_external_storage_validate_command(couple_id,
 
     Parameters:
         @couple_id (int): id of a couple that will store converted data
-        @dst_groups (storage.Group): destination groups that store converted data
+        @dst_groups (list of lists of storage.Group): a list of destination groups that
+            store converted data, where each nested list contains groups for some new
+            groupset.
+        @groupset_type: destination groupset type
+        @groupset_settings (dict): destination groupset settings
+        @src_storage (str): source storage id
+        @src_storage_options (dict): source storage options (data unit to convert, etc.)
+        @trace_id (str): trace id that should be used by the command if tracing is
+            implemented
+
+    '''
+    raise NotImplemented
+
+
+def make_external_storage_data_size_command(groupset_type,
+                                            groupset_settings,
+                                            src_storage,
+                                            src_storage_options,
+                                            trace_id=None):
+    '''
+    Construct command that will be executed by minion to determine @src_storage data size.
+
+    Parameters:
         @groupset_type: destination groupset type
         @groupset_settings (dict): destination groupset settings
         @src_storage (str): source storage id
