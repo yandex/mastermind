@@ -375,8 +375,7 @@ class Planner(object):
             for src_group in full_groups:
 
                 src_host = src_group.node_backends[0].node.host.addr
-                if src_host in busy_hosts:
-                    continue
+                assert src_host not in busy_hosts, 'Group src host is not expected to be in busy_hosts'
 
                 try:
                     # uncoupled_groups should change on each iteration (to skip those that are
@@ -428,6 +427,7 @@ class Planner(object):
                         unc_group, merged_groups = candidates[0], candidates[1:]
 
                         dst_host = unc_group.node_backends[0].node.host.addr
+                        assert dst_host not in busy_hosts, 'Group dst host is not expected to be in busy_hosts'
 
                         dst_dc_state = candidate.state[dst_dc]
                         if src_group.couple in dst_dc_state.couples:
@@ -441,11 +441,6 @@ class Planner(object):
 
                         # TODO: check merged groups for files
                         if unc_group_stat.files + unc_group_stat.files_removed > 0:
-                            continue
-
-                        if dst_host in busy_hosts:
-                            logger.debug('dst group {0} is skipped, {1} is in busy hosts'.format(
-                                unc_group.group_id, dst_host))
                             continue
 
                         break
