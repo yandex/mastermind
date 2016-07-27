@@ -2674,6 +2674,32 @@ class Lrc822v1Groupset(Groupset):
         if not isinstance(part_size, int) or part_size <= 0:
             raise ValueError('"part_size" must be a positive integer')
 
+    @property
+    def groups_effective_space(self):
+        return sum(
+            g.effective_space
+            for g in self.groups[:Lrc.Scheme822v1.NUM_DATA_PARTS]
+        )
+
+    @property
+    def ns_reserved_space_percentage(self):
+        return 0
+
+    @property
+    def ns_reserved_space(self):
+        return 0
+
+    @property
+    def effective_space(self):
+        return self.groups_effective_space
+
+    @property
+    def effective_free_space(self):
+        return sum(
+            g.effective_free_space
+            for g in self.groups[:Lrc.Scheme822v1.NUM_DATA_PARTS]
+        )
+
 
 class DcNodes(object):
     def __init__(self):
