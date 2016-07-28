@@ -205,7 +205,6 @@ def register_handle_wne(worker, handle):
             if isinstance(res, Future):
                 res = yield res
             response.write(msgpack.packb(res))
-            response.close()
         except Exception as e:
             code, error_msg = ((e.code, e.message)
                                if isinstance(e, errors.MastermindError) else
@@ -229,6 +228,7 @@ def register_handle_wne(worker, handle):
                     time=time() - start_ts,
                 )
             )
+            response.close()
 
     worker.on(handle_name, wrapper)
     logger.info("Registering handle for event {}".format(handle_name))
