@@ -1727,6 +1727,10 @@ class StorageState(object):
             if couple.status != storage.Status.FULL:
                 continue
 
+            if couple.namespace.id == storage.Group.CACHE_NAMESPACE:
+                # there is no point in moving cached keys
+                continue
+
             for group in couple.groups:
                 if len(group.node_backends) > 1:
                     break
