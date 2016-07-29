@@ -18,7 +18,10 @@ class ExternalStorageDataSizeTask(MinionCmdTask):
 
     def on_exec_stop(self, processor):
         if self.status == self.STATUS_COMPLETED:
-            data_size = self._data_size(self.minion_cmd['output'])
+            try:
+                data_size = self._data_size(self.minion_cmd['output'])
+            except ValueError as e:
+                raise JobBrokenError(str(e))
 
             total_space = 0
             groupsets = []
@@ -76,4 +79,12 @@ class ExternalStorageDataSizeTask(MinionCmdTask):
 
     @staticmethod
     def _data_size(output):
-        return int(output)
+        try:
+            data_size = int(output)
+        except ValueError:
+            raise ValueError('Unexpected storage data size returned from command stdout')
+
+        if data_size <= 0:
+            raise ValueError('Unexpected storage data size returned from command stdout')
+
+        return data_size
