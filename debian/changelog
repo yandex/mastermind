@@ -1,3 +1,9 @@
+mastermind (2.28.23) trusty; urgency=medium
+
+  * Consider WRITE_NEW commands as write operations
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 08 Aug 2016 14:25:37 +0300
+
 mastermind (2.28.22) trusty; urgency=medium
 
   * Forbid moving cache groups via move jobs
