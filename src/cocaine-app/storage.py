@@ -730,9 +730,9 @@ class CommandsStat(object):
                        outside=False):
 
         def filter(cmd_type, src_type, dst_type):
-            if not write_ops and cmd_type == 'WRITE':
+            if not write_ops and cmd_type in ('WRITE', 'WRITE_NEW'):
                 return False
-            if not read_ops and cmd_type != 'WRITE':
+            if not read_ops and cmd_type not in ('WRITE', 'WRITE_NEW'):
                 return False
             if not disk and src_type == 'disk':
                 return False
