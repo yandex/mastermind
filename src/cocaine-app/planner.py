@@ -1499,7 +1499,6 @@ class Planner(object):
                 [int(group_id) for group_id in groupset.split(':')]
                 for groupset in request.get('groupsets', [])
             ]
-            groupsets = request.get('groupsets', [])
         else:
             # choose a single groupset for job to use (and to lock before job starts)
             groupsets = [
