@@ -251,7 +251,6 @@ def init_job_processor(jf, minions_monitor, niu, external_storage_meta, couple_r
         external_storage_meta=external_storage_meta,
         couple_record_finder=couple_record_finder,
     )
-    j = jobs.JobProcessor(jf, n, meta_db, niu, minions)
     helpers.register_handle(W, j.create_job)
     helpers.register_handle(W, j.cancel_job)
     helpers.register_handle(W, j.approve_job)

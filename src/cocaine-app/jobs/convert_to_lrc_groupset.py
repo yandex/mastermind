@@ -17,6 +17,7 @@ class ConvertToLrcGroupsetJob(Job):
     PARAMS = (
         'ns',
         'groups',
+        'couples',
         'mandatory_dcs',
         'part_size',
         'scheme',
@@ -299,6 +300,7 @@ class ConvertToLrcGroupsetJob(Job):
 
     def _write_metakeys_to_new_groups_tasks(self, couple_ids, groups, processor):
         job_tasks = []
+
         for couple_id, groupset_groups in itertools.izip(couple_ids, groups):
             metakey = self._generate_metakey(couple_id, groupset_groups, processor)
             for group in groupset_groups:
