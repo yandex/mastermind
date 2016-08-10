@@ -70,12 +70,17 @@ class ExternalStorageDataSizeTask(MinionCmdTask):
                 raise
             self.parent_job.perform_locks()
 
+            # @determine_data_size is set to False to allow parent job to create
+            # convert tasks in a standard mode
             self.parent_job.determine_data_size = False
-            self.parent_job.create_tasks(processor)
+            try:
+                self.parent_job.create_tasks(processor)
 
-            # assign data size task back to parent job
-            self.parent_job.tasks.insert(0, self)
-            self.parent_job.determine_data_size = True
+                # assign data size task back to parent job
+                self.parent_job.tasks.insert(0, self)
+            finally:
+                # set @determine_data_size to its original value
+                self.parent_job.determine_data_size = True
 
     @staticmethod
     def _data_size(output):

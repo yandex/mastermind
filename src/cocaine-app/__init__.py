@@ -31,6 +31,7 @@ logger = logging.getLogger('mm.init')
 import storage
 import balancer
 from db.mongo.pool import MongoReplicaSetClient
+import external_storage
 import helpers
 import history
 import infrastructure
@@ -261,6 +262,17 @@ def init_job_finder():
     return jf
 
 
+def init_external_storage_meta():
+    if not config['metadata'].get('external_storage', {}).get('db'):
+        logger.error(
+            'External storage metadb is not set up '
+            '("metadata.external_storage.db" key), will not be initialized'
+        )
+    external_storage_meta = external_storage.ExternalStorageMeta(meta_db)
+    register_handle(external_storage_meta.get_external_storage_mapping)
+    return external_storage_meta
+
+
 def init_couple_record_finder():
     if not config['metadata'].get('couples', {}).get('db'):
         msg = (
@@ -284,14 +296,21 @@ def init_group_history_finder():
     return ghf
 
 
-def init_job_processor(jf, minions, niu):
+def init_job_processor(jf, minions, niu, external_storage_meta):
     if jf is None:
         logger.error(
             'Job processor will not be initialized because '
             'job finder is not initialized'
         )
         return None
-    j = jobs.JobProcessor(jf, n, meta_db, niu, minions)
+    j = jobs.JobProcessor(
+        jf,
+        n,
+        meta_db,
+        niu,
+        minions,
+        external_storage_meta=external_storage_meta,
+    )
     register_handle(j.create_job)
     register_handle(j.cancel_job)
     register_handle(j.approve_job)
@@ -311,6 +330,8 @@ def init_manual_locker(manual_locker):
 
 
 jf = init_job_finder()
+
+external_storage_meta = init_external_storage_meta()
 crf = init_couple_record_finder()
 ghf = init_group_history_finder()
 io = init_infrastructure(jf, ghf)
@@ -319,7 +340,7 @@ b.niu = niu
 b.start()
 init_statistics()
 m = init_minions()
-j = init_job_processor(jf, m, niu)
+j = init_job_processor(jf, m, niu, external_storage_meta)
 if j:
     po = init_planner(j, niu)
     j.planner = po

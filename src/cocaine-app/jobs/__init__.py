@@ -67,7 +67,7 @@ class JobProcessor(object):
         JobTypes.TYPE_CONVERT_TO_LRC_GROUPSET_JOB,
     ])
 
-    def __init__(self, job_finder, node, db, niu, minions):
+    def __init__(self, job_finder, node, db, niu, minions, external_storage_meta):
         logger.info('Starting JobProcessor')
         self.job_finder = job_finder
         self.session = elliptics.Session(node)
@@ -78,6 +78,7 @@ class JobProcessor(object):
         self.minions = minions
         self.node_info_updater = niu
         self.planner = None
+        self.external_storage_meta = external_storage_meta
 
         self.__tq = timed_queue.TimedQueue()
 

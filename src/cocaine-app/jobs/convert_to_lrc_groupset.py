@@ -1,3 +1,4 @@
+import itertools
 import logging
 import random
 
@@ -16,6 +17,7 @@ class ConvertToLrcGroupsetJob(Job):
     PARAMS = (
         'ns',
         'groups',
+        'couples',
         'mandatory_dcs',
         'part_size',
         'scheme',
@@ -110,8 +112,11 @@ class ConvertToLrcGroupsetJob(Job):
             )
         )
 
+        couple_ids = self._generate_couple_ids(count=len(dst_groups))
+
         tasks.extend(
             self._write_metakeys_to_new_groups_tasks(
+                couple_ids=couple_ids,
                 groups=dst_groups,
                 processor=processor,
             )
@@ -123,7 +128,13 @@ class ConvertToLrcGroupsetJob(Job):
                 self._wait_groupset_state_task(groupset=groupset_id)
             )
 
-        # TODO: add mapping task
+        tasks.append(
+            self._write_external_storage_mapping_task(
+                couple_ids=couple_ids,
+            )
+        )
+
+        self.couples = couple_ids
 
         self.tasks = tasks
 
@@ -248,10 +259,12 @@ class ConvertToLrcGroupsetJob(Job):
             ns = storage.namespaces[self.ns]
         return ns
 
-    def _generate_metakey(self, groups, processor):
-        try:
-            couple_id = infrastructure.reserve_group_ids(1)[0]
+    @staticmethod
+    def _generate_couple_ids(count):
+        return infrastructure.reserve_group_ids(count)
 
+    def _generate_metakey(self, couple_id, groups, processor):
+        try:
             # create dummy couple to construct metakey
             couple = storage.Couple([storage.Group(couple_id)])
             ns = self._get_namespace()
@@ -279,11 +292,11 @@ class ConvertToLrcGroupsetJob(Job):
             raise
         return metakey
 
-    def _write_metakeys_to_new_groups_tasks(self, groups, processor):
+    def _write_metakeys_to_new_groups_tasks(self, couple_ids, groups, processor):
         job_tasks = []
 
-        for groupset_groups in groups:
-            metakey = self._generate_metakey(groupset_groups, processor)
+        for couple_id, groupset_groups in itertools.izip(couple_ids, groups):
+            metakey = self._generate_metakey(couple_id, groupset_groups, processor)
             for group in groupset_groups:
                 # write corresponding metakey to a new group
                 task = tasks.WriteMetaKeyTask.new(
@@ -294,6 +307,15 @@ class ConvertToLrcGroupsetJob(Job):
                 job_tasks.append(task)
 
         return job_tasks
+
+    def _write_external_storage_mapping_task(self, couple_ids):
+        return tasks.WriteExternalStorageMappingTask.new(
+            self,
+            external_storage=self.src_storage,
+            external_storage_options=self.src_storage_options,
+            couples=couple_ids,
+            namespace=self.ns,
+        )
 
     def _wait_groupset_state_task(self, groupset):
         return tasks.WaitGroupsetStateTask.new(

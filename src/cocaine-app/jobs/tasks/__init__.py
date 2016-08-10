@@ -15,6 +15,7 @@ from wait_groupset_state import WaitGroupsetStateTask
 from write_meta_key import WriteMetaKeyTask
 from change_couple_frozen_status import ChangeCoupleFrozenStatusTask
 from external_storage_data_size import ExternalStorageDataSizeTask
+from write_external_storage_mapping import WriteExternalStorageMappingTask
 
 
 class TaskFactory(object):
@@ -50,4 +51,6 @@ class TaskFactory(object):
             return ChangeCoupleFrozenStatusTask.from_data(data, job)
         if task_type == TaskTypes.TYPE_EXTERNAL_STORAGE_DATA_SIZE:
             return ExternalStorageDataSizeTask.from_data(data, job)
+        if task_type == TaskTypes.TYPE_WRITE_EXTERNAL_STORAGE_MAPPING:
+            return WriteExternalStorageMappingTask.from_data(data, job)
         raise ValueError('Unknown task type {0}'.format(task_type))
