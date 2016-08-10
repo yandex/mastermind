@@ -308,6 +308,8 @@ class Lrc(object):
             if not check_group(group):
                 continue
 
+            logger.debug('Lrc groupset group candidate: checking group {}'.format(group))
+
             check_linked_groups = all(
                 group_id in groups and check_group(groups[group_id])
                 for group_id in group.meta['lrc_groups']
@@ -316,13 +318,33 @@ class Lrc(object):
             checked_groups.update(group.meta['lrc_groups'])
 
             if not check_linked_groups:
+                logger.info(
+                    'Lrc groupset group candidate: group {}, linked groups check failed'.format(
+                        group
+                    )
+                )
                 continue
 
             if not check_groupset(groups[group_id] for group_id in group.meta['lrc_groups']):
+                logger.info(
+                    'Lrc groupset group candidate: group {group}, groupset {groupset} check '
+                    'failed'.format(
+                        group=group,
+                        groupset=group.meta['lrc_groups'],
+                    )
+                )
                 continue
 
             # all groups have been checked and can be used for groupset construction
             prepared_groups.append(group.meta['lrc_groups'])
+
+            logger.info(
+                'Lrc groupset group candidate: group {group}, groupset {groupset} check '
+                'passed'.format(
+                    group=group,
+                    groupset=group.meta['lrc_groups'],
+                )
+            )
 
         if not prepared_groups:
             raise ValueError('Failed to find suitable groups for groupset')
