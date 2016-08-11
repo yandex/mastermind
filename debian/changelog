@@ -1,3 +1,13 @@
+mastermind (2.28.24) trusty; urgency=medium
+
+  * Implement external storage mapping for external storage convertion
+  * Use task to determine external storage total size and alter convert job accordingly
+  * Add ExternalStorageDataSizeTask for fetching data size of external storage
+  * Add multi groupsets to mastermind-cli groupset convert command
+  * Add make_external_storage_data_size_command inventory command
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 11 Aug 2016 17:02:57 +0300
+
 mastermind (2.28.23) trusty; urgency=medium
 
   * Consider WRITE_NEW commands as write operations
