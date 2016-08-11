@@ -30,7 +30,7 @@ class MakeLrcGroupsJob(Job):
     def _set_resources(self):
         self.resources = {}
 
-    def create_tasks(self):
+    def create_tasks(self, processor):
         """ Create tasks for new lrc groups construction
 
         This job prepares lrc groups that can later be used for groupset construction.

@@ -146,6 +146,12 @@ class Lrc(object):
 
         ID = 'lrc-8-2-2-v1'
 
+        STRIPE_SIZE = 12
+        NUM_DATA_PARTS = 8
+        NUM_PARITIES = 4
+        NUM_LOCAL_PARITIES = 2
+        NUM_GLOBAL_PARITIES = 2
+
         @staticmethod
         def order_groups(groups_lists):
             """ Order groups from groups_lists using scheme's specific group ordering
@@ -254,13 +260,17 @@ class Lrc(object):
             return False
 
     @staticmethod
-    def select_groups_for_groupset(mandatory_dcs):
+    def select_groups_for_groupset(mandatory_dcs, skip_groups=None):
         '''Select appropriate groups for 'lrc' groupset.
+
+        Returns:
+            a list of selected group ids
 
         Parameters:
             mandatory_dcs - selected groups in such a way that each dc in this list is
                 occupied by at least one group (for 'lrc-8-2-2-v1' scheme -- by at least
                 one 4-group set);
+            skip_groups - a list of groups to skip when selecting new groups;
         '''
         prepared_groups = []
 
@@ -269,11 +279,14 @@ class Lrc(object):
 
         groups_in_service = set(infrastructure.get_group_ids_in_service())
         mandatory_dcs = set(mandatory_dcs)
+        skip_groups = set(skip_groups or [])
 
         def check_group(group):
             if group.type != Group.TYPE_UNCOUPLED_LRC_8_2_2_V1:
                 return False
             if group in checked_groups:
+                return False
+            if group in skip_groups:
                 return False
             if group in groups_in_service:
                 return False
@@ -295,6 +308,8 @@ class Lrc(object):
             if not check_group(group):
                 continue
 
+            logger.debug('Lrc groupset group candidate: checking group {}'.format(group))
+
             check_linked_groups = all(
                 group_id in groups and check_group(groups[group_id])
                 for group_id in group.meta['lrc_groups']
@@ -303,13 +318,33 @@ class Lrc(object):
             checked_groups.update(group.meta['lrc_groups'])
 
             if not check_linked_groups:
+                logger.info(
+                    'Lrc groupset group candidate: group {}, linked groups check failed'.format(
+                        group
+                    )
+                )
                 continue
 
             if not check_groupset(groups[group_id] for group_id in group.meta['lrc_groups']):
+                logger.info(
+                    'Lrc groupset group candidate: group {group}, groupset {groupset} check '
+                    'failed'.format(
+                        group=group,
+                        groupset=group.meta['lrc_groups'],
+                    )
+                )
                 continue
 
             # all groups have been checked and can be used for groupset construction
             prepared_groups.append(group.meta['lrc_groups'])
+
+            logger.info(
+                'Lrc groupset group candidate: group {group}, groupset {groupset} check '
+                'passed'.format(
+                    group=group,
+                    groupset=group.meta['lrc_groups'],
+                )
+            )
 
         if not prepared_groups:
             raise ValueError('Failed to find suitable groups for groupset')
@@ -2667,6 +2702,32 @@ class Lrc822v1Groupset(Groupset):
         part_size = settings['part_size']
         if not isinstance(part_size, int) or part_size <= 0:
             raise ValueError('"part_size" must be a positive integer')
+
+    @property
+    def groups_effective_space(self):
+        return sum(
+            g.effective_space
+            for g in self.groups[:Lrc.Scheme822v1.NUM_DATA_PARTS]
+        )
+
+    @property
+    def ns_reserved_space_percentage(self):
+        return 0
+
+    @property
+    def ns_reserved_space(self):
+        return 0
+
+    @property
+    def effective_space(self):
+        return self.groups_effective_space
+
+    @property
+    def effective_free_space(self):
+        return sum(
+            g.effective_free_space
+            for g in self.groups[:Lrc.Scheme822v1.NUM_DATA_PARTS]
+        )
 
 
 class DcNodes(object):

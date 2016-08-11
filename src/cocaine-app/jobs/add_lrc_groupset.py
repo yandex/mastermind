@@ -89,7 +89,7 @@ class AddLrcGroupsetJob(Job):
                 )
             )
 
-    def create_tasks(self):
+    def create_tasks(self, processor):
         """Create tasks for adding new lrc groupset to a couple
 
         - freeze couple;

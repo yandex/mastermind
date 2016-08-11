@@ -1708,14 +1708,23 @@ def lrc_groupset_attach(group_or_groupset,
 
 @lrcGroupsetDispatcher.command(name='convert')
 @log_action
-def lrc_groupset_convert(group_or_groupset=('g',
-                                            '',
-                                            'Uncouple lrc group or groupset to convert '
-                                            'data to'),
+def lrc_groupset_convert(groupset=('g',
+                                   [],
+                                   'Uncoupled lrc group or groupset to convert data to. '
+                                   'This parameter can be used multiple times to define '
+                                   'several destination groupsets'),
                          namespace=('n',
                                     '',
                                     'Namespace of a groupset'),
                          dc=('', [], 'dc to select groups from (may be used multiple times)'),
+                         determine_data_size=('',
+                                              False,
+                                              'When this flag is set mastermind will run '
+                                              'a separate task to determine source data size '
+                                              'and select appropriate number of destination '
+                                              'groupsets automatically. If any of the groupsets '
+                                              'are supplied using --groupset option, such '
+                                              'groupsets will be used first'),
                          scheme=('',
                                  'lrc-8-2-2-v1',
                                  'Scheme of lrc groupset'),
@@ -1771,24 +1780,28 @@ def lrc_groupset_convert(group_or_groupset=('g',
         'src_storage': src_storage,
         'src_storage_options': dict({key: value
                                      for key, value in itertools.izip(option, value)}),
+        'determine_data_size': determine_data_size,
     }
 
-    if group_or_groupset:
-        if ':' not in group_or_groupset:
-            # this is a group, fetch lrc groupset for this group
-            cl = client(host, app)
-            try:
-                meta = cl.groups[int(group_or_groupset)].meta
-            except Exception:
-                meta = None
-            if not (meta and 'lrc_groups' in meta):
-                print warn('Group {} is not an uncoupled lrc group'.format(group_or_groupset))
-                return 1
-            lrc_groups = meta['lrc_groups']
-            groupset = ':'.join(str(g) for g in lrc_groups)
-        else:
-            groupset = group_or_groupset
-        params['groupset'] = groupset
+    if groupset:
+        groupsets = []
+        for gs in groupset:
+            if ':' not in gs:
+                # this is a group, fetch lrc groupset for this group
+                cl = client(host, app)
+                try:
+                    meta = cl.groups[int(gs)].meta
+                except Exception:
+                    meta = None
+                if not (meta and 'lrc_groups' in meta):
+                    print warn('Group {} is not an uncoupled lrc group'.format(gs))
+                    return 1
+                lrc_groups = meta['lrc_groups']
+                groupset = ':'.join(str(g) for g in lrc_groups)
+            else:
+                groupset = gs
+            groupsets.append(groupset)
+        params['groupsets'] = groupsets
     elif dc:
         params['mandatory_dcs'] = dc
 

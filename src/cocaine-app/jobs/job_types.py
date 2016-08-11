@@ -31,3 +31,5 @@ class TaskTypes(object):
     TYPE_DNET_CLIENT_BACKEND_CMD = 'dnet_client_backend_cmd'
     TYPE_WAIT_GROUPSET_STATE = 'wait_groupset_state'
     TYPE_CHANGE_COUPLE_FROZEN_STATUS = 'change_couple_frozen_status'
+    TYPE_EXTERNAL_STORAGE_DATA_SIZE = 'external_storage_data_size'
+    TYPE_WRITE_EXTERNAL_STORAGE_MAPPING = 'write_external_storage_mapping'

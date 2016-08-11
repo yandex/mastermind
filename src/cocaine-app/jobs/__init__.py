@@ -67,7 +67,7 @@ class JobProcessor(object):
         JobTypes.TYPE_CONVERT_TO_LRC_GROUPSET_JOB,
     ])
 
-    def __init__(self, job_finder, node, db, niu, minions):
+    def __init__(self, job_finder, node, db, niu, minions, external_storage_meta):
         logger.info('Starting JobProcessor')
         self.job_finder = job_finder
         self.session = elliptics.Session(node)
@@ -78,6 +78,7 @@ class JobProcessor(object):
         self.minions = minions
         self.node_info_updater = niu
         self.planner = None
+        self.external_storage_meta = external_storage_meta
 
         self.__tq = timed_queue.TimedQueue()
 
@@ -365,10 +366,29 @@ class JobProcessor(object):
 
                 try:
                     task.on_exec_stop(self)
-                except Exception as e:
-                    logger.error('Job {0}, task {1}: failed to execute task '
-                        'stop handler: {2}\n{3}'.format(
-                            job.id, task.id, e, traceback.format_exc()))
+                except JobBrokenError as e:
+                    logger.exception(
+                        'Job {job_id}, task {task_id}: failed to execute task stop handler'.format(
+                            job_id=job.id,
+                            task_id=task.id,
+                        )
+                    )
+                    job.add_error_msg(str(e))
+                    task.status = Task.STATUS_FAILED
+                    job.status = Job.STATUS_PENDING
+                    ts = time.time()
+                    job.update_ts = ts
+                    job.finish_ts = ts
+                    job._dirty = True
+                    break
+
+                except Exception:
+                    logger.exception(
+                        'Job {job_id}, task {task_id}: failed to execute task stop handler'.format(
+                            job_id=job.id,
+                            task_id=task.id,
+                        )
+                    )
                     raise
 
                 logger.debug('Job {0}, task {1} is finished, status {2}'.format(
@@ -503,7 +523,7 @@ class JobProcessor(object):
             pass
 
         try:
-            job.create_tasks()
+            job.create_tasks(self)
             job.save()
             logger.info('Job {0} created: {1}'.format(job.id, job.dump()))
         except Exception:
@@ -809,7 +829,7 @@ class JobProcessor(object):
                         )
                     )
 
-    def _select_groups_for_groupset(self, type, mandatory_dcs):
+    def _select_groups_for_groupset(self, type, mandatory_dcs, skip_groups=None):
         '''Select appropriate groups for a new groupset of selected 'type' for 'couple'.
 
         Parameters:
@@ -818,10 +838,12 @@ class JobProcessor(object):
             mandatory_dcs -  if supplied, selected groups will be located in these dcs
                 according to groupset type distribution rules. See certain type
                 implementations for further details;
+            skip_groups - a list of groups to skip when selecting new groups;
         '''
         if type == storage.GROUPSET_LRC:
             return storage.Lrc.select_groups_for_groupset(
                 mandatory_dcs=mandatory_dcs,
+                skip_groups=skip_groups,
             )
         else:
             raise ValueError('Unsupported groupset type: {}'.format(type))

@@ -53,7 +53,7 @@ class CoupleDefragJob(Job):
                 (g.node_backends[0].node.host.addr, str(g.node_backends[0].fs.fsid)))
         self.resources = resources
 
-    def create_tasks(self):
+    def create_tasks(self, processor):
         # TODO: use 'couples' container
         couples = (storage.cache_couples
                    if self.is_cache_couple else

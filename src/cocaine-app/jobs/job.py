@@ -249,7 +249,7 @@ class Job(MongoObject):
             backend_id=backend_id,
         )
 
-    def create_tasks(self):
+    def create_tasks(self, processor):
         raise RuntimeError('Job creation should be implemented '
             'in derived class')
 
@@ -268,8 +268,12 @@ class Job(MongoObject):
 
                 raise
             else:
-                logger.warn('Job {0}: lock for group {1} has already '
-                    'been acquired, skipping'.format(self.id, self.group))
+                logger.warn(
+                    'Job {job_id}: locks {locks} are already acquired, skipping'.format(
+                        job_id=self.id,
+                        locks=e.lock_ids,
+                    )
+                )
 
 
     def mark_groups(self, session):
