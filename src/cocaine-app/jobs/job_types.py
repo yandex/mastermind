@@ -33,3 +33,4 @@ class TaskTypes(object):
     TYPE_CHANGE_COUPLE_FROZEN_STATUS = 'change_couple_frozen_status'
     TYPE_EXTERNAL_STORAGE_DATA_SIZE = 'external_storage_data_size'
     TYPE_WRITE_EXTERNAL_STORAGE_MAPPING = 'write_external_storage_mapping'
+    TYPE_CHANGE_COUPLE_SETTINGS = 'change_couple_settings'

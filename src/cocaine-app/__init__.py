@@ -296,7 +296,7 @@ def init_group_history_finder():
     return ghf
 
 
-def init_job_processor(jf, minions, niu, external_storage_meta):
+def init_job_processor(jf, minions, niu, external_storage_meta, couple_record_finder):
     if jf is None:
         logger.error(
             'Job processor will not be initialized because '
@@ -310,6 +310,7 @@ def init_job_processor(jf, minions, niu, external_storage_meta):
         niu,
         minions,
         external_storage_meta=external_storage_meta,
+        couple_record_finder=couple_record_finder,
     )
     register_handle(j.create_job)
     register_handle(j.cancel_job)
@@ -340,7 +341,7 @@ b.niu = niu
 b.start()
 init_statistics()
 m = init_minions()
-j = init_job_processor(jf, m, niu, external_storage_meta)
+j = init_job_processor(jf, m, niu, external_storage_meta, crf)
 if j:
     po = init_planner(j, niu)
     j.planner = po

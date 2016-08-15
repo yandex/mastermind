@@ -16,6 +16,7 @@ from write_meta_key import WriteMetaKeyTask
 from change_couple_frozen_status import ChangeCoupleFrozenStatusTask
 from external_storage_data_size import ExternalStorageDataSizeTask
 from write_external_storage_mapping import WriteExternalStorageMappingTask
+from change_couple_settings import ChangeCoupleSettingsTask
 
 
 class TaskFactory(object):
@@ -53,4 +54,6 @@ class TaskFactory(object):
             return ExternalStorageDataSizeTask.from_data(data, job)
         if task_type == TaskTypes.TYPE_WRITE_EXTERNAL_STORAGE_MAPPING:
             return WriteExternalStorageMappingTask.from_data(data, job)
+        if task_type == TaskTypes.TYPE_CHANGE_COUPLE_SETTINGS:
+            return ChangeCoupleSettingsTask.from_data(data, job)
         raise ValueError('Unknown task type {0}'.format(task_type))

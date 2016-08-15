@@ -134,6 +134,12 @@ class ConvertToLrcGroupsetJob(Job):
             )
         )
 
+        tasks.extend(
+            self._read_preference_tasks(
+                couple_ids=couple_ids,
+            )
+        )
+
         self.couples = couple_ids
 
         self.tasks = tasks
@@ -323,6 +329,23 @@ class ConvertToLrcGroupsetJob(Job):
             groupset=groupset,
             groupset_status=storage.Status.ARCHIVED,
         )
+
+    def _read_preference_tasks(self, couple_ids):
+        job_tasks = []
+        read_preference_settings = {
+            storage.Couple.READ_PREFERENCE: [storage.Lrc.Scheme822v1.ID],
+        }
+        for couple_id in couple_ids:
+            job_tasks.append(
+                tasks.ChangeCoupleSettingsTask.new(
+                    self,
+                    # redundant, but consistent with couple id construction
+                    couple=':'.join([couple_id]),
+                    settings=read_preference_settings,
+                    update=True,
+                )
+            )
+        return job_tasks
 
     @property
     def _involved_groups(self):
