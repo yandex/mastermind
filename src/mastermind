@@ -820,6 +820,27 @@ def job_move_groups(src_host,
         print
 
 
+@jobDispatcher.command(name='restore-path')
+@log_action
+def host_restore_groups_from_path(src_host, path,
+                                  uncoupled_group=('u', False, 'Use uncoupled group as '
+                                                   'a restoration point instead of previous group location'),
+                                  force=('f', False, 'Cancel all pending jobs of low priority '
+                                         '(e.g. recover-dc and defragmenation)'),
+                                  host=None, app=None):
+    '''Create job to restore all group's node backend from path in source host.'''
+    s = service(host, app)
+    params = {
+        'src_host': src_host,
+        'path': path,
+        'uncoupled_group': uncoupled_group,
+        'force': force,
+    }
+
+    job_data = s.enqueue('restore_groups_from_path', msgpack.packb(params)).get()
+    print job_data
+
+
 # namespace commands
 nsDispatcher = Dispatcher(globaloptions=(host_param, app_param))
 
@@ -1820,7 +1841,6 @@ def lrc_groupset_convert(groupset=('g',
         pprint(res)
 
     return
-
 
 
 d = Dispatcher(globaloptions=(app_param,))
