@@ -1,10 +1,12 @@
 import logging
 from logging.handlers import SysLogHandler
-
-from cocaine.logger import CocaineHandler
+from logging import FileHandler
 
 
 def setup_logger(logger_name='logging'):
+    """
+    TODO: get rid of unused cocaine handler parameters if cocaine handler won't be used anymore
+    """
 
     base_logger = logging.getLogger()
     base_handler = SysLogHandler()
@@ -17,9 +19,8 @@ def setup_logger(logger_name='logging'):
     tornado_logger = logging.getLogger('tornado')
     tornado_logger.propagate = False
 
-    _handler = CocaineHandler()
-    _handler._logger._name = logger_name
-    _handler.setFormatter(logging.Formatter(fmt='[%(name)s] [%(process)d] %(message)s'))
+    _handler = FileHandler('/var/log/cocaine-core/file.log')
+    _handler.setFormatter(logging.Formatter(fmt='[%(asctime)s] [%(name)s] [%(process)d] %(message)s'))
 
     root_app_logger.addHandler(_handler)
     tornado_logger.addHandler(_handler)
