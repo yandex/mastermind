@@ -6,6 +6,7 @@ import storage
 import time
 import traceback
 
+
 import pymongo
 
 from config import config
@@ -894,6 +895,9 @@ class Planner(object):
         except IndexError:
             force = False
 
+        return self.create_restore_job(group_id, use_uncoupled_group, options.get('src_group', None), force)
+
+    def create_restore_job(self, group_id, use_uncoupled_group, src_group, force):
         group = storage.groups[group_id]
         involved_groups = [group]
         involved_groups.extend(g for g in group.coupled_groups)
@@ -920,7 +924,7 @@ class Planner(object):
             raise ValueError('Group {0} is uncoupled'.format(group.group_id))
 
         candidates = []
-        if not options.get('src_group'):
+        if src_group is None:
             for g in group.coupled_groups:
                 if len(g.node_backends) != 1:
                     continue
@@ -937,7 +941,8 @@ class Planner(object):
             src_group = candidates[0]
 
         else:
-            src_group = storage.groups[int(options['src_group'])]
+            src_group = storage.groups[int(src_group)]
+
             if src_group not in group.couple.groups:
                 raise ValueError(
                     'Group {0} cannot be restored from group {1}, '
@@ -965,6 +970,127 @@ class Planner(object):
             job_params, force=force)
 
         return job.dump()
+
+    CREATE_JOB_ATTEMPTS = 3
+    RUNNING_STATUSES = [jobs.Job.STATUS_NOT_APPROVED,
+                        jobs.Job.STATUS_NEW,
+                        jobs.Job.STATUS_EXECUTING]
+    ERROR_STATUSES = [jobs.Job.STATUS_PENDING,
+                      jobs.Job.STATUS_BROKEN]
+    RESTORE_TYPES = [jobs.JobTypes.TYPE_MOVE_JOB,
+                     jobs.JobTypes.TYPE_RESTORE_GROUP_JOB]
+
+    @h.concurrent_handler
+    def restore_groups_from_path(self, request):
+        logger.info('----------------------------------------')
+        logger.info('New restore groups from path request: ' + str(request))
+
+        if 'src_host' not in request:
+            raise ValueError('Source host is required')
+
+        if 'path' not in request:
+            raise ValueError('Path is required')
+
+        if 'uncoupled_group' not in request:
+            raise ValueError('Uncoupled_groups is required')
+
+        if 'force' not in request:
+            raise ValueError('Force is required')
+
+        host_or_ip = request['src_host']
+        try:
+            hostname = socket.getfqdn(host_or_ip)
+        except Exception as e:
+            raise ValueError('Failed to get hostname for {0}: {1}'.format(host_or_ip, e))
+
+        try:
+            ips = h.ips_set(hostname)
+        except Exception as e:
+            raise ValueError('Failed to get ip list for {0}: {1}'.format(hostname, e))
+
+        path = request['path']
+
+        try:
+            use_uncoupled_group = bool(request['uncoupled_group'])
+        except (TypeError, ValueError):
+            use_uncoupled_group = False
+
+        force = bool(request.get('force', False))
+
+        groups = []
+        for group in storage.groups:
+            for backend in group.node_backends:
+                if backend.node.host.addr in ips and backend.base_path.startswith(path):
+                    if len(group.node_backends) == 1:
+                        groups.append(group)
+                    else:
+                        raise ValueError(
+                            'Group {} has {} node backends, currently '
+                            'only groups with 1 node backend can be used'.format(
+                                group.group_id, len(group.node_backends)))
+
+        groups_to_backup = []
+        groups_to_restore = []
+        active_jobs = []
+        uncoupled_groups = {}
+        for group in groups:
+            if group.couple is None:
+                backend_name = "{host}:{port}:{family}/{backend_id}".format(
+                    host=hostname,
+                    port=group.node_backends[0].node.port,
+                    family=group.node_backends[0].node.family,
+                    backend_id=group.node_backends[0].backend_id,
+                )
+                uncoupled_groups[group.group_id] = str(backend_name)
+            else:
+                job = group.active_job
+                if job is None:
+                    groups_to_backup.append(group.group_id)
+                else:
+                    active_jobs = self.job_processor.job_finder.jobs(ids=job['id'],
+                                                                     types=self.RESTORE_TYPES)
+                    if len(active_jobs) > 1:
+                        raise ValueError('Id {} has {} jobs'.format(job['id'], len(jobs)))
+                    elif len(active_jobs) == 1:
+                        job = active_jobs[0]
+
+                        if job.status in self.RUNNING_STATUSES:
+                            active_jobs.append(job.id)
+                        elif job.status in self.ERROR_STATUSES:
+                            groups_to_restore.append(group.group_id)
+                        else:
+                            raise ValueError(
+                                'Unknown job status: {}'.format(job.status))
+                    else:
+                        groups_to_backup.append(group.group_id)
+
+        def restore_job(group, use_uncoupled_group, src_group, force):
+            last_error = None
+            for _ in xrange(self.CREATE_JOB_ATTEMPTS):
+                try:
+                    return self.create_restore_job(group, use_uncoupled_group, src_group, force)
+                except Exception as e:
+                    last_error = e
+                    continue
+            if last_error:
+                    raise last_error
+
+        failed = {}
+        for group in groups_to_backup:
+            try:
+                job = restore_job(group, use_uncoupled_group, group, force)
+                active_jobs.append(job['id'])
+            except Exception as e:
+                failed[group] = str(e)
+
+        for group in groups_to_restore:
+            try:
+                job = restore_job(group, use_uncoupled_group, None, force)
+                active_jobs.append(job['id'])
+            except Exception as e:
+                failed[group] = str(e)
+
+        return {'jobs': active_jobs, 'failed': failed, 'uncoupled': uncoupled_groups}
 
     MOVE_GROUP_ATTEMPTS = 3
 
