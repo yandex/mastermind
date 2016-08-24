@@ -778,7 +778,10 @@ class Infrastructure(object):
             tmp_dir=RECOVERY_DC_CNF.get(
                 'tmp_dir',
                 '/var/tmp/dnet_recovery_dc_{group_id}'
-            ).format(group_id=group_id),
+            ).format(
+                group_id=group_id,
+                group_base_path=group.node_backends[0].base_path,
+            ),
             attempts=RECOVERY_DC_CNF.get('attempts', 1),
             batch=RECOVERY_DC_CNF.get('batch', 2000),
             log=RECOVERY_DC_CNF.get('log', 'dnet_recovery.log').format(group_id=group_id),
