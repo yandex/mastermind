@@ -1047,12 +1047,12 @@ class Planner(object):
                 if job is None:
                     groups_to_backup.append(group.group_id)
                 else:
-                    active_jobs = self.job_processor.job_finder.jobs(ids=job['id'],
-                                                                     types=self.RESTORE_TYPES)
-                    if len(active_jobs) > 1:
+                    group_jobs = self.job_processor.job_finder.jobs(ids=job['id'],
+                                                                    types=self.RESTORE_TYPES)
+                    if len(group_jobs) > 1:
                         raise ValueError('Id {} has {} jobs'.format(job['id'], len(jobs)))
-                    elif len(active_jobs) == 1:
-                        job = active_jobs[0]
+                    elif len(group_jobs) == 1:
+                        job = group_jobs[0]
 
                         if job.status in self.RUNNING_STATUSES:
                             active_jobs.append(job.id)
