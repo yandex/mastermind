@@ -323,6 +323,11 @@ def group_restore(group, uncoupled_group=('u', False, 'Use uncoupled group as '
 
     group = int(group)
 
+    if src_group:
+        src_group = int(src_group)
+    else:
+        src_group = None
+
     job_data = s.enqueue('restore_group', msgpack.packb([
         group, uncoupled_group, {'src_group': src_group}, force])).get()
 

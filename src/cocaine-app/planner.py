@@ -895,7 +895,7 @@ class Planner(object):
         except IndexError:
             force = False
 
-        return self.create_restore_job(group_id, use_uncoupled_group, options.get('src_group', None), force)
+        return self.create_restore_job(group_id, use_uncoupled_group, options.get('src_group'), force)
 
     def create_restore_job(self, group_id, use_uncoupled_group, src_group, force):
         group = storage.groups[group_id]
@@ -941,7 +941,7 @@ class Planner(object):
             src_group = candidates[0]
 
         else:
-            src_group = storage.groups[int(src_group)]
+            src_group = storage.groups[src_group]
 
             if src_group not in group.couple.groups:
                 raise ValueError(
