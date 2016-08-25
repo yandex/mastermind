@@ -1,3 +1,9 @@
+mastermind (2.28.29) trusty; urgency=medium
+
+  * Fix group restore by path handle
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 25 Aug 2016 18:51:43 +0300
+
 mastermind (2.28.28) trusty; urgency=medium
 
   * Fix restore group src_group parameter
