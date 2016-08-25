@@ -1,3 +1,9 @@
+mastermind (2.28.28) trusty; urgency=medium
+
+  * Fix restore group src_group parameter
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 25 Aug 2016 13:58:34 +0300
+
 mastermind (2.28.27) trusty; urgency=medium
 
   * Add job for restore groups from path
