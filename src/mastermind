@@ -832,6 +832,7 @@ def host_restore_groups_from_path(src_host, path,
                                                    'a restoration point instead of previous group location'),
                                   force=('f', False, 'Cancel all pending jobs of low priority '
                                          '(e.g. recover-dc and defragmenation)'),
+                                  autoapprove=('a', False, 'Automatically approve jobs'),
                                   host=None, app=None):
     '''Create job to restore all group's node backend from path in source host.'''
     s = service(host, app)
@@ -840,6 +841,7 @@ def host_restore_groups_from_path(src_host, path,
         'path': path,
         'uncoupled_group': uncoupled_group,
         'force': force,
+        'autoapprove': autoapprove,
     }
 
     job_data = s.enqueue('restore_groups_from_path', msgpack.packb(params)).get()
