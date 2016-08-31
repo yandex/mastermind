@@ -340,7 +340,7 @@ class ConvertToLrcGroupsetJob(Job):
                 tasks.ChangeCoupleSettingsTask.new(
                     self,
                     # redundant, but consistent with couple id construction
-                    couple=':'.join([couple_id]),
+                    couple=':'.join([str(couple_id)]),
                     settings=read_preference_settings,
                     update=True,
                 )
