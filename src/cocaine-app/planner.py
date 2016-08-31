@@ -895,15 +895,16 @@ class Planner(object):
         except IndexError:
             force = False
 
-        return self.create_restore_job(group_id, use_uncoupled_group, options.get('src_group'), force)
+        return self.create_restore_job(group_id, use_uncoupled_group, options.get('src_group'), force, autoapprove=False)
 
-    def create_restore_job(self, group_id, use_uncoupled_group, src_group, force):
+    def create_restore_job(self, group_id, use_uncoupled_group, src_group, force, autoapprove=False):
         group = storage.groups[group_id]
         involved_groups = [group]
         involved_groups.extend(g for g in group.coupled_groups)
         self.node_info_updater.update_status(involved_groups)
 
         job_params = {'group': group.group_id}
+        job_params['need_approving'] = not autoapprove
 
         if len(group.node_backends) > 1:
             raise ValueError('Group {0} has {1} node backends, should have at most one'.format(
@@ -1017,6 +1018,8 @@ class Planner(object):
 
         force = bool(request.get('force', False))
 
+        autoapprove = bool(request.get('autoapprove', False))
+
         groups = []
         for group in storage.groups:
             for backend in group.node_backends:
@@ -1064,11 +1067,11 @@ class Planner(object):
                     else:
                         groups_to_backup.append(group.group_id)
 
-        def restore_job(group, use_uncoupled_group, src_group, force):
+        def restore_job(group, use_uncoupled_group, src_group, force, autoapprove):
             last_error = None
             for _ in xrange(self.CREATE_JOB_ATTEMPTS):
                 try:
-                    return self.create_restore_job(group, use_uncoupled_group, src_group, force)
+                    return self.create_restore_job(group, use_uncoupled_group, src_group, force, autoapprove)
                 except Exception as e:
                     last_error = e
                     continue
@@ -1078,14 +1081,14 @@ class Planner(object):
         failed = {}
         for group in groups_to_backup:
             try:
-                job = restore_job(group, use_uncoupled_group, group, force)
+                job = restore_job(group, use_uncoupled_group, group, force, autoapprove)
                 active_jobs.append(job['id'])
             except Exception as e:
                 failed[group] = str(e)
 
         for group in groups_to_restore:
             try:
-                job = restore_job(group, use_uncoupled_group, None, force)
+                job = restore_job(group, use_uncoupled_group, None, force, autoapprove)
                 active_jobs.append(job['id'])
             except Exception as e:
                 failed[group] = str(e)
