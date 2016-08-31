@@ -1,3 +1,9 @@
+mastermind (2.28.30) trusty; urgency=medium
+
+  * Restore path: option to automatically approve jobs
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 31 Aug 2016 12:17:57 +0300
+
 mastermind (2.28.29) trusty; urgency=medium
 
   * Fix group restore by path handle
