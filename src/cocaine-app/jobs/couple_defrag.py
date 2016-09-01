@@ -40,7 +40,10 @@ class CoupleDefragJob(Job):
         return job
 
     def _set_resources(self):
-        resources = {Job.RESOURCE_FS: []}
+        resources = {
+            Job.RESOURCE_FS: [],
+            Job.RESOURCE_CPU: [],
+        }
 
         # TODO: use 'couples' container
         couples = (storage.cache_couples
@@ -51,6 +54,7 @@ class CoupleDefragJob(Job):
         for g in couple.groups:
             resources[Job.RESOURCE_FS].append(
                 (g.node_backends[0].node.host.addr, str(g.node_backends[0].fs.fsid)))
+            resources[Job.RESOURCE_CPU].append(g.node_backends[0].node.host.addr)
         self.resources = resources
 
     def create_tasks(self, processor):

@@ -115,6 +115,7 @@ class JobProcessor(object):
                 Job.RESOURCE_FS: {},
                 Job.RESOURCE_HOST_IN: {},
                 Job.RESOURCE_HOST_OUT: {},
+                Job.RESOURCE_CPU: {},
             }
 
         resources = defaultdict(default_res_counter)
