@@ -1,3 +1,9 @@
+mastermind (2.28.33) trusty; urgency=medium
+
+  * Optimize history record search mongo queries
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 01 Sep 2016 23:04:06 +0300
+
 mastermind (2.28.32) trusty; urgency=medium
 
   * Limit couple defrag jobs number per host
