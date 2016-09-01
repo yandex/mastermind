@@ -221,14 +221,17 @@ class Infrastructure(object):
 
         for group_history in self.group_history_finder.search_by_history_record(
             type=types_to_sync,
-            start_ts=self._sync_ts,
-            finish_ts=new_ts
+            start_ts=self._sync_ts
         ):
             logger.debug('Found updated group history for group {}'.format(group_history.group_id))
             if group_history.group_id not in storage.groups:
                 continue
             group = storage.groups[group_history.group_id]
             for node_backends_set in group_history.nodes:
+                # top threshold is checked due to mongo optimization: using bottom threshold only
+                # leads to mongo using index interval [<bottom_threshold>, inf+], which matches a
+                # lot less number of records than [inf-, <top_threshold>] (apparently mongo can use
+                # only one interval end for range queries)
                 if not self._sync_ts <= node_backends_set.timestamp < new_ts:
                     continue
                 if node_backends_set.type not in types_to_sync:
