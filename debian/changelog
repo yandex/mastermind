@@ -1,3 +1,9 @@
+mastermind (2.28.32) trusty; urgency=medium
+
+  * Limit couple defrag jobs number per host
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 01 Sep 2016 20:56:39 +0300
+
 mastermind (2.28.31) trusty; urgency=medium
 
   * Convert to lrc groupset minor fix
