@@ -51,6 +51,7 @@ class Job(MongoObject):
     RESOURCE_FS = 'fs'
     RESOURCE_HOST_IN = 'host_in'
     RESOURCE_HOST_OUT = 'host_out'
+    RESOURCE_CPU = 'cpu'
 
     COMMON_PARAMS = ('need_approving',)
 
