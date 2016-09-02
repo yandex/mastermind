@@ -1036,6 +1036,7 @@ class Planner(object):
         groups_to_restore = []
         active_jobs = []
         uncoupled_groups = {}
+        cancelled_jobs = []
         for group in groups:
             if group.couple is None:
                 backend_name = "{host}:{port}:{family}/{backend_id}".format(
@@ -1060,6 +1061,12 @@ class Planner(object):
                         if job.status in self.RUNNING_STATUSES:
                             active_jobs.append(job.id)
                         elif job.status in self.ERROR_STATUSES:
+                            try:
+                                self.job_processor.cancel_job(job.id)
+                                cancelled_jobs.append(job.id)
+                            except Exception as e:
+                                logger.exception('Failed to cancel job {}'.format(job.id))
+                                raise ValueError('Failed to cancel job {}: {}'.format(job.id, e))
                             groups_to_restore.append(group.group_id)
                         else:
                             raise ValueError(
@@ -1093,7 +1100,7 @@ class Planner(object):
             except Exception as e:
                 failed[group] = str(e)
 
-        return {'jobs': active_jobs, 'failed': failed, 'uncoupled': uncoupled_groups}
+        return {'jobs': active_jobs, 'failed': failed, 'uncoupled': uncoupled_groups, 'cancelled_jobs': cancelled_jobs}
 
     MOVE_GROUP_ATTEMPTS = 3
 

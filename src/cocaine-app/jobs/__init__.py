@@ -629,8 +629,6 @@ class JobProcessor(object):
 
             self._cancel_job(job)
 
-            job.save()
-
             logger.info('Job {0}: status set to {1}'.format(job.id, job.status))
 
         except Exception as e:
@@ -648,6 +646,7 @@ class JobProcessor(object):
         job.status = Job.STATUS_CANCELLED
         job.complete(self)
         job._dirty = True
+        job.save()
 
     @h.concurrent_handler
     def approve_job(self, request):
