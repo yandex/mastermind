@@ -3,7 +3,6 @@ import logging
 import signal
 import sys
 
-from cocaine.asio.exceptions import LocatorResolveError
 from cocaine.worker import Worker
 
 import log
@@ -11,7 +10,7 @@ import log
 try:
     log.setup_logger('mm_inventory_logging')
     logger = logging.getLogger('mm.init')
-except LocatorResolveError:
+except Exception:
     log.setup_logger()
     logger = logging.getLogger('mm.init')
     logger.warn(

@@ -29,6 +29,6 @@ class Inventory(object):
     TODO: add support of all inventory methods as worker handles.
     """
     @staticmethod
-    @h.source
+    @h.concurrent_handler
     def get_dc_by_host(host):
-        yield inv.get_dc_by_host(host)
+        return inv.get_dc_by_host(host)
