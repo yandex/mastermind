@@ -1062,7 +1062,7 @@ class Planner(object):
                             active_jobs.append(job.id)
                         elif job.status in self.ERROR_STATUSES:
                             try:
-                                self.job_processor.cancel_job(job.id)
+                                self.job_processor._cancel_job(job)
                                 cancelled_jobs.append(job.id)
                             except Exception as e:
                                 logger.exception('Failed to cancel job {}'.format(job.id))
