@@ -20,6 +20,8 @@ from make_lrc_groups import MakeLrcGroupsJob
 from add_lrc_groupset import AddLrcGroupsetJob
 from job_factory import JobFactory
 from restore_group import RestoreGroupJob
+from backend_cleanup import BackendCleanupJob
+from backend_manager import BackendManagerJob
 from tasks import Task, MinionCmdTask
 import timed_queue
 import storage
@@ -54,6 +56,10 @@ class JobProcessor(object):
         JobTypes.TYPE_RECOVER_DC_JOB: 15,
         JobTypes.TYPE_COUPLE_DEFRAG_JOB: 10,
         JobTypes.TYPE_MAKE_LRC_GROUPS_JOB: 5,
+        # Priority of this jobs is zero
+        # because they're not using resources
+        JobTypes.TYPE_BACKEND_CLEANUP_JOB: 0,
+        JobTypes.TYPE_BACKEND_MANAGER_JOB: 0,
     }
 
     # job types that should be processed by processor,
@@ -67,6 +73,8 @@ class JobProcessor(object):
         JobTypes.TYPE_MAKE_LRC_GROUPS_JOB,
         JobTypes.TYPE_ADD_LRC_GROUPSET_JOB,
         JobTypes.TYPE_CONVERT_TO_LRC_GROUPSET_JOB,
+        JobTypes.TYPE_BACKEND_CLEANUP_JOB,
+        JobTypes.TYPE_BACKEND_MANAGER_JOB,
     ])
 
     def __init__(self, job_finder, node, db, niu, minions, external_storage_meta, couple_record_finder):

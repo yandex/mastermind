@@ -60,6 +60,8 @@ class Job(MongoObject):
     BACKEND_DOWN_MARKER = RESTORE_CFG.get('backend_down_marker')
     IDS_FILE_PATH = RESTORE_CFG.get('ids_file')
 
+    BACKEND_COMMANDS_CFG = config.get('backend_commands', {})
+
     DNET_CLIENT_ALREADY_IN_PROGRESS = -114
 
     def __init__(self, need_approving=False):

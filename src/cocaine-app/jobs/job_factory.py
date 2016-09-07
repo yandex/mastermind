@@ -3,10 +3,13 @@ from move import MoveJob
 from recover_dc import RecoverDcJob
 from couple_defrag import CoupleDefragJob
 from restore_group import RestoreGroupJob
+from backend_cleanup import BackendCleanupJob
 from make_lrc_groups import MakeLrcGroupsJob
 from add_lrc_groupset import AddLrcGroupsetJob
 from convert_to_lrc_groupset import ConvertToLrcGroupsetJob
 from ttl_cleanup import TtlCleanupJob
+from backend_manager import BackendManagerJob
+
 
 class JobFactory(object):
 
@@ -28,6 +31,10 @@ class JobFactory(object):
             return ConvertToLrcGroupsetJob
         elif job_type == JobTypes.TYPE_TTL_CLEANUP_JOB:
             return TtlCleanupJob
+        elif job_type == JobTypes.TYPE_BACKEND_CLEANUP_JOB:
+            return BackendCleanupJob
+        elif job_type == JobTypes.TYPE_BACKEND_MANAGER_JOB:
+            return BackendManagerJob
         raise ValueError('Unknown job type: {}'.format(job_type))
 
     @staticmethod

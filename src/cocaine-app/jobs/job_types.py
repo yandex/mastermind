@@ -8,6 +8,8 @@ class JobTypes(object):
     TYPE_ADD_LRC_GROUPSET_JOB = 'add_lrc_groupset_job'
     TYPE_CONVERT_TO_LRC_GROUPSET_JOB = 'convert_to_lrc_groupset_job'
     TYPE_TTL_CLEANUP_JOB = 'ttl_cleanup_job'
+    TYPE_BACKEND_CLEANUP_JOB = 'backend_cleanup_job'
+    TYPE_BACKEND_MANAGER_JOB = 'backend_manager_job'
 
     AVAILABLE_TYPES = (
         TYPE_MOVE_JOB,
@@ -15,6 +17,8 @@ class JobTypes(object):
         TYPE_COUPLE_DEFRAG_JOB,
         TYPE_RESTORE_GROUP_JOB,
         TYPE_MAKE_LRC_GROUPS_JOB,
+        TYPE_BACKEND_CLEANUP_JOB,
+        TYPE_BACKEND_MANAGER_JOB,
     )
 
 
