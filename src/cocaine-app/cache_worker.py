@@ -28,9 +28,11 @@ from config import config
 import storage
 import cache
 from db.mongo.pool import MongoReplicaSetClient
+import external_storage
 import infrastructure
 import infrastructure_cache
 import jobs
+import couple_records
 import node_info_updater
 import helpers as h
 
@@ -164,7 +166,15 @@ def init_job_processor(jf, meta_db, niu):
         logger.error('Job processor will not be initialized because '
                      'job finder is not initialized')
         return None
-    j = jobs.JobProcessor(jf, n, meta_db, niu, minions=None)
+    j = jobs.JobProcessor(
+        jf,
+        n,
+        meta_db,
+        niu,
+        minions=None,
+        external_storage_meta=external_storage.ExternalStorageMeta(meta_db),
+        couple_record_finder=couple_records.CoupleRecordFinder(meta_db),
+    )
     return j
 
 
