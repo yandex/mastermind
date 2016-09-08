@@ -1,3 +1,9 @@
+mastermind (2.28.36) trusty; urgency=medium
+
+  * Fix mastermind2.26-cache worker start
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 08 Sep 2016 13:49:20 +0300
+
 mastermind (2.28.35) trusty; urgency=medium
 
   * Restore-path: fix cancel_job
