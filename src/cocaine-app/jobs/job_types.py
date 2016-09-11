@@ -7,6 +7,7 @@ class JobTypes(object):
     TYPE_MAKE_LRC_GROUPS_JOB = 'make_lrc_groups_job'
     TYPE_ADD_LRC_GROUPSET_JOB = 'add_lrc_groupset_job'
     TYPE_CONVERT_TO_LRC_GROUPSET_JOB = 'convert_to_lrc_groupset_job'
+    TYPE_TTL_CLEANUP_JOB = 'ttl_cleanup_job'
 
     AVAILABLE_TYPES = (
         TYPE_MOVE_JOB,
