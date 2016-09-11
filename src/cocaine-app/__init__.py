@@ -246,6 +246,7 @@ def init_planner(job_processor, niu):
     register_handle(planner.move_groups_from_host)
     register_handle(planner.convert_external_storage_to_groupset)
     register_handle(planner.restore_groups_from_path)
+    register_handle(planner.ttl_cleanup)
     return planner
 
 

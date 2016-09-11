@@ -1850,6 +1850,36 @@ def lrc_groupset_convert(groupset=('g',
     return
 
 
+@coupleDispatcher.command(name='ttl_cleanup')
+@log_action
+def ttl_cleanup(iter_group, 
+                batch_size=('b', '', 'The batch size (a number of records to be removed simultaneously)'),
+                attempts=('a', '', 'The retry count'),
+                nproc=('n', '', 'A number of threads in session'),
+                wait_timeout=('w', '', 'Timeout for elliptics operations'),
+                dry_run=('d', False, 'Dry-run mode'),
+                host=None, app=None):
+    '''
+    Remove records with TTL expired
+    '''
+    s = service(host, app)
+
+    iter_group = int(iter_group)
+
+    params = {
+        'iter_group': iter_group,
+        'batch_size': batch_size,
+        'attempts': attempts,
+        'nproc': nproc,
+        'wait_timeout': wait_timeout,
+        'dry_run': dry_run
+        }
+
+    res = s.enqueue('ttl_cleanup', msgpack.packb(params)).get()
+
+    print res
+    return
+
 d = Dispatcher(globaloptions=(app_param,))
 d.nest('group', groupDispatcher, 'Perform group action')
 d.nest('couple', coupleDispatcher, 'Perform couple action')
@@ -1859,7 +1889,6 @@ d.nest('job', jobDispatcher, 'Perform jobs action')
 d.nest('lock', lockDispatcher, 'Acquire locks on storage infrastructure nodes')
 d.nest('unlock', unlockDispatcher, 'Release locks on storage infrastructure nodes')
 d.nest('lrc', lrcDispatcher, 'Perform actions with LRC groups or couples')
-
 
 def command_helper(argv):
     cmdtable = d.cmdtable
