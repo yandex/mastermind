@@ -108,7 +108,7 @@ class Infrastructure(object):
 
     TTL_CLEANUP_CMD = (
         'mds_cleanup --groups {groups} --iterate-group {iter_group} '
-        '--log {log} --log-level {log_level} --tmp {temp_dir} --trace-id {trace_id} '
+        '--log {log} --log-level {log_level} --tmp {tmp_dir} --trace-id {trace_id} '
         '--wait-timeout {wait_timeout} --attempts {attempts} --batch-size {batch_size} '
         '--nproc {nproc} {safe} {remotes}'
     )
@@ -600,7 +600,7 @@ class Infrastructure(object):
 
     def ttl_cleanup_cmd(self,
                         remotes,
-                        groups,
+                        couple,
                         iter_group,
                         trace_id=None,
                         safe=False,
@@ -612,7 +612,7 @@ class Infrastructure(object):
         TTL_CLEANUP_CNF = config.get('infrastructure', {}).get('ttl_cleanup', {})
 
         cmd = self.TTL_CLEANUP_CMD.format(
-            groups=",".join(str(g) for g in groups),
+            groups=",".join(str(g.group_id) for g in couple.groups),
             iter_group=iter_group,
             attempts=(attempts or TTL_CLEANUP_CNF.get('attempts', 3)),
             wait_timeout=(wait_timeout or TTL_CLEANUP_CNF.get('wait_timeout', 20)),
@@ -621,13 +621,17 @@ class Infrastructure(object):
             trace_id=(trace_id or int(uuid.uuid4().hex[:16], 16)),
             log=TTL_CLEANUP_CNF.get('log', 'ttl_cleanup.log'),
             log_level="debug",
-            temp_dir=TTL_CLEANUP_CNF.get('tmp_dir', '/var/tmp/ttl_cleanup'),
+            tmp_dir=TTL_CLEANUP_CNF.get(
+                'tmp_dir',
+                '/var/tmp/ttl_cleanup_{couple_id}'
+            ).format(
+                couple_id=couple,
+            ),
             safe=('-S' if safe else ''),
             remotes=(' '.join('-r {}'.format(r) for r in remotes))
         )
 
         return cmd
-
 
     @h.concurrent_handler
     def start_node_cmd(self, request):
