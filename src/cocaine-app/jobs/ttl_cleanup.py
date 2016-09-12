@@ -49,17 +49,15 @@ class TtlCleanupJob(Job):
         # and manually restart the job then simply ignore undone work
         iter_group_desc = storage.groups[self.iter_group]
         couple = iter_group_desc.couple
-        groups = []
         remotes = []
         for g in couple.groups:
-            groups.append(g.group_id)
             node = g.node_backends[0].node
             remotes.append("{}:{}:{}".format(node.host.addr, node.port, node.family))
 
         # Log, Log_level, temp to be taken from config on infrastructure side
         ttl_cleanup_cmd = infrastructure.ttl_cleanup_cmd(
             remotes=remotes,
-            groups=groups,
+            couple=couple,
             iter_group=self.iter_group,
             wait_timeout=self.wait_timeout,
             batch_size=self.batch_size,
