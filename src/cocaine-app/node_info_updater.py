@@ -731,7 +731,6 @@ class NodeInfoUpdater(object):
             res[ns]['settings'] = settings
 
         # couples
-        # TODO: should we count lrc groupsets here?
         for couple in storage.replicas_groupsets:
             try:
                 try:
