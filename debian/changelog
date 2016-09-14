@@ -1,3 +1,9 @@
+mastermind (2.28.38) trusty; urgency=medium
+
+  * Set primary and secondary hosts when lrc groupset is used
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 14 Sep 2016 17:52:59 +0300
+
 mastermind (2.28.37) trusty; urgency=medium
 
   * Add new job to remove records with expired ttl
