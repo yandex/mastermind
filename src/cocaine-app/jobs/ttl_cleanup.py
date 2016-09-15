@@ -12,6 +12,8 @@ class TtlCleanupJob(Job):
 
     PARAMS = (
         'iter_group',
+        'namespace',
+        'couple',
         'batch_size',
         'attempts',
         'nproc',
