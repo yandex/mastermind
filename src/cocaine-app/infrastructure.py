@@ -1272,7 +1272,8 @@ class Infrastructure(object):
                                   including_in_service=False,
                                   status=None,
                                   types=None,
-                                  skip_groups=None):
+                                  skip_groups=None,
+                                  allow_alive_keys=False):
 
         suitable_groups = []
         locked_hosts = manual_locker.get_locked_hosts()
@@ -1291,7 +1292,8 @@ class Infrastructure(object):
                     types or (storage.Group.TYPE_UNCOUPLED,),
                     max_node_backends=max_node_backends,
                     in_service=in_service,
-                    status=status):
+                    status=status,
+                    allow_alive_keys=allow_alive_keys):
 
                 suitable_groups.append(group)
 
@@ -1303,7 +1305,8 @@ class Infrastructure(object):
                                 types,
                                 max_node_backends=None,
                                 in_service=None,
-                                status=None):
+                                status=None,
+                                allow_alive_keys=False):
 
         if group.couple is not None:
             return False
@@ -1322,6 +1325,8 @@ class Infrastructure(object):
             if nb.status != storage.Status.OK:
                 return False
             if nb.node.host in locked_hosts:
+                return False
+            if not allow_alive_keys and nb.stat and nb.stat.files > 0:
                 return False
 
         if group.type not in types:
