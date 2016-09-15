@@ -2194,6 +2194,48 @@ class Groupset(object):
         max_keys = max(group_keys)
         return sum(max_keys - gk for gk in group_keys)
 
+    FALLBACK_HOSTS_PER_DC = config.get('fallback_hosts_per_dc', 10)
+
+    def groupset_hosts(self):
+        hosts = {'primary': [],
+                 'fallback': []}
+        used_hosts = set()
+        used_dcs = set()
+
+        def serialize_node(node):
+            return {
+                'host': node.host.hostname,
+                'dc': node.host.dc,
+            }
+
+        for group in self.groups:
+            for nb in group.node_backends:
+                node = nb.node
+                if node.host in used_hosts:
+                    continue
+                try:
+                    hosts['primary'].append(serialize_node(node))
+                except CacheUpstreamError:
+                    continue
+                used_hosts.add(node.host)
+                used_dcs.add(node.host.dc)
+
+        for dc in used_dcs:
+            count = 0
+            for node in dc_host_view[dc].by_la:
+                if node.host in used_hosts:
+                    continue
+                try:
+                    hosts['fallback'].append(serialize_node(node))
+                except CacheUpstreamError:
+                    continue
+                used_hosts.add(node.host)
+                count += 1
+                if count >= self.FALLBACK_HOSTS_PER_DC:
+                    break
+
+        return hosts
+
     def __contains__(self, group):
         return group in self.groups
 
@@ -2429,57 +2471,6 @@ class Couple(Groupset):
         if 'frozen' in settings:
             if not isinstance(settings['frozen'], bool):
                 raise ValueError('Replicas groupset "frozen" setting must be bool')
-
-    FALLBACK_HOSTS_PER_DC = config.get('fallback_hosts_per_dc', 10)
-
-    def couple_hosts(self):
-        hosts = {'primary': [],
-                 'fallback': []}
-        used_hosts = set()
-        used_dcs = set()
-
-        groups = []
-        if self.settings['read_preference']:
-            preferred_groupset_type = self.settings['read_preference'][0]
-            if preferred_groupset_type == Lrc.Scheme822v1.ID and self.lrc822v1_groupset:
-                groups = self.lrc822v1_groupset.groups
-            elif preferred_groupset_type == GROUPSET_REPLICAS:
-                # TODO: change to replicas groups when replicas groupset is implemented
-                groups = self.groups
-
-        def serialize_node(node):
-            return {
-                'host': node.host.hostname,
-                'dc': node.host.dc,
-            }
-
-        for group in groups:
-            for nb in group.node_backends:
-                node = nb.node
-                if node.host in used_hosts:
-                    continue
-                try:
-                    hosts['primary'].append(serialize_node(node))
-                except CacheUpstreamError:
-                    continue
-                used_hosts.add(node.host)
-                used_dcs.add(node.host.dc)
-
-        for dc in used_dcs:
-            count = 0
-            for node in dc_host_view[dc].by_la:
-                if node.host in used_hosts:
-                    continue
-                try:
-                    hosts['fallback'].append(serialize_node(node))
-                except CacheUpstreamError:
-                    continue
-                used_hosts.add(node.host)
-                count += 1
-                if count >= self.FALLBACK_HOSTS_PER_DC:
-                    break
-
-        return hosts
 
 
 class Lrc822v1Groupset(Groupset):
