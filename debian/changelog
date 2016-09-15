@@ -1,3 +1,9 @@
+mastermind (2.28.39) trusty; urgency=medium
+
+  * Separate replicas and lrc groupset primary/secondary hosts
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 15 Sep 2016 14:10:45 +0300
+
 mastermind (2.28.38) trusty; urgency=medium
 
   * Set primary and secondary hosts when lrc groupset is used
