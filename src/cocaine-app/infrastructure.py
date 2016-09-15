@@ -110,7 +110,8 @@ class Infrastructure(object):
         'mds_cleanup --groups {groups} --iterate-group {iter_group} '
         '--log {log} --log-level {log_level} --tmp {tmp_dir} --trace-id {trace_id} '
         '--wait-timeout {wait_timeout} --attempts {attempts} --batch-size {batch_size} '
-        '--nproc {nproc} {safe} {remotes} --elliptics-log-level error'
+        '--nproc {nproc} {safe} {remotes} --elliptics-log-level error '
+        '--remove-expired'
     )
 
     def __init__(self):
