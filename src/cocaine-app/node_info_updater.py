@@ -738,7 +738,9 @@ class NodeInfoUpdater(object):
                 except ValueError:
                     continue
                 info = couple.info().serialize()
-                info['hosts'] = couple.couple_hosts()
+                info['hosts'] = couple.groupset_hosts()
+                if couple.lrc822v1_groupset:
+                    info['groupsets'][storage.Group.TYPE_LRC_8_2_2_V1]['hosts'] = couple.lrc822v1_groupset.groupset_hosts()
                 # couples
                 res[ns.id]['couples'].append(info)
             except Exception:
