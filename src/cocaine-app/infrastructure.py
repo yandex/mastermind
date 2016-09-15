@@ -621,7 +621,7 @@ class Infrastructure(object):
             batch_size=(batch_size or TTL_CLEANUP_CNF.get('batch_size', 100)),
             trace_id=(trace_id or int(uuid.uuid4().hex[:16], 16)),
             log=TTL_CLEANUP_CNF.get('log', 'ttl_cleanup.log'),
-            log_level="debug",
+            log_level="info",
             tmp_dir=TTL_CLEANUP_CNF.get(
                 'tmp_dir',
                 '/var/tmp/ttl_cleanup_{couple_id}'
