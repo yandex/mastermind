@@ -111,7 +111,7 @@ class Infrastructure(object):
         '--log {log} --log-level {log_level} --tmp {tmp_dir} --trace-id {trace_id} '
         '--wait-timeout {wait_timeout} --attempts {attempts} --batch-size {batch_size} '
         '--nproc {nproc} {safe} {remotes} --elliptics-log-level error '
-        '--remove-expired'
+        '--remove-expired {tskv}'
     )
 
     def __init__(self):
@@ -629,7 +629,10 @@ class Infrastructure(object):
                 couple_id=couple,
             ),
             safe=('-S' if safe else ''),
-            remotes=(' '.join('-r {}'.format(r) for r in remotes))
+            remotes=(' '.join('-r {}'.format(r) for r in remotes)),
+            tskv='--tskv-context namespace={},couple_id={} --tskv-log syslog'.format(
+                couple.namespace, couple.groups[0].group_id
+            )
         )
 
         return cmd
