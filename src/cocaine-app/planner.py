@@ -1719,10 +1719,14 @@ class Planner(object):
         except ValueError:
             raise ValueError('Parameter "wait_timeout" must be a number')
 
+        iter_group = storage.groups[request['iter_group']]
+
         job = self.job_processor._create_job(
             job_type=jobs.JobTypes.TYPE_TTL_CLEANUP_JOB,
             params={
-                'iter_group': request['iter_group'],
+                'iter_group': iter_group.group_id,
+                'couple': str(iter_group.couple),
+                'namespace': iter_group.couple.namespace.id,
                 'batch_size': batch_size,
                 'attempts': attempts,
                 'nproc': nproc,
@@ -1732,6 +1736,7 @@ class Planner(object):
         )
 
         return job.dump()
+
 
 def _recovery_applicable_couple(couple):
     if couple.status not in storage.GOOD_STATUSES:
