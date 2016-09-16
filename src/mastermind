@@ -1852,7 +1852,7 @@ def lrc_groupset_convert(groupset=('g',
 
 @coupleDispatcher.command(name='ttl_cleanup')
 @log_action
-def ttl_cleanup(iter_group, 
+def ttl_cleanup(iter_group,
                 batch_size=('b', '', 'The batch size (a number of records to be removed simultaneously)'),
                 attempts=('a', '', 'The retry count'),
                 nproc=('n', '', 'A number of threads in session'),
@@ -1889,6 +1889,7 @@ d.nest('job', jobDispatcher, 'Perform jobs action')
 d.nest('lock', lockDispatcher, 'Acquire locks on storage infrastructure nodes')
 d.nest('unlock', unlockDispatcher, 'Release locks on storage infrastructure nodes')
 d.nest('lrc', lrcDispatcher, 'Perform actions with LRC groups or couples')
+
 
 def command_helper(argv):
     cmdtable = d.cmdtable

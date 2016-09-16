@@ -110,7 +110,8 @@ class Infrastructure(object):
         'mds_cleanup --groups {groups} --iterate-group {iter_group} '
         '--log {log} --log-level {log_level} --tmp {tmp_dir} --trace-id {trace_id} '
         '--wait-timeout {wait_timeout} --attempts {attempts} --batch-size {batch_size} '
-        '--nproc {nproc} {safe} {remotes}'
+        '--nproc {nproc} {safe} {remotes} --elliptics-log-level error '
+        '--remove-expired {tskv}'
     )
 
     def __init__(self):
@@ -620,7 +621,7 @@ class Infrastructure(object):
             batch_size=(batch_size or TTL_CLEANUP_CNF.get('batch_size', 100)),
             trace_id=(trace_id or int(uuid.uuid4().hex[:16], 16)),
             log=TTL_CLEANUP_CNF.get('log', 'ttl_cleanup.log'),
-            log_level="debug",
+            log_level="info",
             tmp_dir=TTL_CLEANUP_CNF.get(
                 'tmp_dir',
                 '/var/tmp/ttl_cleanup_{couple_id}'
@@ -628,7 +629,10 @@ class Infrastructure(object):
                 couple_id=couple,
             ),
             safe=('-S' if safe else ''),
-            remotes=(' '.join('-r {}'.format(r) for r in remotes))
+            remotes=(' '.join('-r {}'.format(r) for r in remotes)),
+            tskv='--tskv-context namespace={},couple_id={} --tskv-log syslog'.format(
+                couple.namespace, couple.groups[0].group_id
+            )
         )
 
         return cmd
