@@ -107,7 +107,13 @@ class JobProcessor(object):
 
     def _ready_jobs(self):
 
-        active_jobs = self.job_finder.jobs(statuses=Job.ACTIVE_STATUSES)
+        active_statuses = Job.ACTIVE_STATUSES
+
+        # TEMP: do not account broken/pending jobs' resources
+        active_statuses.remove(Job.STATUS_PENDING)
+        active_statuses.remove(Job.STATUS_BROKEN)
+
+        active_jobs = self.job_finder.jobs(statuses=active_statuses)
 
         ready_jobs = []
         new_jobs = []
