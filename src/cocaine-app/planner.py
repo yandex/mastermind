@@ -980,6 +980,56 @@ class Planner(object):
                       jobs.Job.STATUS_BROKEN]
     RESTORE_TYPES = [jobs.JobTypes.TYPE_MOVE_JOB,
                      jobs.JobTypes.TYPE_RESTORE_GROUP_JOB]
+    RESTORE_AND_MANAGER_TYPES = [jobs.JobTypes.TYPE_MOVE_JOB,
+                                 jobs.JobTypes.TYPE_RESTORE_GROUP_JOB,
+                                 jobs.JobTypes.TYPE_BACKEND_MANAGER_JOB]
+
+    def _create_restore_job(self, group, use_uncoupled_group, src_group, force, autoapprove):
+        last_error = None
+        for _ in xrange(self.CREATE_JOB_ATTEMPTS):
+            try:
+                return self.create_restore_job(group, use_uncoupled_group, src_group, force, autoapprove)
+            except Exception as e:
+                last_error = e
+                continue
+        if last_error:
+                raise last_error
+
+    def _create_backend_cleanup_job(self, group, force, autoapprove):
+        last_error = None
+        for _ in xrange(self.CREATE_JOB_ATTEMPTS):
+            try:
+                job = self.job_processor._create_job(
+                    jobs.JobTypes.TYPE_BACKEND_CLEANUP_JOB,
+                    params={
+                        'group': group,
+                        'need_approving': not autoapprove
+                    },
+                    force=force,
+                )
+                return job.dump()
+            except Exception as e:
+                last_error = e
+                continue
+        if last_error:
+            raise last_error
+
+    def _create_backend_manager_job(self, group, force, autoapprove, cmd_type):
+        params = {'group': group}
+        params['need_approving'] = not autoapprove
+        params['cmd_type'] = cmd_type
+        last_error = None
+        for _ in xrange(self.CREATE_JOB_ATTEMPTS):
+            try:
+                job = self.job_processor._create_job(
+                    jobs.JobTypes.TYPE_BACKEND_MANAGER_JOB,
+                    params, force=force)
+                return job.dump()
+            except Exception as e:
+                last_error = e
+                continue
+        if last_error:
+            raise last_error
 
     @h.concurrent_handler
     def restore_groups_from_path(self, request):
@@ -1037,6 +1087,8 @@ class Planner(object):
         active_jobs = []
         uncoupled_groups = {}
         cancelled_jobs = []
+        groups_to_ro = []
+
         for group in groups:
             if group.couple is None:
                 backend_name = "{host}:{port}:{family}/{backend_id}".format(
@@ -1045,21 +1097,43 @@ class Planner(object):
                     family=group.node_backends[0].node.family,
                     backend_id=group.node_backends[0].backend_id,
                 )
-                uncoupled_groups[group.group_id] = str(backend_name)
+                job = group.active_job
+                if job is None:
+                    uncoupled_groups[group.group_id] = str(backend_name)
+                else:
+                    group_jobs = self.job_processor.job_finder.jobs(
+                        ids=job['id'],
+                        types=jobs.JobTypes.TYPE_BACKEND_CLEANUP_JOB,
+                    )
+                    if group_jobs:
+                        job = group_jobs[0]
+                        if job.status in self.RUNNING_STATUSES:
+                            active_jobs.append(job.id)
+                        else:
+                            raise ValueError(
+                                'Backend cleanup job failed, group: {}, status: {}'.format(
+                                    group.group_id,
+                                    job.status
+                                )
+                            )
             else:
                 job = group.active_job
                 if job is None:
-                    groups_to_backup.append(group.group_id)
+                    if group.node_backends[0].status != 'RO':
+                        groups_to_ro.append(group.group_id)
+                    else:
+                        groups_to_backup.append(group.group_id)
                 else:
                     group_jobs = self.job_processor.job_finder.jobs(ids=job['id'],
-                                                                    types=self.RESTORE_TYPES)
-                    if len(group_jobs) > 1:
-                        raise ValueError('Id {} has {} jobs'.format(job['id'], len(jobs)))
-                    elif len(group_jobs) == 1:
+                                                                    types=self.RESTORE_AND_MANAGER_TYPES)
+                    if group_jobs:
                         job = group_jobs[0]
 
                         if job.status in self.RUNNING_STATUSES:
-                            active_jobs.append(job.id)
+                            if job.type == jobs.JobTypes.TYPE_BACKEND_MANAGER_JOB:
+                                active_jobs.append(job.id)
+                            elif job.type in self.RESTORE_TYPES:
+                                active_jobs.append(job.id)
                         elif job.status in self.ERROR_STATUSES:
                             try:
                                 self.job_processor._cancel_job(job)
@@ -1068,39 +1142,46 @@ class Planner(object):
                                 logger.exception('Failed to cancel job {}'.format(job.id))
                                 raise ValueError('Failed to cancel job {}: {}'.format(job.id, e))
                             groups_to_restore.append(group.group_id)
+                        elif job.status == jobs.Job.STATUS_CANCELLED:
+                            groups_to_restore.append(group.group_id)
                         else:
                             raise ValueError(
-                                'Unknown job status: {}'.format(job.status))
+                                'Unknown job status: {}'.format(job.status)
+                            )
                     else:
                         groups_to_backup.append(group.group_id)
 
-        def restore_job(group, use_uncoupled_group, src_group, force, autoapprove):
-            last_error = None
-            for _ in xrange(self.CREATE_JOB_ATTEMPTS):
-                try:
-                    return self.create_restore_job(group, use_uncoupled_group, src_group, force, autoapprove)
-                except Exception as e:
-                    last_error = e
-                    continue
-            if last_error:
-                    raise last_error
-
         failed = {}
+        for group in groups_to_ro:
+            cmd_type = jobs.BackendManagerJob.CMD_TYPE_MAKE_READONLY
+            try:
+                job = self._create_backend_manager_job(group, force, autoapprove, cmd_type)
+                active_jobs.append(job['id'])
+            except Exception as e:
+                failed[group] = str(e)
+
         for group in groups_to_backup:
             try:
-                job = restore_job(group, use_uncoupled_group, group, force, autoapprove)
+                job = self._create_restore_job(group, use_uncoupled_group, group, force, autoapprove)
                 active_jobs.append(job['id'])
             except Exception as e:
                 failed[group] = str(e)
 
         for group in groups_to_restore:
             try:
-                job = restore_job(group, use_uncoupled_group, None, force, autoapprove)
+                job = self.create_restore_job(group, use_uncoupled_group, None, force, autoapprove)
                 active_jobs.append(job['id'])
             except Exception as e:
                 failed[group] = str(e)
 
-        return {'jobs': active_jobs, 'failed': failed, 'uncoupled': uncoupled_groups, 'cancelled_jobs': cancelled_jobs}
+        for group in uncoupled_groups:
+            try:
+                job = self._create_backend_cleanup_job(group, force, autoapprove)
+                active_jobs.append(job['id'])
+            except Exception as e:
+                failed[group] = str(e)
+
+        return {'jobs': active_jobs, 'failed': failed, 'cancelled_jobs': cancelled_jobs}
 
     MOVE_GROUP_ATTEMPTS = 3
 
