@@ -1,3 +1,9 @@
+mastermind (2.28.43) trusty; urgency=medium
+
+  * Fix backend cleanup tasks creating
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 19 Sep 2016 20:29:37 +0300
+
 mastermind (2.28.42) trusty; urgency=medium
 
   * Fix jobs status filtering on jobs scheduling
