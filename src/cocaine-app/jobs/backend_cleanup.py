@@ -53,6 +53,8 @@ class BackendCleanupJob(Job):
             self._remove_node_backend_from_history(group, node_backend)
         )
 
+        self.tasks = tasks
+
     def _stop_node_backend_task(self, group, node_backend):
 
         shutdown_cmd = infrastructure._disable_node_backend_cmd(
