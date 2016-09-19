@@ -115,7 +115,7 @@ class JobProcessor(object):
 
     def _ready_jobs(self):
 
-        active_statuses = Job.ACTIVE_STATUSES
+        active_statuses = list(Job.ACTIVE_STATUSES)
 
         # TEMP: do not account broken/pending jobs' resources
         active_statuses.remove(Job.STATUS_PENDING)
