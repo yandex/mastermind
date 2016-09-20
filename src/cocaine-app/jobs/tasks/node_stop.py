@@ -66,21 +66,4 @@ class NodeStopTask(MinionCmdTask):
                     )
                 )
 
-            if self.uncoupled:
-                if group.couple:
-                    raise JobBrokenError(
-                        'Task {task_id}: group {group} happens to be already coupled'.format(
-                            task_id=self.id,
-                            group=self.group
-                        )
-                    )
-            else:
-                if not group.couple:
-                    raise JobBrokenError(
-                        'Task {task_id}: group {group} is not coupled'.format(
-                            task_id=self.id,
-                            group=self.group
-                        )
-                    )
-
         super(NodeStopTask, self).execute(processor)
