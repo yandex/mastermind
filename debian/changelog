@@ -1,3 +1,10 @@
+mastermind (2.28.46) trusty; urgency=medium
+
+  * Replace 'group_ids' with empty list when replicas groupset is not
+    available
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 21 Sep 2016 18:26:14 +0300
+
 mastermind (2.28.45) trusty; urgency=medium
 
   * Add couple settings viewer command
