@@ -1,3 +1,10 @@
+mastermind (2.28.45) trusty; urgency=medium
+
+  * Add couple settings viewer command
+  * Do not provide a list of fake groups if replicas groupset is not used
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 21 Sep 2016 15:13:09 +0300
+
 mastermind (2.28.44) trusty; urgency=medium
 
   * Ignore checks for uncoupled groups in node stop task
