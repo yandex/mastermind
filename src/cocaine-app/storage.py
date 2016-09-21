@@ -2309,6 +2309,16 @@ class Couple(Groupset):
         if self.lrc822v1_groupset:
             data['groupsets'][Group.TYPE_LRC_8_2_2_V1] = self.lrc822v1_groupset.info().serialize()
 
+            # NOTE: this is a temporary workaround for replicas groupset
+            disabled_replicas_groupset = (
+                GROUPSET_REPLICAS not in self.settings['read_preference'] and
+                all(group.status == Status.INIT for group in self.groups)
+            )
+
+            if disabled_replicas_groupset:
+                # NOTE: overwriting common groups info
+                data['groups'] = []
+
         data['settings'] = self.settings
         # TODO: temporary backward compatibility, remove after libmastermind
         # refactoring
