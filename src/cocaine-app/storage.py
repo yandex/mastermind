@@ -2318,6 +2318,7 @@ class Couple(Groupset):
             if disabled_replicas_groupset:
                 # NOTE: overwriting common groups info
                 data['groups'] = []
+                data['group_ids'] = []
 
         data['settings'] = self.settings
         # TODO: temporary backward compatibility, remove after libmastermind
