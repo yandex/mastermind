@@ -433,21 +433,50 @@ def couple_info(group, host=None, app=None):
 @coupleDispatcher.command(name='settings')
 @log_action
 def couple_settings(couple_id,
-                    overwrite=('o', False, 'Flag to setup couple settings from scratch'),
-                    read_preference=(
-                        '',
-                        [],
-                        'Read preference for couple (can be used multiple times to set '
-                        'read preference list, e.g "--read-preference replicas '
-                        '--read-preference lrc-8-2-2v1")'),
                     host=None,
                     app=None):
+    '''View couple settings'''
+    cl = client(host, app)
+
+    try:
+        group_id = int(couple_id)
+    except (ValueError, TypeError):
+        group_id = None
+
+    if group_id:
+        couple = cl.groups[group_id].couple
+    else:
+        couple = cl.couples[couple_id]
+
+    pprint(couple.settings)
+
+
+@coupleDispatcher.command(name='setup')
+@log_action
+def couple_setup(couple_id,
+                 overwrite=('o', False, 'Flag to setup couple settings from scratch'),
+                 read_preference=(
+                     '',
+                     [],
+                     'Read preference for couple (can be used multiple times to set '
+                     'read preference list, e.g "--read-preference replicas '
+                     '--read-preference lrc-8-2-2v1")'),
+                 no_read_preference=(
+                     '',
+                     False,
+                     'Remove "read_preference" setting from couple settings (is overrided '
+                     'by --read-preference option)'
+                 ),
+                 host=None,
+                 app=None):
     '''Update couple settings'''
     cl = client(host, app)
 
     settings = {}
     if read_preference:
         settings['read_preference'] = read_preference
+    elif no_read_preference:
+        settings['read_preference'] = []
 
     try:
         group_id = int(couple_id)
