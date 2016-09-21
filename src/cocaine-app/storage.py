@@ -837,6 +837,8 @@ class NodeBackendStat(object):
 
         self.backend_start_ts = 0
 
+        self.stat_commit_errors = 0
+
     def update(self, raw_stat, collect_ts):
 
         if self.ts and collect_ts > self.ts:
@@ -903,16 +905,15 @@ class NodeBackendStat(object):
             self.backend_start_ts = raw_stat['status']['last_start']['tv_sec']
             self._reset_stat_commit_errors()
 
+        if self.cur_stat_commit_err_count < self.start_stat_commit_err_count:
+            self._reset_stat_commit_errors()
+
+        self.stat_commit_errors = self.cur_stat_commit_err_count - self.start_stat_commit_err_count
+
         self.commands_stat.update(raw_stat['commands'], collect_ts)
 
     def _reset_stat_commit_errors(self):
         self.start_stat_commit_err_count = self.cur_stat_commit_err_count
-
-    @property
-    def stat_commit_errors(self):
-        if self.cur_stat_commit_err_count < self.start_stat_commit_err_count:
-            self._reset_stat_commit_errors()
-        return self.cur_stat_commit_err_count - self.start_stat_commit_err_count
 
     def max_rps(self, rps, load_avg):
         return max(rps / max(load_avg, 0.01), 100)
