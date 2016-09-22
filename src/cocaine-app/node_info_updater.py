@@ -66,13 +66,13 @@ class NodeInfoUpdater(object):
         self._prepare_flow_stats = prepare_flow_stats
 
     def start(self):
-        self.node_statistics_update()
-        self.update_symm_groups()
+        self._node_statistics_update()
+        self._update_symm_groups()
 
     def _start_tq(self):
         self.__tq.start()
 
-    def node_statistics_update(self):
+    def _node_statistics_update(self):
         try:
             with self.__cluster_update_lock:
 
@@ -93,10 +93,10 @@ class NodeInfoUpdater(object):
         finally:
             logger.info('Cluster updating: node statistics collecting finished, time: {0:.3f}'.format(time.time() - start_ts))
             reload_period = config.get('nodes_reload_period', 60)
-            self.__tq.add_task_in('node_statistics_update', reload_period, self.node_statistics_update)
+            self.__tq.add_task_in('_node_statistics_update', reload_period, self._node_statistics_update)
             self.__nodeUpdateTimestamps = self.__nodeUpdateTimestamps[1:] + (time.time(),)
 
-    def update_symm_groups(self):
+    def _update_symm_groups(self):
         start_ts = time.time()
         try:
 
@@ -119,7 +119,7 @@ class NodeInfoUpdater(object):
             logger.info('Cluster updating: updating group coupling info finished, time: {0:.3f}'.format(time.time() - start_ts))
             # TODO: change period
             reload_period = config.get('nodes_reload_period', 60)
-            self.__tq.add_task_in(GROUPS_META_UPDATE_TASK_ID, reload_period, self.update_symm_groups)
+            self.__tq.add_task_in(GROUPS_META_UPDATE_TASK_ID, reload_period, self._update_symm_groups)
 
     @h.concurrent_handler
     def force_nodes_update(self, request):
@@ -149,7 +149,7 @@ class NodeInfoUpdater(object):
         self.update_symm_groups_async(groups=groups, namespaces_settings=namespaces_settings)
 
     @staticmethod
-    def log_monitor_stat_exc(e):
+    def _log_monitor_stat_exc(e):
         logger.error('Malformed monitor stat response: {}'.format(e))
 
     @staticmethod
@@ -176,7 +176,7 @@ class NodeInfoUpdater(object):
 
         # TODO: set timeout!!!
         for packed_result in skip_exceptions(results,
-                                             on_exc=NodeInfoUpdater.log_monitor_stat_exc):
+                                             on_exc=NodeInfoUpdater._log_monitor_stat_exc):
             try:
                 result = msgpack.unpackb(packed_result)
             except Exception:
@@ -252,7 +252,7 @@ class NodeInfoUpdater(object):
         responses_collected = 0
         for node, result in self._do_get_monitor_stats(host_addrs):
             responses_collected += 1
-            self.update_statistics(
+            self._update_statistics(
                 node,
                 result['content'],
                 elapsed_time=result['request_time']
@@ -405,7 +405,7 @@ class NodeInfoUpdater(object):
             infrastructure.update_group_history(group)
 
     @staticmethod
-    def update_statistics(node, stat, elapsed_time=None):
+    def _update_statistics(node, stat, elapsed_time=None):
 
         logger.debug(
             'Cluster updating: node {0} statistics time: {1:03f}'.format(
@@ -656,7 +656,7 @@ class NodeInfoUpdater(object):
                         pass
 
             if groups is None:
-                self.update_couple_settings()
+                self._update_couple_settings()
                 load_manager.update(storage)
                 weight_manager.update(storage, namespaces_settings)
 
@@ -665,7 +665,7 @@ class NodeInfoUpdater(object):
         except Exception as e:
             logger.exception('Critical error during symmetric group update')
 
-    def update_couple_settings(self):
+    def _update_couple_settings(self):
         if not self.couple_record_finder:
             # case for side worker that don't need access to couple settings
             return
