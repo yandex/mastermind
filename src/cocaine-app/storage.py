@@ -24,6 +24,11 @@ from mastermind.query.groupsets import Groupset as GroupsetInfo
 from mastermind.query.groups import Group as GroupInfo
 from mastermind_core.config import config
 
+if config.get('stat_source', 'native') == 'collector':
+    from new_entities import Host
+else:
+    from old_entities import Host
+
 logger = logging.getLogger('mm.storage')
 
 
@@ -996,63 +1001,6 @@ class NodeBackendStat(object):
                     ts_str(self.ts), self.write_rps, self.max_write_rps, self.read_rps,
                     self.max_read_rps, self.total_space, self.free_space, self.files,
                     self.files_removed, self.fragmentation, self.node_stat.load_average))
-
-
-class Host(object):
-    def __init__(self, addr):
-        self.addr = addr
-        self.nodes = []
-
-    @property
-    def hostname(self):
-        return cache.get_hostname_by_addr(self.addr)
-
-    @property
-    def hostname_or_not(self):
-        return cache.get_hostname_by_addr(self.addr, strict=False)
-
-    @property
-    def dc(self):
-        return cache.get_dc_by_host(self.hostname)
-
-    @property
-    def dc_or_not(self):
-        return cache.get_dc_by_host(self.hostname, strict=False)
-
-    @property
-    def parents(self):
-        return cache.get_host_tree(self.hostname)
-
-    @property
-    def full_path(self):
-        parent = self.parents
-        parts = [parent['name']]
-        while 'parent' in parent:
-            parent = parent['parent']
-            parts.append(parent['name'])
-        return '|'.join(reversed(parts))
-
-    def index(self):
-        return self.__str__()
-
-    def __eq__(self, other):
-        if isinstance(other, basestring):
-            return self.addr == other
-
-        if isinstance(other, Host):
-            return self.addr == other.addr
-
-        return False
-
-    def __hash__(self):
-        return hash(self.__str__())
-
-    def __repr__(self):
-        return ('<Host object: addr=%s, nodes=[%s] >' %
-                (self.addr, ', '.join((repr(n) for n in self.nodes))))
-
-    def __str__(self):
-        return self.addr
 
 
 class Node(object):
@@ -2788,6 +2736,7 @@ class Namespace(object):
     def __init__(self, id):
         self.id = id
         self.couples = set()
+        self.settings = {}
 
         self.groupsets = Groupsets(
             replicas=Repositary(Couple, 'Replicas groupset'),

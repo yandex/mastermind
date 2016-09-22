@@ -38,6 +38,11 @@ from namespaces import NamespacesSettings
 from mastermind_core.config import config
 from mastermind_core.meta_db import meta_db
 
+if config.get('stat_source', 'native') == 'collector':
+    from collector_updater import NodeInfoUpdater
+else:
+    from node_info_updater import NodeInfoUpdater
+
 logger = logging.getLogger()
 i = iter(xrange(100))
 logger.info("trace %d" % (i.next()))
@@ -135,7 +140,7 @@ def init_infrastructure(jf, ghf, namespaces_settings):
 
 def init_node_info_updater(jf, crf, statistics, namespaces_settings):
     logger.info("trace node info updater %d" % (i.next()))
-    niu = node_info_updater.NodeInfoUpdater(
+    niu = NodeInfoUpdater(
         node=n,
         job_finder=jf,
         namespaces_settings=namespaces_settings,
