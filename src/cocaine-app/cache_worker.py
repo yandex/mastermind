@@ -31,6 +31,11 @@ from namespaces import NamespacesSettings
 
 logger = logging.getLogger()
 
+if config.get('stat_source', 'native') == 'collector':
+    from collector_updater import NodeInfoUpdater
+else:
+    from node_info_updater import NodeInfoUpdater
+
 logger = logging.getLogger()
 
 

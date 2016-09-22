@@ -45,6 +45,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                  statistics=None):
         super(NodeInfoUpdater, self).__init__(node=node,
                                               job_finder=job_finder,
+                                              namespaces_settings=namespaces_settings,
                                               couple_record_finder=couple_record_finder,
                                               prepare_namespaces_states=prepare_namespaces_states,
                                               prepare_flow_stats=prepare_flow_stats,

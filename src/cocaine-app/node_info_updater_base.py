@@ -9,7 +9,7 @@ import traceback
 import elliptics
 
 # import balancer
-from config import config
+from mastermind_core.config import config
 import helpers as h
 from infrastructure import infrastructure
 from jobs import Job
@@ -32,14 +32,15 @@ class NodeInfoUpdaterBase(object):
     def __init__(self,
                  node,
                  job_finder,
+                 namespaces_settings,
                  couple_record_finder,
                  prepare_namespaces_states,
                  prepare_flow_stats,
                  statistics):
-        self.abcdef = None
         self._node = node
         self.statistics = statistics
         self.job_finder = job_finder
+        self.namespaces_settings = namespaces_settings
         self.couple_record_finder = couple_record_finder
         self._namespaces_states = CachedGzipResponse()
         self._flow_stats = {}
