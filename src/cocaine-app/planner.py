@@ -1085,69 +1085,59 @@ class Planner(object):
         groups_to_backup = []
         groups_to_restore = []
         active_jobs = []
-        uncoupled_groups = {}
+        uncoupled_groups = []
         cancelled_jobs = []
         groups_to_ro = []
 
         for group in groups:
             if group.couple is None:
-                backend_name = "{host}:{port}:{family}/{backend_id}".format(
-                    host=hostname,
-                    port=group.node_backends[0].node.port,
-                    family=group.node_backends[0].node.family,
-                    backend_id=group.node_backends[0].backend_id,
+                group_jobs = self.job_processor.job_finder.jobs(
+                    groups=group.group_id,
+                    types=jobs.JobTypes.TYPE_BACKEND_CLEANUP_JOB,
+                    statuses=jobs.Job.ACTIVE_STATUSES,
                 )
-                job = group.active_job
-                if job is None:
-                    uncoupled_groups[group.group_id] = str(backend_name)
-                else:
-                    group_jobs = self.job_processor.job_finder.jobs(
-                        ids=job['id'],
-                        types=jobs.JobTypes.TYPE_BACKEND_CLEANUP_JOB,
-                    )
-                    if group_jobs:
-                        job = group_jobs[0]
-                        if job.status in self.RUNNING_STATUSES:
-                            active_jobs.append(job.id)
-                        else:
-                            raise ValueError(
-                                'Backend cleanup job failed, group: {}, status: {}'.format(
-                                    group.group_id,
-                                    job.status
-                                )
+                if group_jobs:
+                    job = group_jobs[0]
+
+                    if job.status in self.RUNNING_STATUSES:
+                        active_jobs.append(job.id)
+                    else:
+                        raise RuntimeError(
+                            'Backend cleanup job failed, group: {}, status: {}'.format(
+                                group.group_id,
+                                job.status
                             )
+                        )
+                else:
+                    uncoupled_groups.append(group.group_id)
             else:
-                job = group.active_job
-                if job is None:
+                group_jobs = self.job_processor.job_finder.jobs(
+                    groups=group.group_id,
+                    types=self.RESTORE_AND_MANAGER_TYPES,
+                    statuses=jobs.Job.ACTIVE_STATUSES,
+                )
+                if group_jobs:
+                    job = group_jobs[0]
+
+                    if job.status in self.RUNNING_STATUSES:
+                        active_jobs.append(job.id)
+                    elif job.status in self.ERROR_STATUSES:
+                        try:
+                            self.job_processor._cancel_job(job)
+                            cancelled_jobs.append(job.id)
+                        except Exception as e:
+                            logger.exception('Failed to cancel job {}'.format(job.id))
+                            raise ValueError('Failed to cancel job {}: {}'.format(job.id, e))
+                        groups_to_restore.append(group.group_id)
+                    elif job.status == jobs.Job.STATUS_CANCELLED:
+                        groups_to_restore.append(group.group_id)
+                    else:
+                        raise ValueError(
+                            'Unknown job status: {}'.format(job.status)
+                        )
+                else:
                     if group.node_backends[0].status != 'RO':
                         groups_to_ro.append(group.group_id)
-                    else:
-                        groups_to_backup.append(group.group_id)
-                else:
-                    group_jobs = self.job_processor.job_finder.jobs(ids=job['id'],
-                                                                    types=self.RESTORE_AND_MANAGER_TYPES)
-                    if group_jobs:
-                        job = group_jobs[0]
-
-                        if job.status in self.RUNNING_STATUSES:
-                            if job.type == jobs.JobTypes.TYPE_BACKEND_MANAGER_JOB:
-                                active_jobs.append(job.id)
-                            elif job.type in self.RESTORE_TYPES:
-                                active_jobs.append(job.id)
-                        elif job.status in self.ERROR_STATUSES:
-                            try:
-                                self.job_processor._cancel_job(job)
-                                cancelled_jobs.append(job.id)
-                            except Exception as e:
-                                logger.exception('Failed to cancel job {}'.format(job.id))
-                                raise ValueError('Failed to cancel job {}: {}'.format(job.id, e))
-                            groups_to_restore.append(group.group_id)
-                        elif job.status == jobs.Job.STATUS_CANCELLED:
-                            groups_to_restore.append(group.group_id)
-                        else:
-                            raise ValueError(
-                                'Unknown job status: {}'.format(job.status)
-                            )
                     else:
                         groups_to_backup.append(group.group_id)
 
