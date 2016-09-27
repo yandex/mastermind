@@ -294,23 +294,46 @@ class Planner(object):
             by_dc.setdefault(dc, []).append(candidates)
         return by_dc
 
-    def _sample_groups_by_ts(self, state, groups):
+    def _sample_groups_by_ts_and_couple_dcs(self, state, groups):
+        """
+        Sample groups by its total space and dcs of its neighbouring groups.
 
-        groups_by_space = {}
+        This method splits groups by their approximate total space and then selects
+        those that have a unique set of dcs of coupled groups. This helps to narrow
+        a list of candidate groups to move from a dc.
+        """
+
+        groups_sample = []
 
         groups = sorted(groups, key=lambda x: state.stats(x).total_space, reverse=True)
 
+        dcs_combinations = set()
         total_space = None
+
         for group in groups:
 
             group_total_space = state.stats(group).total_space
-            if total_space and group_total_space >= total_space * 0.95:
+            try:
+                dcs = tuple(sorted(
+                    nb.node.host.dc
+                    for g in group.couple.groups
+                    for nb in g.node_backends
+                ))
+            except CacheUpstreamError:
                 continue
 
-            groups_by_space[group_total_space] = group
-            total_space = group_total_space
+            if total_space and group_total_space >= total_space * 0.95:
+                if dcs in dcs_combinations:
+                    continue
+            else:
+                # dcs_combinations are dropped because next total space group has begun
+                dcs_combinations = set()
 
-        return groups_by_space
+            groups_sample.append(group)
+            total_space = group_total_space
+            dcs_combinations.add(dcs)
+
+        return groups_sample
 
     def _sample_dc_candidates(self, src_group, dc_candidates, storage_state):
         candidates_ts = []
@@ -362,7 +385,7 @@ class Planner(object):
                     src_dc))
                 continue
 
-            full_groups = self._sample_groups_by_ts(candidate, src_dc_state.groups).values()
+            full_groups = self._sample_groups_by_ts_and_couple_dcs(candidate, src_dc_state.groups)
             full_groups = list(self._filter_groups_on_busy_hosts(full_groups, busy_hosts))
             logger.debug(
                 'Source dc "{dc}" candidates: decreased number from {total_groups_count} to '
