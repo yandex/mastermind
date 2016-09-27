@@ -1,8 +1,9 @@
+import os.path
 import logging
 import time
 
 from error import JobBrokenError
-from infrastructure import infrastructure
+import infrastructure
 from infrastructure_cache import cache
 from job import Job
 from job_types import JobTypes
@@ -88,17 +89,43 @@ class RecoverDcJob(Job):
 
         couple = storage.replicas_groupsets[self.couple]
 
-        recover_cmd = infrastructure._recover_group_cmd(
+        group = storage.groups[self.group]
+
+        tmp_dir = infrastructure.RECOVERY_DC_CNF.get(
+            'tmp_dir',
+            '/var/tmp/dnet_recovery_dc_{group_id}'
+        ).format(
+            group_id=group.group_id,
+            group_base_path=group.node_backends[0].base_path,
+        )
+
+        recover_cmd = infrastructure.infrastructure._recover_group_cmd(
             self.group,
+            json_stats=True,
             trace_id=self.id[:16],
         )
-        task = RecoverGroupDcTask.new(self,
+
+        # here we force dnet_recovery to dump output to json stats file,
+        # its filename is hardcoded in dnet_recovery utility as stats.json
+        commands_stats_path = os.path.join(tmp_dir, 'stats.json')
+
+        task = RecoverGroupDcTask.new(
+            self,
             group=self.group,
             host=self.host,
             cmd=recover_cmd,
-            params={'node_backend': self.node_backend(
-                        self.host, self.port, self.backend_id).encode('utf-8'),
-                    'group': str(self.group)})
+            json_stats=True,
+            tmp_dir=tmp_dir,
+            params={
+                'node_backend': self.node_backend(
+                    host=self.host,
+                    port=self.port,
+                    backend_id=self.backend_id,
+                ),
+                'group': str(self.group),
+                'commands_stats_path': commands_stats_path,
+            }
+        )
         self.tasks.append(task)
 
     def on_complete(self, processor):

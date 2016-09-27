@@ -83,7 +83,7 @@ class Infrastructure(object):
     DNET_RECOVERY_DC_CMD = (
         'dnet_recovery dc {remotes} -g {groups} -D {tmp_dir} '
         '-a {attempts} -b {batch} -l {log} -L {log_level} -n {processes_num} -M '
-        '-T {trace_id}'
+        '-T {trace_id} {json_stats}'
     )
     REMOTE_TPL = '-r {host}:{port}:{family}'
 
@@ -808,7 +808,7 @@ class Infrastructure(object):
 
         return cmd
 
-    def _recover_group_cmd(self, group_id, trace_id=None):
+    def _recover_group_cmd(self, group_id, json_stats=False, tmp_dir=None, trace_id=None):
         group = storage.groups[group_id]
         if not group.couple:
             raise ValueError('Group {0} is not coupled'.format(group_id))
@@ -821,21 +821,25 @@ class Infrastructure(object):
                     port=nb.node.port,
                     family=nb.node.family,))
 
-        cmd = self.DNET_RECOVERY_DC_CMD.format(
-            remotes=' '.join(remotes),
-            groups=','.join(str(g) for g in group.couple.groups),
-            tmp_dir=RECOVERY_DC_CNF.get(
+        if not tmp_dir:
+            tmp_dir = RECOVERY_DC_CNF.get(
                 'tmp_dir',
                 '/var/tmp/dnet_recovery_dc_{group_id}'
             ).format(
                 group_id=group_id,
                 group_base_path=group.node_backends[0].base_path,
-            ),
+            )
+
+        cmd = self.DNET_RECOVERY_DC_CMD.format(
+            remotes=' '.join(remotes),
+            groups=','.join(str(g) for g in group.couple.groups),
+            tmp_dir=tmp_dir,
             attempts=RECOVERY_DC_CNF.get('attempts', 1),
             batch=RECOVERY_DC_CNF.get('batch', 2000),
             log=RECOVERY_DC_CNF.get('log', 'dnet_recovery.log').format(group_id=group_id),
             log_level=RECOVERY_DC_CNF.get('log_level', 1),
             processes_num=len(group.couple.groups) - 1 or 1,
+            json_stats='-s json' if json_stats else '',
             trace_id=trace_id or uuid.uuid4().hex[:16],
         )
 
