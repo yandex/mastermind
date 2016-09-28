@@ -7,6 +7,7 @@ from tornado.httpclient import HTTPError
 from infrastructure import infrastructure
 from infrastructure_cache import cache
 from jobs import TaskTypes, RetryError
+import minions
 from task import Task
 
 
@@ -35,6 +36,17 @@ class MinionCmdTask(Task):
             self.minion_cmd = processor.minions._get_command(self.minion_cmd_id)
             logger.debug('Job {0}, task {1}, minion command status was updated: {2}'.format(
                 self.parent_job.id, self.id, self.minion_cmd))
+        except minions.MinionCommandNotFound:
+            logger.error(
+                'Job {job_id}, task {task_id}, minion command status {cmd_id} failed to fetch '
+                'from metadb: {error}'.format(
+                    job_id=self.parent_job.id,
+                    task_id=self.id,
+                    cmd_id=self.minion_cmd_id,
+                    error=e,
+                )
+            )
+            pass
         except elliptics.Error as e:
             logger.warn('Job {0}, task {1}, minion command status {2} failed to fetch '
                 'from metadb: {3}'.format(self.parent_job.id, self.id,

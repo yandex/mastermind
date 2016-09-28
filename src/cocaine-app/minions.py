@@ -30,6 +30,10 @@ logger = logging.getLogger('mm.minions')
 MINIONS_CFG = config.get('minions', {})
 
 
+class MinionCommandNotFound(Exception):
+    pass
+
+
 class Minions(object):
 
     STATE_FETCH = 'state_fetch'
@@ -248,7 +252,7 @@ class Minions(object):
         try:
             uid = request[0]
             return self._get_command(uid)
-        except ValueError:
+        except MinionCommandNotFound:
             raise ValueError('Unknown command uid {0}'.format(uid))
 
     def _get_command(self, uid):
@@ -343,7 +347,7 @@ class Minions(object):
                 # updating if process is finished
                 if int(self.cmd_progress[uid]) != int(state['progress']):
                     update_history_entry = True
-            except ValueError as e:
+            except MinionCommandNotFound as e:
                 logger.debug(e)
                 update_history_entry = True
 
@@ -377,7 +381,7 @@ class Minions(object):
             r = self.meta_session.list_indexes(eid).get()[0]
             state = self._unserialize(r.data)
         except (elliptics.NotFoundError, IndexError):
-            raise ValueError('Unknown command uid {0}'.format(uid))
+            raise MinionCommandNotFound('Unknown command uid {0}'.format(uid))
 
         return state
 

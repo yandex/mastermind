@@ -10,6 +10,8 @@ logger = logging.getLogger('mm.jobs')
 
 class RecoverGroupDcTask(MinionCmdTask):
 
+    TASK_TIMEOUT = 24 * 60 * 60  # 1 day
+
     PARAMS = MinionCmdTask.PARAMS + ('couple',)
 
     def __init__(self, job):
