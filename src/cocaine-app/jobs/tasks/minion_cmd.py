@@ -36,7 +36,7 @@ class MinionCmdTask(Task):
             self.minion_cmd = processor.minions._get_command(self.minion_cmd_id)
             logger.debug('Job {0}, task {1}, minion command status was updated: {2}'.format(
                 self.parent_job.id, self.id, self.minion_cmd))
-        except minions.MinionCommandNotFound:
+        except minions.MinionCommandNotFound as e:
             logger.error(
                 'Job {job_id}, task {task_id}, minion command status {cmd_id} failed to fetch '
                 'from metadb: {error}'.format(
