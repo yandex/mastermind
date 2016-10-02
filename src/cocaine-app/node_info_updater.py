@@ -36,6 +36,7 @@ class NodeInfoUpdater(object):
     def __init__(self,
                  node,
                  job_finder,
+                 namespaces_settings,
                  couple_record_finder=None,
                  prepare_namespaces_states=False,
                  prepare_flow_stats=False,
@@ -44,6 +45,7 @@ class NodeInfoUpdater(object):
         self.__node = node
         self.statistics = statistics
         self.job_finder = job_finder
+        self.namespaces_settings=namespaces_settings
         self.couple_record_finder = couple_record_finder
         self._namespaces_states = CachedGzipResponse()
         self._flow_stats = {}
@@ -106,14 +108,16 @@ class NodeInfoUpdater(object):
 
     def update_symm_groups(self):
         try:
+
+            namespaces_settings = self.namespaces_settings.fetch()
             with self.__cluster_update_lock:
                 start_ts = time.time()
                 logger.info('Cluster updating: updating group coupling info started')
-                self.update_symm_groups_async()
+                self.update_symm_groups_async(namespaces_settings=namespaces_settings)
 
             if self._prepare_namespaces_states:
                 logger.info('Recalculating namespace states')
-                self._update_namespaces_states()
+                self._update_namespaces_states(namespaces_settings=namespaces_settings)
             if self._prepare_flow_stats:
                 logger.info('Recalculating flow stats')
                 self._update_flow_stats()
@@ -150,7 +154,9 @@ class NodeInfoUpdater(object):
 
     def update_status(self, groups):
         self.monitor_stats(groups=groups)
-        self.update_symm_groups_async(groups=groups)
+
+        namespaces_settings = self.namespaces_settings.fetch()
+        self.update_symm_groups_async(groups=groups, namespaces_settings=namespaces_settings)
 
     @staticmethod
     def log_monitor_stat_exc(e):
@@ -460,7 +466,7 @@ class NodeInfoUpdater(object):
         finally:
             logger.debug('Cluster updating: node {}, statistics processed'.format(node))
 
-    def update_symm_groups_async(self, groups=None):
+    def update_symm_groups_async(self, namespaces_settings, groups=None):
 
         _queue = set()
 
@@ -662,7 +668,7 @@ class NodeInfoUpdater(object):
             if groups is None:
                 self.update_couple_settings()
                 load_manager.update(storage)
-                weight_manager.update(storage)
+                weight_manager.update(storage, namespaces_settings)
 
                 infrastructure.schedule_history_update()
 
@@ -694,7 +700,8 @@ class NodeInfoUpdater(object):
         start_ts = time.time()
         logger.info('Namespaces states forced updating: started')
         try:
-            self._do_update_namespaces_states()
+            namespaces_settings = self.namespaces_settings.fetch()
+            self._do_update_namespaces_states(namespaces_settings)
         except Exception as e:
             logger.exception('Namespaces states forced updating: failed')
             self._namespaces_states.set_exception(e)
@@ -702,11 +709,11 @@ class NodeInfoUpdater(object):
             logger.info('Namespaces states forced updating: finished, time: {0:.3f}'.format(
                 time.time() - start_ts))
 
-    def _update_namespaces_states(self):
+    def _update_namespaces_states(self, namespaces_settings):
         start_ts = time.time()
         logger.info('Namespaces states updating: started')
         try:
-            self._do_update_namespaces_states()
+            self._do_update_namespaces_states(namespaces_settings)
         except Exception as e:
             logger.exception('Namespaces states updating: failed')
             self._namespaces_states.set_exception(e)
@@ -714,7 +721,7 @@ class NodeInfoUpdater(object):
             logger.info('Namespaces states updating: finished, time: {0:.3f}'.format(
                 time.time() - start_ts))
 
-    def _do_update_namespaces_states(self):
+    def _do_update_namespaces_states(self, namespaces_settings):
         def default():
             return {
                 'settings': {},
@@ -726,9 +733,8 @@ class NodeInfoUpdater(object):
         res = defaultdict(default)
 
         # settings
-        ns_settings = infrastructure.ns_settings
-        for ns, settings in ns_settings.items():
-            res[ns]['settings'] = settings
+        for ns_settings in namespaces_settings:
+            res[ns_settings.namespace]['settings'] = ns_settings.dump()
 
         # couples
         for couple in storage.replicas_groupsets:

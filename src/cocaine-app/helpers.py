@@ -239,11 +239,6 @@ def hosts_dcs(hosts):
     return dcs
 
 
-def random_hex_string(bytes):
-    format_str = '{{:0={hexdigits}x}}'.format(hexdigits=bytes * 2)
-    return format_str.format(random.getrandbits(bytes * 8))
-
-
 def unidirectional_value_map(old_result, old_value, new_value, func):
     if new_value < old_value:
         return old_result

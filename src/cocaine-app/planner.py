@@ -39,7 +39,7 @@ class Planner(object):
     RECOVER_DC_LOCK = 'planner/recover_dc'
     MOVE_LOCK = 'planner/move'
 
-    def __init__(self, meta_session, db, niu, job_processor):
+    def __init__(self, meta_session, db, niu, job_processor, namespaces_settings):
 
         self.params = config.get('planner', {})
 
@@ -51,6 +51,7 @@ class Planner(object):
         self.__tq = timed_queue.TimedQueue()
 
         self.node_info_updater = niu
+        self.namespaces_settings = namespaces_settings
 
         self.recover_dc_timer = periodic_timer(
             seconds=self.params.get('recover_dc', {}).get(
@@ -1688,13 +1689,6 @@ class Planner(object):
 
         return candidates[0]
 
-    def __check_namespace(self, namespace):
-        if namespace not in infrastructure.ns_settings:
-            raise ValueError('Namespace "{}" does not exist'.format(namespace))
-        else:
-            if infrastructure.ns_settings[namespace]['__service'].get('is_deleted'):
-                raise ValueError('Namespace "{}" is deleted'.format(namespace))
-
     @h.concurrent_handler
     def convert_external_storage_to_groupset(self, request):
         if not request.get('src_storage'):
@@ -1742,7 +1736,9 @@ class Planner(object):
             self.job_processor._check_groupset(groupset, type=request['type'])
 
         namespace_id = request['namespace']
-        self.__check_namespace(namespace_id)
+        ns_settings = self.namespaces_settings.get(namespace_id)
+        if ns_settings.deleted:
+            raise ValueError('Namespace "{}" is deleted'.format(namespace_id))
 
         if namespace_id not in storage.namespaces:
             ns = storage.namespaces.add(namespace_id)

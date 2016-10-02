@@ -52,11 +52,12 @@ class Balancer(object):
 
     MAKE_IOLOOP = 'make_ioloop'
 
-    def __init__(self, n, meta_db):
+    def __init__(self, n, meta_db, namespaces_settings):
         self.node = n
         self.infrastructure = None
         self.statistics = statistics.Statistics(self)
         self.niu = None
+        self.namespaces_settings = namespaces_settings
 
         self._cached_keys = CachedGzipResponse()
         self.cached_keys_timer = periodic_timer(seconds=config.get('nodes_reload_period', 60))
@@ -644,11 +645,9 @@ class Balancer(object):
 
     VALID_COUPLE_INIT_STATES = (storage.Status.COUPLED, storage.Status.FROZEN)
 
-    def __update_cluster_state(self, namespace=None):
+    def __update_cluster_state(self):
         logger.info('Starting concurrent cluster info update')
         self.niu._force_nodes_update()
-        if namespace:
-            infrastructure.infrastructure.sync_single_ns_settings(namespace)
         logger.info('Concurrent cluster info update completed')
 
     @staticmethod
@@ -1103,12 +1102,12 @@ class Balancer(object):
         ns = options['namespace']
         logger.info('namespace from request: {0}'.format(ns))
 
-        self.__check_namespace(ns)
+        self.__check_namespace(self.namespaces_settings.get(ns))
 
         with sync_manager.lock(self.CLUSTER_CHANGES_LOCK, blocking=False):
 
             logger.info('Updating cluster info')
-            self.__update_cluster_state(namespace=options['namespace'])
+            self.__update_cluster_state()
             logger.info('Updating cluster info completed')
 
             groups_by_total_space = infrastructure.infrastructure.groups_by_total_space(
@@ -1188,224 +1187,52 @@ class Balancer(object):
     def __valid_namespace(self, namespace):
         return self.NS_RE.match(namespace) is not None
 
-    TIME_UNITS_RE = re.compile('^(\d+)(?:[smhd])$')
-
-    @staticmethod
-    def __valid_time_units(time_units):
-        match = Balancer.TIME_UNITS_RE.match(time_units)
-        if match is None:
-            return False
-        time_units_num_val = int(match.group(1))
-        if time_units_num_val <= 0:
-            return False
-        return True
-
-    def __validate_ns_settings(self, namespace, settings):
-
-        groups_count = None
-        if settings.get('groups-count'):
-            groups_count = settings['groups-count']
-            if groups_count <= 0:
-                raise ValueError('groups-count should be positive integer')
-        elif not settings.get('static-couple'):
-            raise ValueError('groups-count should be set')
-
-        try:
-            min_units = settings['min-units'] = int(settings['min-units'])
-            if not min_units > 0:
-                raise ValueError
-        except KeyError:
-            pass
-        except ValueError:
-            raise ValueError('min-units should be positive integer')
-
-        try:
-            add_units = settings['add-units'] = int(settings['add-units'])
-            if not add_units > 0:
-                raise ValueError
-        except KeyError:
-            pass
-        except ValueError:
-            raise ValueError('add-units should be positive integer')
-
-        try:
-            settings['check-for-update'] = bool(settings['check-for-update'])
-        except KeyError:
-            pass
-        except (TypeError, ValueError):
-            raise ValueError('check-for-update should be boolean')
-
-        try:
-            content_length_threshold = settings['redirect']['content-length-threshold'] = int(settings['redirect']['content-length-threshold'])
-            if not content_length_threshold >= -1:
-                raise ValueError
-        except KeyError:
-            pass
-        except ValueError:
-            raise ValueError('redirect content length threshold should be non-negative integer or -1')
-
-        try:
-            expire_time = settings['redirect']['expire-time'] = int(settings['redirect']['expire-time'])
-            if not expire_time > 0:
-                raise ValueError
-        except KeyError:
-            pass
-        except ValueError:
-            raise ValueError('redirect expire time should be positive integer')
-
-        try:
-            query_args = settings['redirect']['query-args']
-            for query_arg in query_args:
-                if not isinstance(query_arg, basestring):
-                    raise ValueError('query-args should be a list of strings')
-        except KeyError:
-            pass
-
-        try:
-            reserved_space_percentage = settings['reserved-space-percentage'] = float(settings['reserved-space-percentage'])
-            if not 0.0 <= reserved_space_percentage <= 1.0:
-                raise ValueError
-        except KeyError:
-            pass
-        except ValueError:
-            raise ValueError('reserved-space-percentage should be a float in interval [0.0, 1.0]')
-
-        if settings.get('success-copies-num', '') not in ('any', 'quorum', 'all'):
-            raise ValueError('success-copies-num allowed values are "any", '
-                             '"quorum" and "all"')
-
-        if 'auth-keys' in settings:
-            auth_keys_settings = settings['auth-keys']
-            if 'read' not in auth_keys_settings:
-                auth_keys_settings['read'] = ''
-            elif auth_keys_settings['read'] is True:
-                auth_keys_settings['read'] = h.random_hex_string(16)
-            if 'write' not in auth_keys_settings:
-                auth_keys_settings['write'] = ''
-            elif auth_keys_settings['write'] is True:
-                auth_keys_settings['write'] = h.random_hex_string(16)
-
-        if 'attributes' in settings:
-            attributes = settings['attributes']
-
-            if 'filename' in attributes:
-                if not isinstance(attributes['filename'], bool):
-                    raise ValueError('attributes filename should be boolean')
-
-            if 'ttl' in attributes:
-                attributes_ttl = attributes['ttl']
-                if 'enable' in attributes_ttl:
-                    if not isinstance(attributes_ttl['enable'], bool):
-                        raise ValueError('ttl "enable" flag should be boolean')
-                if 'minimum' in attributes_ttl:
-                    if not self.__valid_time_units(attributes_ttl['minimum']):
-                        raise ValueError('minimum ttl should be a valid time unit')
-                if 'maximum' in attributes_ttl:
-                    if not self.__valid_time_units(attributes_ttl['maximum']):
-                        raise ValueError('maximum ttl should be a valid time unit')
-
-        is_ttl_enabled = settings.get('attributes', {}).get('ttl', {}).get('enable', False)
-        is_check_for_update_disabled = settings.get('check-for-update', True) is False
-        if is_ttl_enabled and is_check_for_update_disabled:
-            raise ValueError(
-                'ttl attribute cannot be enabled when check-for-update is disabled'
-            )
-
-        keys = (settings.get('redirect', {}).get('expire-time'),
-                settings.get('signature', {}).get('token'),
-                settings.get('signature', {}).get('path_prefix'))
-
-        if not all(keys) and any(keys):
-            raise ValueError(
-                'Signature token, signature path prefix '
-                'and redirect expire time should be set simultaneously'
-            )
-
-        if settings.get('static-couple'):
-            couple = settings['static-couple']
-            groups = [storage.groups[g] for g in couple]
+    def _validate_static_couple(self, ns_settings):
+        if ns_settings.static_couple:
+            groups = [storage.groups[g] for g in ns_settings.static_couple]
             ref_couple = groups[0].couple
 
             couple_checks = [g.couple and g.couple == ref_couple
                              for g in groups]
-            logger.debug('Checking couple {0}: {1}'.format(
-                couple, couple_checks))
+            logger.debug('Checking couple {}: {}'.format(ns_settings.static_couple, couple_checks))
 
             if (not ref_couple or not all(couple_checks)):
-                raise ValueError('Couple {0} is not found'.format(couple))
+                raise ValueError('Couple {} is not found'.format(ns_settings.static_couple))
 
-            logger.debug('Checking couple {0} namespace'.format(couple))
-            if ref_couple.namespace != namespace:
+            logger.debug('Checking couple {} namespace'.format(ns_settings.static_couple))
+            if ref_couple.namespace != ns_settings.namespace:
                 raise ValueError(
-                    'Couple {0} namespace is {1}, not {2}'.format(
+                    'Couple {} namespace is {}, not {}'.format(
                         ref_couple,
                         ref_couple.namespace,
-                        namespace
+                        ns_settings.namespace
                     )
                 )
 
             for c in storage.replicas_groupsets:
-                if c.namespace == namespace and c != ref_couple:
+                if c.namespace == ns_settings.namespace and c != ref_couple:
                     raise ValueError(
-                        'Namespace "{0}" has several couples, '
+                        'Namespace "{}" has several couples, '
                         'should have only 1 couple for static couple setting'.format(
-                            namespace
+                            ns_settings.namespace
                         )
                     )
 
             for g in ref_couple:
                 if g not in groups:
                     raise ValueError(
-                        'Using incomplete couple {0}, full couple is {1}'.format(
-                            couple, ref_couple
+                        'Using incomplete couple {}, full couple is {}'.format(
+                            couple,
+                            ref_couple
                         )
                     )
 
-            if groups_count:
-                if len(couple) != groups_count:
-                    raise ValueError('Couple {0} does not have length {1}'.format(
-                        couple, groups_count
+            if ns_settings.groups_count:
+                if len(ns_settings.static_couple) != ns_settings.groups_count:
+                    raise ValueError('Couple {} does not have length {}'.format(
+                        ns_settings.static_couple,
+                        ns_settings.groups_count
                     ))
-            else:
-                groups_count = len(ref_couple.groups)
-
-        settings['groups-count'] = groups_count
-
-    ALLOWED_NS_KEYS = set([
-        'success-copies-num', 'groups-count',
-        'static-couple', 'auth-keys', 'signature', 'redirect',
-        'min-units', 'add-units', 'features', 'reserved-space-percentage',
-        'check-for-update', '__service',
-        'attributes',
-    ])
-    ALLOWED_NS_SIGN_KEYS = set(['token', 'path_prefix'])
-    ALLOWED_NS_AUTH_KEYS = set(['write', 'read'])
-    ALLOWED_REDIRECT_KEYS = set([
-        'content-length-threshold',
-        'expire-time',
-        'query-args',
-        'add-orig-path-query-arg',
-    ])
-    ALLOWED_SERVICE_KEYS = set(['is_deleted'])
-    ALLOWED_ATTRIBUTES_KEYS = set([
-        'filename',
-        'ttl',
-    ])
-    ALLOWED_ATTRIBUTES_TTL_KEYS = set([
-        'enable',
-        'minimum',
-        'maximum',
-    ])
-
-    def __merge_dict(self, dst, src):
-        for k, val in src.iteritems():
-            if k not in dst:
-                dst[k] = val
-            else:
-                if not isinstance(val, dict):
-                    dst[k] = val
-                else:
-                    self.__merge_dict(dst[k], src[k])
 
     @h.concurrent_handler
     def namespace_setup(self, request):
@@ -1419,98 +1246,72 @@ class Balancer(object):
         except IndexError:
             options = {}
 
-        cur_settings = {}
+        if not self.__valid_namespace(namespace):
+            raise ValueError('Namespace "{}" is invalid'.format(namespace))
+
+        cur_settings = self.namespaces_settings.make(namespace)
         if not overwrite:
             try:
-                self.infrastructure.sync_single_ns_settings(namespace)
-                cur_settings = self.infrastructure.ns_settings[namespace]
-            except elliptics.NotFoundError:
-                pass
+                cur_settings = self.namespaces_settings.get(namespace)
             except Exception as e:
-                logger.error('Failed to update namespace {0} settings: {1}\n{2}'.format(
-                    namespace, str(e), traceback.format_exc()
-                ))
+                logger.exception('Failed to update namespace {} settings'.format(namespace))
                 raise
 
-        if cur_settings.get('__service', {}).get('is_deleted'):
+        if cur_settings.deleted:
             logger.info(
-                'Namespace {0} is deleted, will not merge old settings with new ones'.format(
+                'Namespace {} is deleted, will not merge old settings with new ones'.format(
                     namespace
                 )
             )
-            cur_settings = {'__service': cur_settings['__service']}
-
-        cur_settings.setdefault('__service', {})
 
         if options.get('json'):
             try:
                 settings = json.loads(settings)
-                logger.info('Namespace {0}: input settings {1}'.format(namespace, settings))
+                logger.info('Namespace {}: input settings {}'.format(namespace, settings))
             except Exception as e:
-                logger.error('Namespace {0}, invalid json settings: {1}'.format(namespace, e))
+                logger.error('Namespace {}, invalid json settings: {}'.format(namespace, e))
                 raise ValueError('Invalid json settings')
 
-        logger.info('Namespace {0}, old settings found: {1}, updating with {2}'.format(
-            namespace, cur_settings, settings))
+        logger.info(
+            'Namespace {ns}, old settings found: {old_settings}, updating with '
+            '{new_settings}'.format(
+                ns=namespace,
+                old_settings=cur_settings,
+                new_settings=settings,
+            )
+        )
 
-        for auth_key_type in ('read', 'write'):
-            if (not overwrite and
-                cur_settings.get('auth-keys', {}).get(auth_key_type) and
-                    settings.get('auth-keys', {}).get(auth_key_type)):
+        new_read_auth_key = settings.get('auth-keys', {}).get('read')
+        if not overwrite and cur_settings.auth_keys.read and new_read_auth_key:
+            raise ValueError('Read auth key is already set')
 
-                raise ValueError('{} auth key is already set'.format(auth_key_type))
+        new_write_auth_key = settings.get('auth-keys', {}).get('write')
+        if not overwrite and cur_settings.auth_keys.write and new_write_auth_key:
+            raise ValueError('Write auth key is already set')
 
-        self.__merge_dict(cur_settings, settings)
+        cur_settings.update(settings)
 
-        if not self.__valid_namespace(namespace):
-            raise ValueError('Namespace "{0}" is invalid'.format(namespace))
-
-        settings = cur_settings
+        self._validate_static_couple(cur_settings)
 
         if not options.get('skip_validation'):
+            cur_settings.validate()
 
-            # filtering settings
-            for k in settings.keys():
-                if k not in self.ALLOWED_NS_KEYS:
-                    del settings[k]
-            for k in settings.get('signature', {}).keys():
-                if k not in self.ALLOWED_NS_SIGN_KEYS:
-                    del settings['signature'][k]
-            for k in settings.get('auth-keys', {}).keys():
-                if k not in self.ALLOWED_NS_AUTH_KEYS:
-                    del settings['auth-keys'][k]
-            for k in settings.get('redirect', {}).keys():
-                if k not in self.ALLOWED_REDIRECT_KEYS:
-                    del settings['redirect'][k]
-            for k in settings['__service'].keys():
-                if k not in self.ALLOWED_SERVICE_KEYS:
-                    del settings['__service'][k]
-            for k in settings.get('attributes', {}).keys():
-                if k not in self.ALLOWED_ATTRIBUTES_KEYS:
-                    del settings['attributes'][k]
-            for k in settings.get('attributes', {}).get('ttl', {}).keys():
-                if k not in self.ALLOWED_ATTRIBUTES_TTL_KEYS:
-                    del settings['attributes']['ttl'][k]
+        cur_settings.save()
 
-            try:
-                self.__validate_ns_settings(namespace, settings)
-            except Exception as e:
-                logger.error(e)
-                raise
+        logger.info('Namespace {}, settings set to {}'.format(namespace, cur_settings))
 
-        self.infrastructure.set_ns_settings(namespace, settings)
+        return cur_settings.dump()
 
-        logger.info('Namespace {0}, settings set to {1}'.format(namespace, settings))
+    def __check_namespace(self, ns_settings):
+        logger.info(
+            'Current namespace "{}" settings: {}'.format(
+                ns_settings.namespace,
+                ns_settings.dump(),
+            )
+        )
 
-        return self.infrastructure.ns_settings[namespace]
-
-    def __check_namespace(self, namespace):
-        if namespace not in self.infrastructure.ns_settings:
-            raise ValueError('Namespace "{0}" does not exist'.format(namespace))
-        else:
-            logger.info('Current namespace {0} settings: {1}'.format(namespace, self.infrastructure.ns_settings[namespace]))
-            if self.infrastructure.ns_settings[namespace]['__service'].get('is_deleted'):
-                raise ValueError('Namespace "{0}" is deleted'.format(namespace))
+        if ns_settings.deleted:
+            raise ValueError('Namespace "{}" is deleted'.format(ns_settings.namespace))
 
     @h.concurrent_handler
     def namespace_delete(self, request):
@@ -1522,26 +1323,17 @@ class Balancer(object):
         with sync_manager.lock(self.CLUSTER_CHANGES_LOCK, blocking=False):
 
             logger.info('Updating cluster info')
-            self.__update_cluster_state(namespace=namespace)
+            self.__update_cluster_state()
             logger.info('Updating cluster info completed')
 
-            self.__check_namespace(namespace)
+            ns_settings = self.namespaces_settings.get(namespace)
+            self.__check_namespace(ns_settings)
 
             if namespace in storage.namespaces and storage.namespaces[namespace].couples:
                 raise ValueError('Cannot delete non-empty namespace'.format(namespace))
 
-            try:
-                settings = self.infrastructure.ns_settings[namespace]
-
-                settings.setdefault('__service', {})
-                settings['__service']['is_deleted'] = True
-
-                self.infrastructure.set_ns_settings(namespace, settings)
-            except Exception as e:
-                logger.error('Failed to delete namespace {0}: {1}\n{2}'.format(
-                    namespace, str(e), traceback.format_exc()
-                ))
-                raise
+            ns_settings.delete()
+            ns_settings.save()
 
         return True
 
@@ -1552,14 +1344,7 @@ class Balancer(object):
         except Exception:
             raise ValueError('Invalid parameters')
 
-        if namespace not in self.infrastructure.ns_settings:
-            raise ValueError('Namespace "{}" is not found'.format(namespace))
-
-        return self.infrastructure.ns_settings[namespace]
-
-    @h.concurrent_handler
-    def get_namespaces_settings(self, request):
-        return self.infrastructure.ns_settings
+        return self.namespaces_settings.get(namespace).dump()
 
     @h.concurrent_handler
     def get_namespaces_statistics(self, request):
@@ -1627,30 +1412,23 @@ class Balancer(object):
             raise
 
     @h.concurrent_handler
-    def get_namespaces(self, request):
-        return self.infrastructure.ns_settings.keys()
-
-    @h.concurrent_handler
     def get_namespaces_list(self, request):
         try:
             _filter = request[0]
         except IndexError:
             _filter = {}
 
-        def filtered_out(ns, settings):
+        def filtered_out(ns_ettings):
             if _filter.get('deleted') is not None:
-                is_deleted = settings['__service'].get('is_deleted', False)
-                if _filter['deleted'] != is_deleted:
+                if _filter['deleted'] != ns_settings.deleted:
                     return True
             return False
 
         res = []
-        for ns, settings in self.infrastructure.ns_settings.items():
-            if filtered_out(ns, settings):
+        for ns_settings in self.namespaces_settings.fetch():
+            if filtered_out(ns_settings):
                 continue
-            s = copy.deepcopy(settings)
-            s['namespace'] = ns
-            res.append(s)
+            res.append(ns_settings.dump())
 
         return res
 

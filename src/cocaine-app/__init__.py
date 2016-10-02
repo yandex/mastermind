@@ -42,6 +42,7 @@ import node_info_updater
 from planner import Planner
 from config import config
 from manual_locks import manual_locker
+from namespaces import NamespacesSettings
 
 
 i = iter(xrange(100))
@@ -145,7 +146,13 @@ W = Worker(disown_timeout=config.get('disown_timeout', 2))
 logger.info("after creating worker")
 
 
-b = balancer.Balancer(n, meta_db)
+def init_namespaces_settings(meta_db):
+    namespaces_settings = NamespacesSettings(meta_db)
+    return namespaces_settings
+
+
+namespaces_settings = init_namespaces_settings(meta_db)
+b = balancer.Balancer(n, meta_db, namespaces_settings)
 
 
 def register_handle(h):
@@ -192,9 +199,9 @@ def register_handle(h):
     return wrapper
 
 
-def init_infrastructure(jf, ghf):
+def init_infrastructure(jf, ghf, namespaces_settings):
     infstruct = infrastructure.infrastructure
-    infstruct.init(n, jf, ghf)
+    infstruct.init(n, jf, ghf, namespaces_settings)
     register_handle(infstruct.shutdown_node_cmd)
     register_handle(infstruct.start_node_cmd)
     register_handle(infstruct.disable_node_backend_cmd)
@@ -207,11 +214,12 @@ def init_infrastructure(jf, ghf):
     return infstruct
 
 
-def init_node_info_updater(jf, crf, statistics):
+def init_node_info_updater(jf, crf, statistics, namespaces_settings):
     logger.info("trace node info updater %d" % (i.next()))
     niu = node_info_updater.NodeInfoUpdater(
         node=n,
         job_finder=jf,
+        namespaces_settings=namespaces_settings,
         couple_record_finder=crf,
         prepare_namespaces_states=True,
         prepare_flow_stats=True,
@@ -239,8 +247,8 @@ def init_minions():
     return m
 
 
-def init_planner(job_processor, niu):
-    planner = Planner(n.meta_session, meta_db, niu, job_processor)
+def init_planner(job_processor, niu, namespaces_settings):
+    planner = Planner(n.meta_session, meta_db, niu, job_processor, namespaces_settings)
     register_handle(planner.restore_group)
     register_handle(planner.move_group)
     register_handle(planner.move_groups_from_host)
@@ -337,15 +345,15 @@ jf = init_job_finder()
 external_storage_meta = init_external_storage_meta()
 crf = init_couple_record_finder()
 ghf = init_group_history_finder()
-io = init_infrastructure(jf, ghf)
-niu = init_node_info_updater(jf, crf, b.statistics)
+io = init_infrastructure(jf, ghf, namespaces_settings)
+niu = init_node_info_updater(jf, crf, b.statistics, namespaces_settings)
 b.niu = niu
 b.start()
 init_statistics()
 m = init_minions()
 j = init_job_processor(jf, m, niu, external_storage_meta, crf)
 if j:
-    po = init_planner(j, niu)
+    po = init_planner(j, niu, namespaces_settings)
     j.planner = po
 else:
     po = None
