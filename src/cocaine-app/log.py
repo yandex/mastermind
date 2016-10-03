@@ -20,7 +20,7 @@ def setup_logger(logger_name='logging'):
     tornado_logger.propagate = False
 
     _handler = FileHandler('/var/log/cocaine-core/file.log')
-    _handler.setFormatter(logging.Formatter(fmt='[%(asctime)s] [%(name)s] [%(process)d] %(message)s'))
+    _handler.setFormatter(logging.Formatter(fmt='[%(asctime)s] [%(levelname)s] [%(name)s] [%(process)d] %(message)s'))
 
     root_app_logger.addHandler(_handler)
     tornado_logger.addHandler(_handler)
