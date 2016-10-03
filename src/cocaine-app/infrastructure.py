@@ -73,7 +73,6 @@ class Infrastructure(object):
 
     TASK_SYNC = 'infrastructure_sync'
     TASK_UPDATE = 'infrastructure_update'
-    NS_SETTINGS_SYNC = 'ns_settings_sync'
 
     RSYNC_CMD = ('rsync -rlHpogDt --progress --timeout=1200 '
                  '"{user}@{src_host}:{src_path}data*" "{dst_path}"')
@@ -129,10 +128,11 @@ class Infrastructure(object):
 
         self.__tq = timed_queue.TimedQueue()
 
-    def init(self, node, job_finder, group_history_finder):
+    def init(self, node, job_finder, group_history_finder, namespaces_settings):
         self.node = node
         self.job_finder = job_finder
         self.group_history_finder = group_history_finder
+        self.namespaces_settings = namespaces_settings
         self.meta_session = self.node.meta_session
 
         if self.group_history_finder:
@@ -140,17 +140,6 @@ class Infrastructure(object):
 
         self.cache = cache
         cache.init(self.meta_session, self.__tq)
-
-        self.ns_settings_idx = \
-            indexes.TagSecondaryIndex(keys.MM_NAMESPACE_SETTINGS_IDX,
-                                      None,
-                                      keys.MM_NAMESPACE_SETTINGS_KEY_TPL,
-                                      self.meta_session,
-                                      logger=logger,
-                                      namespace='namespaces')
-
-        self.ns_settings = {}
-        self._sync_ns_settings()
 
     def schedule_history_update(self):
         if not self.group_history_finder:
@@ -462,54 +451,6 @@ class Infrastructure(object):
 
             logger.info('Finished updating infrastructure state, time: {0:.3f}'.format(
                 time.time() - start_ts))
-
-    def _sync_ns_settings(self):
-        try:
-            logger.debug('fetching all namespace settings')
-            start = time.time()
-            for data in self.ns_settings_idx:
-                self.__do_sync_ns_settings(data, start)
-        except Exception:
-            logger.exception('Failed to sync ns settings')
-        finally:
-            self.__tq.add_task_in(
-                self.NS_SETTINGS_SYNC,
-                config.get('infrastructure_ns_settings_sync_period', 60),
-                self._sync_ns_settings
-            )
-
-    def sync_single_ns_settings(self, namespace):
-        logger.debug('fetching namespace {0} settings'.format(namespace))
-        start_ts = time.time()
-        self.__do_sync_ns_settings(self.ns_settings_idx[namespace], start_ts)
-
-    def __do_sync_ns_settings(self, data, start_ts):
-        settings = msgpack.unpackb(data)
-        logger.debug('fetched namespace settings for "{0}" ({1:.3f}s)'.format(
-            settings['namespace'], time.time() - start_ts
-        ))
-        ns = settings['namespace']
-        del settings['namespace']
-        self.ns_settings[ns] = settings
-
-    def set_ns_settings(self, namespace, settings):
-
-        logger.debug('saving settings for namespace "{0}": {1}'.format(
-            namespace, settings))
-
-        settings['namespace'] = namespace
-        start = time.time()
-
-        self.ns_settings_idx[namespace] = msgpack.packb(settings)
-        if namespace not in self.ns_settings:
-            self.ns_settings_idx.set_tag(namespace)
-
-        logger.debug('namespace "{0}" settings saved to index ({1:.4f}s)'.format(
-            namespace, time.time() - start
-        ))
-
-        del settings['namespace']
-        self.ns_settings[namespace] = settings
 
     def _update_group(self,
                       group_history,

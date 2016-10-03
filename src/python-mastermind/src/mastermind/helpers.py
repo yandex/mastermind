@@ -1,3 +1,5 @@
+import random
+
 
 def elliptics_time_to_ts(t):
     if isinstance(t, dict) and 'tv_sec' in t:
@@ -6,3 +8,8 @@ def elliptics_time_to_ts(t):
         # instance of elliptics.Time
         return t.tsec + t.tnsec / float(10 ** 9)
     raise TypeError('Invalid elliptics time object: {}'.format(t))
+
+
+def random_hex_string(bytes):
+    format_str = '{{:0={hexdigits}x}}'.format(hexdigits=bytes * 2)
+    return format_str.format(random.getrandbits(bytes * 8))

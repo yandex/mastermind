@@ -116,18 +116,23 @@ def init_meta_db():
     return meta_db
 
 
+def init_namespaces_settings(meta_db):
+    namespaces_settings = NamespacesSettings(meta_db)
+    return namespaces_settings
+
+
 def init_infrastructure_cache_manager(W, n):
     icm = infrastructure_cache.InfrastructureCacheManager(n.meta_session)
     return icm
 
 
-def init_node_info_updater(n):
-    return node_info_updater.NodeInfoUpdater(n, None)
+def init_node_info_updater(n, namespaces_settings):
+    return node_info_updater.NodeInfoUpdater(n, None, namespaces_settings)
 
 
-def init_infrastructure(W, n):
+def init_infrastructure(W, n, namespaces_settings):
     infstruct = infrastructure.infrastructure
-    infstruct.init(n, None, None)
+    infstruct.init(n, None, None, namespaces_settings)
     return infstruct
 
 
@@ -199,10 +204,12 @@ if __name__ == '__main__':
         logger.error(s)
         raise RuntimeError(s)
 
-    i = init_infrastructure(W, n)
+    namespaces_settings = init_namespaces_settings(meta_db)
+
+    i = init_infrastructure(W, n, namespaces_settings)
     icm = init_infrastructure_cache_manager(W, n)
 
-    niu = init_node_info_updater(n)
+    niu = init_node_info_updater(n, namespaces_settings)
     jf = init_job_finder(meta_db)
     j = init_job_processor(jf, meta_db, niu)
 

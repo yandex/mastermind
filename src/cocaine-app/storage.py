@@ -1981,7 +1981,9 @@ class Groupset(object):
         if FORBIDDEN_NS_WITHOUT_SETTINGS:
             if self.namespace.id == Group.CACHE_NAMESPACE:
                 return None
-            if not infrastructure.ns_settings.get(self.namespace.id):
+            try:
+                infrastructure.namespaces_settings.get_cached(self.namespace.id)
+            except ValueError:
                 status_text = (
                     'Couple {couple} is assigned to the namespace {namespace}, '
                     'which is not set up'.format(
@@ -2090,7 +2092,7 @@ class Groupset(object):
 
     def is_full(self):
 
-        ns_reserved_space = infrastructure.ns_settings.get(self.namespace.id, {}).get(self.RESERVED_SPACE_KEY, 0.0)
+        ns_reserved_space = self.ns_reserved_space_percentage
 
         # TODO: move this logic to effective_free_space property,
         #       it should handle all calculations by itself
@@ -2110,7 +2112,8 @@ class Groupset(object):
 
     @property
     def ns_reserved_space_percentage(self):
-        return infrastructure.ns_settings.get(self.namespace.id, {}).get(self.RESERVED_SPACE_KEY, 0.0)
+        ns_settings = infrastructure.namespaces_settings.get_cached(self.namespace.id)
+        return ns_settings.reserved_space_percentage or 0.0
 
     @property
     def ns_reserved_space(self):

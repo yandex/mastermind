@@ -22,6 +22,7 @@ from cocaine.exceptions import ServiceError
 from cocaine.services import Service
 
 from mastermind import MastermindClient
+from mastermind import helpers
 from mastermind.query.couples import Couple
 
 try:
@@ -984,13 +985,21 @@ def ns_setup(namespace,
     if not new and (namespace not in cl.namespaces or cl.namespaces[namespace].deleted):
         new = True
 
+    new_auth_key_read = ''
+    if auth_key_read:
+        new_auth_key_read = helpers.random_hex_string(16)
+
+    new_auth_key_write = ''
+    if auth_key_write:
+        new_auth_key_write = helpers.random_hex_string(16)
+
     if new:
         params = dict(
             groups_count=groups_count,
             static_couple=couple,
             success_copies=success_copies,
-            auth_key_write=auth_key_write,
-            auth_key_read=auth_key_read,
+            auth_key_write=new_auth_key_write,
+            auth_key_read=new_auth_key_read,
             sign_token=sign_token,
             sign_path_prefix=sign_path_prefix,
             min_units=min_units,
@@ -1053,10 +1062,10 @@ def ns_setup(namespace,
             settings.setdefault('signature', {})['token'] = sign_token
         if sign_path_prefix:
             settings.setdefault('signature', {})['path_prefix'] = sign_path_prefix
-        if auth_key_read:
-            settings.setdefault('auth-keys', {})['read'] = auth_key_read
-        if auth_key_write:
-            settings.setdefault('auth-keys', {})['write'] = auth_key_write
+        if new_auth_key_read:
+            settings.setdefault('auth-keys', {})['read'] = new_auth_key_read
+        if new_auth_key_write:
+            settings.setdefault('auth-keys', {})['write'] = new_auth_key_write
         if overwrite and (auth_key_read or auth_key_write):
             # set empty read or write key if not specified
             settings['auth-keys'].setdefault('read', '')
@@ -1067,7 +1076,7 @@ def ns_setup(namespace,
         if add_units:
             settings['add-units'] = add_units
         if reserved_space_percentage:
-            settings['reserved-space-percentage'] = reserved_space_percentage
+            settings['reserved-space-percentage'] = float(reserved_space_percentage)
 
         redirect = {}
         if redirect_content_length_threshold:

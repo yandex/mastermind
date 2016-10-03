@@ -28,9 +28,9 @@ class WeightManager(object):
         self.couples_by_net = {}
         self.weights = {}
 
-    def update(self, storage):
+    def update(self, storage, namespaces_settings):
         self.update_resources(storage)
-        self.calculate_weights(storage)
+        self.calculate_weights(storage, namespaces_settings)
 
     def update_resources(self, storage):
         disks = {}
@@ -76,18 +76,22 @@ class WeightManager(object):
         self.couples_by_disk = couples_by_disk
         self.couples_by_net = couples_by_net
 
-    def calculate_weights(self, storage):
+    def calculate_weights(self, storage, namespaces_settings):
+        ns_settings_by_ns = {
+            ns_settings.namespace: ns_settings
+            for ns_settings in namespaces_settings
+        }
         try:
             weights = {}
             min_couple_res_units = WeightCalculator.min_couple_resources()
             zero_res_units = WeightCalculator.zero_resources()
-            for ns in self.namespaces(storage):
+            for ns in self.namespaces(storage, ns_settings_by_ns):
                 ns_weights = {}
                 ns_sizes = {}
 
-                ns_settings = infrastructure.ns_settings[ns]
-                ns_min_units = ns_settings.get('min-units', self.MIN_NS_UNITS)
-                ns_add_units = ns_settings.get('add-units', self.ADD_NS_UNITS)
+                ns_settings = ns_settings_by_ns[ns]
+                ns_min_units = ns_settings.min_units or self.MIN_NS_UNITS
+                ns_add_units = ns_settings.add_units or self.ADD_NS_UNITS
 
                 for couple in ns.couples:
                     ns_weights.setdefault(len(couple.groups), [])
@@ -145,13 +149,13 @@ class WeightManager(object):
                             # claimed enough resouce units for namespace
                             break
 
-                ns_groups_count = infrastructure.ns_settings[ns]['groups-count']
+                ns_groups_count = ns_settings.groups_count
                 found_couples = len(ns_weights.get(ns_groups_count, []))
                 if found_couples < ns_min_units:
                     logger.error(
                         'Namespace {}, {}, has {} available couples, {} required'.format(
                             ns.id,
-                            'static' if 'static-couple' in ns_settings else 'non-static',
+                            'static' if ns_settings.static_couple else 'non-static',
                             found_couples,
                             ns_min_units
                         )
@@ -200,13 +204,13 @@ class WeightManager(object):
             ))
 
     @staticmethod
-    def namespaces(storage):
+    def namespaces(storage, ns_settings_by_ns):
         nss = storage.namespaces.keys()
         nss.sort(key=lambda ns: len(ns.couples))
         for ns in nss:
             if ns.id == storage.Group.CACHE_NAMESPACE:
                 continue
-            if ns.id not in infrastructure.ns_settings:
+            if ns.id not in ns_settings_by_ns:
                 # namespace does not have settings
                 continue
             yield ns
