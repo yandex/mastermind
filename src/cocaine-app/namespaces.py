@@ -1,6 +1,12 @@
+import logging
+
 from config import config
 from db.mongo.pool import Collection
 from mastermind_core.namespaces.settings import NamespaceSettings
+import storage
+
+
+logger = logging.getLogger('mm.namespaces')
 
 
 class NamespacesSettings(object):
@@ -63,7 +69,7 @@ class NamespacesSettings(object):
                 )
                 namespaces_settings.append(ns_settings)
                 self._cache[ns_settings.namespace] = ns_settings
-            except Exception as e:
+            except Exception:
                 logger.exception('Failed to construct namespace settings object')
                 continue
         return namespaces_settings
