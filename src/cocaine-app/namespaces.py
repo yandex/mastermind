@@ -1,6 +1,12 @@
+import logging
+
 from config import config
 from db.mongo.pool import Collection
 from mastermind_core.namespaces.settings import NamespaceSettings
+import storage
+
+
+logger = logging.getLogger('mm.namespaces')
 
 
 class NamespacesSettings(object):
@@ -63,12 +69,22 @@ class NamespacesSettings(object):
                 )
                 namespaces_settings.append(ns_settings)
                 self._cache[ns_settings.namespace] = ns_settings
-            except Exception as e:
+            except Exception:
                 logger.exception('Failed to construct namespace settings object')
                 continue
+        namespaces_settings.append(
+            NamespaceSettings({
+                'namespace': storage.Group.CACHE_NAMESPACE,
+            })
+        )
         return namespaces_settings
 
     def get(self, namespace_id):
+        if namespace_id == storage.Group.CACHE_NAMESPACE:
+            # special internal namespace for cache groups
+            return NamespaceSettings({
+                'namespace': storage.Group.CACHE_NAMESPACE,
+            })
         settings_dump = self.settings_db.find_one(
             spec_or_id={'namespace': namespace_id},
             fields={'_id': False}
@@ -83,6 +99,11 @@ class NamespacesSettings(object):
         return ns_settings
 
     def get_cached(self, namespace_id):
+        if namespace_id == storage.Group.CACHE_NAMESPACE:
+            # special internal namespace for cache groups
+            return NamespaceSettings({
+                'namespace': storage.Group.CACHE_NAMESPACE,
+            })
         if namespace_id not in self._cache:
             raise ValueError('Namespace "{}" is not found'.format(namespace_id))
         return self._cache[namespace_id]
