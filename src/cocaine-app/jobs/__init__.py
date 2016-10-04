@@ -51,6 +51,7 @@ class JobProcessor(object):
         JobTypes.TYPE_RESTORE_GROUP_JOB: 25,
         JobTypes.TYPE_MOVE_JOB: 20,
         JobTypes.TYPE_TTL_CLEANUP_JOB: 19,
+        JobTypes.TYPE_BACKEND_MANAGER_JOB: 18,
         JobTypes.TYPE_ADD_LRC_GROUPSET_JOB: 17,
         JobTypes.TYPE_CONVERT_TO_LRC_GROUPSET_JOB: 17,
         JobTypes.TYPE_RECOVER_DC_JOB: 15,
@@ -59,7 +60,6 @@ class JobProcessor(object):
         # Priority of this jobs is zero
         # because they're not using resources
         JobTypes.TYPE_BACKEND_CLEANUP_JOB: 0,
-        JobTypes.TYPE_BACKEND_MANAGER_JOB: 0,
     }
 
     # job types that should be processed by processor,
@@ -498,7 +498,7 @@ class JobProcessor(object):
             STOP_ALLOWED_TYPES = (JobTypes.TYPE_RECOVER_DC_JOB,
                                   JobTypes.TYPE_COUPLE_DEFRAG_JOB)
 
-            if job_type not in (JobTypes.TYPE_RESTORE_GROUP_JOB, JobTypes.TYPE_MOVE_JOB):
+            if job_type not in (JobTypes.TYPE_RESTORE_GROUP_JOB, JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_BACKEND_MANAGER_JOB):
                 raise
 
             jobs = self.job_finder.jobs(ids=job_ids)
