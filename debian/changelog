@@ -1,3 +1,9 @@
+mastermind (2.28.53) trusty; urgency=medium
+
+  * Change priority for BACKEND_MANAGER_JOB
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 04 Oct 2016 14:28:45 +0300
+
 mastermind (2.28.52) trusty; urgency=medium
 
   * Support internal storage_cache namespace
