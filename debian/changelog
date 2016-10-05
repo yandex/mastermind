@@ -1,3 +1,9 @@
+mastermind (2.28.56) trusty; urgency=medium
+
+  * Fix delete service key name
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 05 Oct 2016 13:50:49 +0300
+
 mastermind (2.28.55) trusty; urgency=medium
 
   * Implement uncoupled group selector for group selection problems
