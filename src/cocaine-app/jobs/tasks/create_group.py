@@ -32,7 +32,7 @@ class CreateGroupTask(MinionCmdTask):
                 )
             )
         try:
-            minion_response = processor.minions.create_group(
+            minion_response = processor.minions_monitor.create_group(
                 self.host,
                 self.params,
                 files=inventory.get_new_group_files(

@@ -32,7 +32,7 @@ class RemoveGroupTask(MinionCmdTask):
                 )
             )
         try:
-            minion_response = processor.minions.remove_group(
+            minion_response = processor.minions_monitor.remove_group(
                 self.host,
                 self.params
             )

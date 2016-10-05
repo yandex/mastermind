@@ -118,7 +118,6 @@ class Minions(object):
                 headers=self.minion_headers,
                 timeout=MINIONS_CFG.get('commands_fetch_timeout', 15)).get()
 
-            successful_hosts = set()
             for url, response in responses.iteritems():
                 host = states[url]
 

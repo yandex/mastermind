@@ -77,7 +77,7 @@ class JobProcessor(object):
         JobTypes.TYPE_BACKEND_MANAGER_JOB,
     ])
 
-    def __init__(self, job_finder, node, db, niu, minions, external_storage_meta, couple_record_finder):
+    def __init__(self, job_finder, node, db, niu, minions_monitor, external_storage_meta, couple_record_finder):
         logger.info('Starting JobProcessor')
         self.job_finder = job_finder
         self.session = elliptics.Session(node)
@@ -85,7 +85,7 @@ class JobProcessor(object):
             config.get('wait_timeout', 5)
         self.session.set_timeout(wait_timeout)
         self.meta_session = node.meta_session
-        self.minions = minions
+        self.minions_monitor = minions_monitor
         self.node_info_updater = niu
         self.planner = None
         self.external_storage_meta = external_storage_meta
@@ -605,7 +605,7 @@ class JobProcessor(object):
                     # Move task stop handling to task itself?
                     if isinstance(task, MinionCmdTask):
                         try:
-                            self.minions._terminate_cmd(task.host, task.minion_cmd_id)
+                            self.minions_monitor._terminate_cmd(task.host, task.minion_cmd_id)
                         except Exception as e:
                             logger.error('Job {0}, task {1}: failed to stop '
                                 'minion task: {2}\n{3}'.format(

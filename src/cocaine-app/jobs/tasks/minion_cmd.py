@@ -1,13 +1,10 @@
 import logging
 import time
 
-import elliptics
 from tornado.httpclient import HTTPError
 
-from infrastructure import infrastructure
 from infrastructure_cache import cache
 from jobs import TaskTypes, RetryError
-import minions
 from task import Task
 
 
@@ -33,29 +30,23 @@ class MinionCmdTask(Task):
 
     def update_status(self, processor):
         try:
-            self.minion_cmd = processor.minions._get_command(self.minion_cmd_id)
+            self.minion_cmd = processor.minions_monitor._get_command(self.minion_cmd_id)
             logger.debug('Job {0}, task {1}, minion command status was updated: {2}'.format(
                 self.parent_job.id, self.id, self.minion_cmd))
-        except minions.MinionCommandNotFound as e:
-            logger.error(
-                'Job {job_id}, task {task_id}, minion command status {cmd_id} failed to fetch '
-                'from metadb: {error}'.format(
+        except ValueError:
+            logger.exception(
+                'Job {job_id}, task {task_id}, failed to fetch minion command "{cmd_id}" '
+                'status'.format(
                     job_id=self.parent_job.id,
                     task_id=self.id,
                     cmd_id=self.minion_cmd_id,
-                    error=e,
                 )
             )
-            pass
-        except elliptics.Error as e:
-            logger.warn('Job {0}, task {1}, minion command status {2} failed to fetch '
-                'from metadb: {3}'.format(self.parent_job.id, self.id,
-                    self.minion_cmd_id, e))
             pass
 
     def execute(self, processor):
         try:
-            minion_response = processor.minions._execute_cmd(
+            minion_response = processor.minions_monitor.execute(
                 self.host,
                 self.cmd,
                 self.params

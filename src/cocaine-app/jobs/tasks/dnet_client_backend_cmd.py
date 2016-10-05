@@ -42,7 +42,7 @@ class DnetClientBackendCmdTask(MinionCmdTask):
         self.params['cmd_tpl'] = infrastructure.DNET_CLIENT_BACKEND_CMD_TPL
         self.params['subcommand'] = 'backend'
         try:
-            minion_response = processor.minions.dnet_client_cmd(
+            minion_response = processor.minions_monitor.dnet_client_cmd(
                 self.host,
                 self.params
             )
