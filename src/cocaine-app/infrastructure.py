@@ -1222,28 +1222,22 @@ class Infrastructure(object):
                                   skip_groups=None,
                                   allow_alive_keys=False):
 
-        suitable_groups = []
-        locked_hosts = manual_locker.get_locked_hosts()
-        in_service = set()
-        if not including_in_service and self.job_finder:
-            in_service = set(self.job_finder.get_uncoupled_groups_in_service())
-        logger.debug('Groups in service - total {0}: {1}'.format(
-            len(in_service), in_service))
-        if skip_groups:
-            in_service |= set(skip_groups)
-        for group in storage.groups.keys():
+        if including_in_service and self.job_finder:
+            in_service_group_ids = set(self.job_finder.get_uncoupled_groups_in_service())
+        else:
+            in_service_group_ids = None
 
-            if Infrastructure.is_uncoupled_group_good(
-                    group,
-                    locked_hosts,
-                    types or (storage.Group.TYPE_UNCOUPLED,),
-                    max_node_backends=max_node_backends,
-                    in_service=in_service,
-                    status=status,
-                    allow_alive_keys=allow_alive_keys):
-
-                suitable_groups.append(group)
-
+        selector = UncoupledGroupsSelector(
+            max_node_backends=max_node_backends,
+            status=status or storage.Status.INIT,
+            types=types,
+            skip_groups=skip_groups,
+            allow_alive_keys=allow_alive_keys,
+            locked_hosts=manual_locker.get_locked_hosts(),
+            in_service_group_ids=in_service_group_ids,
+        )
+        suitable_groups = selector.select()
+        logger.debug('Uncoupled groups selector result: {}'.format(selector))
         return suitable_groups
 
     @staticmethod
@@ -1297,5 +1291,135 @@ class Infrastructure(object):
             session.write_data(keys.MASTERMIND_MAX_GROUP_KEY, str(new_max_group)).get()
 
             return range(max_group + 1, max_group + count + 1)
+
+
+class UncoupledGroupsSelector(object):
+
+    def __init__(self,
+                 groups=None,
+                 max_node_backends=None,
+                 status=None,
+                 types=None,
+                 skip_groups=None,
+                 allow_alive_keys=False,
+                 locked_hosts=None,
+                 in_service_group_ids=None):
+
+        self.groups = groups
+
+        self.max_node_backends = max_node_backends
+        self.status = status or storage.Status.INIT
+        self.types = types or (storage.Group.TYPE_UNCOUPLED,)
+        self.skip_groups = skip_groups
+        self.allow_alive_keys = allow_alive_keys
+        self.locked_hosts = locked_hosts
+        self.in_service_group_ids = in_service_group_ids
+
+        self._reset()
+
+    def _reset(self):
+        self._in_service_groups = []
+        self._skipped_groups = []
+        self._no_backends_groups = []
+        self._mismatched_status_groups = []
+        self._not_ok_backends_groups = []
+        self._locked_hosts_groups = []
+        self._alive_keys_groups = []
+        self._mismatched_type_groups = []
+        self._max_backends_groups = []
+
+        self._good_uncoupled_groups = []
+
+    def select(self):
+        self._reset()
+
+        groups = self.groups or storage.groups.keys()
+        for group in groups:
+            self._dispatch_group(group)
+
+        return self._good_uncoupled_groups
+
+    def _dispatch_group(self, group):
+        if group.couple is not None:
+            # TODO: coupled groups are not saved since its the obvious reason
+            return
+
+        if self.in_service_group_ids is not None and group.group_id in self.in_service_group_ids:
+            self._in_service_groups.append(group)
+            return
+
+        if self.skip_groups and group.group_id in self.skip_groups:
+            self._skipped_groups.append(group)
+            return
+
+        if not len(group.node_backends):
+            self._no_backends_groups.append(group)
+            return
+
+        if group.type not in self.types:
+            self._mismatched_type_groups.append((group, group.type))
+            return
+
+        if group.status != self.status:
+            self._mismatched_status_groups.append((group, group.status))
+            return
+
+        for nb in group.node_backends:
+            if nb.status != storage.Status.OK:
+                self._not_ok_backends_groups.append((group, nb.status))
+                return
+
+            if self.locked_hosts and nb.node.host in self.locked_hosts:
+                self._locked_hosts_groups.append(group)
+                return
+
+            if not self.allow_alive_keys and nb.stat and nb.stat.files > 0:
+                self._alive_keys_groups.append(group)
+                return
+
+        if self.max_node_backends and len(group.node_backends) > self.max_node_backends:
+            self._max_backends_groups.append((group, len(group.node_backends)))
+            return
+
+        self._good_uncoupled_groups.append(group)
+
+    def __str__(self):
+        s = 'selected uncoupled groups: {}'.format([g.group_id for g in self._good_uncoupled_groups])
+        if self.in_service_group_ids is not None:
+            s += '; groups in service: {}'.format([g.group_id for g in self._in_service_groups])
+        if self.skip_groups:
+            s += '; groups manually skipped: {}'.format([g.group_id for g in self._skipped_groups])
+        s += '; groups with no backends: {}'.format([g.group_id for g in self._no_backends_groups])
+        s += '; groups with mismatched status: {}'.format(
+            [
+                (g.group_id, status)
+                for g, status in self._mismatched_status_groups
+            ]
+        )
+        s += '; groups with not OK backends: {}'.format(
+            [
+                (g.group_id, status)
+                for g, status in self._not_ok_backends_groups
+            ]
+        )
+        s += '; groups on locked hosts: {}'.format([g.group_id for g in self._locked_hosts_groups])
+        if not self.allow_alive_keys:
+            s += '; groups with alive keys: {}'.format([g.group_id for g in self._alive_keys_groups])
+
+        s += '; groups with mismatched type: {}'.format(
+            [
+                (g.group_id, type)
+                for g, type in self._mismatched_type_groups
+            ]
+        )
+        if self.max_node_backends:
+            s += '; groups exceeding max backends limit: {}'.format(
+                [
+                    (g.group_id, count)
+                    for g, count in self._max_backends_groups
+                ]
+            )
+        return s
+
 
 infrastructure = Infrastructure()
