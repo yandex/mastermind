@@ -10,7 +10,7 @@ class NamespaceSettings(SettingsObject):
 
     # __service is a special hidden key with internal namespace settings
     __SERVICE = '__service'
-    __DELETED = 'deleted'
+    __DELETED = 'is_deleted'
 
     NAMESPACE = 'namespace'
     SUCCESS_COPIES_NUM = 'success-copies-num'
