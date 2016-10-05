@@ -8,7 +8,6 @@ import traceback
 import uuid
 
 import elliptics
-import msgpack
 
 from config import config
 from errors import CacheUpstreamError
@@ -21,7 +20,6 @@ from history import (
     GroupCoupleRecord,
     GroupStateRecord
 )
-import indexes
 from infrastructure_cache import cache
 import inventory
 import jobs
