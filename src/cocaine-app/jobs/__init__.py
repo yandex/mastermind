@@ -219,6 +219,11 @@ class JobProcessor(object):
 
             # account job resources and add job to queue
             for res_type, res_val in self._unfold_resources(job.resources):
+
+                cur_usage = resources[job.type][res_type].get(res_val, 0)
+                max_usage = JOB_CONFIG.get(job.type, {}).get(
+                    'resources_limits', {}).get(res_type, float('inf'))
+
                 logger.debug(
                     'Job {}: will use resource {} / {} counter {} / {}'.format(
                         job.id, res_type, res_val, cur_usage, max_usage))
