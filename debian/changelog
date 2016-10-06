@@ -1,3 +1,9 @@
+mastermind (2.28.59) trusty; urgency=medium
+
+  * Fix cache worker
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 06 Oct 2016 17:02:27 +0300
+
 mastermind (2.28.58) trusty; urgency=medium
 
   * Skip hosts without known dc for dc host view
