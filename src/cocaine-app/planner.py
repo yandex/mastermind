@@ -1112,6 +1112,7 @@ class Planner(object):
         uncoupled_groups = []
         cancelled_jobs = []
         groups_to_ro = []
+        pending_restore_jobs = []
 
         for group in groups:
             if group.couple is None:
@@ -1146,13 +1147,19 @@ class Planner(object):
                     if job.status in self.RUNNING_STATUSES:
                         active_jobs.append(job.id)
                     elif job.status in self.ERROR_STATUSES:
-                        try:
-                            self.job_processor._cancel_job(job)
-                            cancelled_jobs.append(job.id)
-                        except Exception as e:
-                            logger.exception('Failed to cancel job {}'.format(job.id))
-                            raise ValueError('Failed to cancel job {}: {}'.format(job.id, e))
-                        groups_to_restore.append(group.group_id)
+                        if job.group == job.src_group:
+                            try:
+                                self.job_processor._cancel_job(job)
+                                cancelled_jobs.append(job.id)
+                            except Exception as e:
+                                logger.exception('Failed to cancel job {}'.format(job.id))
+                                raise ValueError('Failed to cancel job {}: {}'.format(job.id, e))
+                            groups_to_restore.append(group.group_id)
+                        else:
+                            # Jobs in pending or broken states that were
+                            # working with fallback can be restored only
+                            # manually
+                            pending_restore_jobs.append(job.id)
                     elif job.status == jobs.Job.STATUS_CANCELLED:
                         groups_to_restore.append(group.group_id)
                     else:
@@ -1195,7 +1202,7 @@ class Planner(object):
             except Exception as e:
                 failed[group] = str(e)
 
-        return {'jobs': active_jobs, 'failed': failed, 'cancelled_jobs': cancelled_jobs}
+        return {'jobs': active_jobs, 'failed': failed, 'cancelled_jobs': cancelled_jobs, 'help': pending_restore_jobs}
 
     MOVE_GROUP_ATTEMPTS = 3
 
