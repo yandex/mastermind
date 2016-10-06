@@ -35,6 +35,7 @@ import jobs
 import couple_records
 import node_info_updater
 import helpers as h
+from namespaces import NamespacesSettings
 
 
 def init_elliptics_node():
