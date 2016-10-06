@@ -2771,7 +2771,10 @@ class DcHostView(object):
         # to a separate object
         hosts = set()
         for node in nodes:
-            dc_hosts = dcs_hosts.setdefault(node.host.dc, DcNodes())
+            try:
+                dc_hosts = dcs_hosts.setdefault(node.host.dc, DcNodes())
+            except CacheUpstreamError:
+                continue
             if node.host in hosts:
                 continue
             if node.stat is None:
