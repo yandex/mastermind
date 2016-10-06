@@ -56,6 +56,8 @@ class Minions(object):
         self.cmd_progress = {}
         self.active_hosts = []
 
+        self.finish_ts_per_host = {}
+
         # self.pending_hosts = None
         # self.ready = False
 
@@ -99,12 +101,17 @@ class Minions(object):
 
             random.shuffle(hosts)
 
-            # fetch tasks finished in last 24 hours or not finished at all
-            min_finish_ts = int(time.time()) - 24 * 60 * 60
+            current_ts = int(time.time())
+
             for host in hosts:
+                # at first fetch tasks finished in last 24 hours or not finished at all
+                last_host_min_finish_ts = self.finish_ts_per_host.get(
+                    host,
+                    int(time.time()) - 24 * 60 * 60
+                )
                 url = self.STATE_URL_TPL.format(host=self._wrap_host(host.addr),
                                                 port=self.minion_port,
-                                                finish_ts_gte=min_finish_ts)
+                                                finish_ts_gte=last_host_min_finish_ts)
                 states[url] = host
             logger.debug('Starting async batch')
             responses = AsyncHTTPBatch(states.keys(),
@@ -126,6 +133,7 @@ class Minions(object):
                     continue
 
                 successful_hosts.add(host.addr)
+                self.finish_ts_per_host[host] = current_ts
 
             logger.info('Finished fetching minion states task')
         except errors.NotReadyError as e:
