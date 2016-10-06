@@ -49,9 +49,10 @@ class CacheManager(object):
 
     MONITOR_TOP_STATS = 'monitor_top_stats'
 
-    def __init__(self, node, niu, job_processor, db):
+    def __init__(self, node, niu, job_processor, db, namespaces_settings):
         self.node = node
         self.niu = niu
+        self.namespaces_settings = namespaces_settings
         self.session = elliptics.Session(self.node)
         wait_timeout = config.get('elliptics', {}).get('wait_timeout', 5)
         self.session.set_timeout(wait_timeout)
@@ -495,7 +496,7 @@ class CacheManager(object):
 
             self._mark_cache_groups()
 
-            self.niu.update_symm_groups_async()
+            self.niu.update_symm_groups_async(namespaces_settings=self.namespaces_settings)
 
             logger.info('Detected cache groups: {0}'.format(
                 len(storage.cache_couples)))
