@@ -13,7 +13,7 @@ from config import config
 from db.mongo.pool import Collection
 from errors import CacheUpstreamError
 import helpers as h
-from infrastructure import infrastructure
+from infrastructure import infrastructure, UncoupledGroupsSelector
 from infrastructure_cache import cache
 import inventory
 import jobs
@@ -1337,7 +1337,7 @@ class Planner(object):
                         'only groups with 1 node backend can be used'.format(
                             unc_group.group_id, len(unc_group.node_backends)))
 
-                selector = infrastructure.UncoupledGroupsSelector(
+                selector = UncoupledGroupsSelector(
                     groups=[unc_group],
                     max_node_backends=1,
                     locked_hosts=locked_hosts,
