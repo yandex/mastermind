@@ -140,14 +140,9 @@ class NamespacesQuery(Query):
 
         groups_count = int(groups_count) if groups_count else 0
 
-        if not success_copies:
-            raise ValueError('success_copies is required')
         settings['success-copies-num'] = success_copies
 
         static_couple = [int(g) for g in static_couple.split(':')] if static_couple else None
-
-        if (not static_couple and not groups_count):
-            raise ValueError('either groups_count or static_couple is required')
 
         if static_couple:
             settings['static-couple'] = static_couple
