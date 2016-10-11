@@ -995,24 +995,46 @@ def ns_setup(namespace,
 
     if new:
         params = dict(
-            groups_count=groups_count,
+            # TODO: groups_count should not be a string
+            groups_count=(
+                int(groups_count)
+                if groups_count else
+                None
+            ),
             static_couple=couple,
             success_copies=success_copies,
             auth_key_write=new_auth_key_write,
             auth_key_read=new_auth_key_read,
             sign_token=sign_token,
             sign_path_prefix=sign_path_prefix,
-            min_units=min_units,
-            add_units=add_units,
-            redirect_content_length_threshold=redirect_content_length_threshold,
-            redirect_expire_time=redirect_expire_time,
+            # TODO: min_units should not be a string
+            min_units=int(min_units) if min_units else None,
+            # TODO: add_units should not be a string
+            add_units=int(add_units) if add_units else None,
+            # TODO: redirect_content_length_threshold should not be a string
+            redirect_content_length_threshold=(
+                int(redirect_content_length_threshold)
+                if redirect_content_length_threshold else
+                None
+            ),
+            # TODO: redirect_expire_time should not be a string
+            redirect_expire_time=int(redirect_expire_time) if redirect_expire_time else None,
             redirect_query_args=redirect_query_args,
             redirect_add_orig_path_query_arg=redirect_add_orig_path_query_arg,
-            multipart_content_length_threshold=multipart_content_length_threshold,
+            # TODO: multipart_content_length_threshold should not be a string
+            multipart_content_length_threshold=(
+                int(multipart_content_length_threshold)
+                if multipart_content_length_threshold else
+                None
+            ),
             select_couple_to_upload=select_couple_to_upload,
-            reserved_space_percentage=float(reserved_space_percentage or 0.0),
+            reserved_space_percentage=(
+                float(reserved_space_percentage)
+                if reserved_space_percentage else
+                None
+            ),
             check_for_update=check_for_update,
-            custom_expiration_time=custom_expiration_time,
+            custom_expiration_time=custom_expiration_time == '1',
             attributes_filename=attributes_filename == '1',
             attributes_ttl_minimum=attributes_ttl_minimum,
             attributes_ttl_maximum=attributes_ttl_maximum,
@@ -1072,9 +1094,9 @@ def ns_setup(namespace,
             settings['auth-keys'].setdefault('write', '')
 
         if min_units:
-            settings['min-units'] = min_units
+            settings['min-units'] = int(min_units)
         if add_units:
-            settings['add-units'] = add_units
+            settings['add-units'] = int(add_units)
         if reserved_space_percentage:
             settings['reserved-space-percentage'] = float(reserved_space_percentage)
 
