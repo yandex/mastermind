@@ -1,3 +1,9 @@
+mastermind (2.28.61) trusty; urgency=medium
+
+  * Fix namespace setup parameter types
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 11 Oct 2016 12:23:40 +0300
+
 mastermind (2.28.60) trusty; urgency=medium
 
   * Fix cache worker
