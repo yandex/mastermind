@@ -18,6 +18,3 @@ MM_HOSTTREE_CACHE_HOST = 'mastermind:hosttree_cache_%s'
 
 MM_IPADDRESSES_CACHE_IDX = 'mastermind:ipaddresses_cache'
 MM_IPADDRESSES_CACHE_HOST = 'mastermind:ipaddresses_cache_%s'
-
-MINION_HISTORY_KEY = 'minion_cmd_log:%s'
-MINION_HISTORY_ENTRY_KEY = 'minion_cmd_entry:%s'
