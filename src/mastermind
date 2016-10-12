@@ -827,6 +827,106 @@ def job_status(job_id,
         pprint(res)
 
 
+@jobDispatcher.command(name='cancel')
+@log_action
+def job_cancel(job_id,
+               json=('', None, 'Format data as json'),
+               host=None, app=None):
+    '''Cancel job'''
+    s = service(host, app)
+    res = s.enqueue('cancel_job', msgpack.packb([job_id])).get()
+    if json:
+        print dumps(res)
+    else:
+        pprint(res)
+
+
+@jobDispatcher.command(name='stop')
+@log_action
+def job_stop(job_id,
+             json=('', None, 'Format data as json'),
+             host=None, app=None):
+    '''Stop job'''
+    s = service(host, app)
+    res = s.enqueue('stop_jobs', msgpack.packb([[job_id]])).get()
+    if json:
+        print dumps(res)
+    else:
+        pprint(res)
+
+
+@jobDispatcher.command(name='approve')
+@log_action
+def job_approve(job_id,
+                json=('', None, 'Format data as json'),
+                host=None, app=None):
+    '''Approve job'''
+    s = service(host, app)
+    res = s.enqueue('approve_job', msgpack.packb([job_id])).get()
+    if json:
+        print dumps(res)
+    else:
+        pprint(res)
+
+
+@jobDispatcher.command(name='retry_task')
+@log_action
+def job_retry_task(job_id, task_id,
+                   json=('', None, 'Format data as json'),
+                   host=None, app=None):
+    '''Retry failed job task'''
+    s = service(host, app)
+    res = s.enqueue('retry_failed_job_task', msgpack.packb([job_id, task_id])).get()
+    if json:
+        print dumps(res)
+    else:
+        pprint(res)
+
+
+@jobDispatcher.command(name='skip_task')
+@log_action
+def job_skip_task(job_id, task_id,
+                  json=('', None, 'Format data as json'),
+                  host=None, app=None):
+    '''Skip failed job task'''
+    s = service(host, app)
+    res = s.enqueue('skip_failed_job_task', msgpack.packb([job_id, task_id])).get()
+    if json:
+        print dumps(res)
+    else:
+        pprint(res)
+
+
+@jobDispatcher.command(name='list')
+@log_action
+def job_list(statuses=('s', 'not_approved', 'Filtering jobs by statuses '
+                       '(comma-separated values can be used, i.e. "pending,broken")'),
+             job_type=('t', '', 'Filtering jobs by types '
+                       '(comma-separated values can be used, i.e. "move_job,restore_group_job")'),
+             groups=('g', '', 'Filtering jobs by groups'
+                     '(comma-separated values can be used, i.e. "move_job,restore_group_job")'),
+             limit=('l', '', 'Jobs limit'),
+             offset=('o', '', 'Jobs offset'),
+             json=('', None, 'Format data as json'),
+             short=('', False, 'Use short format output'),
+             host=None, app=None):
+    '''Get jobs list'''
+    s = service(host, app)
+    params = {}
+    params['statuses'] = statuses.split(',') if statuses else None
+    params['job_type'] = job_type.split(',') if job_type else None
+    params['groups'] = groups.split(',') if groups else None
+    params['limit'] = limit if limit else None
+    params['offset'] = offset if offset else 0
+    res = s.enqueue('get_job_list', msgpack.packb(params)).get()
+    if short:
+        res['jobs'] = [job['id'] for job in res['jobs']]
+    if json:
+        print dumps(res)
+    else:
+        pprint(res)
+
+
 @jobDispatcher.command(name='move-groups')
 @log_action
 def job_move_groups(src_host,
