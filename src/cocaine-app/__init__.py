@@ -37,7 +37,7 @@ import history
 import infrastructure
 import jobs
 import couple_records
-import minions
+import minions_monitor
 import node_info_updater
 from planner import Planner
 from config import config
@@ -239,9 +239,8 @@ def init_statistics():
 
 
 def init_minions():
-    m = minions.Minions(n)
+    m = minions_monitor.MinionsMonitor(meta_db)
     register_handle(m.get_command)
-    register_handle(m.get_commands)
     register_handle(m.execute_cmd)
     register_handle(m.terminate_cmd)
     return m
@@ -306,7 +305,7 @@ def init_group_history_finder():
     return ghf
 
 
-def init_job_processor(jf, minions, niu, external_storage_meta, couple_record_finder):
+def init_job_processor(jf, minions_monitor, niu, external_storage_meta, couple_record_finder):
     if jf is None:
         logger.error(
             'Job processor will not be initialized because '
@@ -318,7 +317,7 @@ def init_job_processor(jf, minions, niu, external_storage_meta, couple_record_fi
         n,
         meta_db,
         niu,
-        minions,
+        minions_monitor,
         external_storage_meta=external_storage_meta,
         couple_record_finder=couple_record_finder,
     )
