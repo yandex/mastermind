@@ -1,3 +1,9 @@
+mastermind (2.28.65) trusty; urgency=medium
+
+  * Initialize http client after making thread ioloop
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 13 Oct 2016 18:32:10 +0300
+
 mastermind (2.28.64) trusty; urgency=medium
 
   * Remove run_sync timeout from ioloop
