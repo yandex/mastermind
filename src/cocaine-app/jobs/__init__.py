@@ -947,21 +947,22 @@ class JobFinder(object):
 
     @h.concurrent_handler
     def get_job_list(self, request):
-        try:
-            options = request[0]
-        except (TypeError, IndexError):
-            options = {}
+        statuses = request.get('statuses', None)
+        job_type = request.get('job_type', None)
+        groups = request.get('groups', None)
+        limit = request.get('limit', None)
+        offset = int(request.get('offset', 0))
 
-        jobs_list = Job.list(self.collection,
-            status=options['statuses'],
-            type=options['job_type'])
+        jobs_list = Job.list(
+            self.collection,
+            status=statuses,
+            type=job_type,
+            group=groups,
+        )
         total_jobs = jobs_list.count()
 
-        if options.get('limit'):
-            limit = int(options['limit'])
-            offset = int(options.get('offset', 0))
-
-            jobs_list = jobs_list[offset:offset + limit]
+        if limit is not None:
+            jobs_list = jobs_list[offset:offset + int(limit)]
 
         res = []
         for j in jobs_list:
