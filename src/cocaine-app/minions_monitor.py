@@ -32,6 +32,7 @@ class MinionsMonitor(object):
     TERMINATE_URL_TPL = 'http://{host}:{port}/command/terminate/'
 
     MAKE_IOLOOP = 'make_ioloop'
+    MAKE_HTTP_CLIENT = 'make_http_client'
     STATE_FETCH = 'state_fetch'
 
     CREATE_GROUP_URL_TPL = 'http://{host}:{port}/command/create_group/'
@@ -48,8 +49,7 @@ class MinionsMonitor(object):
                                if MINIONS_CFG.get('authkey') else
                                None)
         self.minion_port = MINIONS_CFG.get('port', 8081)
-        # TODO: set max_clients in config
-        self.http_client = AsyncHTTPClient(max_clients=100)
+        self.http_client = None
         self.finish_ts_per_host = {}
 
         # set an independent IOLoop instance in timed queue thread
@@ -57,6 +57,11 @@ class MinionsMonitor(object):
             self.MAKE_IOLOOP,
             0,
             self._make_tq_thread_ioloop)
+
+        self.__tq.add_task_in(
+            self.MAKE_HTTP_CLIENT,
+            0,
+            self._make_http_client)
 
         self.__tq.add_task_in(
             self.STATE_FETCH,
@@ -240,6 +245,11 @@ class MinionsMonitor(object):
         logger.debug('Minion states, creating thread ioloop')
         io_loop = IOLoop()
         io_loop.make_current()
+
+    def _make_http_client(self):
+        logger.debug('Minion states, creating http client')
+        # TODO: set max_clients in config
+        self.http_client = AsyncHTTPClient(max_clients=100)
 
     @helpers.handler_wne
     def set_minion_hosts(self, hosts):
