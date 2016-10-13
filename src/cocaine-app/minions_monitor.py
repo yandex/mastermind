@@ -239,18 +239,14 @@ class MinionsMonitor(object):
     def _make_tq_thread_ioloop(self):
         logger.debug('Minion states, creating thread ioloop')
         io_loop = IOLoop()
-        io_loop.initialize(make_current=True)
+        io_loop.make_current()
 
     @helpers.handler_wne
     def set_minion_hosts(self, hosts):
         self._hosts = hosts
 
     def _perform_http_requests_sync(self, urls):
-        return IOLoop.current().run_sync(
-            functools.partial(self._perform_http_requests, urls),
-            # TODO: fix timeout
-            timeout=MINIONS_CFG.get('commands_fetch_timeout', 15) * 3,
-        )
+        return IOLoop.current().run_sync(functools.partial(self._perform_http_requests, urls))
 
     @gen.coroutine
     def _perform_http_requests(self, urls):
@@ -261,7 +257,7 @@ class MinionsMonitor(object):
                 method='GET',
                 headers=self.minion_headers,
                 # TODO: fix timeout settings
-                connect_timeout=None,
+                connect_timeout=MINIONS_CFG.get('commands_fetch_timeout', 15),
                 request_timeout=MINIONS_CFG.get('commands_fetch_timeout', 15),
                 follow_redirects=False,
                 allow_ipv6=True,
