@@ -918,7 +918,7 @@ def job_list(statuses=('s', 'not_approved', 'Filtering jobs by statuses '
     params['groups'] = groups.split(',') if groups else None
     params['limit'] = limit if limit else None
     params['offset'] = offset if offset else 0
-    res = s.enqueue('get_job_list', msgpack.packb(params)).get()
+    res = s.enqueue('get_job_list', msgpack.packb([params])).get()
     if short:
         res['jobs'] = [job['id'] for job in res['jobs']]
     if json:
