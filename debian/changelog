@@ -1,3 +1,10 @@
+mastermind (2.28.64) trusty; urgency=medium
+
+  * Remove run_sync timeout from ioloop
+  * Added jobs list in cli
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 13 Oct 2016 17:37:50 +0300
+
 mastermind (2.28.63) trusty; urgency=medium
 
   * Store and use minion commands from mongo
