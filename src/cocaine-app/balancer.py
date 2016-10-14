@@ -1222,7 +1222,7 @@ class Balancer(object):
                 if g not in groups:
                     raise ValueError(
                         'Using incomplete couple {}, full couple is {}'.format(
-                            couple,
+                            groups,
                             ref_couple
                         )
                     )
