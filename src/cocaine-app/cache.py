@@ -496,7 +496,8 @@ class CacheManager(object):
 
             self._mark_cache_groups()
 
-            self.niu.update_symm_groups_async(namespaces_settings=self.namespaces_settings)
+            namespaces_settings = self.namespaces_settings.fetch()
+            self.niu.update_symm_groups_async(namespaces_settings=namespaces_settings)
 
             logger.info('Detected cache groups: {0}'.format(
                 len(storage.cache_couples)))
