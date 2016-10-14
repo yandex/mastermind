@@ -201,10 +201,15 @@ class MinionsMonitor(object):
                 del state['error_output']
 
         for uid, state in response_data.iteritems():
+
             update_stored_command = (
                 force_update or (
-                    uid in stored_commands and
-                    abs(state['progress'] - stored_commands[uid]['progress']) >= 0.01
+                    uid in stored_commands and (
+                        # minion command is finished
+                        state['exit_code'] is not None or
+                        # progress value changed noticeably
+                        abs(state['progress'] - stored_commands[uid]['progress']) >= 0.01
+                    )
                 )
             )
 
