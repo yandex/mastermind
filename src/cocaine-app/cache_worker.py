@@ -177,7 +177,7 @@ def init_job_processor(jf, meta_db, niu):
         n,
         meta_db,
         niu,
-        minions=None,
+        minions_monitor=None,
         external_storage_meta=external_storage.ExternalStorageMeta(meta_db),
         couple_record_finder=couple_records.CoupleRecordFinder(meta_db),
     )
