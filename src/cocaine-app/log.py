@@ -32,4 +32,4 @@ def setup_logger(logger_name='logging'):
     # cocaine.Logger will take care of low-level messages filtering
     root_app_logger.setLevel(logging.DEBUG)
     tornado_logger.setLevel(logging.DEBUG)
-    worker_logger.setLevel(logging.DEBUG)
+    worker_logger.setLevel(logging.INFO)
