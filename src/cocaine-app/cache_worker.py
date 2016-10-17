@@ -123,7 +123,7 @@ def init_namespaces_settings(meta_db):
 
 
 def init_infrastructure_cache_manager(W, n):
-    icm = infrastructure_cache.InfrastructureCacheManager(n.meta_session)
+    icm = infrastructure_cache.InfrastructureCacheManager()
     return icm
 
 

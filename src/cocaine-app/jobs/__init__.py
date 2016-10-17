@@ -84,7 +84,6 @@ class JobProcessor(object):
         wait_timeout = config.get('elliptics', {}).get('wait_timeout') or \
             config.get('wait_timeout', 5)
         self.session.set_timeout(wait_timeout)
-        self.meta_session = node.meta_session
         self.minions_monitor = minions_monitor
         self.node_info_updater = niu
         self.planner = None

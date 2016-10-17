@@ -247,7 +247,7 @@ def init_minions():
 
 
 def init_planner(job_processor, niu, namespaces_settings):
-    planner = Planner(n.meta_session, meta_db, niu, job_processor, namespaces_settings)
+    planner = Planner(meta_db, niu, job_processor, namespaces_settings)
     register_handle(planner.restore_group)
     register_handle(planner.move_group)
     register_handle(planner.move_groups_from_host)

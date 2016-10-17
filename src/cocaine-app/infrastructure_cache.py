@@ -24,8 +24,7 @@ class InfrastructureCache(object):
         socket.AF_INET: (),
     }
 
-    def init(self, meta_session, tq):
-        self.meta_session = meta_session
+    def init(self, tq):
         self.__tq = tq
 
         self.hostname_cache = HostnameCacheItem(self.__tq)
@@ -90,11 +89,10 @@ cache = InfrastructureCache()
 
 
 class InfrastructureCacheManager(object):
-    def __init__(self, meta_session):
-        self.meta_session = meta_session
+    def __init__(self):
         self.__tq = timed_queue.TimedQueue()
 
-        cache.init(self.meta_session, self.__tq)
+        cache.init(self.__tq)
 
     def _start_tq(self):
         self.__tq.start()

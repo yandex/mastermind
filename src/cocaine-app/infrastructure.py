@@ -117,7 +117,6 @@ class Infrastructure(object):
         # TODO: return node back to constructor after wrapping
         #       all the code in a 'mastermind' package
         self.node = None
-        self.meta_session = None
         self.cache = None
         self._sync_ts = int(time.time())
 
@@ -131,13 +130,12 @@ class Infrastructure(object):
         self.job_finder = job_finder
         self.group_history_finder = group_history_finder
         self.namespaces_settings = namespaces_settings
-        self.meta_session = self.node.meta_session
 
         if self.group_history_finder:
             self._sync_state()
 
         self.cache = cache
-        cache.init(self.meta_session, self.__tq)
+        cache.init(self.__tq)
 
     def schedule_history_update(self):
         if not self.group_history_finder:

@@ -39,13 +39,12 @@ class Planner(object):
     RECOVER_DC_LOCK = 'planner/recover_dc'
     MOVE_LOCK = 'planner/move'
 
-    def __init__(self, meta_session, db, niu, job_processor, namespaces_settings):
+    def __init__(self, db, niu, job_processor, namespaces_settings):
 
         self.params = config.get('planner', {})
 
         logger.info('Planner initializing')
         self.candidates = []
-        self.meta_session = meta_session
         self.job_processor = job_processor
         self.__max_plan_length = self.params.get('move', {}).get('max_plan_length', 5)
         self.__tq = timed_queue.TimedQueue()
