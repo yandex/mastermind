@@ -24,7 +24,6 @@ except LocatorResolveError:
     logger.warn('mm_cache_logging is not set up properly in '
         'cocaine.conf, fallback to default logging service')
 
-from config import config
 import storage
 import cache
 import external_storage
@@ -33,6 +32,7 @@ import infrastructure_cache
 import jobs
 import couple_records
 import node_info_updater
+from mastermind_core.config import config
 from mastermind_core.db.mongo.pool import MongoReplicaSetClient
 import helpers as h
 from namespaces import NamespacesSettings

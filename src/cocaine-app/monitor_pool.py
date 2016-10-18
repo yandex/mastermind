@@ -4,7 +4,7 @@ import elliptics
 from mastermind.pool import Pool
 from mastermind.monitor_pool import MonitorStatParseWorker
 
-from config import config
+from mastermind_core.config import config
 
 
 MONITOR_CFG = config.get('monitor', {})

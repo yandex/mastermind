@@ -39,10 +39,10 @@ import couple_records
 import minions_monitor
 import node_info_updater
 from planner import Planner
-from config import config
 from manual_locks import manual_locker
 from namespaces import NamespacesSettings
 from mastermind_core.db.mongo.pool import MongoReplicaSetClient
+from mastermind_core.config import config
 
 
 i = iter(xrange(100))

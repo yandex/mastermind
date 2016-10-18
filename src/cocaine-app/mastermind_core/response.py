@@ -1,7 +1,7 @@
 import json
 import threading
 
-from config import config
+from mastermind_core.config import config
 from mastermind_core import helpers
 
 

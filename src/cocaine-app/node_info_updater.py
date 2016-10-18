@@ -9,8 +9,6 @@ import traceback
 import elliptics
 import msgpack
 
-# import balancer
-from config import config
 import helpers as h
 from infrastructure import infrastructure
 from jobs import Job
@@ -18,6 +16,7 @@ import keys
 from load_manager import load_manager
 from mastermind import helpers as mh
 from mastermind.pool import skip_exceptions
+from mastermind_core.config import config
 from mastermind_core.response import CachedGzipResponse
 from mastermind_core import errors
 from monitor_pool import monitor_pool
@@ -45,7 +44,7 @@ class NodeInfoUpdater(object):
         self.__node = node
         self.statistics = statistics
         self.job_finder = job_finder
-        self.namespaces_settings=namespaces_settings
+        self.namespaces_settings = namespaces_settings
         self.couple_record_finder = couple_record_finder
         self._namespaces_states = CachedGzipResponse()
         self._flow_stats = {}

@@ -4,7 +4,7 @@ import time
 
 import pymongo
 
-from config import config
+from mastermind_core.config import config
 from mastermind_core.db.mongo.pool import Collection
 import storage
 from sync import sync_manager

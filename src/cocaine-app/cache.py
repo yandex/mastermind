@@ -11,12 +11,12 @@ import pymongo
 
 import balancer
 from cache_transport import cache_task_manager
-from config import config
 import helpers as h
 import inventory
 from infrastructure import infrastructure
 import jobs
 import keys
+from mastermind_core.config import config
 from mastermind_core.db.mongo.pool import Collection
 import storage
 from sync import sync_manager

@@ -14,12 +14,12 @@ import msgpack
 # from mastermind.service import ReconnectableService
 from tornado.ioloop import IOLoop
 
-from config import config
 import helpers as h
 import infrastructure
 import inventory
 import jobs.job
 import keys
+from mastermind_core.config import config
 from mastermind_core.db.mongo.pool import Collection
 from mastermind_core.response import CachedGzipResponse
 from mastermind_core.helpers import gzip_compress

@@ -13,9 +13,9 @@ from tornado.httpclient import HTTPRequest, AsyncHTTPClient, HTTPError
 # TODO: Replace with AsyncHttpClient?
 from tornado.simple_httpclient import SimpleAsyncHTTPClient
 
-from config import config
 import errors
 import helpers
+from mastermind_core.config import config
 import timed_queue
 import storage
 

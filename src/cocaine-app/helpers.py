@@ -11,8 +11,8 @@ import uuid
 import elliptics
 from errors import CacheUpstreamError
 from cocaine.futures import chain
-from config import config
 from mastermind import errors
+from mastermind_core.config import config
 
 
 logger = logging.getLogger('mm.balancer')

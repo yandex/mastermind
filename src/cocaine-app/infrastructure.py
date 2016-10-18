@@ -9,7 +9,6 @@ import uuid
 
 import elliptics
 
-from config import config
 from errors import CacheUpstreamError
 import helpers as h
 from history import (
@@ -25,6 +24,7 @@ import inventory
 import jobs
 import keys
 from manual_locks import manual_locker
+from mastermind_core.config import config
 import storage
 from sync import sync_manager
 import timed_queue

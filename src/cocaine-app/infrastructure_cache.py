@@ -7,9 +7,9 @@ import time
 
 import msgpack
 
-from config import config
 from errors import CacheUpstreamError
 import inventory
+from mastermind_core.config import config
 import timed_queue
 
 

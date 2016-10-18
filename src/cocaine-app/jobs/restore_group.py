@@ -1,13 +1,13 @@
 import logging
 import os.path
 
-from config import config
 from error import JobBrokenError
 from errors import CacheUpstreamError
 from infrastructure import infrastructure
 from infrastructure_cache import cache
 from job import Job
 from job_types import JobTypes
+from mastermind_core.config import config
 from tasks import (NodeBackendDefragTask, CoupleDefragStateCheckTask,
                    RsyncBackendTask, MinionCmdTask, NodeStopTask, HistoryRemoveNodeTask)
 import storage

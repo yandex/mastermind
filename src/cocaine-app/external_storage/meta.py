@@ -1,8 +1,8 @@
 import functools
 import uuid
 
-from config import config
 import helpers
+from mastermind_core.config import config
 from mastermind_core.db.mongo import MongoObject
 from mastermind_core.db.mongo.pool import Collection
 
