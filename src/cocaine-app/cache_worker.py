@@ -27,13 +27,13 @@ except LocatorResolveError:
 from config import config
 import storage
 import cache
-from db.mongo.pool import MongoReplicaSetClient
 import external_storage
 import infrastructure
 import infrastructure_cache
 import jobs
 import couple_records
 import node_info_updater
+from mastermind_core.db.mongo.pool import MongoReplicaSetClient
 import helpers as h
 from namespaces import NamespacesSettings
 

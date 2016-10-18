@@ -15,12 +15,12 @@ import msgpack
 from tornado.ioloop import IOLoop
 
 from config import config
-from db.mongo.pool import Collection
 import helpers as h
 import infrastructure
 import inventory
 import jobs.job
 import keys
+from mastermind_core.db.mongo.pool import Collection
 from mastermind_core.response import CachedGzipResponse
 from mastermind_core.helpers import gzip_compress
 import monitor

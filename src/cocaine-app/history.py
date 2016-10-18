@@ -1,8 +1,8 @@
 import logging
 
 from config import config
-from db.mongo import MongoObject
-from db.mongo.pool import Collection
+from mastermind_core.db.mongo import MongoObject
+from mastermind_core.db.mongo.pool import Collection
 
 
 logger = logging.getLogger('mm.infrastructure')

@@ -30,7 +30,6 @@ logger = logging.getLogger('mm.init')
 # TODO: remove this dependency
 import storage
 import balancer
-from db.mongo.pool import MongoReplicaSetClient
 import external_storage
 import helpers
 import history
@@ -43,6 +42,7 @@ from planner import Planner
 from config import config
 from manual_locks import manual_locker
 from namespaces import NamespacesSettings
+from mastermind_core.db.mongo.pool import MongoReplicaSetClient
 
 
 i = iter(xrange(100))

@@ -1,7 +1,7 @@
 import logging
 
 from config import config
-from db.mongo.pool import Collection
+from mastermind_core.db.mongo.pool import Collection
 from mastermind_core.namespaces.settings import NamespaceSettings
 import storage
 

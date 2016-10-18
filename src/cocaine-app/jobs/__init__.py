@@ -7,13 +7,13 @@ import traceback
 import elliptics
 
 from config import config
-from db.mongo.pool import Collection
 from error import JobBrokenError, RetryError
 import helpers as h
 from job_types import JobTypes, TaskTypes
 from job import Job
 from couple_defrag import CoupleDefragJob
 import lrc_builder
+from mastermind_core.db.mongo.pool import Collection
 from move import MoveJob
 from recover_dc import RecoverDcJob
 from make_lrc_groups import MakeLrcGroupsJob
