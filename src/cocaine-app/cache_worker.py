@@ -73,34 +73,6 @@ def init_elliptics_node():
             e))
         raise ValueError('Failed to connect to any elliptics storage node')
 
-    meta_node = elliptics.Node(log, node_config)
-
-    addresses = []
-    for node in config["metadata"]["nodes"]:
-        try:
-            addresses.append(elliptics.Address(
-                host=str(node[0]), port=node[1], family=node[2]))
-        except Exception as e:
-            logger.error('Failed to connect to meta node: {0}:{1}:{2}'.format(
-                node[0], node[1], node[2]))
-            pass
-
-    logger.info('Connecting to meta nodes: {0}'.format(config["metadata"]["nodes"]))
-
-    try:
-        meta_node.add_remotes(addresses)
-    except Exception as e:
-        logger.error('Failed to connect to any elliptics meta storage node: {0}'.format(
-            e))
-        raise ValueError('Failed to connect to any elliptics storage META node')
-
-    meta_wait_timeout = config['metadata'].get('wait_timeout', 5)
-
-    meta_session = elliptics.Session(meta_node)
-    meta_session.set_timeout(meta_wait_timeout)
-    meta_session.add_groups(list(config["metadata"]["groups"]))
-    n.meta_session = meta_session
-
     wait_timeout = config.get('elliptics', {}).get('wait_timeout', 5)
     time.sleep(wait_timeout)
 

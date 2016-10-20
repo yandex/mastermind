@@ -7,8 +7,6 @@ import time
 import traceback
 import uuid
 
-import elliptics
-
 from errors import CacheUpstreamError
 import helpers as h
 from history import (
