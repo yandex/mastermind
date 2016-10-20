@@ -7,6 +7,8 @@ import socket
 import time
 import urllib
 
+import requests
+from requests.exceptions import RequestException
 from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.httpclient import HTTPRequest, AsyncHTTPClient, HTTPError
@@ -367,6 +369,45 @@ class MinionsMonitor(object):
                 self._check_param(k, v)
             dst[params_rename.get(k, k)] = v
         return dst
+
+    def _make_http_request(self, method, url, *args, **kwargs):
+        try:
+            response = requests.request(
+                method=method,
+                url=url,
+                *args,
+                **kwargs
+            )
+        except RequestException as e:
+            logger.error('HTTP request failed: {}'.format(e))
+            raise RuntimeError(e)
+
+        if response.status_code != 200:
+            raise RuntimeError(
+                'Minion http error, url {url}, '
+                'code {code} ({reason})'.format(
+                    url=url,
+                    code=response.status_code,
+                    reason=response.reason,
+                )
+            )
+
+        return response.text
+
+    def _perform_request(self, host, url, **kwargs):
+        response = self._make_http_request(
+            method='POST',
+            url=url,
+            headers=self.minion_headers,
+            timeout=MINIONS_CFG.get('request_timeout', 5.0),
+            **kwargs
+        )
+        return self._process_state(
+            host,
+            response,
+            stored_commands={},
+            force_update=True,
+        )
 
     @staticmethod
     def _check_param(key, val):
