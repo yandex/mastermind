@@ -41,7 +41,7 @@ class InfrastructureCache(object):
         try:
             return cache[key]
         except Exception as e:
-            if not strict:
+            if not strict and hasattr(cache, 'fallback_value')::
                 return cache.fallback_value
             raise CacheUpstreamError(str(e))
 
