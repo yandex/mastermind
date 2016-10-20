@@ -1,5 +1,5 @@
-from config import config
 from importer import import_object
+from mastermind_core.config import config
 
 
 try:

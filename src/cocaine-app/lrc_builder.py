@@ -3,10 +3,10 @@ import itertools
 
 from mastermind.utils.tree_picker import TreePicker
 
-from config import config
 import infrastructure
 import inventory
 from jobs.job_types import JobTypes
+from mastermind_core.config import config
 import storage
 
 

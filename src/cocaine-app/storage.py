@@ -18,11 +18,11 @@ import jobs.job
 from jobs.job_types import JobTypes
 from infrastructure import infrastructure
 from infrastructure_cache import cache
-from config import config
 import lrc_builder
 from mastermind.query.couples import Couple as CoupleInfo
 from mastermind.query.groupsets import Groupset as GroupsetInfo
 from mastermind.query.groups import Group as GroupInfo
+from mastermind_core.config import config
 
 logger = logging.getLogger('mm.storage')
 

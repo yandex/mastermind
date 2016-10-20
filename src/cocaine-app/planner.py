@@ -9,8 +9,6 @@ import traceback
 
 import pymongo
 
-from config import config
-from db.mongo.pool import Collection
 from errors import CacheUpstreamError
 import helpers as h
 from infrastructure import infrastructure, UncoupledGroupsSelector
@@ -18,6 +16,8 @@ from infrastructure_cache import cache
 import inventory
 import jobs
 from manual_locks import manual_locker
+from mastermind_core.config import config
+from mastermind_core.db.mongo.pool import Collection
 from sync import sync_manager
 from sync.error import LockFailedError, LockAlreadyAcquiredError
 from timer import periodic_timer
@@ -39,13 +39,12 @@ class Planner(object):
     RECOVER_DC_LOCK = 'planner/recover_dc'
     MOVE_LOCK = 'planner/move'
 
-    def __init__(self, meta_session, db, niu, job_processor, namespaces_settings):
+    def __init__(self, db, niu, job_processor, namespaces_settings):
 
         self.params = config.get('planner', {})
 
         logger.info('Planner initializing')
         self.candidates = []
-        self.meta_session = meta_session
         self.job_processor = job_processor
         self.__max_plan_length = self.params.get('move', {}).get('max_plan_length', 5)
         self.__tq = timed_queue.TimedQueue()

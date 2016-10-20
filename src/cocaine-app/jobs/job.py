@@ -4,11 +4,11 @@ import os.path
 import time
 import uuid
 
-from config import config
-from db.mongo import MongoObject
 from error import JobBrokenError
 import helpers as h
 import keys
+from mastermind_core.db.mongo import MongoObject
+from mastermind_core.config import config
 from sync import sync_manager
 from sync.error import (
     LockError,

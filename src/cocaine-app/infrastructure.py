@@ -7,9 +7,6 @@ import time
 import traceback
 import uuid
 
-import elliptics
-
-from config import config
 from errors import CacheUpstreamError
 import helpers as h
 from history import (
@@ -23,10 +20,10 @@ from history import (
 from infrastructure_cache import cache
 import inventory
 import jobs
-import keys
 from manual_locks import manual_locker
+from mastermind_core.config import config
+from mastermind_core.max_group import max_group_manager
 import storage
-from sync import sync_manager
 import timed_queue
 
 
@@ -117,7 +114,6 @@ class Infrastructure(object):
         # TODO: return node back to constructor after wrapping
         #       all the code in a 'mastermind' package
         self.node = None
-        self.meta_session = None
         self.cache = None
         self._sync_ts = int(time.time())
 
@@ -131,13 +127,12 @@ class Infrastructure(object):
         self.job_finder = job_finder
         self.group_history_finder = group_history_finder
         self.namespaces_settings = namespaces_settings
-        self.meta_session = self.node.meta_session
 
         if self.group_history_finder:
             self._sync_state()
 
         self.cache = cache
-        cache.init(self.meta_session, self.__tq)
+        cache.init(self.__tq)
 
     def schedule_history_update(self):
         if not self.group_history_finder:
@@ -1278,19 +1273,11 @@ class Infrastructure(object):
 
         return True
 
-    def reserve_group_ids(self, count, timeout=10):
-        with sync_manager.lock('cluster_max_group', timeout=timeout):
-            session = self.node.meta_session
-            try:
-                request = session.read_latest(keys.MASTERMIND_MAX_GROUP_KEY)
-                max_group = int(request.get()[0].data)
-            except elliptics.NotFoundError:
-                max_group = 0
-
-            new_max_group = max_group + count
-            session.write_data(keys.MASTERMIND_MAX_GROUP_KEY, str(new_max_group)).get()
-
-            return range(max_group + 1, max_group + count + 1)
+    def reserve_group_ids(self, count):
+        logger.info('Storage max group: reserving {} groups'.format(count))
+        result = max_group_manager.reserve_group_ids(count)
+        logger.info('Storage max group: reserved groups: {}'.format(result))
+        return result
 
 
 class UncoupledGroupsSelector(object):

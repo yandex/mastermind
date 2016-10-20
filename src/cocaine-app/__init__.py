@@ -30,7 +30,6 @@ logger = logging.getLogger('mm.init')
 # TODO: remove this dependency
 import storage
 import balancer
-from db.mongo.pool import MongoReplicaSetClient
 import external_storage
 import helpers
 import history
@@ -40,9 +39,10 @@ import couple_records
 import minions_monitor
 import node_info_updater
 from planner import Planner
-from config import config
 from manual_locks import manual_locker
 from namespaces import NamespacesSettings
+from mastermind_core.config import config
+from mastermind_core.meta_db import meta_db
 
 
 i = iter(xrange(100))
@@ -99,46 +99,10 @@ except Exception as e:
     raise ValueError('Failed to connect to any elliptics storage node')
 
 logger.info("trace %d" % (i.next()))
-meta_node = elliptics.Node(log, node_config)
-
-addresses = []
-for node in config["metadata"]["nodes"]:
-    try:
-        addresses.append(elliptics.Address(
-            host=str(node[0]), port=node[1], family=node[2]))
-    except Exception as e:
-        logger.error('Failed to connect to meta node: {0}:{1}:{2}'.format(
-            node[0], node[1], node[2]))
-        pass
-
-logger.info('Connecting to meta nodes: {0}'.format(config["metadata"]["nodes"]))
-
-try:
-    meta_node.add_remotes(addresses)
-except Exception as e:
-    logger.error('Failed to connect to any elliptics meta storage node: {0}'.format(
-        e))
-    raise ValueError('Failed to connect to any elliptics storage META node')
-
 
 wait_timeout = config.get('wait_timeout', 5)
 logger.info('sleeping for wait_timeout for nodes to collect data ({0} sec)'.format(wait_timeout))
 sleep(wait_timeout)
-
-meta_wait_timeout = config['metadata'].get('wait_timeout', 5)
-
-meta_session = elliptics.Session(meta_node)
-meta_session.set_timeout(meta_wait_timeout)
-meta_session.add_groups(list(config["metadata"]["groups"]))
-logger.info("trace %d" % (i.next()))
-n.meta_session = meta_session
-
-mrsc_options = config['metadata'].get('options', {})
-
-meta_db = None
-if config['metadata'].get('url'):
-    meta_db = MongoReplicaSetClient(config['metadata']['url'], **mrsc_options)
-
 
 logger.info("trace %d" % (i.next()))
 logger.info("before creating worker")
@@ -247,7 +211,7 @@ def init_minions():
 
 
 def init_planner(job_processor, niu, namespaces_settings):
-    planner = Planner(n.meta_session, meta_db, niu, job_processor, namespaces_settings)
+    planner = Planner(meta_db, niu, job_processor, namespaces_settings)
     register_handle(planner.restore_group)
     register_handle(planner.move_group)
     register_handle(planner.move_groups_from_host)

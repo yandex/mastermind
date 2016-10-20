@@ -2,12 +2,12 @@ import itertools
 import math
 import random
 
-from config import config
 from infrastructure import infrastructure
 from jobs.job import Job
 from jobs.job_types import JobTypes
 from load_manager import load_manager
 import logging
+from mastermind_core.config import config
 
 
 logger = logging.getLogger('mm.weights')

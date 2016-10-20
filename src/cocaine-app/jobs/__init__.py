@@ -6,14 +6,14 @@ import traceback
 
 import elliptics
 
-from config import config
-from db.mongo.pool import Collection
 from error import JobBrokenError, RetryError
 import helpers as h
 from job_types import JobTypes, TaskTypes
 from job import Job
 from couple_defrag import CoupleDefragJob
 import lrc_builder
+from mastermind_core.config import config
+from mastermind_core.db.mongo.pool import Collection
 from move import MoveJob
 from recover_dc import RecoverDcJob
 from make_lrc_groups import MakeLrcGroupsJob
@@ -84,7 +84,6 @@ class JobProcessor(object):
         wait_timeout = config.get('elliptics', {}).get('wait_timeout') or \
             config.get('wait_timeout', 5)
         self.session.set_timeout(wait_timeout)
-        self.meta_session = node.meta_session
         self.minions_monitor = minions_monitor
         self.node_info_updater = niu
         self.planner = None

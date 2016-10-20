@@ -2,7 +2,7 @@
 from copy import deepcopy
 import logging
 
-from config import config
+from mastermind_core.config import config
 from importer import import_object
 
 

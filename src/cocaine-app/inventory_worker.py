@@ -19,7 +19,7 @@ except LocatorResolveError:
         'cocaine.conf, fallback to default logging service'
     )
 
-from config import config
+from mastermind_core.config import config
 # TODO: rename inv module to 'inventory' when switched to using inventory worker
 import inv as inventory
 import helpers
