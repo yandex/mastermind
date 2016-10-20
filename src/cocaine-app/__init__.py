@@ -41,8 +41,8 @@ import node_info_updater
 from planner import Planner
 from manual_locks import manual_locker
 from namespaces import NamespacesSettings
-from mastermind_core.db.mongo.pool import MongoReplicaSetClient
 from mastermind_core.config import config
+from mastermind_core.meta_db import meta_db
 
 
 i = iter(xrange(100))
@@ -134,10 +134,6 @@ logger.info("trace %d" % (i.next()))
 n.meta_session = meta_session
 
 mrsc_options = config['metadata'].get('options', {})
-
-meta_db = None
-if config['metadata'].get('url'):
-    meta_db = MongoReplicaSetClient(config['metadata']['url'], **mrsc_options)
 
 
 logger.info("trace %d" % (i.next()))
