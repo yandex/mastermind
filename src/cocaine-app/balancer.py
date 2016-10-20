@@ -1471,6 +1471,8 @@ class Balancer(object):
     def storage_keys_diff(self, request):
         couples_diff = {}
         for couple in storage.replicas_groupsets:
+            if couple.status == storage.Status.BROKEN:
+                continue
             group_keys = []
             for group in couple.groups:
                 if not len(group.node_backends):
