@@ -2258,7 +2258,7 @@ class Groupset(object):
         if isinstance(other, (str, unicode)):
             return self.__str__() == other
 
-        if isinstance(other, Couple):
+        if isinstance(other, Groupset):
             return self.groups == other.groups
 
     def __repr__(self):
