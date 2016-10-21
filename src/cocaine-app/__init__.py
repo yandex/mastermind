@@ -241,6 +241,7 @@ def init_external_storage_meta():
             'External storage metadb is not set up '
             '("metadata.external_storage.db" key), will not be initialized'
         )
+        return None
     external_storage_meta = external_storage.ExternalStorageMeta(meta_db)
     register_handle(external_storage_meta.get_external_storage_mapping)
     return external_storage_meta
