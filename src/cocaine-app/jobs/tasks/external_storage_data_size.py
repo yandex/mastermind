@@ -18,8 +18,11 @@ class ExternalStorageDataSizeTask(MinionCmdTask):
 
     def on_exec_stop(self, processor):
         if self.status == self.STATUS_COMPLETED:
+
+            command_state = processor.minions_monitor.get_minion_cmd_state(self.minion_cmd)
+
             try:
-                data_size = self._data_size(self.minion_cmd['output'])
+                data_size = self._data_size(command_state['output'])
             except ValueError as e:
                 raise JobBrokenError(str(e))
 
