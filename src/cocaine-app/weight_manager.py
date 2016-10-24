@@ -2,7 +2,6 @@ import itertools
 import math
 import random
 
-from infrastructure import infrastructure
 from jobs.job import Job
 from jobs.job_types import JobTypes
 from load_manager import load_manager
@@ -682,7 +681,12 @@ class NetResources(object):
 
     def claim(self, resource_units):
         # net_read_rate is not affected by resource claiming
-        self.net_write_rate = self.net_write_rate + resource_units.net_rate
+
+        # NOTE: net write rate is not claimed since this can lead to lock shared net
+        # resources by namespaces that will not actually use them
+        # self.net_write_rate = self.net_write_rate + resource_units.net_rate
+
+        pass
 
     def __repr__(self):
         return (
