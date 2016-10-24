@@ -2,7 +2,6 @@ import itertools
 import math
 import random
 
-from infrastructure import infrastructure
 from jobs.job import Job
 from jobs.job_types import JobTypes
 from load_manager import load_manager
