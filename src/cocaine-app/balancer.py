@@ -7,7 +7,6 @@ import logging
 import operator
 import re
 import time
-import traceback
 
 import elliptics
 import msgpack
