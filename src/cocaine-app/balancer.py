@@ -7,7 +7,6 @@ import logging
 import operator
 import re
 import time
-import traceback
 
 import elliptics
 import msgpack
@@ -1291,9 +1290,8 @@ class Balancer(object):
 
         cur_settings.update(settings)
 
-        self._validate_static_couple(cur_settings)
-
         if not options.get('skip_validation'):
+            self._validate_static_couple(cur_settings)
             cur_settings.validate()
 
         cur_settings.save()
