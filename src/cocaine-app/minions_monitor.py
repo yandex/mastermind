@@ -30,6 +30,7 @@ MINIONS_CFG = config.get('minions', {})
 class MinionsMonitor(object):
 
     STATE_URL_TPL = 'http://{host}:{port}/rsync/list/?finish_ts_gte={finish_ts_gte}'
+    STATUS_URL_TPL = 'http://{host}:{port}/command/status/{uid}/'
     START_URL_TPL = 'http://{host}:{port}/rsync/start/'
     TERMINATE_URL_TPL = 'http://{host}:{port}/command/terminate/'
 
@@ -343,6 +344,36 @@ class MinionsMonitor(object):
             stored_commands={},
             force_update=True,
         )
+
+    def get_minion_cmd_state(self, minion_cmd):
+        uid = minion_cmd['uid']
+
+        url = self.STATUS_URL_TPL.format(
+            host=self._wrap_host(minion_cmd['host']),
+            port=self.minion_port,
+            uid=uid,
+        )
+
+        io_loop = IOLoop()
+        client = SimpleAsyncHTTPClient(io_loop)
+        response = io_loop.run_sync(
+            functools.partial(
+                client.fetch,
+                url,
+                method='GET',
+                headers=self.minion_headers,
+                request_timeout=MINIONS_CFG.get('request_timeout', 5.0),
+                allow_ipv6=True,
+                use_gzip=True,
+            )
+        )
+
+        response_data = self._unwrap_response(json.loads(response), minion_cmd['host'])
+
+        if uid not in response_data:
+            raise RuntimeError('Unknown command uid: {}'.format(uid))
+
+        return response_data[uid]
 
     @staticmethod
     def _wrap_host(addr):
