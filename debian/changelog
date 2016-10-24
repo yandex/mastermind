@@ -1,3 +1,9 @@
+mastermind (2.28.76) trusty; urgency=medium
+
+  * Skip static couple validation when skip_validation option is applied
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 24 Oct 2016 13:03:13 +0300
+
 mastermind (2.28.75) trusty; urgency=medium
 
   * Skip claiming net resources when calculating couple weights
