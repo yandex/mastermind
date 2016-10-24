@@ -1,3 +1,9 @@
+mastermind (2.28.78) trusty; urgency=medium
+
+  * Add separate minion API request to fetch command output
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 24 Oct 2016 17:22:59 +0300
+
 mastermind (2.28.77) trusty; urgency=medium
 
   * * Add separate minion API request to fetch command output
