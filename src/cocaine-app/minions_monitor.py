@@ -44,8 +44,6 @@ class MinionsMonitor(object):
 
     def __init__(self, meta_db):
 
-        self._hosts = []
-
         self.__tq = timed_queue.TimedQueue()
 
         self.minion_headers = ({'X-Auth': MINIONS_CFG['authkey']}
@@ -258,10 +256,6 @@ class MinionsMonitor(object):
         logger.debug('Minion states, creating http client')
         # TODO: set max_clients in config
         self.http_client = AsyncHTTPClient(max_clients=100)
-
-    @helpers.handler_wne
-    def set_minion_hosts(self, hosts):
-        self._hosts = hosts
 
     def _perform_http_requests_sync(self, urls):
         return IOLoop.current().run_sync(functools.partial(self._perform_http_requests, urls))
