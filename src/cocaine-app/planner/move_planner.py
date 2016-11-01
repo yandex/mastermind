@@ -206,6 +206,23 @@ class MovePlanner(object):
             if not filtered_src_groups:
                 continue
 
+            uncoupled_space_min_limit_bytes = MOVE_PLANNER_PARAMS.get(
+                'uncoupled_space_min_limit_bytes',
+                0
+            )
+
+            if uncoupled_space_min_limit_bytes and dst_dc_state.uncoupled_space <= uncoupled_space_min_limit_bytes:
+                logger.info(
+                    'Source dc "{dc}": dst dc "{dst_dc}" skipped, uncoupled space '
+                    '{uncoupled_space} <= {limit} (uncoupled space min limit)'.format(
+                        dc=src_dc_state.dc,
+                        dst_dc=dst_dc_state.dc,
+                        uncoupled_space=helpers.convert_bytes(dst_dc_state.uncoupled_space),
+                        limit=helpers.convert_bytes(uncoupled_space_min_limit_bytes),
+                    )
+                )
+                continue
+
             for move_job_plan in dst_dc_state.move_job_candidates(src_dc_state,
                                                                   src_host_state,
                                                                   filtered_src_groups):
