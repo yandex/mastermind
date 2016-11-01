@@ -1035,7 +1035,7 @@ class Host(object):
         return self.__str__()
 
     def __eq__(self, other):
-        if isinstance(other, str):
+        if isinstance(other, basestring):
             return self.addr == other
 
         if isinstance(other, Host):

@@ -161,48 +161,45 @@ class JobProcessor(object):
         # selecting jobs to start processing
         for job in new_jobs:
 
-            check_types = [t for t, p in self.JOB_PRIORITIES.iteritems()
-                           if p > self.JOB_PRIORITIES[job.type]]
-            logger.debug('Job {}: checking higher priority job types: {}'.format(
-                job.id, check_types))
+            check_types = [
+                t
+                for t, p in self.JOB_PRIORITIES.iteritems()
+                if p >= self.JOB_PRIORITIES[job.type]
+            ]
+            logger.debug(
+                'Job {}: checking job type resources according to priorities: {}'.format(
+                    job.id,
+                    check_types
+                )
+            )
 
             no_slots = False
 
             for res_type, res_val in self._unfold_resources(job.resources):
 
-                for job_type in check_types:
-                    if resources[job_type][res_type].get(res_val, 0) > 0:
-                        # job of higher priority is using the resource
-                        logger.debug(
-                            'Job {}: will be skipped, resource {} / {} '
-                            'is occupuied by higher priority job of type {}'.format(
-                                job.id, res_type, res_val, job_type))
-                        no_slots = True
-                        break
+                max_res_limit = JOB_CONFIG.get(job.type, {}).get('resources_limits', {}).get(
+                    res_type, float('inf')
+                )
 
-                if no_slots:
-                    break
+                used_res_count = sum(
+                    resources[job_type][res_type].get(res_val, 0)
+                    for job_type in check_types
+                )
 
-                cur_usage = resources[job.type][res_type].get(res_val, 0)
-                max_usage = JOB_CONFIG.get(job.type, {}).get(
-                    'resources_limits', {}).get(res_type, float('inf'))
-                if cur_usage >= max_usage:
+                if used_res_count >= max_res_limit:
+                    # job of higher or same priority is using the resource
                     logger.debug(
-                        'Job {job_id}: will be skipped, resource '
-                        '{used_resource_type} / {used_resource} '
-                        'counter {used_resource_counter} >= {used_resource_max} '
-                        'is occupied by jobs of same or less priority'.format(
+                        'Job {job_id}: will be skipped, resource {res_type} / {res_val} is '
+                        'occupuied by higher or same priority jobs (used {used_res_count} >= '
+                        '{max_res_limit})'.format(
                             job_id=job.id,
-                            used_resource_type=res_type,
-                            used_resource=res_val,
-                            used_resource_counter=cur_usage,
-                            used_resource_max=max_usage,
+                            res_type=res_type,
+                            res_val=res_val,
+                            used_res_count=used_res_count,
+                            max_res_limit=max_res_limit,
                         )
                     )
-
                     no_slots = True
-
-                if no_slots:
                     break
 
             if no_slots:
@@ -1006,10 +1003,13 @@ class JobFinder(object):
         job.collection = self.collection
         return job
 
-    def jobs_count(self, types=None, statuses=None):
-        return Job.list(self.collection,
+    def jobs_count(self, types=None, statuses=None, **kwargs):
+        return Job.list(
+            self.collection,
             status=statuses,
-            type=types).count()
+            type=types,
+            **kwargs
+        ).count()
 
     def jobs(self, types=None, statuses=None, ids=None, groups=None):
         jobs = []
