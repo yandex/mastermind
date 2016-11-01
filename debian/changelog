@@ -1,3 +1,9 @@
+mastermind (2.28.80) trusty; urgency=medium
+
+  * Fix resource accounting in move planner
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 01 Nov 2016 20:16:06 +0300
+
 mastermind (2.28.79) trusty; urgency=medium
 
   * Refactor move planner
