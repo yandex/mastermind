@@ -1,3 +1,10 @@
+mastermind (2.28.79) trusty; urgency=medium
+
+  * Refactor move planner
+  * Allow cooperative running of low priority jobs
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 01 Nov 2016 15:54:27 +0300
+
 mastermind (2.28.78) trusty; urgency=medium
 
   * Add separate minion API request to fetch command output
