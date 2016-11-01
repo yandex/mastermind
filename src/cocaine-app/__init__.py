@@ -39,6 +39,7 @@ import couple_records
 import minions_monitor
 import node_info_updater
 from planner import Planner
+from planner.move_planner import MovePlanner
 from manual_locks import manual_locker
 from namespaces import NamespacesSettings
 from mastermind_core.config import config
@@ -210,7 +211,7 @@ def init_minions():
     return m
 
 
-def init_planner(job_processor, niu, namespaces_settings):
+def init_planner(job_processor, niu, namespaces_settings, move_planner):
     planner = Planner(meta_db, niu, job_processor, namespaces_settings)
     register_handle(planner.restore_group)
     register_handle(planner.move_group)
@@ -218,6 +219,14 @@ def init_planner(job_processor, niu, namespaces_settings):
     register_handle(planner.convert_external_storage_to_groupset)
     register_handle(planner.restore_groups_from_path)
     register_handle(planner.ttl_cleanup)
+
+    planner.add_planner(move_planner)
+
+    return planner
+
+
+def init_move_planner(job_processor, niu, namespaces_settings):
+    planner = MovePlanner(meta_db, niu, job_processor, namespaces_settings)
     return planner
 
 
@@ -317,7 +326,8 @@ init_statistics()
 m = init_minions()
 j = init_job_processor(jf, m, niu, external_storage_meta, crf)
 if j:
-    po = init_planner(j, niu, namespaces_settings)
+    move_planner = init_move_planner(j, niu, namespaces_settings)
+    po = init_planner(j, niu, namespaces_settings, move_planner)
     j.planner = po
 else:
     po = None

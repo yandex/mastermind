@@ -1003,10 +1003,13 @@ class JobFinder(object):
         job.collection = self.collection
         return job
 
-    def jobs_count(self, types=None, statuses=None):
-        return Job.list(self.collection,
+    def jobs_count(self, types=None, statuses=None, **kwargs):
+        return Job.list(
+            self.collection,
             status=statuses,
-            type=types).count()
+            type=types,
+            **kwargs
+        ).count()
 
     def jobs(self, types=None, statuses=None, ids=None, groups=None):
         jobs = []

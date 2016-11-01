@@ -40,3 +40,19 @@ def merge_dict(dst, src):
             else:
                 res[k] = merge_dict(res[k], src[k])
     return res
+
+
+def percent(val):
+    return '{:.2f}%'.format(val * 100.0)
+
+
+BYTES_UNITS = ['b', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB']
+
+
+def convert_bytes(b):
+    res = float(b)
+    for unit in BYTES_UNITS:
+        if res < 1024:
+            return '{:.2f} {}'.format(res, unit)
+        res = res / 1024
+    return '{:.2f} {}'.format(res, BYTES_UNITS[-1])

@@ -25,10 +25,13 @@ class MoveJob(Job):
     MERGE_GROUP_FILE_MARKER_PATH = RESTORE_CFG.get('merge_group_file_marker')
     MERGE_GROUP_FILE_DIR_MOVE_SRC_RENAME = RESTORE_CFG.get('merge_group_file_dir_move_src_rename')
 
-    PARAMS = ('group', 'uncoupled_group', 'uncoupled_group_fsid', 'merged_groups',
-              'resources',
-              'src_host', 'src_port', 'src_backend_id', 'src_family', 'src_base_path',
-              'dst_host', 'dst_port', 'dst_backend_id', 'dst_family', 'dst_base_path')
+    PARAMS = (
+        'group', 'uncoupled_group', 'uncoupled_group_fsid', 'merged_groups',
+        'resources',
+        'src_host', 'src_port', 'src_backend_id', 'src_family', 'src_base_path',
+        'dst_host', 'dst_port', 'dst_backend_id', 'dst_family', 'dst_base_path',
+        'move_planner',  # special marker that is set to True for move jobs created by move planner
+    )
 
     def __init__(self, **kwargs):
         super(MoveJob, self).__init__(**kwargs)
