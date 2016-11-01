@@ -153,10 +153,10 @@ class MovePlanner(object):
                                 plan=move_job_plan,
                             )
                         )
-                        self._create_move_job(move_job_plan)
+                        job = self._create_move_job(move_job_plan)
                     except LockFailedError as e:
                         logger.error(
-                            'Failed to create move job for move job, {plan}: {err}'.format(
+                            'Failed to create move job, {plan}: {err}'.format(
                                 plan=move_job_plan,
                                 err=e,
                             )
@@ -164,13 +164,16 @@ class MovePlanner(object):
                         continue
                     except Exception as e:
                         logger.exception(
-                            'Failed to create move job for move job, {plan}'.format(
+                            'Failed to create move job, {plan}'.format(
                                 plan=move_job_plan,
                             )
                         )
                         continue
 
                     storage_state.account_move_job_plan(move_job_plan)
+                    storage_state.account_resources(job, jobs.Job.RESOURCE_HOST_IN)
+                    storage_state.account_resources(job, jobs.Job.RESOURCE_HOST_OUT)
+
                     break
                 else:
                     logger.info(
@@ -354,38 +357,38 @@ class StorageState(object):
     def stats(self, group):
         return self._stats[group.group_id]
 
+    def account_resources(self, job, resource_type):
+        for addr in job.resources.get(resource_type, []):
+
+            if addr not in storage.hosts:
+                logger.error('Job {}: host with address {} is not found in storage'.format(job.id, addr))
+                continue
+            host = storage.hosts[addr]
+            try:
+                dc_state = self.state[host.dc]
+            except CacheUpstreamError:
+                continue
+            except KeyError:
+                logger.error('Storage state does not contain state for dc "{}"'.format(host.dc))
+                continue
+            try:
+                host_state = dc_state.hosts[host]
+            except KeyError:
+                logger.error('Dc "{dc}" state does not contain state for host "{host}"'.format(
+                    dc=host.dc,
+                    host=host.hostname,
+                ))
+                continue
+
+            host_state.resources[resource_type] += 1
+
     def account_jobs(self, active_jobs):
-
-        def account_resources(job, resource_type):
-            for addr in job.resources.get(resource_type, []):
-
-                if addr not in storage.hosts:
-                    logger.error('Job {}: host with address {} is not found in storage'.format(job.id, addr))
-                    continue
-                host = storage.hosts[addr]
-                try:
-                    dc_state = self.state[host.dc]
-                except CacheUpstreamError:
-                    continue
-                except KeyError:
-                    logger.error('Storage state does not contain state for dc "{}"'.format(host.dc))
-                    continue
-                try:
-                    host_state = dc_state.hosts[host]
-                except KeyError:
-                    logger.error('Dc "{dc}" state does not contain state for host "{host}"'.format(
-                        dc=host.dc,
-                        host=host.hostname,
-                    ))
-                    continue
-
-                host_state.resources[resource_type] += 1
 
         job_plans = []
 
         for job in active_jobs:
-            account_resources(job, jobs.Job.RESOURCE_HOST_IN)
-            account_resources(job, jobs.Job.RESOURCE_HOST_OUT)
+            self.account_resources(job, jobs.Job.RESOURCE_HOST_IN)
+            self.account_resources(job, jobs.Job.RESOURCE_HOST_OUT)
 
             try:
                 job_plans.append(MoveJobPlan.from_job(self, job))
@@ -424,7 +427,13 @@ class StorageState(object):
         # manually. So this group can be considered disabled as of now, and we can just subtract
         # host's total_space
         if plan.src_group in plan.host_out_state.full_groups:
-            plan.host_out_state.full_groups.remove(plan.src_group)
+            # plan.host_out_state.full_groups.remove(plan.src_group)
+            for cg in plan.src_group.couple.groups:
+                for nb in cg.node_backends:
+                    dc_state = self.state[nb.node.host.dc]
+                    host_state = dc_state.hosts[nb.node.host]
+                    host_state.full_groups.discard(cg)
+
         plan.host_out_state.total_space -= stat.total_space
 
         # moving out src_group from source dc_state
@@ -438,10 +447,11 @@ class StorageState(object):
         plan.host_in_state.uncoupled_space -= sum(
             self.stats(ug).total_space for ug in plan.dst_groups
         )
+        for ug in plan.dst_groups:
+            plan.host_in_state.uncoupled_groups.discard(ug)
 
         # moving in src_group to destination dc_state
-        if plan.src_group.couple in plan.dc_in_state.full_groupsets:
-            plan.dc_in_state.full_groupsets.add(plan.src_group.couple)
+        plan.dc_in_state.full_groupsets.add(plan.src_group.couple)
         plan.dc_in_state.uncoupled_space -= sum(
             self.stats(ug).total_space for ug in plan.dst_groups
         )
