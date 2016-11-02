@@ -1,3 +1,9 @@
+mastermind (2.28.82) trusty; urgency=medium
+
+  * Fix for total space accounting in move planner
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 02 Nov 2016 14:17:21 +0300
+
 mastermind (2.28.81) trusty; urgency=medium
 
   * Fix uncoupled space min limit accounting in move planner
