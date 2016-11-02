@@ -147,6 +147,20 @@ class MovePlanner(object):
 
                     # TODO: add dry-run mode
                     try:
+
+                        src_total_space = move_job_plan.src_group.get_stat().total_space
+                        dst_total_space = sum(
+                            ug.get_stat().total_space
+                            for ug in move_job_plan.dst_groups
+                        )
+                        assert dst_total_space >= src_total_space, (
+                            'total space of src group "{src_group}" is greater than total space of '
+                            'destination groups "{dst_groups}"'.format(
+                                src_group=move_job_plan.src_group,
+                                dst_groups=[ug.group_id for ug in move_job_plan.dst_groups]
+                            )
+                        )
+
                         logger.info(
                             'Source dc "{dc}": creating move job, {plan}'.format(
                                 dc=src_dc_state.dc,
@@ -437,41 +451,44 @@ class StorageState(object):
 
     def account_move_job_plan(self, plan):
 
-        stat = self.stats(plan.src_group)
+        if plan.src_group:
+            stat = self.stats(plan.src_group)
 
-        # moving out src_group from source host_state
-        # TODO: when group is moved out, we disable it but do not remove its data, cleanup is done
-        # manually. So this group can be considered disabled as of now, and we can just subtract
-        # host's total_space
-        if plan.src_group in plan.host_out_state.full_groups:
-            # plan.host_out_state.full_groups.remove(plan.src_group)
-            for cg in plan.src_group.couple.groups:
-                for nb in cg.node_backends:
-                    dc_state = self.state[nb.node.host.dc]
-                    host_state = dc_state.hosts[nb.node.host]
-                    host_state.full_groups.discard(cg)
+            # moving out src_group from source host_state
+            # TODO: when group is moved out, we disable it but do not remove its data, cleanup is done
+            # manually. So this group can be considered disabled as of now, and we can just subtract
+            # host's total_space
+            if plan.src_group in plan.host_out_state.full_groups:
+                # plan.host_out_state.full_groups.remove(plan.src_group)
+                for cg in plan.src_group.couple.groups:
+                    for nb in cg.node_backends:
+                        dc_state = self.state[nb.node.host.dc]
+                        host_state = dc_state.hosts[nb.node.host]
+                        host_state.full_groups.discard(cg)
 
-        plan.host_out_state.total_space -= stat.total_space
+            plan.host_out_state.total_space -= stat.total_space
 
-        # moving out src_group from source dc_state
-        if plan.src_group.couple in plan.dc_out_state.full_groupsets:
-            plan.dc_out_state.full_groupsets.remove(plan.src_group.couple)
-        plan.dc_out_state.total_space -= stat.total_space
+            # moving out src_group from source dc_state
+            if plan.src_group.couple in plan.dc_out_state.full_groupsets:
+                plan.dc_out_state.full_groupsets.remove(plan.src_group.couple)
+            plan.dc_out_state.total_space -= stat.total_space
 
-        # moving in src_group to destination host_state
-        if plan.src_group in plan.host_in_state.full_groups:
-            plan.host_in_state.full_groups.add(plan.src_group)
-        plan.host_in_state.uncoupled_space -= sum(
-            self.stats(ug).total_space for ug in plan.dst_groups
-        )
-        for ug in plan.dst_groups:
-            plan.host_in_state.uncoupled_groups.discard(ug)
+            # moving in src_group to destination host_state
+            if plan.src_group in plan.host_in_state.full_groups:
+                plan.host_in_state.full_groups.add(plan.src_group)
 
-        # moving in src_group to destination dc_state
-        plan.dc_in_state.full_groupsets.add(plan.src_group.couple)
-        plan.dc_in_state.uncoupled_space -= sum(
-            self.stats(ug).total_space for ug in plan.dst_groups
-        )
+            # moving in src_group to destination dc_state
+            plan.dc_in_state.full_groupsets.add(plan.src_group.couple)
+
+        if plan.dst_groups:
+            plan.host_in_state.uncoupled_space -= sum(
+                self.stats(ug).total_space for ug in plan.dst_groups
+            )
+            for ug in plan.dst_groups:
+                plan.host_in_state.uncoupled_groups.discard(ug)
+            plan.dc_in_state.uncoupled_space -= sum(
+                self.stats(ug).total_space for ug in plan.dst_groups
+            )
 
 
 class MoveJobPlan(object):
@@ -498,8 +515,16 @@ class MoveJobPlan(object):
 
     @staticmethod
     def from_job(storage_state, job):
-        src_group = storage.groups[job.group]
-        dst_groups = [storage.groups[g] for g in [job.uncoupled_group] + job.merged_groups]
+        if job.group in storage.groups:
+            src_group = storage.groups[job.group]
+        else:
+            # in case when job.group was disabled during move execution
+            src_group = None
+        if job.uncoupled_group in storage.groups:
+            dst_groups = [storage.groups[g] for g in [job.uncoupled_group] + job.merged_groups]
+        else:
+            # in case when job.uncoupled_group was disabled during move execution
+            dst_groups = []
 
         src_host = storage.hosts[job.src_host]
         src_dc_state = storage_state.state[src_host.dc]
@@ -709,7 +734,13 @@ class DcState(object):
                         if total_fs_groups_space >= src_total_space:
                             break
 
-                    if len(fs_candidate_groups) == 1 and total_fs_groups_space <= src_total_space * 1.05:
+                    is_good_enough_match = (
+                        len(fs_candidate_groups) and
+                        total_fs_groups_space >= src_total_space and
+                        total_fs_groups_space <= src_total_space * 1.05
+                    )
+
+                    if is_good_enough_match:
                         # NOTE: found good enough candidate, no point in further searching
                         yield MoveJobPlan(
                             dc_out_state=src_dc_state,
