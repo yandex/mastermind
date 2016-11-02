@@ -331,11 +331,7 @@ class StorageState(object):
                     state.state[dc].account_uncoupled_group_stat(nb.stat)
                     host_state.account_uncoupled_group_stat(nb.stat)
 
-                    try:
-                        state._stats[group.group_id] = group.get_stat()
-                    except Exception:
-                        logger.exception('Failed to fetch statistics for group {}'.format(group))
-                        continue
+                    state._stats[group.group_id] = group.get_stat()
 
                     if group.group_id in good_uncoupled_groups:
                         host_state.add_uncoupled_group(group)
@@ -365,27 +361,18 @@ class StorageState(object):
                         # couple is participating in some job, skipping it
                         continue
 
-                    try:
-                        state._stats[group.group_id] = group.get_stat()
-                    except Exception:
-                        logger.exception('Failed to fetch statistics for group {}'.format(group))
-                        continue
+                    state._stats[group.group_id] = group.get_stat()
 
                     state.state[dc].add_full_groupset(group.couple)
                     host_state.add_full_group(group)
 
-        for group_id in busy_group_ids:
-            # fetching busy groups' stats to account active move jobs in a storage state
-
-            try:
-                state._stats[group_id] = storage.groups[group_id].get_stat()
-            except Exception:
-                logger.exception('Failed to fetch statistics for group {}'.format(group))
-                continue
-
         return state
 
     def stats(self, group):
+        if group.group_id not in self._stats:
+            # cache group stats if possible
+            if group.group_id in storage.groups and storage.groups[group.group_id].node_backends:
+                self._stats[group.group_id] = storage.groups[group.group_id].get_stat()
         return self._stats[group.group_id]
 
     def account_resources(self, job, resource_type):
@@ -452,12 +439,11 @@ class StorageState(object):
     def account_move_job_plan(self, plan):
 
         if plan.src_group:
-            stat = self.stats(plan.src_group)
 
             # moving out src_group from source host_state
-            # TODO: when group is moved out, we disable it but do not remove its data, cleanup is done
-            # manually. So this group can be considered disabled as of now, and we can just subtract
-            # host's total_space
+            # TODO: when group is moved out, we disable it but do not remove its data, cleanup is
+            # done manually. So this group can be considered disabled as of now, and we can just
+            # subtract host's total_space
             if plan.src_group in plan.host_out_state.full_groups:
                 # plan.host_out_state.full_groups.remove(plan.src_group)
                 for cg in plan.src_group.couple.groups:
@@ -466,12 +452,17 @@ class StorageState(object):
                         host_state = dc_state.hosts[nb.node.host]
                         host_state.full_groups.discard(cg)
 
-            plan.host_out_state.total_space -= stat.total_space
+            try:
+                src_total_space = self.stats(plan.src_group).total_space
+            except KeyError:
+                # group is unavailable, it's stats were not accounted for
+                src_total_space = 0
+            plan.host_out_state.total_space -= src_total_space
 
             # moving out src_group from source dc_state
             if plan.src_group.couple in plan.dc_out_state.full_groupsets:
                 plan.dc_out_state.full_groupsets.remove(plan.src_group.couple)
-            plan.dc_out_state.total_space -= stat.total_space
+            plan.dc_out_state.total_space -= src_total_space
 
             # moving in src_group to destination host_state
             if plan.src_group in plan.host_in_state.full_groups:
@@ -481,14 +472,17 @@ class StorageState(object):
             plan.dc_in_state.full_groupsets.add(plan.src_group.couple)
 
         if plan.dst_groups:
-            plan.host_in_state.uncoupled_space -= sum(
-                self.stats(ug).total_space for ug in plan.dst_groups
-            )
+            dst_total_space = 0
+            for ug in plan.dst_groups:
+                try:
+                    dst_total_space += self.stats(ug).total_space
+                except KeyError:
+                    continue
+
+            plan.host_in_state.uncoupled_space -= dst_total_space
             for ug in plan.dst_groups:
                 plan.host_in_state.uncoupled_groups.discard(ug)
-            plan.dc_in_state.uncoupled_space -= sum(
-                self.stats(ug).total_space for ug in plan.dst_groups
-            )
+            plan.dc_in_state.uncoupled_space -= dst_total_space
 
 
 class MoveJobPlan(object):
@@ -520,11 +514,12 @@ class MoveJobPlan(object):
         else:
             # in case when job.group was disabled during move execution
             src_group = None
-        if job.uncoupled_group in storage.groups:
-            dst_groups = [storage.groups[g] for g in [job.uncoupled_group] + job.merged_groups]
-        else:
-            # in case when job.uncoupled_group was disabled during move execution
-            dst_groups = []
+
+        dst_groups = [
+            storage.groups[gid]
+            for gid in [job.uncoupled_group] + job.merged_groups
+            if gid in storage.groups
+        ]
 
         src_host = storage.hosts[job.src_host]
         src_dc_state = storage_state.state[src_host.dc]
