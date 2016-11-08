@@ -163,6 +163,11 @@ class WeightManager(object):
                 else:
                     weights[ns.id] = ns_weights
 
+                # Restoring claimed resources
+                for ns_size, couples_res in ns_sizes.iteritems():
+                    for couple_res in couples_res:
+                        self.__restore(couple_res)
+
             self.weights = weights
         except Exception:
             logger.exception('Failed to calculate weights')
@@ -201,6 +206,12 @@ class WeightManager(object):
                 resource_units,
                 resource
             ))
+
+    def __restore(self, couple_res):
+        disks = [self.disks[disk_key] for disk_key in couple_res.disks_keys()]
+        nets = [self.net[net_key] for net_key in couple_res.net_keys()]
+        for resource in itertools.chain(disks, nets):
+            resource.restore()
 
     @staticmethod
     def namespaces(storage, ns_settings_by_ns):
@@ -630,6 +641,8 @@ class DiskResources(object):
         self.disk_util = min(disk_load.disk_util_read + ext_write_disk_util, self.MAX_DISK_UTIL)
         self.is_defragmentation_running = False
 
+        self._base_disk_util = self.disk_util
+
     def account_node_backend(self, nb):
         """Account node backend that resides on the disk.
 
@@ -655,6 +668,13 @@ class DiskResources(object):
             self.MAX_DISK_UTIL
         )
 
+    def restore(self):
+        # NOTE: disk util is not restored to keep utilized disk resources acquired by all
+        # namespaces
+        # self.disk_util = self._base_disk_util
+
+        pass
+
     def __repr__(self):
         return '<Disk {}: disk_util: {:.4f}>'.format(self.key, self.disk_util)
 
@@ -675,6 +695,9 @@ class NetResources(object):
         self.net_write_rate = net_load.write_rate - net_load.ell_write_rate
         self.net_read_rate = net_load.read_rate
 
+        self._base_net_write_rate = self.net_write_rate
+        self._base_net_read_rate = self.net_read_rate
+
     @staticmethod
     def key(nb):
         return nb.node.host.hostname
@@ -687,6 +710,10 @@ class NetResources(object):
         # self.net_write_rate = self.net_write_rate + resource_units.net_rate
 
         pass
+
+    def restore(self):
+        self.net_write_rate = self._base_net_write_rate
+        self.net_read_rate = self._base_net_read_rate
 
     def __repr__(self):
         return (
