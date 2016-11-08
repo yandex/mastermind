@@ -704,12 +704,7 @@ class NetResources(object):
 
     def claim(self, resource_units):
         # net_read_rate is not affected by resource claiming
-
-        # NOTE: net write rate is not claimed since this can lead to lock shared net
-        # resources by namespaces that will not actually use them
-        # self.net_write_rate = self.net_write_rate + resource_units.net_rate
-
-        pass
+        self.net_write_rate = self.net_write_rate + resource_units.net_rate
 
     def restore(self):
         self.net_write_rate = self._base_net_write_rate
