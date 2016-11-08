@@ -1,3 +1,9 @@
+mastermind (2.28.84) trusty; urgency=medium
+
+  * Claim net resources during single namespace weights calculation
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 08 Nov 2016 16:49:34 +0300
+
 mastermind (2.28.83) trusty; urgency=medium
 
   * Tweak resource accounting for running move jobs
