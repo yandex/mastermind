@@ -90,17 +90,25 @@ class JobProcessor(object):
         self.external_storage_meta = external_storage_meta
         self.couple_record_finder = couple_record_finder
 
-        self.__tq = timed_queue.TimedQueue()
+        self.__tq = None
 
         self.jobs_timer = periodic_timer(seconds=JOB_CONFIG.get('execute_period', 60))
         self.downtimes = Collection(db[config['metadata']['jobs']['db']], 'downtimes')
-        self.__tq.add_task_at(
-            self.JOBS_EXECUTE,
-            self.jobs_timer.next(),
-            self._execute_jobs)
+
+        if config.get('jobs', {}).get('enabled', True):
+            self.__tq = timed_queue.TimedQueue()
+            self.__tq.add_task_at(
+                task_id=self.JOBS_EXECUTE,
+                at=self.jobs_timer.next(),
+                function=self._execute_jobs,
+            )
+        else:
+            logger.warn("Job processor is disabled (config option ['jobs']['enabled'])")
+            pass
 
     def _start_tq(self):
-        self.__tq.start()
+        if self.__tq:
+            self.__tq.start()
 
     @staticmethod
     def _unfold_resources(d):
