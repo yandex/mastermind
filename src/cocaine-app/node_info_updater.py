@@ -97,11 +97,11 @@ class NodeInfoUpdater(object):
             self.__nodeUpdateTimestamps = self.__nodeUpdateTimestamps[1:] + (time.time(),)
 
     def update_symm_groups(self):
+        start_ts = time.time()
         try:
 
             namespaces_settings = self.namespaces_settings.fetch()
             with self.__cluster_update_lock:
-                start_ts = time.time()
                 logger.info('Cluster updating: updating group coupling info started')
                 self.update_symm_groups_async(namespaces_settings=namespaces_settings)
 
