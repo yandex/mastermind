@@ -641,7 +641,7 @@ class NodeInfoUpdater(object):
                     logger.exception(
                         'Critical error on updating metakey from group {}'.format(group_id)
                     )
-                    group.parse_meta(None)
+                    group.reset_meta()
                 finally:
                     try:
                         active_job = jobs.get(group.group_id) or jobs.get(group.couple) or None
