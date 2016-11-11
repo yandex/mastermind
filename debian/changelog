@@ -1,3 +1,9 @@
+mastermind (2.28.88) trusty; urgency=medium
+
+  * Update group type properly if metakey was removed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 11 Nov 2016 20:55:32 +0300
+
 mastermind (2.28.87) trusty; urgency=medium
 
   * Minor fix
