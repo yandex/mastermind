@@ -1560,10 +1560,6 @@ class Group(object):
 
         else:
 
-            if self._type != Group.TYPE_UNKNOWN:
-                # when meta is None keep current type if set
-                return self._type
-
             if self.couple:
                 return Group.TYPE_DATA
 
