@@ -1,8 +1,14 @@
-mastermind (2.28.88~cocainev12-1) trusty; urgency=medium
+mastermind (2.28.89~cocainev12-1) trusty; urgency=medium
 
   * Update workers to run on cocaine v12
 
  -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 21 Mar 2016 12:17:24 +0300
+
+mastermind (2.28.89) trusty; urgency=medium
+
+  * Add symlink namespace setting
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 14 Nov 2016 11:47:32 +0300
 
 mastermind (2.28.88) trusty; urgency=medium
 
