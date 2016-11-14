@@ -1084,8 +1084,7 @@ def ns_setup(namespace,
                  '',
                  '',
                  'Scope limit for symlink, available values: "namespace" - symlink can be a '
-                 'relative url to the same namespace\'s keys; "storage" - symlink can be a '
-                 'relative url to any namespace\'s keys'
+                 'relative url to the same namespace\'s keys;'
              ),
              json=('', None, 'Format output as json'),
              host=None, app=None):

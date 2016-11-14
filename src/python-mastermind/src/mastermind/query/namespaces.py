@@ -135,7 +135,6 @@ class NamespacesQuery(Query):
             (key's data contains url to another key in the scope (see symlink_scope_limit defenition)
           attributes_symlink_scope_limit: scope limit for symlink, available values:
             "namespace": symlink can be a relative url to the same namespace's keys
-            "storage": symlink can be a relative url to any namespace's keys
 
         Returns:
           Namespace object representing created namespace.
