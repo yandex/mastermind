@@ -85,16 +85,78 @@ class TtlSettings(SettingsObject):
                 )
 
 
+class SymlinkSettings(SettingsObject):
+
+    PARENT_KEY = 'symlink'
+
+    ENABLE = 'enable'
+    SCOPE_LIMIT = 'scope-limit'
+
+    VALID_SETTING_KEYS = set([
+        ENABLE,
+        SCOPE_LIMIT,
+    ])
+
+    SCOPE_LIMIT_NAMESPACE = 'namespace'
+    # NOTE: reserved for future implementation (accept any storage namespace)
+    # SCOPE_LIMIT_STORAGE = 'storage'
+    # NOTE: reserved for future implementation (accept links to external resources)
+    # SCOPE_LIMIT_EXTERNAL = 'external'
+    VALID_SCOPE_LIMIT = (
+        SCOPE_LIMIT_NAMESPACE,
+        # SCOPE_LIMIT_STORAGE,
+        # SCOPE_LIMIT_EXTERNAL,
+    )
+
+    @SettingsObject.settings_property
+    def enable(self):
+        return self._settings.get(self.ENABLE)
+
+    @enable.setter
+    def enable(self, value):
+        self._settings[self.ENABLE] = value
+
+    @SettingsObject.settings_property
+    def scope_limit(self):
+        return self._settings.get(self.SCOPE_LIMIT)
+
+    @scope_limit.setter
+    def scope_limit(self, value):
+        self._settings[self.SCOPE_LIMIT] = value
+
+    def validate(self):
+        super(SymlinkSettings, self).validate()
+
+        if self.ENABLE in self._settings:
+            if not isinstance(self._settings[self.ENABLE], bool):
+                raise ValueError(
+                    'Namespace "{}": attributes symlink enable should be boolean'.format(
+                        self.namespace
+                    )
+                )
+
+        if self._settings and self._settings.get(self.SCOPE_LIMIT) not in self.VALID_SCOPE_LIMIT:
+            raise ValueError(
+                'Namespace "{ns}": attributes symlink scope-limit expected to be one of '
+                '{values}'.format(
+                    ns=self.namespace,
+                    values=self.VALID_SCOPE_LIMIT,
+                )
+            )
+
+
 class AttributesSettings(SettingsObject):
 
     PARENT_KEY = 'attributes'
 
     FILENAME = 'filename'
     TTL = 'ttl'
+    SYMLINK = 'symlink'
 
     VALID_SETTING_KEYS = set([
         FILENAME,
         TTL,
+        SYMLINK,
     ])
 
     def _rebuild(self):
@@ -102,6 +164,11 @@ class AttributesSettings(SettingsObject):
             self._ttl = TtlSettings(self, self._settings[self.TTL])
         else:
             self._ttl = TtlSettings(self, {})
+
+        if self.SYMLINK in self._settings:
+            self._symlink = SymlinkSettings(self, self._settings[self.SYMLINK])
+        else:
+            self._symlink = SymlinkSettings(self, {})
 
     @SettingsObject.settings_property
     def filename(self):
@@ -115,6 +182,10 @@ class AttributesSettings(SettingsObject):
     def ttl(self):
         return self._ttl
 
+    @property
+    def symlink(self):
+        return self._symlink
+
     def validate(self):
         super(AttributesSettings, self).validate()
 
@@ -127,3 +198,4 @@ class AttributesSettings(SettingsObject):
                 )
 
         self._ttl.validate()
+        self._symlink.validate()

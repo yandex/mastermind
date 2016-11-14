@@ -1073,6 +1073,20 @@ def ns_setup(namespace,
                  "positive integer value with one of the following postfixes: "
                  "s - seconds; m - minutes; h - hours; d - days. Examples: 7200s, 2h"
              ),
+             attributes_symlink=(
+                 '',
+                 '',
+                 "This flag toggles the client's ability to use keys in symlink mode (key's data "
+                 "contains url to another key in the symlink scope). To allow symlink mode set "
+                 "this flag to 1, to disable set it to 0. "
+             ),
+             attributes_symlink_scope_limit=(
+                 '',
+                 '',
+                 'Scope limit for symlink, available values: "namespace" - symlink can be a '
+                 'relative url to the same namespace\'s keys; "storage" - symlink can be a '
+                 'relative url to any namespace\'s keys'
+             ),
              json=('', None, 'Format output as json'),
              host=None, app=None):
 
@@ -1138,11 +1152,16 @@ def ns_setup(namespace,
             attributes_filename=attributes_filename == '1',
             attributes_ttl_minimum=attributes_ttl_minimum,
             attributes_ttl_maximum=attributes_ttl_maximum,
+            attributes_symlink_scope_limit=attributes_symlink_scope_limit,
         )
 
         # attributes_ttl should not be passed if not set so that default value stays None
         if attributes_ttl:
             params['attributes_ttl'] = attributes_ttl == '1'
+
+        # symlink should not be passed if not set so that default value stays None
+        if attributes_symlink:
+            params['attributes_symlink'] = attributes_symlink == '1'
 
         ns = cl.namespaces.setup(
             namespace,
@@ -1243,6 +1262,15 @@ def ns_setup(namespace,
 
         if ttl_attributes:
             attributes['ttl'] = ttl_attributes
+
+        symlink_attributes = {}
+        if attributes_symlink:
+            symlink_attributes['enable'] = attributes_symlink == '1'
+        if attributes_symlink_scope_limit:
+            symlink_attributes['scope-limit'] = attributes_symlink_scope_limit
+
+        if symlink_attributes:
+            attributes['symlink'] = symlink_attributes
 
         if attributes:
             settings['attributes'] = attributes

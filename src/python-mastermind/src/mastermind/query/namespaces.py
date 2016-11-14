@@ -72,7 +72,9 @@ class NamespacesQuery(Query):
               attributes_filename=None,
               attributes_ttl=None,
               attributes_ttl_minimum=None,
-              attributes_ttl_maximum=None):
+              attributes_ttl_maximum=None,
+              attributes_symlink=None,
+              attributes_symlink_scope_limit=None,):
         """Performs initial namespace setup.
 
         Args:
@@ -129,6 +131,11 @@ class NamespacesQuery(Query):
                 h - hours;
                 d - days.
             Examples: 7200s, 2h.
+          attributes_symlink: this flag toggles the client's ability to use keys in symlink mode
+            (key's data contains url to another key in the scope (see symlink_scope_limit defenition)
+          attributes_symlink_scope_limit: scope limit for symlink, available values:
+            "namespace": symlink can be a relative url to the same namespace's keys
+            "storage": symlink can be a relative url to any namespace's keys
 
         Returns:
           Namespace object representing created namespace.
@@ -207,6 +214,15 @@ class NamespacesQuery(Query):
 
         if ttl_attributes:
             attributes['ttl'] = ttl_attributes
+
+        symlink_attributes = {}
+        if attributes_symlink is not None:
+            symlink_attributes['enable'] = attributes_symlink is True
+        if attributes_symlink_scope_limit:
+            symlink_attributes['scope-limit'] = attributes_symlink_scope_limit
+
+        if symlink_attributes:
+            attributes['symlink'] = symlink_attributes
 
         if attributes:
             settings['attributes'] = attributes
