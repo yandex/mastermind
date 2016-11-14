@@ -1,3 +1,9 @@
+mastermind (2.28.89) trusty; urgency=medium
+
+  * Add symlink namespace setting
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 14 Nov 2016 11:47:32 +0300
+
 mastermind (2.28.88) trusty; urgency=medium
 
   * Update group type properly if metakey was removed
