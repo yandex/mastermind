@@ -753,7 +753,8 @@ class Infrastructure(object):
                 remotes.append(self.REMOTE_TPL.format(
                     host=nb.node.host.addr,
                     port=nb.node.port,
-                    family=nb.node.family,))
+                    family=nb.node.family,
+                ))
 
         if not tmp_dir:
             tmp_dir = RECOVERY_DC_CNF.get(
@@ -784,17 +785,21 @@ class Infrastructure(object):
 
         try:
             host, port, family, backend_id = request[:4]
-            port, family, backend_id = map(int, (port, family, backend_id))
-            node_backend_str = '{0}:{1}/{2}'.format(host, port, backend_id)
-            node_backend = storage.node_backends[node_backend_str]
-        except (ValueError, TypeError, KeyError):
-            raise ValueError('Node backend {0} is not found'.format(node_backend_str))
+        except ValueError:
+            raise ValueError(
+                'Request should contain parameters in the following order: '
+                'host, port, family, backend_id'
+            )
+
+        node_backend_str = '{0}:{1}/{2}'.format(host, port, backend_id)
+        node_backend = storage.node_backends[node_backend_str]
 
         cmd = self._defrag_node_backend_cmd(
             node_backend.node.host.addr,
             node_backend.node.port,
             node_backend.node.family,
-            node_backend.backend_id)
+            node_backend.backend_id,
+        )
 
         logger.info('Command for node backend {0} defragmentation was requested: {1}'.format(
             node_backend, cmd
@@ -804,7 +809,8 @@ class Infrastructure(object):
 
     def _defrag_node_backend_cmd(self, host, port, family, backend_id):
         cmd = self.DNET_DEFRAG_CMD.format(
-            host=host, port=port, family=family, backend_id=backend_id)
+            host=host, port=port, family=family, backend_id=backend_id
+        )
         return cmd
 
     def _lrc_convert_cmd(self,

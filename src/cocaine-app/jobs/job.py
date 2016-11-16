@@ -287,7 +287,6 @@ class Job(MongoObject):
                     )
                 )
 
-
     def mark_groups(self, session):
         for group_id, updated_meta in self._group_marks():
             s = session.clone()
@@ -344,6 +343,16 @@ class Job(MongoObject):
         '''Returns uncoupled groups' ids that are involved in the job
         '''
         return []
+
+    @property
+    def _involved_groups(self):
+        raise NotImplementedError('_involved_groups property for {} should be '
+            'implemented'.format(type(self).__name__))
+
+    @property
+    def _involved_couples(self):
+        raise NotImplementedError('_involved_couples property for {} should be '
+            'implemented'.format(type(self).__name__))
 
     def check_node_backends(self, group, node_backends_count=1):
         if len(group.node_backends) != node_backends_count:
