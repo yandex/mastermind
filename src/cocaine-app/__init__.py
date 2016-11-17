@@ -228,8 +228,8 @@ def init_planner(job_processor, niu, namespaces_settings, move_planner, external
     return planner
 
 
-def init_move_planner(job_processor, niu, namespaces_settings):
-    planner = MovePlanner(meta_db, niu, job_processor, namespaces_settings)
+def init_move_planner(job_processor, niu):
+    planner = MovePlanner(meta_db, niu, job_processor)
     return planner
 
 
@@ -341,7 +341,7 @@ init_statistics()
 m = init_minions()
 j = init_job_processor(jf, m, niu, external_storage_meta, crf)
 if j:
-    move_planner = init_move_planner(j, niu, namespaces_settings)
+    move_planner = init_move_planner(j, niu)
     external_storage_converting_planner = init_external_storage_converting_planner(j, namespaces_settings)
     po = init_planner(j, niu, namespaces_settings, move_planner, external_storage_converting_planner)
     j.planner = po
