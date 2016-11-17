@@ -46,13 +46,13 @@ def percent(val):
     return '{:.2f}%'.format(val * 100.0)
 
 
-BYTES_UNITS = ['b', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB']
+BYTES_UNITS = ('B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB')
 
 
 def convert_bytes(b):
     res = float(b)
-    for unit in BYTES_UNITS:
-        if res < 1024:
+    for unit in BYTES_UNITS[:-1]:
+        if abs(res) < 1024:
             return '{:.2f} {}'.format(res, unit)
         res = res / 1024
     return '{:.2f} {}'.format(res, BYTES_UNITS[-1])
