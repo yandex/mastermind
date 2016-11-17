@@ -306,7 +306,7 @@ try:
     j = init_job_processor(jf, m, niu, external_storage_meta, crf)
     logger.info('Job processor module initialized')
     if j:
-        move_planner = init_move_planner(j, niu, namespaces_settings)
+        move_planner = init_move_planner(j, niu)
         external_storage_converting_planner = init_external_storage_converting_planner(j, namespaces_settings)
         po = init_planner(j, niu, namespaces_settings, move_planner, external_storage_converting_planner)
         j.planner = po
