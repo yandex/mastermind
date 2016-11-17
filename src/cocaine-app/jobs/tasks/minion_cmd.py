@@ -25,6 +25,8 @@ class MinionCmdTask(Task):
     @classmethod
     def new(cls, job, **kwargs):
         task = super(MinionCmdTask, cls).new(job, **kwargs)
+        if task.params is None:
+            task.params = {}
         task.params['task_id'] = task.id
         return task
 

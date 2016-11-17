@@ -33,6 +33,7 @@ import minions_monitor
 import node_info_updater
 from planner import Planner
 from planner.move_planner import MovePlanner
+from planner.external_storage_converting_planner import ExternalStorageConvertingPlanner
 from manual_locks import manual_locker
 from namespaces import NamespacesSettings
 from mastermind_core.config import config
@@ -167,22 +168,36 @@ def init_minions():
     return m
 
 
-def init_planner(job_processor, niu, namespaces_settings, move_planner):
+def init_planner(job_processor, niu, namespaces_settings, move_planner, external_storage_converting_planner):
     planner = Planner(meta_db, niu, job_processor, namespaces_settings)
     helpers.register_handle(W, planner.restore_group)
     helpers.register_handle(W, planner.move_group)
     helpers.register_handle(W, planner.move_groups_from_host)
-    helpers.register_handle(W, planner.convert_external_storage_to_groupset)
     helpers.register_handle(W, planner.restore_groups_from_path)
     helpers.register_handle(W, planner.ttl_cleanup)
 
-    planner.add_planner(move_planner)
+    if move_planner:
+        planner.add_planner(move_planner)
+    if external_storage_converting_planner:
+        planner.add_planner(external_storage_converting_planner)
 
     return planner
 
 
-def init_move_planner(job_processor, niu, namespaces_settings):
-    planner = MovePlanner(meta_db, niu, job_processor, namespaces_settings)
+def init_move_planner(job_processor, niu):
+    planner = MovePlanner(meta_db, niu, job_processor)
+    return planner
+
+
+def init_external_storage_converting_planner(job_processor, namespaces_settings):
+    if not config['metadata'].get('external_storage', {}).get('db'):
+        logger.warn(
+            'External storage db is not set up ("metadata.external_storage.db" key), external '
+            'storage convert planner will not be initialized'
+        )
+        return None
+    planner = ExternalStorageConvertingPlanner(meta_db, job_processor, namespaces_settings)
+    helpers.register_handle(W, planner.convert_external_storage_to_groupset)
     return planner
 
 
@@ -292,7 +307,8 @@ try:
     logger.info('Job processor module initialized')
     if j:
         move_planner = init_move_planner(j, niu, namespaces_settings)
-        po = init_planner(j, niu, namespaces_settings, move_planner)
+        external_storage_converting_planner = init_external_storage_converting_planner(j, namespaces_settings)
+        po = init_planner(j, niu, namespaces_settings, move_planner, external_storage_converting_planner)
         j.planner = po
     else:
         po = None

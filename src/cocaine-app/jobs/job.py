@@ -48,10 +48,19 @@ class Job(MongoObject):
         STATUS_BROKEN,
     )
 
+    # NOTE: this list should be synchronized with RESOURCE_TYPES
     RESOURCE_FS = 'fs'
     RESOURCE_HOST_IN = 'host_in'
     RESOURCE_HOST_OUT = 'host_out'
     RESOURCE_CPU = 'cpu'
+
+    # NOTE: this list should be synchronized with the set of RESOURCE_* constants
+    RESOURCE_TYPES = (
+        RESOURCE_FS,
+        RESOURCE_HOST_IN,
+        RESOURCE_HOST_OUT,
+        RESOURCE_CPU,
+    )
 
     COMMON_PARAMS = ('need_approving',)
 
