@@ -40,6 +40,7 @@ import minions_monitor
 import node_info_updater
 from planner import Planner
 from planner.move_planner import MovePlanner
+from planner.external_storage_converting_planner import ExternalStorageConvertingPlanner
 from manual_locks import manual_locker
 from namespaces import NamespacesSettings
 from mastermind_core.config import config
@@ -211,22 +212,36 @@ def init_minions():
     return m
 
 
-def init_planner(job_processor, niu, namespaces_settings, move_planner):
+def init_planner(job_processor, niu, namespaces_settings, move_planner, external_storage_converting_planner):
     planner = Planner(meta_db, niu, job_processor, namespaces_settings)
     register_handle(planner.restore_group)
     register_handle(planner.move_group)
     register_handle(planner.move_groups_from_host)
-    register_handle(planner.convert_external_storage_to_groupset)
     register_handle(planner.restore_groups_from_path)
     register_handle(planner.ttl_cleanup)
 
-    planner.add_planner(move_planner)
+    if move_planner:
+        planner.add_planner(move_planner)
+    if external_storage_converting_planner:
+        planner.add_planner(external_storage_converting_planner)
 
     return planner
 
 
 def init_move_planner(job_processor, niu, namespaces_settings):
     planner = MovePlanner(meta_db, niu, job_processor, namespaces_settings)
+    return planner
+
+
+def init_external_storage_converting_planner(job_processor, namespaces_settings):
+    if not config['metadata'].get('external_storage', {}).get('db'):
+        logger.warn(
+            'External storage db is not set up ("metadata.external_storage.db" key), external '
+            'storage convert planner will not be initialized'
+        )
+        return None
+    planner = ExternalStorageConvertingPlanner(meta_db, job_processor, namespaces_settings)
+    register_handle(planner.convert_external_storage_to_groupset)
     return planner
 
 
@@ -327,7 +342,8 @@ m = init_minions()
 j = init_job_processor(jf, m, niu, external_storage_meta, crf)
 if j:
     move_planner = init_move_planner(j, niu, namespaces_settings)
-    po = init_planner(j, niu, namespaces_settings, move_planner)
+    external_storage_converting_planner = init_external_storage_converting_planner(j, namespaces_settings)
+    po = init_planner(j, niu, namespaces_settings, move_planner, external_storage_converting_planner)
     j.planner = po
 else:
     po = None
