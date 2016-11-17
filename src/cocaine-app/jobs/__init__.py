@@ -22,6 +22,7 @@ from job_factory import JobFactory
 from restore_group import RestoreGroupJob
 from backend_cleanup import BackendCleanupJob
 from backend_manager import BackendManagerJob
+from convert_to_lrc_groupset import ConvertToLrcGroupsetJob
 from tasks import Task, MinionCmdTask
 import timed_queue
 import storage
