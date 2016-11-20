@@ -270,7 +270,7 @@ class ExternalStorageConvertingPlanner(object):
                 namespace=item.namespace,
                 src_storage=item.src_storage,
                 src_storage_options=item.src_storage_options,
-                determine_data_size=True,
+                determine_data_size=item.determine_data_size,
                 converting_host=host_state.host.addr,
                 need_approving=not CONVERTING_PLANNER_PARAMS.get('autoapprove', False)
             )

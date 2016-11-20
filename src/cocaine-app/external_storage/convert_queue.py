@@ -18,6 +18,7 @@ class ExternalStorageConvertQueueItem(MongoObject):
     NAMESPACE = 'namespace'
     GROUPSET = 'groupset'
     JOB_ID = 'job_id'
+    DETERMINE_DATA_SIZE = 'determine_data_size'
 
     PRIMARY_ID_KEY = ID
 
@@ -33,6 +34,7 @@ class ExternalStorageConvertQueueItem(MongoObject):
         self.namespace = init_params[self.NAMESPACE]
         self.groupset = init_params[self.GROUPSET]
         self.job_id = init_params[self.JOB_ID]
+        self.determine_data_size = init_params[self.DETERMINE_DATA_SIZE]
 
     @classmethod
     def new(cls, **kwargs):
@@ -52,6 +54,7 @@ class ExternalStorageConvertQueueItem(MongoObject):
             self.NAMESPACE: self.namespace,
             self.GROUPSET: self.groupset,
             self.JOB_ID: self.job_id,
+            self.DETERMINE_DATA_SIZE: self.determine_data_size,
         }
 
 

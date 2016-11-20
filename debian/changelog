@@ -1,14 +1,14 @@
-mastermind (2.28.90~cocainev12-2) trusty; urgency=medium
+mastermind (2.28.91~cocainev12-1) trusty; urgency=medium
 
   * Update workers to run on cocaine v12
 
  -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 17 Nov 2016 19:59:02 +0300
 
-mastermind (2.28.90~cocainev12-1) trusty; urgency=medium
+mastermind (2.28.91) trusty; urgency=medium
 
-  * Update workers to run on cocaine v12
+  * Add support of determine_data_size convert queue parameter
 
- -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 21 Mar 2016 12:17:24 +0300
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sun, 20 Nov 2016 17:25:56 +0300
 
 mastermind (2.28.90) trusty; urgency=medium
 
