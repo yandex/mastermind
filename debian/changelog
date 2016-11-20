@@ -1,3 +1,9 @@
+mastermind (2.28.91) trusty; urgency=medium
+
+  * Add support of determine_data_size convert queue parameter
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sun, 20 Nov 2016 17:25:56 +0300
+
 mastermind (2.28.90) trusty; urgency=medium
 
   * Implement external storage converting planner
