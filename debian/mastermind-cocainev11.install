@@ -1,5 +1,5 @@
 usr/bin/mastermind_deploy.sh usr/bin
 usr/bin/mastermind_app_name.sh usr/bin
-src/cocaine-app/*.manifest usr/lib/mastermind/cocaine-app/
-src/cocaine-app/*.profile usr/lib/mastermind/cocaine-app/
-mastermind.tar.gz usr/lib/mastermind/cocaine-app/
+src/cocaine-app/*.manifest usr/lib/mastermind-cocainev11/cocaine-app/
+src/cocaine-app/*.profile usr/lib/mastermind-cocainev11/cocaine-app/
+mastermind.tar.gz usr/lib/mastermind-cocainev11/cocaine-app/
