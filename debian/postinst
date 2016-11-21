@@ -8,7 +8,7 @@ set -e
 case "$1" in
     configure)
 
-    DEPLOY_DIR="/usr/lib/mastermind"
+    DEPLOY_DIR="/usr/lib/mastermind-cocainev11"
 
     mkdir -p /var/log/mastermind
     chown cocaine -R $DEPLOY_DIR
