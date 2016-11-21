@@ -17,7 +17,7 @@ Homepage: https://github.com/toshic/mastermind
 Vcs-Git: git://github.com/toshic/mastermind.git
 X-Python-Version: >= 2.7
 
-Package: mastermind
+Package: mastermind-cocainev11
 Architecture: amd64
 Depends:
  ${shlibs:Depends},
@@ -29,11 +29,11 @@ Depends:
  python-bson (<< 3),
  cocaine-runtime (<< 0.12),
  python-requests,
- python-mastermind (= ${binary:Version}),
+ python-mastermind-cocainev11 (= ${binary:Version}),
 Recommends: python-kazoo
 Description: Metabalancer for elliptics storage
 
-Package: mastermind-utils
+Package: mastermind-utils-cocainev11
 Architecture: amd64
 Depends:
  ${shlibs:Depends},
@@ -42,10 +42,10 @@ Depends:
  cocaine-framework-python (<< 0.12),
  python-msgpack | msgpack-python,
  python-tornado (>= 4.0),
- python-mastermind (= ${binary:Version}),
+ python-mastermind-cocainev11 (= ${binary:Version}),
 Description: Metabalancer CLI for elliptics storage
 
-Package: python-mastermind
+Package: python-mastermind-cocainev11
 Architecture: amd64
 Section: python
 Depends:
