@@ -1,3 +1,9 @@
+mastermind (2.28.95) trusty; urgency=medium
+
+  * Fix package building after package renaming
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 21 Nov 2016 16:33:29 +0300
+
 mastermind (2.28.94) trusty; urgency=medium
 
   * Fix package building after package renaming
