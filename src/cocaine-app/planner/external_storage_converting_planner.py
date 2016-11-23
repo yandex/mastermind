@@ -3,8 +3,9 @@ import logging
 import time
 
 from errors import CacheUpstreamError
-from external_storage import ExternalStorageConvertQueue
+from external_storage import ExternalStorageConvertQueue, ExternalStorageConvertQueueItem
 import helpers
+import inventory
 import jobs
 from mastermind_core.config import config
 import storage
@@ -197,6 +198,33 @@ class ExternalStorageConvertingPlanner(object):
 
         return True
 
+    def _convert_queue_items(self, slots):
+        # in case of low values of 'slots'
+        min_chunk_size = 10
+
+        skip = 0
+        chunk_size = min(int(slots * 1.5), min_chunk_size)
+
+        dcs = LIMITS.get('dcs')
+
+        while True:
+            items = self.queue.items(
+                dcs=dcs,
+                status=ExternalStorageConvertQueue.STATUS_QUEUED,
+                limit=chunk_size,
+                skip=skip,
+                sort_by_priority=True,
+            )
+            received_result = False
+            for item in items:
+                yield item
+                received_result |= True
+
+            if not received_result:
+                break
+
+            skip += chunk_size
+
     def _do_converting_candidates(self, job_type, job_slots):
         active_jobs = self.job_processor.job_finder.jobs(
             statuses=jobs.Job.ACTIVE_STATUSES,
@@ -244,17 +272,26 @@ class ExternalStorageConvertingPlanner(object):
         if not slots:
             return
 
-        dcs = LIMITS.get('dcs')
-        items = self.queue.items(
-            dcs=dcs,
-            status=ExternalStorageConvertQueue.STATUS_QUEUED,
-            limit=slots,
-        )
-
         host_states = iter(hosts_queue)
+        queue_items = self._convert_queue_items(slots)
 
-        for item in items:
+        created_jobs_count = 0
+
+        # TODO: make top threshold for a number of jobs created at a time
+
+        while created_jobs_count < slots:
             host_state = next(host_states)
+            try:
+                item = next(queue_items)
+            except StopIteration:
+                logger.info('Convert queue is exhausted')
+                break
+
+            if not inventory.is_external_storage_ready(item.id):
+                logger.info(
+                    'External storage with id {} is not ready to be converted'.format(item.id)
+                )
+                continue
 
             logger.info(
                 'Trying to create convert external storage job: src id "{}", host to run on: '
@@ -282,12 +319,46 @@ class ExternalStorageConvertingPlanner(object):
                 )
             )
 
+            created_jobs_count += 1
+
             host_state.add_job(job)
 
             item.status = ExternalStorageConvertQueue.STATUS_CONVERTING
             item.job_id = job.id
             item._dirty = True
             item.save()
+
+    @helpers.concurrent_handler
+    def get_convert_queue_item(self, request):
+        if not request.get('id'):
+            raise ValueError('Request should contain "id" field')
+
+        try:
+            items = self.queue.items(ids=[request['id']])
+            item = next(items)
+        except StopIteration:
+            raise ValueError('External storage with id {} is not found'.format(request['id']))
+
+        return item.dump()
+
+    @helpers.concurrent_handler
+    def update_convert_queue_item(self, request):
+        if not request.get('id'):
+            raise ValueError('Request should contain "id" field')
+
+        try:
+            items = self.queue.items(ids=[request['id']])
+            item = next(items)
+        except StopIteration:
+            raise ValueError('External storage with id {} is not found'.format(request['id']))
+
+        if request.get(ExternalStorageConvertQueueItem.PRIORITY):
+            item.priority = request[ExternalStorageConvertQueueItem.PRIORITY]
+            item._dirty = True
+
+        item.save()
+
+        return item.dump()
 
     @helpers.concurrent_handler
     def convert_external_storage_to_groupset(self, request):
