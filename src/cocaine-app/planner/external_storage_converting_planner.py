@@ -3,7 +3,7 @@ import logging
 import time
 
 from errors import CacheUpstreamError
-from external_storage import ExternalStorageConvertQueue
+from external_storage import ExternalStorageConvertQueue, ExternalStorageConvertQueueItem
 import helpers
 import jobs
 from mastermind_core.config import config
@@ -288,6 +288,38 @@ class ExternalStorageConvertingPlanner(object):
             item.job_id = job.id
             item._dirty = True
             item.save()
+
+    @helpers.concurrent_handler
+    def get_convert_queue_item(self, request):
+        if not request.get('id'):
+            raise ValueError('Request should contain "id" field')
+
+        try:
+            items = self.queue.items(ids=[request['id']])
+            item = next(items)
+        except StopIteration:
+            raise ValueError('External storage with id {} is not found'.format(request['id']))
+
+        return item.dump()
+
+    @helpers.concurrent_handler
+    def update_convert_queue_item(self, request):
+        if not request.get('id'):
+            raise ValueError('Request should contain "id" field')
+
+        try:
+            items = self.queue.items(ids=[request['id']])
+            item = next(items)
+        except StopIteration:
+            raise ValueError('External storage with id {} is not found'.format(request['id']))
+
+        if request.get(ExternalStorageConvertQueueItem.PRIORITY):
+            item.priority = request[ExternalStorageConvertQueueItem.PRIORITY]
+            item._dirty = True
+
+        item.save()
+
+        return item.dump()
 
     @helpers.concurrent_handler
     def convert_external_storage_to_groupset(self, request):

@@ -19,6 +19,7 @@ class ExternalStorageConvertQueueItem(MongoObject):
     GROUPSET = 'groupset'
     JOB_ID = 'job_id'
     DETERMINE_DATA_SIZE = 'determine_data_size'
+    PRIORITY = 'priority'
 
     PRIMARY_ID_KEY = ID
 
@@ -35,6 +36,7 @@ class ExternalStorageConvertQueueItem(MongoObject):
         self.groupset = init_params[self.GROUPSET]
         self.job_id = init_params[self.JOB_ID]
         self.determine_data_size = init_params[self.DETERMINE_DATA_SIZE]
+        self.priority = init_params[self.PRIORITY]
 
     @classmethod
     def new(cls, **kwargs):
@@ -55,6 +57,7 @@ class ExternalStorageConvertQueueItem(MongoObject):
             self.GROUPSET: self.groupset,
             self.JOB_ID: self.job_id,
             self.DETERMINE_DATA_SIZE: self.determine_data_size,
+            self.PRIORITY: self.priority,
         }
 
 
@@ -82,8 +85,10 @@ class ExternalStorageConvertQueue(object):
         return wrapper
 
     @_check_coll
-    def items(self, src_storage=None, status=None, dcs=None, limit=None):
+    def items(self, ids=None, src_storage=None, status=None, dcs=None, limit=None):
         params = {}
+        if ids is not None:
+            params['id'] = {'$in': ids}
         if src_storage is not None:
             params['src_storage'] = src_storage
         if status is not None:
