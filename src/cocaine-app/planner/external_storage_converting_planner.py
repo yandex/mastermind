@@ -197,6 +197,33 @@ class ExternalStorageConvertingPlanner(object):
 
         return True
 
+    def _convert_queue_items(self, slots):
+        # in case of low values of 'slots'
+        min_chunk_size = 10
+
+        skip = 0
+        chunk_size = min(int(slots * 1.5), min_chunk_size)
+
+        dcs = LIMITS.get('dcs')
+
+        while True:
+            items = self.queue.items(
+                dcs=dcs,
+                status=ExternalStorageConvertQueue.STATUS_QUEUED,
+                limit=chunk_size,
+                skip=skip,
+                sort_by_priority=True,
+            )
+            received_result = False
+            for item in items:
+                yield item
+                received_result |= True
+
+            if not received_result:
+                break
+
+            skip += chunk_size
+
     def _do_converting_candidates(self, job_type, job_slots):
         active_jobs = self.job_processor.job_finder.jobs(
             statuses=jobs.Job.ACTIVE_STATUSES,
@@ -244,18 +271,20 @@ class ExternalStorageConvertingPlanner(object):
         if not slots:
             return
 
-        dcs = LIMITS.get('dcs')
-        items = self.queue.items(
-            dcs=dcs,
-            status=ExternalStorageConvertQueue.STATUS_QUEUED,
-            limit=slots,
-            sort_by_priority=True,
-        )
-
         host_states = iter(hosts_queue)
+        queue_items = self._convert_queue_items(slots)
 
-        for item in items:
+        created_jobs_count = 0
+
+        # TODO: make top threshold for a number of jobs created at a time
+
+        while created_jobs_count < slots:
             host_state = next(host_states)
+            try:
+                item = next(queue_items)
+            except StopIteration:
+                logger.info('Convert queue is exhausted')
+                break
 
             logger.info(
                 'Trying to create convert external storage job: src id "{}", host to run on: '
@@ -282,6 +311,8 @@ class ExternalStorageConvertingPlanner(object):
                     job.id
                 )
             )
+
+            created_jobs_count += 1
 
             host_state.add_job(job)
 
