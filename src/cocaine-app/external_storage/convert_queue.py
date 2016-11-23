@@ -1,5 +1,7 @@
 import functools
 
+import pymongo
+
 # import helpers
 from mastermind_core.config import config
 from mastermind_core.db.mongo import MongoObject
@@ -85,7 +87,14 @@ class ExternalStorageConvertQueue(object):
         return wrapper
 
     @_check_coll
-    def items(self, ids=None, src_storage=None, status=None, dcs=None, limit=None):
+    def items(self,
+              ids=None,
+              src_storage=None,
+              status=None,
+              dcs=None,
+              limit=None,
+              sort_by_priority=None):
+
         params = {}
         if ids is not None:
             params['id'] = {'$in': ids}
@@ -96,6 +105,8 @@ class ExternalStorageConvertQueue(object):
         if dcs:
             params['dcs'] = {'$in': dcs}
         request = self.convert_queue.find(params)
+        if sort_by_priority:
+            request.sort(ExternalStorageConvertQueueItem.PRIORITY, pymongo.DESCENDING)
         if limit:
             # pymongo uses 0 value to mean 'unlimited', so we cannot use None
             request = request.limit(limit)

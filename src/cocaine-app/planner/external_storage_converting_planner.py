@@ -249,6 +249,7 @@ class ExternalStorageConvertingPlanner(object):
             dcs=dcs,
             status=ExternalStorageConvertQueue.STATUS_QUEUED,
             limit=slots,
+            sort_by_priority=True,
         )
 
         host_states = iter(hosts_queue)
