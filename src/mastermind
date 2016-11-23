@@ -2014,6 +2014,76 @@ def ttl_cleanup(iter_group,
     print res
     return
 
+
+# external storage commands
+externalStorageDispatcher = Dispatcher(globaloptions=(host_param, app_param))
+
+externalStorageConvertQueueDispatcher = Dispatcher(globaloptions=(host_param, app_param))
+externalStorageDispatcher.nest(
+    'convert-queue',
+    externalStorageConvertQueueDispatcher,
+    'Commands for managing external storage convert queue'
+)
+
+
+@externalStorageConvertQueueDispatcher.command(name='view')
+@log_action
+def convert_queue_view(external_storage_id,
+                       host=None, app=None):
+    """
+    Get convert queue item for external storage
+    """
+    s = service(host, app)
+
+    res = s.enqueue('get_convert_queue_item', msgpack.packb({'id': external_storage_id})).get()
+    print res
+
+    if 'Balancer error' in res or 'Error' in res:
+        print res
+        return 1
+
+    return
+
+
+@externalStorageConvertQueueDispatcher.command(name='set-priority')
+@log_action
+def convert_queue_set_priority(external_storage_id,
+                               priority=('p', '', 'New priority value'),
+                               host=None, app=None):
+    """
+    Set priority to convert queue item for external storage
+    """
+    s = service(host, app)
+
+    if not priority:
+        print warn('"--priority" parameter is required')
+        return 1
+
+    try:
+        priority = int(priority)
+    except ValueError:
+        print warn('--priority must be a positive integer')
+        return 1
+
+    res = s.enqueue('get_convert_queue_item', msgpack.packb({'id': external_storage_id})).get()
+
+    if 'Balancer error' in res or 'Error' in res:
+        print res
+        return 1
+
+    convert_queue_item = res
+    convert_queue_item['priority'] = priority
+
+    res = s.enqueue('update_convert_queue_item', msgpack.packb(convert_queue_item)).get()
+
+    if 'Balancer error' in res or 'Error' in res:
+        print res
+        return 1
+
+    print res
+    return
+
+
 d = Dispatcher(globaloptions=(app_param,))
 d.nest('group', groupDispatcher, 'Perform group action')
 d.nest('couple', coupleDispatcher, 'Perform couple action')
@@ -2023,6 +2093,7 @@ d.nest('job', jobDispatcher, 'Perform jobs action')
 d.nest('lock', lockDispatcher, 'Acquire locks on storage infrastructure nodes')
 d.nest('unlock', unlockDispatcher, 'Release locks on storage infrastructure nodes')
 d.nest('lrc', lrcDispatcher, 'Perform actions with LRC groups or couples')
+d.nest('external-storage', externalStorageDispatcher, 'External storage management')
 
 
 def command_helper(argv):

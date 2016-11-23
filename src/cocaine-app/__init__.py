@@ -198,6 +198,8 @@ def init_external_storage_converting_planner(job_processor, namespaces_settings)
         return None
     planner = ExternalStorageConvertingPlanner(meta_db, job_processor, namespaces_settings)
     helpers.register_handle(W, planner.convert_external_storage_to_groupset)
+    helpers.register_handle(W, planner.get_convert_queue_item)
+    helpers.register_handle(W, planner.update_convert_queue_item)
     return planner
 
 
