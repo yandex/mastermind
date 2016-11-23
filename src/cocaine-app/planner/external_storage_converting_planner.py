@@ -5,6 +5,7 @@ import time
 from errors import CacheUpstreamError
 from external_storage import ExternalStorageConvertQueue, ExternalStorageConvertQueueItem
 import helpers
+import inventory
 import jobs
 from mastermind_core.config import config
 import storage
@@ -285,6 +286,12 @@ class ExternalStorageConvertingPlanner(object):
             except StopIteration:
                 logger.info('Convert queue is exhausted')
                 break
+
+            if not inventory.is_external_storage_ready(item.id):
+                logger.info(
+                    'External storage with id {} is not ready to be converted'.format(item.id)
+                )
+                continue
 
             logger.info(
                 'Trying to create convert external storage job: src id "{}", host to run on: '

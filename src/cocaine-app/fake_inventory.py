@@ -253,3 +253,13 @@ def make_external_storage_data_size_command(groupset_type,
 
     '''
     raise NotImplemented
+
+
+def is_external_storage_ready(src_storage_id):
+    '''
+    Check if external storage is ready to be converted.
+
+    Parameters:
+        @src_storage_id: source storage id to check
+    '''
+    return True
