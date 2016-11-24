@@ -2035,7 +2035,8 @@ def convert_queue_view(external_storage_id,
     """
     s = service(host, app)
 
-    res = s.enqueue('get_convert_queue_item', msgpack.packb({'id': external_storage_id})).get()
+    res = s.run_sync('get_convert_queue_item', msgpack.packb({'id': external_storage_id}))
+
     print res
 
     if 'Balancer error' in res or 'Error' in res:
@@ -2065,7 +2066,7 @@ def convert_queue_set_priority(external_storage_id,
         print warn('--priority must be a positive integer')
         return 1
 
-    res = s.enqueue('get_convert_queue_item', msgpack.packb({'id': external_storage_id})).get()
+    res = s.run_syn('get_convert_queue_item', msgpack.packb({'id': external_storage_id}))
 
     if 'Balancer error' in res or 'Error' in res:
         print res
@@ -2074,7 +2075,7 @@ def convert_queue_set_priority(external_storage_id,
     convert_queue_item = res
     convert_queue_item['priority'] = priority
 
-    res = s.enqueue('update_convert_queue_item', msgpack.packb(convert_queue_item)).get()
+    res = s.run_sync('update_convert_queue_item', msgpack.packb(convert_queue_item))
 
     if 'Balancer error' in res or 'Error' in res:
         print res
