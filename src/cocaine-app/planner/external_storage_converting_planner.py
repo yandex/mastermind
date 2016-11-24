@@ -287,9 +287,12 @@ class ExternalStorageConvertingPlanner(object):
                 logger.info('Convert queue is exhausted')
                 break
 
-            if not inventory.is_external_storage_ready(item.id):
+            if not inventory.is_external_storage_ready(item.src_storage, item.id):
                 logger.info(
-                    'External storage with id {} is not ready to be converted'.format(item.id)
+                    'External storage {} with id {} is not ready to be converted'.format(
+                        item.src_storage,
+                        item.id
+                    )
                 )
                 continue
 
