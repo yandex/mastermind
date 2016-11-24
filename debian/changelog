@@ -1,3 +1,10 @@
+mastermind-cocainev11 (2.28.99) trusty; urgency=medium
+
+  * Fix lrc converting for external storage with empty data
+  * Restore-path: create backend lock file
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 24 Nov 2016 18:29:27 +0300
+
 mastermind-cocainev11 (2.28.98) trusty; urgency=medium
 
   * Fix inventory function usage
