@@ -13,7 +13,7 @@ logger = logging.getLogger('mm.jobs')
 
 class BackendManagerJob(Job):
 
-    PARAMS = ('group', 'cmd_type', 'resources')
+    PARAMS = ('group', 'cmd_type', 'resources', 'mark_backend', 'unmark_backend')
 
     CMD_TYPE_DISABLE = 'disable'
     CMD_TYPE_MAKE_WRITABLE = 'make_writable'
@@ -60,22 +60,33 @@ class BackendManagerJob(Job):
         else:
             raise JobBrokenError('Unknown cmd type: {}'.format(self.cmd_type))
 
+        mark_backend_path = self.make_path(
+            self.BACKEND_DOWN_MARKER, base_path=node_backend.base_path).format(
+                backend_id=node_backend.backend_id)
+
+        task_params = {
+            'node_backend': self.node_backend(
+                host=node_backend.node.host.addr,
+                port=node_backend.node.port,
+                family=node_backend.node.family,
+                backend_id=node_backend.backend_id,
+            ),
+            'group': str(group.group_id),
+            'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS],
+        }
+
+        if self.mark_backend:
+            task_params['mark_backend'] = mark_backend_path
+        elif self.unmark_backend:
+            task_params['unmark_backend'] = mark_backend_path
+
         task = NodeStopTask.new(
             self,
             group=group.group_id,
             uncoupled=True,
             host=node_backend.node.host.addr,
             cmd=cmd,
-            params={
-                'node_backend': self.node_backend(
-                    host=node_backend.node.host.addr,
-                    port=node_backend.node.port,
-                    family=node_backend.node.family,
-                    backend_id=node_backend.backend_id,
-                ),
-                'group': str(group.group_id),
-                'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS],
-            }
+            params=task_params
         )
 
         self.tasks.append(task)

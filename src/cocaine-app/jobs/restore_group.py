@@ -344,7 +344,8 @@ class RestoreGroupJob(Job):
             params = {'node_backend': str(nb).encode('utf-8'),
                       'group': str(self.group),
                       'group_file_marker': group_file_marker_fmt,
-                      'remove_group_file': group_file}
+                      'remove_group_file': group_file,
+                      'unmark_backend': mark_src_backend}
 
             if self.GROUP_FILE_DIR_MOVE_SRC_RENAME and group_file:
                 params['move_src'] = os.path.join(os.path.dirname(group_file))
