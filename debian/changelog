@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.98) trusty; urgency=medium
+
+  * Fix inventory function usage
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 24 Nov 2016 14:57:37 +0300
+
 mastermind-cocainev11 (2.28.97) trusty; urgency=medium
 
   * Add optional inventory function to check if external storage is ready to
