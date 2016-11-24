@@ -1,3 +1,9 @@
+mastermind (2.28.98-1) trusty; urgency=medium
+
+  * Fix cocaine handlers
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 24 Nov 2016 18:16:08 +0300
+
 mastermind (2.28.98) trusty; urgency=medium
 
   * Fix inventory function usage
