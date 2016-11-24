@@ -2066,7 +2066,7 @@ def convert_queue_set_priority(external_storage_id,
         print warn('--priority must be a positive integer')
         return 1
 
-    res = s.run_syn('get_convert_queue_item', msgpack.packb({'id': external_storage_id}))
+    res = s.run_sync('get_convert_queue_item', msgpack.packb({'id': external_storage_id}))
 
     if 'Balancer error' in res or 'Error' in res:
         print res
