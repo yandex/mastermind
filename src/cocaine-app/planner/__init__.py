@@ -696,10 +696,12 @@ class Planner(object):
         if last_error:
             raise last_error
 
-    def _create_backend_manager_job(self, group, force, autoapprove, cmd_type):
+    def _create_backend_manager_job(self, group, force, autoapprove, cmd_type, mark_backend=None, unmark_backend=None):
         params = {'group': group}
         params['need_approving'] = not autoapprove
         params['cmd_type'] = cmd_type
+        params['mark_backend'] = mark_backend
+        params['unmark_backend'] = unmark_backend
         last_error = None
         for _ in xrange(self.CREATE_JOB_ATTEMPTS):
             try:
@@ -834,7 +836,7 @@ class Planner(object):
         for group in groups_to_ro:
             cmd_type = jobs.BackendManagerJob.CMD_TYPE_MAKE_READONLY
             try:
-                job = self._create_backend_manager_job(group, force, autoapprove, cmd_type)
+                job = self._create_backend_manager_job(group, force, autoapprove, cmd_type, mark_backend=True)
                 active_jobs.append(job['id'])
             except Exception as e:
                 failed[group] = str(e)
