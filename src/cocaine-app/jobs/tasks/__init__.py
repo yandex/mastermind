@@ -1,5 +1,7 @@
 from jobs.job_types import TaskTypes
 
+# the following import is for the convenient usage `from tasks import Task`
+# along with `from tasks import SomeTask`
 from task import Task
 from node_stop import NodeStopTask
 from minion_cmd import MinionCmdTask
@@ -20,40 +22,28 @@ from change_couple_settings import ChangeCoupleSettingsTask
 
 
 class TaskFactory(object):
+    TASK_TYPES = {
+        TaskTypes.TYPE_NODE_STOP_TASK: NodeStopTask,
+        TaskTypes.TYPE_MINION_CMD: MinionCmdTask,
+        TaskTypes.TYPE_HISTORY_REMOVE_NODE: HistoryRemoveNodeTask,
+        TaskTypes.TYPE_RECOVER_DC_GROUP_TASK: RecoverGroupDcTask,
+        TaskTypes.TYPE_NODE_BACKEND_DEFRAG_TASK: NodeBackendDefragTask,
+        TaskTypes.TYPE_COUPLE_DEFRAG_STATE_CHECK_TASK: CoupleDefragStateCheckTask,
+        TaskTypes.TYPE_RSYNC_BACKEND_TASK: RsyncBackendTask,
+        TaskTypes.TYPE_CREATE_GROUP: CreateGroupTask,
+        TaskTypes.TYPE_REMOVE_GROUP: RemoveGroupTask,
+        TaskTypes.TYPE_DNET_CLIENT_BACKEND_CMD: DnetClientBackendCmdTask,
+        TaskTypes.TYPE_WAIT_GROUPSET_STATE: WaitGroupsetStateTask,
+        TaskTypes.TYPE_WRITE_META_KEY: WriteMetaKeyTask,
+        TaskTypes.TYPE_CHANGE_COUPLE_FROZEN_STATUS: ChangeCoupleFrozenStatusTask,
+        TaskTypes.TYPE_EXTERNAL_STORAGE_DATA_SIZE: ExternalStorageDataSizeTask,
+        TaskTypes.TYPE_WRITE_EXTERNAL_STORAGE_MAPPING: WriteExternalStorageMappingTask,
+        TaskTypes.TYPE_CHANGE_COUPLE_SETTINGS: ChangeCoupleSettingsTask,
+    }
 
     @staticmethod
     def make_task(data, job):
         task_type = data.get('type')
-        if task_type == TaskTypes.TYPE_NODE_STOP_TASK:
-            return NodeStopTask.from_data(data, job)
-        if task_type == TaskTypes.TYPE_MINION_CMD:
-            return MinionCmdTask.from_data(data, job)
-        if task_type == TaskTypes.TYPE_HISTORY_REMOVE_NODE:
-            return HistoryRemoveNodeTask.from_data(data, job)
-        if task_type == TaskTypes.TYPE_RECOVER_DC_GROUP_TASK:
-            return RecoverGroupDcTask.from_data(data, job)
-        if task_type == TaskTypes.TYPE_NODE_BACKEND_DEFRAG_TASK:
-            return NodeBackendDefragTask.from_data(data, job)
-        if task_type == TaskTypes.TYPE_COUPLE_DEFRAG_STATE_CHECK_TASK:
-            return CoupleDefragStateCheckTask.from_data(data, job)
-        if task_type == TaskTypes.TYPE_RSYNC_BACKEND_TASK:
-            return RsyncBackendTask.from_data(data, job)
-        if task_type == TaskTypes.TYPE_CREATE_GROUP:
-            return CreateGroupTask.from_data(data, job)
-        if task_type == TaskTypes.TYPE_REMOVE_GROUP:
-            return RemoveGroupTask.from_data(data, job)
-        if task_type == TaskTypes.TYPE_DNET_CLIENT_BACKEND_CMD:
-            return DnetClientBackendCmdTask.from_data(data, job)
-        if task_type == TaskTypes.TYPE_WAIT_GROUPSET_STATE:
-            return WaitGroupsetStateTask.from_data(data, job)
-        if task_type == TaskTypes.TYPE_WRITE_META_KEY:
-            return WriteMetaKeyTask.from_data(data, job)
-        if task_type == TaskTypes.TYPE_CHANGE_COUPLE_FROZEN_STATUS:
-            return ChangeCoupleFrozenStatusTask.from_data(data, job)
-        if task_type == TaskTypes.TYPE_EXTERNAL_STORAGE_DATA_SIZE:
-            return ExternalStorageDataSizeTask.from_data(data, job)
-        if task_type == TaskTypes.TYPE_WRITE_EXTERNAL_STORAGE_MAPPING:
-            return WriteExternalStorageMappingTask.from_data(data, job)
-        if task_type == TaskTypes.TYPE_CHANGE_COUPLE_SETTINGS:
-            return ChangeCoupleSettingsTask.from_data(data, job)
-        raise ValueError('Unknown task type {0}'.format(task_type))
+        if task_type not in TaskFactory.TASK_TYPES:
+            raise ValueError('Unknown task type {0}'.format(task_type))
+        return TaskFactory.TASK_TYPES[task_type].from_data(data, job)
