@@ -773,8 +773,14 @@ class Planner(object):
         cancelled_jobs = []
         groups_to_ro = []
         pending_restore_jobs = []
+        failed = {}
 
         for group in groups:
+            if group.type not in [storage.Group.TYPE_DATA,
+                                  storage.Group.TYPE_UNCOUPLED,
+                                  storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1]:
+                failed[group] = 'Failed group type: {}'.format(group.type)
+                continue
             if group.couple is None:
                 group_jobs = self.job_processor.job_finder.jobs(
                     groups=group.group_id,
@@ -832,7 +838,6 @@ class Planner(object):
                     else:
                         groups_to_backup.append(group.group_id)
 
-        failed = {}
         for group in groups_to_ro:
             cmd_type = jobs.BackendManagerJob.CMD_TYPE_MAKE_READONLY
             try:
