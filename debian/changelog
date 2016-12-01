@@ -1,8 +1,10 @@
-mastermind (2.28.99-1) trusty; urgency=medium
+mastermind (2.28.100) trusty; urgency=medium
 
-  * Fix misprint
+  * Improve `couple break`: update group histories
+  * Remove READ* commands accounting for weight calculation
+  * Restore-path: fail lrc groups
 
- -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 24 Nov 2016 18:47:41 +0300
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 02 Dec 2016 00:13:53 +0300
 
 mastermind (2.28.99) trusty; urgency=medium
 
