@@ -1,3 +1,11 @@
+mastermind-cocainev11 (2.28.100) trusty; urgency=medium
+
+  * Improve `couple break`: update group histories
+  * Remove READ* commands accounting for weight calculation
+  * Restore-path: fail lrc groups
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 02 Dec 2016 00:13:53 +0300
+
 mastermind-cocainev11 (2.28.99) trusty; urgency=medium
 
   * Fix lrc converting for external storage with empty data
