@@ -651,11 +651,16 @@ class CommandsStat(object):
 
         self.ell_disk_read_time_cnt, self.ell_disk_write_time_cnt = None, None
         self.ell_disk_read_size, self.ell_disk_write_size = None, None
-        self.ell_net_read_size, self.ell_net_write_size = None, None
+        self.ell_net_write_size = None
 
         self.ell_disk_read_time, self.ell_disk_write_time = 0, 0
         self.ell_disk_read_rate, self.ell_disk_write_rate = 0.0, 0.0
-        self.ell_net_read_rate, self.ell_net_write_rate = 0.0, 0.0
+        self.ell_net_write_rate = 0.0
+
+        # Elliptics READ* commands do not provide valid data on elliptics usage
+        # of network interface and therefore they have no reason to be used
+        # self.ell_net_read_size = None
+        # self.ell_net_read_rate = 0.0
 
     def update(self, raw_stat, collect_ts):
 
@@ -677,16 +682,6 @@ class CommandsStat(object):
         )
         new_ell_disk_write_time_cnt = self.sum(disk_write_stats, 'time')
         new_ell_disk_write_size = self.sum(disk_write_stats, 'size')
-
-        net_read_stats = self.commands_stats(
-            raw_stat,
-            read_ops=True,
-            disk=True,
-            cache=True,
-            internal=True,
-            outside=True
-        )
-        new_ell_net_read_size = self.sum(net_read_stats, 'size')
 
         net_write_stats = self.commands_stats(
             raw_stat,
@@ -728,12 +723,6 @@ class CommandsStat(object):
                 func=lambda ov, nv: (nv - ov) / float(diff_ts)
             )
 
-            self.ell_net_read_rate = h.unidirectional_value_map(
-                self.ell_net_read_rate,
-                self.ell_net_read_size,
-                new_ell_net_read_size,
-                func=lambda ov, nv: (nv - ov) / float(diff_ts)
-            )
             self.ell_net_write_rate = h.unidirectional_value_map(
                 self.ell_net_write_rate,
                 self.ell_net_write_size,
@@ -746,7 +735,6 @@ class CommandsStat(object):
         self.ell_disk_read_size = new_ell_disk_read_size
         self.ell_disk_write_size = new_ell_disk_write_size
 
-        self.ell_net_read_size = new_ell_net_read_size
         self.ell_net_write_size = new_ell_net_write_size
 
         self.ts = collect_ts
@@ -793,7 +781,6 @@ class CommandsStat(object):
         new.ell_disk_write_time = self.ell_disk_write_time + other.ell_disk_write_time
         new.ell_disk_read_rate = self.ell_disk_read_rate + other.ell_disk_read_rate
         new.ell_disk_write_rate = self.ell_disk_write_rate + other.ell_disk_write_rate
-        new.ell_net_read_rate = self.ell_net_read_rate + other.ell_net_read_rate
         new.ell_net_write_rate = self.ell_net_write_rate + other.ell_net_write_rate
 
         return new

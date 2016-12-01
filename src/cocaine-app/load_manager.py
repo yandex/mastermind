@@ -52,12 +52,12 @@ class EllipticsLoad(object):
 
         self.disk_read_rate = 0.0
         self.disk_write_rate = 0.0
-        self.net_read_rate = 0.0
         self.net_write_rate = 0.0
 
         self.disk_util = 0.0
         self.disk_util_read = 0.0
         self.disk_util_write = 0.0
+
 
 class NamespaceLoad(EllipticsLoad):
     def add_couple(self, couple):
@@ -65,7 +65,6 @@ class NamespaceLoad(EllipticsLoad):
         self.io_nonblocking_queue_size += couple.io_nonblocking_queue_size
         self.disk_read_rate += couple.disk_read_rate
         self.disk_write_rate += couple.disk_write_rate
-        self.net_read_rate += couple.net_read_rate
         self.net_write_rate += couple.net_write_rate
 
         self.disk_util += couple.disk_util
@@ -82,7 +81,6 @@ class CoupleLoad(EllipticsLoad):
         # read-key operation is commonly performed on one group, so we can sum
         # all groups' reads to get couple read rate
         self.disk_read_rate = self.disk_read_rate + group.disk_read_rate
-        self.net_read_rate = self.net_read_rate + group.net_read_rate
         # write-key operation is performed to all groups at once to guarantee
         # redundancy, so we take the maximum write rate of all groups
         self.disk_write_rate = max(self.disk_write_rate, group.disk_write_rate)
@@ -100,7 +98,6 @@ class GroupLoad(EllipticsLoad):
         self.io_nonblocking_queue_size += nb.io_nonblocking_queue_size
         self.disk_read_rate += nb.disk_read_rate
         self.disk_write_rate += nb.disk_write_rate
-        self.net_read_rate += nb.net_read_rate
         self.net_write_rate += nb.net_write_rate
 
         self.disk_util += nb.disk_util
@@ -115,7 +112,6 @@ class NodeBackendLoad(EllipticsLoad):
 
         self.disk_read_rate = nb_stat.commands_stat.ell_disk_read_rate
         self.disk_write_rate = nb_stat.commands_stat.ell_disk_write_rate
-        self.net_read_rate = nb_stat.commands_stat.ell_net_read_rate
         self.net_write_rate = nb_stat.commands_stat.ell_net_write_rate
 
         disk_io_rate = disk_load.write_rate + disk_load.read_rate
@@ -143,15 +139,11 @@ class NodeBackendLoad(EllipticsLoad):
 
 class NetLoad(object):
     def __init__(self, node_stat):
-        self.read_rate = max(node_stat.tx_rate,
-                             node_stat.commands_stat.ell_net_read_rate)
-        self.ell_read_rate = min(node_stat.tx_rate,
-                                 node_stat.commands_stat.ell_net_read_rate)
+        self.read_rate = node_stat.tx_rate
         self.write_rate = max(node_stat.rx_rate,
                               node_stat.commands_stat.ell_net_write_rate)
         self.ell_write_rate = min(node_stat.rx_rate,
                                   node_stat.commands_stat.ell_net_write_rate)
-        self.ext_read_rate = self.read_rate - self.ell_read_rate
         self.ext_write_rate = self.write_rate - self.ell_write_rate
 
 
