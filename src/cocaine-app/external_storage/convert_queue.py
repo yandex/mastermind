@@ -105,14 +105,19 @@ class ExternalStorageConvertQueue(object):
             params['status'] = status
         if dcs:
             params['dcs'] = {'$in': dcs}
-        request = self.convert_queue.find(params)
+
+        request_options = {}
         if sort_by_priority:
-            request = request.sort(ExternalStorageConvertQueueItem.PRIORITY, pymongo.DESCENDING)
+            request_options['sort'] = [
+                (ExternalStorageConvertQueueItem.PRIORITY, pymongo.DESCENDING),
+            ]
+
         if limit:
             # pymongo uses 0 value to mean 'unlimited', so we cannot use None
-            request = request.limit(limit)
+            request_options['limit'] = limit
         if skip:
-            request = request.skip(skip)
+            request_options['skip'] = skip
+        request = self.convert_queue.find(params, **request_options)
         for data in request:
             item = ExternalStorageConvertQueueItem(**data)
             item.collection = self.convert_queue
