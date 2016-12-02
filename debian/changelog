@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.101) trusty; urgency=medium
+
+  * Change mongo find request construction to provide complete logging
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 02 Dec 2016 18:05:27 +0300
+
 mastermind-cocainev11 (2.28.100) trusty; urgency=medium
 
   * Improve `couple break`: update group histories
