@@ -1,3 +1,9 @@
+mastermind (2.28.89~collector4) trusty; urgency=medium
+
+  * Fix profile
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sat, 03 Dec 2016 20:24:05 +0300
+
 mastermind (2.28.89~collector3) trusty; urgency=medium
 
   * Remove all side activities of mastermind except storage state collection
