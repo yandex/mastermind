@@ -219,6 +219,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
 
             try:
                 if groups is None:
+                    namespaces_settings = self.namespaces_settings.fetch()
                     storage.dc_host_view.update()
                     load_manager.update(storage)
                     weight_manager.update(storage)
@@ -226,7 +227,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
 
                     if self._prepare_namespaces_states:
                         logger.info('Recalculating namespaces states')
-                        self._update_namespaces_states()
+                        self._update_namespaces_states(namespaces_settings)
                     if self._prepare_flow_stats:
                         logger.info('Recalculating flow stats')
                         self._update_flow_stats()

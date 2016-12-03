@@ -110,7 +110,8 @@ class NodeInfoUpdaterBase(object):
         start_ts = time.time()
         logger.info('Namespaces states forced updating: started')
         try:
-            self._do_update_namespaces_states()
+            namespaces_settings = self.namespaces_settings.fetch()
+            self._do_update_namespaces_states(namespaces_settings)
         except Exception as e:
             logger.exception('Namespaces states forced updating: failed')
             self._namespaces_states.set_exception(e)
@@ -118,11 +119,11 @@ class NodeInfoUpdaterBase(object):
             logger.info('Namespaces states forced updating: finished, time: {0:.3f}'.format(
                 time.time() - start_ts))
 
-    def _update_namespaces_states(self):
+    def _update_namespaces_states(self, namespaces_settings):
         start_ts = time.time()
         logger.info('Namespaces states updating: started')
         try:
-            self._do_update_namespaces_states()
+            self._do_update_namespaces_states(namespaces_settings)
         except Exception as e:
             logger.exception('Namespaces states updating: failed')
             self._namespaces_states.set_exception(e)
@@ -130,7 +131,7 @@ class NodeInfoUpdaterBase(object):
             logger.info('Namespaces states updating: finished, time: {0:.3f}'.format(
                 time.time() - start_ts))
 
-    def _do_update_namespaces_states(self):
+    def _do_update_namespaces_states(self, namespaces_settings):
         def default():
             return {
                 'settings': {},
@@ -142,9 +143,8 @@ class NodeInfoUpdaterBase(object):
         res = defaultdict(default)
 
         # settings
-        ns_settings = infrastructure.ns_settings
-        for ns, settings in ns_settings.items():
-            res[ns]['settings'] = settings
+        for ns_settings in namespaces_settings:
+            res[ns_settings.namespace]['settings'] = ns_settings.dump()
 
         # couples
         for couple in storage.replicas_groupsets:

@@ -98,20 +98,20 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         try:
 
             namespaces_settings = self.namespaces_settings.fetch()
-            with self.__cluster_update_lock:
+            with self._cluster_update_lock:
                 logger.info('Cluster updating: updating group coupling info started')
                 self.update_symm_groups_async(namespaces_settings=namespaces_settings)
 
             if self._prepare_namespaces_states:
                 logger.info('Recalculating namespace states')
-                self._update_namespaces_states(namespaces_settings=namespaces_settings)
+                self._update_namespaces_states(namespaces_settings)
             if self._prepare_flow_stats:
                 logger.info('Recalculating flow stats')
                 self._update_flow_stats()
 
-        except Exception as e:
-            logger.info('Failed to update groups: {0}\n{1}'.format(
-                e, traceback.format_exc()))
+        except Exception:
+            logger.exception('Failed to update groups')
+            pass
         finally:
             logger.info('Cluster updating: updating group coupling info finished, time: {0:.3f}'.format(time.time() - start_ts))
             # TODO: change period
