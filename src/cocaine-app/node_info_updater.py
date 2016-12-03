@@ -20,7 +20,7 @@ from mastermind_core.config import config
 from mastermind_core.max_group import max_group_manager
 from mastermind_core.response import CachedGzipResponse
 from mastermind_core import errors
-from monitor_pool import monitor_pool
+# from monitor_pool import monitor_pool
 import timed_queue
 import storage
 from weight_manager import weight_manager
@@ -58,7 +58,6 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         self.couple_record_finder = couple_record_finder
         self._namespaces_states = CachedGzipResponse()
         self._flow_stats = {}
-        self.__tq = timed_queue.TimedQueue()
         self.__session = elliptics.Session(self.__node)
         wait_timeout = config.get('elliptics', {}).get('wait_timeout') or config.get('wait_timeout', 5)
         self.__session.set_timeout(wait_timeout)
@@ -158,10 +157,11 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         In case of any of these events we should log it and
         skip to the next monitor stat response.
         """
-        results = monitor_pool.imap_unordered(
-            None,
-            ((ha.host, ha.port, ha.family) for ha in host_addrs)
-        )
+        # results = monitor_pool.imap_unordered(
+        #     None,
+        #     ((ha.host, ha.port, ha.family) for ha in host_addrs)
+        # )
+        results = iter([])
         logger.info('Waiting for monitor stats results')
 
         # TODO: set timeout!!!

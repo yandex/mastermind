@@ -8,7 +8,7 @@ from time import sleep
 # NB: pool should be initialized before importing
 # any of cocaine-framework-python modules to avoid
 # tornado ioloop dispatcher issues
-import monitor_pool
+# import monitor_pool
 
 from cocaine.worker import Worker
 
@@ -18,6 +18,9 @@ import elliptics
 
 import log
 log.setup_logger('mm_logging')
+
+logger = logging.getLogger('mm.init')
+
 
 # storage should be imported before balancer
 # TODO: remove this dependency
@@ -43,7 +46,6 @@ if config.get('stat_source', 'native') == 'collector':
 else:
     from node_info_updater import NodeInfoUpdater
 
-logger = logging.getLogger()
 i = iter(xrange(100))
 logger.info("trace %d" % (i.next()))
 

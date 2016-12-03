@@ -197,11 +197,12 @@ class CacheItem(object):
                 )
             )
         finally:
-            self.__tq.add_task_in(
-                self.taskname,
-                self.sync_period,
-                self._sync_cache
-            )
+            # self.__tq.add_task_in(
+            #     self.taskname,
+            #     self.sync_period,
+            #     self._sync_cache
+            # )
+            pass
 
     def _update_cache_item(self, key, val):
         cache_item = {

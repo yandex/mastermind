@@ -78,22 +78,22 @@ class Balancer(object):
         else:
             self._keys_db = Collection(meta_db[keys_db_uri], 'keys')
 
-        self.__tq = timed_queue.TimedQueue()
-        self.__tq.add_task_in(
-            self.MAKE_IOLOOP,
-            0,
-            self._make_tq_thread_ioloop
-        )
+        # self.__tq = timed_queue.TimedQueue()
+        # self.__tq.add_task_in(
+        #     self.MAKE_IOLOOP,
+        #     0,
+        #     self._make_tq_thread_ioloop
+        # )
 
     def start(self):
         assert self.niu
-        self._update_cached_keys()
-        if self.statistics_monitor_enabled:
-            self.__tq.add_task_at(
-                'couples_free_effective_space_collect',
-                self.couples_free_eff_space_collect_timer.next(),
-                self._collect_couples_free_eff_space
-            )
+        # self._update_cached_keys()
+        # if self.statistics_monitor_enabled:
+        #     self.__tq.add_task_at(
+        #         'couples_free_effective_space_collect',
+        #         self.couples_free_eff_space_collect_timer.next(),
+        #         self._collect_couples_free_eff_space
+        #     )
 
     def _make_tq_thread_ioloop(self):
         logger.debug('Balancer task queue, creating thread ioloop')
@@ -101,7 +101,8 @@ class Balancer(object):
         io_loop.make_current()
 
     def _start_tq(self):
-        self.__tq.start()
+        # self.__tq.start()
+        pass
 
     def _set_infrastructure(self, infrastructure):
         self.infrastructure = infrastructure

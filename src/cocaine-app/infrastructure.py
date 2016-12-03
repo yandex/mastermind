@@ -120,7 +120,7 @@ class Infrastructure(object):
         self._groups_to_update = set()
         self._groups_to_update_lock = threading.Lock()
 
-        self.__tq = timed_queue.TimedQueue()
+        # self.__tq = timed_queue.TimedQueue()
 
     def init(self, node, job_finder, group_history_finder, namespaces_settings):
         self.node = node
@@ -128,27 +128,29 @@ class Infrastructure(object):
         self.group_history_finder = group_history_finder
         self.namespaces_settings = namespaces_settings
 
-        if self.group_history_finder:
-            self._sync_state()
+        # if self.group_history_finder:
+        #     self._sync_state()
 
         self.cache = cache
-        cache.init(self.__tq)
+        # cache.init(self.__tq)
+        cache.init(None)
 
     def schedule_history_update(self):
         if not self.group_history_finder:
             return
-        try:
-            self.__tq.add_task_in(
-                task_id=self.TASK_UPDATE,
-                secs=0,
-                function=self._update_state
-            )
-        except ValueError:
-            # task is already scheduled
-            pass
+        # try:
+        #     self.__tq.add_task_in(
+        #         task_id=self.TASK_UPDATE,
+        #         secs=0,
+        #         function=self._update_state
+        #     )
+        # except ValueError:
+        #     # task is already scheduled
+        #     pass
 
     def _start_tq(self):
-        self.__tq.start()
+        # self.__tq.start()
+        pass
 
     def get_group_history(self, group_id):
         if not self.group_history_finder:

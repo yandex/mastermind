@@ -312,7 +312,8 @@ def skip_exceptions(result, on_exc=None, timeout=None):
 
     while True:
         try:
-            yield result.next(timeout)
+            # yield result.next(timeout)
+            yield result.next()
         except StopIteration:
             raise
         except TimeoutError:

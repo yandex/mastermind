@@ -44,7 +44,7 @@ class MinionsMonitor(object):
 
     def __init__(self, meta_db):
 
-        self.__tq = timed_queue.TimedQueue()
+        # self.__tq = timed_queue.TimedQueue()
 
         self.minion_headers = ({'X-Auth': MINIONS_CFG['authkey']}
                                if MINIONS_CFG.get('authkey') else
@@ -54,20 +54,20 @@ class MinionsMonitor(object):
         self.finish_ts_per_host = {}
 
         # set an independent IOLoop instance in timed queue thread
-        self.__tq.add_task_in(
-            self.MAKE_IOLOOP,
-            0,
-            self._make_tq_thread_ioloop)
+        # self.__tq.add_task_in(
+        #     self.MAKE_IOLOOP,
+        #     0,
+        #     self._make_tq_thread_ioloop)
 
-        self.__tq.add_task_in(
-            self.MAKE_HTTP_CLIENT,
-            0,
-            self._make_http_client)
+        # self.__tq.add_task_in(
+        #     self.MAKE_HTTP_CLIENT,
+        #     0,
+        #     self._make_http_client)
 
-        self.__tq.add_task_in(
-            self.STATE_FETCH,
-            5,
-            self._fetch_states)
+        # self.__tq.add_task_in(
+        #     self.STATE_FETCH,
+        #     5,
+        #     self._fetch_states)
 
         db_name = config.get('metadata', {}).get('minions', {}).get('db', '')
         if not db_name:
@@ -76,7 +76,8 @@ class MinionsMonitor(object):
         self.commands = meta_db[db_name]['commands']
 
     def _start_tq(self):
-        self.__tq.start()
+        # self.__tq.start()
+        pass
 
     def _fetch_stored_unfinished_commands(self):
         commands = {}

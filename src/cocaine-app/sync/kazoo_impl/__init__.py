@@ -35,11 +35,12 @@ class ZkSyncManager(object):
     LOCK_TIMEOUT = 3
 
     def __init__(self, host='127.0.0.1:2181', lock_path_prefix='/mastermind/locks/'):
-        self.client = KazooClient(host, timeout=3)
+        # self.client = KazooClient(host, timeout=3)
         logger.info('Connecting to zookeeper host {}, lock_path_prefix: {}'.format(
             host, lock_path_prefix))
         try:
-            self.client.start()
+            # self.client.start()
+            pass
         except Exception as e:
             logger.error(e)
             raise
@@ -184,11 +185,12 @@ class ZkCacheTaskManager(object):
     RETRIES = 2
 
     def __init__(self, host='127.0.0.1:2181', lock_path_prefix='/mastermind/cache/'):
-        self.client = KazooClient(host, timeout=3)
+        # self.client = KazooClient(host, timeout=3)
         logger.info('Connecting to zookeeper host {}, lock_path_prefix: {}'.format(
             host, lock_path_prefix))
         try:
-            self.client.start()
+            # self.client.start()
+            pass
         except Exception as e:
             logger.error(e)
             raise

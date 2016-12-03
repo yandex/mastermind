@@ -20,7 +20,6 @@ from mastermind.pool import skip_exceptions
 from mastermind import MastermindClient
 from mastermind_core.response import CachedGzipResponse
 from mastermind_core import errors
-from monitor_pool import monitor_pool
 import timed_queue
 import storage
 from weight_manager import weight_manager

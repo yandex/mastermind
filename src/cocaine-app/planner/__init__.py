@@ -44,7 +44,7 @@ class Planner(object):
         self.candidates = []
         self.job_processor = job_processor
         self.__max_plan_length = self.params.get('move', {}).get('max_plan_length', 5)
-        self.__tq = timed_queue.TimedQueue()
+        # self.__tq = timed_queue.TimedQueue()
 
         self.node_info_updater = niu
         self.namespaces_settings = namespaces_settings
@@ -56,28 +56,30 @@ class Planner(object):
             seconds=self.params.get('couple_defrag', {}).get(
                 'couple_defrag_period', 60 * 15))
 
-        if config['metadata'].get('planner', {}).get('db'):
-            self.collection = Collection(db[config['metadata']['planner']['db']], 'planner')
+        # if config['metadata'].get('planner', {}).get('db'):
+        #     self.collection = Collection(db[config['metadata']['planner']['db']], 'planner')
 
-            if self.params.get('recover_dc', {}).get('enabled', False):
-                self.__tq.add_task_at(
-                    self.RECOVER_DC,
-                    self.recover_dc_timer.next(),
-                    self._recover_dc
-                )
+        #     if self.params.get('recover_dc', {}).get('enabled', False):
+        #         self.__tq.add_task_at(
+        #             self.RECOVER_DC,
+        #             self.recover_dc_timer.next(),
+        #             self._recover_dc
+        #         )
 
-            if self.params.get('couple_defrag', {}).get('enabled', False):
-                self.__tq.add_task_at(
-                    self.COUPLE_DEFRAG,
-                    self.couple_defrag_timer.next(),
-                    self._couple_defrag
-                )
+        #     if self.params.get('couple_defrag', {}).get('enabled', False):
+        #         self.__tq.add_task_at(
+        #             self.COUPLE_DEFRAG,
+        #             self.couple_defrag_timer.next(),
+        #             self._couple_defrag
+        #         )
 
     def _start_tq(self):
-        self.__tq.start()
+        # self.__tq.start()
+        pass
 
     def add_planner(self, planner):
-        planner.schedule_tasks(self.__tq)
+        # planner.schedule_tasks(self.__tq)
+        pass
 
     @staticmethod
     def _prepare_candidates_by_dc(suitable_groups, unsuitable_dcs):
