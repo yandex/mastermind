@@ -15,4 +15,4 @@ rm -f /var/cache/cocaine/manifests/$APP_NAME
 
 echo "Deploying new application $app"
 cocaine-tool app upload --manifest $DEPLOY_DIR/cocaine-app/$MANIFEST --package $DEPLOY_DIR/cocaine-app/mastermind.tar.gz -n $APP_NAME
-cocaine-tool profile upload -n $APP_NAME --profile $DEPLOY_DIR/cocaine-app/$PROFILE
+/usr/bin/mastermind_upload_profile $APP_NAME --fallback-profile $DEPLOY_DIR/cocaine-app/$PROFILE
