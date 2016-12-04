@@ -1,0 +1,107 @@
+#!/usr/bin/env python
+import json
+import sys
+import time
+
+import cocaine.tools.actions.profile
+from cocaine.services import Service
+from opster import command
+from tornado.ioloop import IOLoop
+from cocaine.futures import chain
+from cocaine.tools import printer
+
+
+printer.ENABLE_OUTPUT = True
+
+
+CONFIG_PATH = '/etc/elliptics/mastermind.conf'
+
+
+def get_config(config_path):
+    try:
+
+        with open(config_path, 'r') as config_file:
+            return json.load(config_file)
+
+    except Exception as e:
+        raise ValueError('Failed to load config file {}: {}'.format(config_path, e))
+
+
+def upload_profile(service, profile_name, profile_content, timeout=None):
+
+    io_loop = IOLoop.current()
+
+    @chain.source
+    def upload():
+        upload = cocaine.tools.actions.profile.Upload(
+            storage=service,
+            name=profile_name,
+            profile=profile_content,
+        )
+        yield upload.execute()
+
+    @chain.source
+    def execute():
+        try:
+            yield upload()
+        except Exception as e:
+            print 'Error during profile upload: {}'.format(e)
+            sys.exit(1)
+        finally:
+            io_loop.stop()
+
+    def timeout_callback():
+        print "Timeout during profile upload"
+        io_loop.stop()
+        sys.exit(1)
+
+    execute()
+
+    if timeout:
+        io_loop.add_timeout(time.time() + timeout, timeout_callback)
+    io_loop.start()
+
+
+@command()
+def main(profile,
+         timeout=(
+             't',
+             '10',
+             'Upload profile timeout',
+         ),
+         config=(
+             'c',
+             CONFIG_PATH,
+             'Mastermind config',
+         ),
+         fallback_profile=(
+             '',
+             '',
+             'Fallback profile to use if profile is not found in config',
+             None,
+         )):
+    config = get_config(config)
+    profiles_cfg = config.get('cocaine_app_profiles', {})
+
+    if profile in profiles_cfg:
+        profile_content = profiles_cfg[profile]
+    elif fallback_profile:
+        print 'Cocaine application profile "{}" is not found in config, using fallback config'.format(profile)
+        try:
+            profile_content = json.loads(open(fallback_profile, 'rb').read())
+        except Exception as e:
+            raise ValueError('Failed to read fallback profile: {}'.format(e))
+    else:
+        raise ValueError('Cocaine application profile "{}" is not found in config'.format(profile))
+
+    service = Service('storage')
+    upload_profile(
+        service=service,
+        profile_name=profile,
+        profile_content=profile_content,
+        timeout=int(timeout),
+    )
+
+
+if __name__ == '__main__':
+    main.command()
