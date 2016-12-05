@@ -674,6 +674,7 @@ class NodeInfoUpdater(object):
                 logger.error('Couple record exists, but couple {couple} is not found'.format(
                     couple=cr.couple_id,
                 ))
+                continue
             group = storage.groups[cr.couple_id]
             if not group.couple:
                 logger.error(
