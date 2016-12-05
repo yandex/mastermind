@@ -1,3 +1,10 @@
+mastermind-cocainev11 (2.28.103) trusty; urgency=medium
+
+  * Fix unknown couple settings update
+  * Add configurable profiles for mastermind cocaine applications
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 05 Dec 2016 17:13:45 +0300
+
 mastermind-cocainev11 (2.28.102) trusty; urgency=medium
 
   * Minor fix
