@@ -255,11 +255,14 @@ def make_external_storage_data_size_command(groupset_type,
     raise NotImplemented
 
 
-def is_external_storage_ready(src_storage, src_storage_id):
+def is_external_storage_ready(src_storage, src_storage_options, src_storage_id, convert_queue):
     '''
     Check if external storage is ready to be converted.
 
     Parameters:
+        @src_storage: type of source storage
+        @src_storage_options: source storage options
         @src_storage_id: source storage id to check
+        @convert_queue: mongo collection to implement custom check logic
     '''
     return True

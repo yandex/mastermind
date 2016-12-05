@@ -1,3 +1,9 @@
+mastermind (2.28.104) trusty; urgency=medium
+
+  * Extend is_external_storage_ready function
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 06 Dec 2016 01:04:16 +0300
+
 mastermind (2.28.103) trusty; urgency=medium
 
   * Fix unknown couple settings update
