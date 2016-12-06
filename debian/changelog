@@ -1,3 +1,9 @@
+mastermind (2.28.105) trusty; urgency=medium
+
+  * Add workaround for creating jobs with empty involved groups list
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 06 Dec 2016 18:35:51 +0300
+
 mastermind (2.28.104) trusty; urgency=medium
 
   * Extend is_external_storage_ready function
