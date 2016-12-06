@@ -339,6 +339,7 @@ class NamespaceQuery(Query):
                       couples=1,
                       groups=None,
                       ignore_space=False,
+                      group_total_space=None,
                       groupsets=None,
                       dry_run=False,
                       attempts=None,
@@ -364,6 +365,8 @@ class NamespaceQuery(Query):
           ignore_space:
             if this flag is set to True mastermind will couple only the groups
             having equal total space
+          group_total_space:
+            Use groups of certain total space for building couples (e.g., 916G, 256m)
           groupsets:
             a list of settings for each required groupset, where each setting object is
             of the following form:
@@ -389,6 +392,7 @@ class NamespaceQuery(Query):
         params = [couple_size, couples, {'namespace': self.id,
                                          'match_group_space': not ignore_space,
                                          'init_state': init_state,
+                                         'group_total_space': group_total_space,
                                          'groupsets': groupsets or [],
                                          'dry_run': dry_run,
                                          'mandatory_groups': groups or []}]

@@ -21,7 +21,7 @@ import keys
 from mastermind_core.config import config
 from mastermind_core.db.mongo.pool import Collection
 from mastermind_core.response import CachedGzipResponse
-from mastermind_core.helpers import gzip_compress
+from mastermind_core.helpers import gzip_compress, convert_config_bytes_value
 import monitor
 import statistics
 import storage
@@ -1079,8 +1079,15 @@ class Balancer(object):
         options.setdefault('match_group_space', True)
         options.setdefault('init_state', storage.Status.COUPLED)
         options.setdefault('dry_run', False)
+        options.setdefault('group_total_space', None)
         options.setdefault('mandatory_groups', [])
         options.setdefault('groupsets', [])
+
+        default_group_total_space = config.get('couple_build', {}).get('default_group_total_space')
+        group_total_space = options['group_total_space'] or default_group_total_space
+        group_total_space_in_bytes = None
+        if group_total_space:
+            group_total_space_in_bytes = convert_config_bytes_value(group_total_space)
 
         options['init_state'] = options['init_state'].upper()
         if not options['init_state'] in self.VALID_COUPLE_INIT_STATES:
@@ -1112,7 +1119,8 @@ class Balancer(object):
             logger.info('Updating cluster info completed')
 
             groups_by_total_space = infrastructure.infrastructure.groups_by_total_space(
-                match_group_space=options['match_group_space']
+                match_group_space=options['match_group_space'],
+                group_total_space=group_total_space_in_bytes,
             )
 
             logger.info('groups by total space: {0}'.format(groups_by_total_space))
