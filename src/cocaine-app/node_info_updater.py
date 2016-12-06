@@ -143,6 +143,10 @@ class NodeInfoUpdater(object):
                                elliptics.monitor_stat_categories.commands)
 
     def update_status(self, groups):
+        if not groups:
+            # otherwise empty groups list is treated as complete cluster update
+            return
+
         self.monitor_stats(groups=groups)
 
         namespaces_settings = self.namespaces_settings.fetch()
