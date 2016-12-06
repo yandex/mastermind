@@ -568,6 +568,13 @@ def couple_build(size,
                  ignore_space=(
                      's', False, 'Ignore checking of groups total space matching'),
                  namespace=('n', '', 'Set custom namespace for couple'),
+                 group_total_space=(
+                     '',
+                     '',
+                     'Use groups of certain total space for building couples (e.g., 916G, 256m). '
+                     'Default value can be set via config option '
+                     '["couple_build"]["default_group_total_space"].',
+                 ),
                  dry_run=('d', False, 'Dry-run mode'),
                  state=('', '', 'Set couple initial state (coupled|frozen)'), host=None, app=None):
     '''Make a couple of groups. The default behaviour is to use
@@ -598,6 +605,7 @@ def couple_build(size,
                                                  couples=couples,
                                                  groups=groups,
                                                  ignore_space=ignore_space,
+                                                 group_total_space=group_total_space or None,
                                                  dry_run=dry_run)
 
     if isinstance(res, dict):

@@ -1,3 +1,9 @@
+mastermind (2.28.106) trusty; urgency=medium
+
+  * Allow setting required groups' total space for new couples
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 07 Dec 2016 01:41:05 +0300
+
 mastermind (2.28.105) trusty; urgency=medium
 
   * Add workaround for creating jobs with empty involved groups list
