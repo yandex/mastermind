@@ -23,6 +23,7 @@ import jobs
 from manual_locks import manual_locker
 from mastermind_core.config import config
 from mastermind_core.max_group import max_group_manager
+from mastermind_core.helpers import convert_config_bytes_value
 import storage
 import timed_queue
 
@@ -1134,7 +1135,7 @@ class Infrastructure(object):
 
         self.update_groups_list(tree)
 
-    def groups_by_total_space(self, match_group_space=True, **kwargs):
+    def groups_by_total_space(self, match_group_space=True, group_total_space=None, **kwargs):
         """ Get good uncoupled groups bucketed by total space values
 
         As total space for group can vary a little depending on the hardware,
@@ -1147,6 +1148,9 @@ class Infrastructure(object):
             match_group_space: if False, all groups in the resulting mapping will
                 be bucketed to a key 'any', otherwise tolerance interval will be used
                 to bucket the groups;
+            group_total_space: groups that are used for couples should have total
+                space within 'total_space_diff_tolerance' percents within required
+                'group_total_space' (in bytes);
             **kwargs: options for selecting uncoupled groups, will be passed through
                 to get_good_uncoupled_groups;
 
@@ -1174,36 +1178,42 @@ class Infrastructure(object):
             groups_by_total_space['any'] = [group.group_id for group in suitable_groups]
             return groups_by_total_space
 
-        total_spaces = (
-            group.get_stat().total_space
-            for group in suitable_groups
-        )
-
-        # bucketing groups by approximate total space
         ts_tolerance = config.get('total_space_diff_tolerance', 0.05)
-        cur_ts_key = 0
-        for ts in sorted(total_spaces, reverse=True):
-            if abs(cur_ts_key - ts) > cur_ts_key * ts_tolerance:
-                cur_ts_key = ts
-                groups_by_total_space[cur_ts_key] = []
 
-        total_spaces = sorted(groups_by_total_space.keys(), reverse=True)
-        logger.info('group total space sizes available: {0}'.format(list(total_spaces)))
+        if group_total_space:
+            for group in suitable_groups:
+                ts = group.get_stat().total_space
+                if abs(group_total_space - ts) < group_total_space * ts_tolerance:
+                    groups_by_total_space[group_total_space].append(group.group_id)
+        else:
+            total_spaces = (
+                group.get_stat().total_space
+                for group in suitable_groups
+            )
+            # bucketing groups by approximate total space
+            cur_ts_key = 0
+            for ts in sorted(total_spaces, reverse=True):
+                if abs(cur_ts_key - ts) > cur_ts_key * ts_tolerance:
+                    cur_ts_key = ts
+                    groups_by_total_space[cur_ts_key] = []
 
-        for group in suitable_groups:
-            ts = group.get_stat().total_space
-            for ts_key in total_spaces:
-                if ts_key - ts < ts_key * ts_tolerance:
-                    groups_by_total_space[ts_key].append(group.group_id)
-                    break
-            else:
-                raise ValueError(
-                    'Failed to find total space key for group {group}, '
-                    'total space {ts}'.format(
-                        group=group,
-                        ts=ts,
+            total_spaces = sorted(groups_by_total_space.keys(), reverse=True)
+            logger.info('group total space sizes available: {0}'.format(list(total_spaces)))
+
+            for group in suitable_groups:
+                ts = group.get_stat().total_space
+                for ts_key in total_spaces:
+                    if ts_key - ts < ts_key * ts_tolerance:
+                        groups_by_total_space[ts_key].append(group.group_id)
+                        break
+                else:
+                    raise ValueError(
+                        'Failed to find total space key for group {group}, '
+                        'total space {ts}'.format(
+                            group=group,
+                            ts=ts,
+                        )
                     )
-                )
 
         return groups_by_total_space
 
