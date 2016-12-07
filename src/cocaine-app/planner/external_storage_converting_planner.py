@@ -29,8 +29,7 @@ class HostsQueue(object):
         heapq.heappush(self.hosts, (len(host_state.jobs), host_state))
 
     def __iter__(self):
-        hosts_count = len(self.hosts)
-        for _ in xrange(hosts_count):
+        while True:
             _, host_state = heapq.heappop(self.hosts)
             yield host_state
             heapq.heappush(self.hosts, (len(host_state.jobs), host_state))
@@ -200,10 +199,10 @@ class ExternalStorageConvertingPlanner(object):
 
     def _convert_queue_items(self, slots):
         # in case of low values of 'slots'
-        min_chunk_size = 10
+        min_chunk_size = 100
 
         skip = 0
-        chunk_size = min(int(slots * 1.5), min_chunk_size)
+        chunk_size = min(int(slots * 3), min_chunk_size)
 
         dcs = LIMITS.get('dcs')
 
