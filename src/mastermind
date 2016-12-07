@@ -911,8 +911,7 @@ def job_list(statuses=('s', 'not_approved', 'Filtering jobs by statuses '
                        '(comma-separated values can be used, i.e. "pending,broken")'),
              job_type=('t', '', 'Filtering jobs by types '
                        '(comma-separated values can be used, i.e. "move_job,restore_group_job")'),
-             groups=('g', '', 'Filtering jobs by groups'
-                     '(comma-separated values can be used, i.e. "move_job,restore_group_job")'),
+             groups=('g', '', 'Filtering jobs by groups'),
              limit=('l', '', 'Jobs limit'),
              offset=('o', '', 'Jobs offset'),
              json=('', None, 'Format data as json'),
@@ -923,7 +922,7 @@ def job_list(statuses=('s', 'not_approved', 'Filtering jobs by statuses '
     params = {}
     params['statuses'] = statuses.split(',') if statuses else None
     params['job_type'] = job_type.split(',') if job_type else None
-    params['groups'] = groups.split(',') if groups else None
+    params['groups'] = [int(x) for x in groups.split(',')] if groups else None
     params['limit'] = limit if limit else None
     params['offset'] = offset if offset else 0
     res = s.enqueue('get_job_list', msgpack.packb([params])).get()
