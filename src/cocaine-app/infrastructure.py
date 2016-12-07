@@ -548,8 +548,16 @@ class Infrastructure(object):
         """
         Create new record "no couple" for groups histories.
         """
+
+        if not self.group_history_finder:
+            return
+
         for group_id in group_ids:
-            group_history = self.get_group_history(group_id)
+            try:
+                group_history = self.get_group_history(group_id)
+            except ValueError:
+                # NOTE: Recently created group with no history - create one
+                group_history = self._new_group_history(group_id)
 
             self._update_group(
                 group_history=group_history,
