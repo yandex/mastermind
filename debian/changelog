@@ -1,3 +1,11 @@
+mastermind-cocainev11 (2.28.108) trusty; urgency=medium
+
+  * Do not exhaust host list while searching for appropriate converting
+    storages
+  * Fix uncoupling groups without history record
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 08 Dec 2016 02:03:44 +0300
+
 mastermind-cocainev11 (2.28.107) trusty; urgency=medium
 
   * Minor fix
