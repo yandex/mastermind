@@ -1181,6 +1181,7 @@ class Infrastructure(object):
         ts_tolerance = config.get('total_space_diff_tolerance', 0.05)
 
         if group_total_space:
+            groups_by_total_space[group_total_space] = []
             for group in suitable_groups:
                 ts = group.get_stat().total_space
                 if abs(group_total_space - ts) < group_total_space * ts_tolerance:
