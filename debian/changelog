@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.107) trusty; urgency=medium
+
+  * Minor fix
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 07 Dec 2016 14:36:02 +0300
+
 mastermind-cocainev11 (2.28.106) trusty; urgency=medium
 
   * Allow setting required groups' total space for new couples
