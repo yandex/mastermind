@@ -459,6 +459,10 @@ class ExternalStorageConvertingPlanner(object):
         else:
             raise ValueError('Unsupported groupset type: {}'.format(groupset_type))
 
+        groupset_creation_sleep_period = CONVERTING_PLANNER_PARAMS.get(
+            'groupset_creation_sleep_period'
+        )
+
         job = self.job_processor._create_job(
             job_type=job_type,
             params={
@@ -471,6 +475,7 @@ class ExternalStorageConvertingPlanner(object):
                 'src_storage': src_storage,
                 'src_storage_options': src_storage_options or {},
                 'converting_host': converting_host,
+                'groupset_creation_sleep_period': groupset_creation_sleep_period,
                 'need_approving': need_approving,
             },
         )
