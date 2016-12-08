@@ -11,7 +11,11 @@ logger = logging.getLogger('mm.jobs')
 
 class WaitGroupsetStateTask(Task):
 
-    PARAMS = ('groupset', 'groupset_status')
+    PARAMS = (
+        'groupset',
+        'groupset_statuses',
+        'groupset_status',  # backward compatibility
+    )
     TASK_TIMEOUT = 30 * 60  # 30 minutes
 
     def __init__(self, job):
@@ -52,13 +56,20 @@ class WaitGroupsetStateTask(Task):
         return self.groupset in storage.groupsets
 
     def __status_matched(self):
-        return storage.groupsets[self.groupset].status == self.groupset_status
+        return storage.groupsets[self.groupset].status in self._groupset_statuses
+
+    @property
+    def _groupset_statuses(self):
+        # NOTE: this is required for backward compatibility
+        if self.groupset_statuses is None:
+            return [self.groupset_status]
+        return self.groupset_statuses
 
     def __str__(self):
         return (
-            'WaitGroupsetStateTask[id: {id}]<groupset {groupset}, status {status}>'.format(
+            'WaitGroupsetStateTask[id: {id}]<groupset {groupset}, statuses {statuses}>'.format(
                 id=self.id,
                 groupset=self.groupset,
-                status=self.groupset_status,
+                status=self._groupset_statuses,
             )
         )

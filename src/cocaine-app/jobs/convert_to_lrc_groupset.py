@@ -310,7 +310,7 @@ class ConvertToLrcGroupsetJob(Job):
         return tasks.WaitGroupsetStateTask.new(
             self,
             groupset=groupset,
-            groupset_status=storage.Status.ARCHIVED,
+            groupset_statuses=[storage.Status.ARCHIVED],
         )
 
     def _read_preference_tasks(self, couple_ids):
