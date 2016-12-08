@@ -592,17 +592,6 @@ class Planner(object):
             raise ValueError('Group {0} has {1} node backends, should have at most one'.format(
                 group.group_id, len(group.node_backends)))
 
-        if group.status not in (storage.Status.BAD, storage.Status.INIT, storage.Status.RO):
-            raise ValueError('Group {0} has {1} status, should have BAD or INIT'.format(
-                group.group_id, group.status))
-
-        if (group.node_backends and group.node_backends[0].status not in (
-                storage.Status.STALLED, storage.Status.INIT, storage.Status.RO)):
-            raise ValueError(
-                'Group {0} has node backend {1} in status {2}, '
-                'should have STALLED or INIT status'.format(
-                    group.group_id, str(group.node_backends[0]), group.node_backends[0].status))
-
         if group.couple is None:
             raise ValueError('Group {0} is uncoupled'.format(group.group_id))
 
@@ -771,7 +760,6 @@ class Planner(object):
         active_jobs = []
         uncoupled_groups = []
         cancelled_jobs = []
-        groups_to_ro = []
         pending_restore_jobs = []
         failed = {}
 
@@ -833,18 +821,7 @@ class Planner(object):
                             'Unknown job status: {}'.format(job.status)
                         )
                 else:
-                    if group.node_backends[0].status != 'RO':
-                        groups_to_ro.append(group.group_id)
-                    else:
-                        groups_to_backup.append(group.group_id)
-
-        for group in groups_to_ro:
-            cmd_type = jobs.BackendManagerJob.CMD_TYPE_MAKE_READONLY
-            try:
-                job = self._create_backend_manager_job(group, force, autoapprove, cmd_type, mark_backend=True)
-                active_jobs.append(job['id'])
-            except Exception as e:
-                failed[group] = str(e)
+                    groups_to_backup.append(group.group_id)
 
         for group in groups_to_backup:
             try:

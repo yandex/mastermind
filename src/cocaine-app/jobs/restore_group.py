@@ -8,8 +8,8 @@ from infrastructure_cache import cache
 from job import Job
 from job_types import JobTypes
 from mastermind_core.config import config
-from tasks import (NodeBackendDefragTask, CoupleDefragStateCheckTask,
-                   RsyncBackendTask, MinionCmdTask, NodeStopTask, HistoryRemoveNodeTask)
+from tasks import (RsyncBackendTask, MinionCmdTask,
+                   NodeStopTask, HistoryRemoveNodeTask)
 import storage
 
 
@@ -23,6 +23,7 @@ class RestoreGroupJob(Job):
     MERGE_GROUP_FILE_MARKER_PATH = config.get('restore', {}).get('merge_group_file_marker')
     GROUP_FILE_DIR_MOVE_DST_RENAME = config.get('restore', {}).get('group_file_dir_move_dst_rename')
     MERGE_GROUP_FILE_DIR_MOVE_SRC_RENAME = config.get('restore', {}).get('merge_group_file_dir_move_src_rename')
+    BACKEND_STOP_MARKER = config.get('restore', {}).get('backend_stop_marker')
 
     PARAMS = ('group', 'src_group', 'uncoupled_group', 'uncoupled_group_fsid',
               'merged_groups', 'resources')
@@ -130,7 +131,7 @@ class RestoreGroupJob(Job):
 
         if self.GROUP_FILE_DIR_MOVE_DST_RENAME and group_file:
             remove_path = os.path.join(
-                    dst_base_path, self.GROUP_FILE_DIR_MOVE_DST_RENAME)
+                dst_base_path, self.GROUP_FILE_DIR_MOVE_DST_RENAME)
 
         if self.uncoupled_group:
             for group_id in self.merged_groups:
@@ -232,27 +233,28 @@ class RestoreGroupJob(Job):
         src_backend = src_group.node_backends[0]
         restore_backend = group.node_backends and group.node_backends[0]
 
-        make_readonly = (src_backend is not restore_backend and
-                         src_backend.status == storage.Status.OK)
-
         mark_src_backend = self.make_path(
             self.BACKEND_DOWN_MARKER, base_path=src_backend.base_path).format(
                 backend_id=src_backend.backend_id)
+        stop_src_backend = self.make_path(
+            self.BACKEND_STOP_MARKER, base_path=src_backend.base_path).format(
+                backend_id=src_backend.backend_id)
 
-        if make_readonly:
-            make_readonly_cmd = infrastructure._make_readonly_node_backend_cmd(
+        make_readonly_cmd = infrastructure._make_readonly_node_backend_cmd(
+            src_backend.node.host.addr, src_backend.node.port,
+            src_backend.node.family, src_backend.backend_id)
+
+        task = MinionCmdTask.new(self,
+            host=src_backend.node.host.addr,
+            cmd=make_readonly_cmd,
+            params={'node_backend': self.node_backend(
                 src_backend.node.host.addr, src_backend.node.port,
-                src_backend.node.family, src_backend.backend_id)
+                src_backend.backend_id).encode('utf-8'),
+                    'mark_backend': mark_src_backend,
+                    'create_stop_file': stop_src_backend,
+                    'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]})
 
-            task = MinionCmdTask.new(self,
-                host=src_backend.node.host.addr,
-                cmd=make_readonly_cmd,
-                params={'node_backend': self.node_backend(
-                    src_backend.node.host.addr, src_backend.node.port,
-                    src_backend.backend_id).encode('utf-8'),
-                        'mark_backend': mark_src_backend})
-
-            self.tasks.append(task)
+        self.tasks.append(task)
 
         move_cmd = infrastructure.move_group_cmd(
             src_host=src_group.node_backends[0].node.host.addr,
@@ -345,7 +347,9 @@ class RestoreGroupJob(Job):
                       'group': str(self.group),
                       'group_file_marker': group_file_marker_fmt,
                       'remove_group_file': group_file,
-                      'unmark_backend': mark_src_backend}
+                      'unmark_backend': mark_src_backend,
+                      'remove_stop_file': stop_src_backend,
+                      'force_stop_file': True}
 
             if self.GROUP_FILE_DIR_MOVE_SRC_RENAME and group_file:
                 params['move_src'] = os.path.join(os.path.dirname(group_file))
@@ -402,7 +406,9 @@ class RestoreGroupJob(Job):
                                  params={'node_backend': dst_node_backend.encode('utf-8')})
         self.tasks.append(task)
 
-        if make_readonly:
+        restore_from_coupled_group = src_backend is not restore_backend
+
+        if restore_from_coupled_group:
             make_writable_cmd = infrastructure._make_writable_node_backend_cmd(
                 src_backend.node.host.addr, src_backend.node.port,
                 src_backend.node.family, src_backend.backend_id)
@@ -414,6 +420,8 @@ class RestoreGroupJob(Job):
                     src_backend.node.host.addr, src_backend.node.port,
                     src_backend.backend_id).encode('utf-8'),
                         'unmark_backend': mark_src_backend,
+                        'remove_stop_file': stop_src_backend,
+                        'force_stop_file': True,
                         'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]})
 
             self.tasks.append(task)
