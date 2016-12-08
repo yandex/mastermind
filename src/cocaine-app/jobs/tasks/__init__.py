@@ -14,6 +14,7 @@ from create_group import CreateGroupTask
 from remove_group import RemoveGroupTask
 from dnet_client_backend_cmd import DnetClientBackendCmdTask
 from wait_groupset_state import WaitGroupsetStateTask
+from wait_backend_state import WaitBackendStateTask
 from write_meta_key import WriteMetaKeyTask
 from change_couple_frozen_status import ChangeCoupleFrozenStatusTask
 from external_storage_data_size import ExternalStorageDataSizeTask
@@ -34,6 +35,7 @@ class TaskFactory(object):
         TaskTypes.TYPE_REMOVE_GROUP: RemoveGroupTask,
         TaskTypes.TYPE_DNET_CLIENT_BACKEND_CMD: DnetClientBackendCmdTask,
         TaskTypes.TYPE_WAIT_GROUPSET_STATE: WaitGroupsetStateTask,
+        TaskTypes.TYPE_WAIT_BACKEND_STATE: WaitBackendStateTask,
         TaskTypes.TYPE_WRITE_META_KEY: WriteMetaKeyTask,
         TaskTypes.TYPE_CHANGE_COUPLE_FROZEN_STATUS: ChangeCoupleFrozenStatusTask,
         TaskTypes.TYPE_EXTERNAL_STORAGE_DATA_SIZE: ExternalStorageDataSizeTask,

@@ -9,19 +9,19 @@ from task import Task
 logger = logging.getLogger('mm.jobs')
 
 
-class WaitGroupsetStateTask(Task):
+class WaitBackendStateTask(Task):
 
     PARAMS = (
-        'groupset',
-        'groupset_statuses',
-        'groupset_status',  # backward compatibility
-        'sleep_period',
+        'backend',
+        'backend_statuses',
+        'missing',
+        'sleep_period'
     )
     TASK_TIMEOUT = 30 * 60  # 30 minutes
 
     def __init__(self, job):
-        super(WaitGroupsetStateTask, self).__init__(job)
-        self.type = TaskTypes.TYPE_WAIT_GROUPSET_STATE
+        super(WaitBackendStateTask, self).__init__(job)
+        self.type = TaskTypes.TYPE_WAIT_BACKEND_STATE
 
     def update_status(self):
         # infrastructure state is updated by itself via task queue
@@ -49,32 +49,31 @@ class WaitGroupsetStateTask(Task):
         return not self.__state_matched()
 
     def __state_matched(self):
-        if not self.__groupset_detected():
+        if not self.__backend_detected():
+            if self.missing:
+                return True
+            else:
+                return False
+
+        if self.missing:
             return False
 
-        if self.groupset_status and not self.__status_matched():
-            return False
+        if self.backend_statuses and self.__status_matched():
+            return True
 
-        return True
+        return False
 
-    def __groupset_detected(self):
-        return self.groupset in storage.groupsets
+    def __backend_detected(self):
+        return self.backend in storage.node_backends
 
     def __status_matched(self):
-        return storage.groupsets[self.groupset].status in self._groupset_statuses
-
-    @property
-    def _groupset_statuses(self):
-        # NOTE: this is required for backward compatibility
-        if self.groupset_statuses is None:
-            return [self.groupset_status]
-        return self.groupset_statuses
+        return storage.node_backends[self.backend].status in self.backend_statuses
 
     def __str__(self):
         return (
-            'WaitGroupsetStateTask[id: {id}]<groupset {groupset}, statuses {statuses}>'.format(
+            'WaitBackendStateTask[id: {id}]<backend {backend}, statuses {statuses}>'.format(
                 id=self.id,
-                groupset=self.groupset,
-                statuses=self._groupset_statuses,
+                backend=self.backend,
+                statuses=self.backend_statuses,
             )
         )
