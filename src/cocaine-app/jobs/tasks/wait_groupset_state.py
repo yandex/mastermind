@@ -75,6 +75,6 @@ class WaitGroupsetStateTask(Task):
             'WaitGroupsetStateTask[id: {id}]<groupset {groupset}, statuses {statuses}>'.format(
                 id=self.id,
                 groupset=self.groupset,
-                status=self._groupset_statuses,
+                statuses=self._groupset_statuses,
             )
         )
