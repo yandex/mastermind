@@ -26,6 +26,7 @@ class ConvertToLrcGroupsetJob(Job):
         'src_storage_options',
         'resources',
         'converting_host',
+        'groupset_creation_sleep_period',
     )
 
     def __init__(self, **kwargs):
@@ -310,7 +311,8 @@ class ConvertToLrcGroupsetJob(Job):
         return tasks.WaitGroupsetStateTask.new(
             self,
             groupset=groupset,
-            groupset_status=storage.Status.ARCHIVED,
+            groupset_statuses=[storage.Status.ARCHIVED],
+            sleep_period=self.groupset_creation_sleep_period,
         )
 
     def _read_preference_tasks(self, couple_ids):
