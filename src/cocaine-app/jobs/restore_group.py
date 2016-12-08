@@ -9,7 +9,8 @@ from job import Job
 from job_types import JobTypes
 from mastermind_core.config import config
 from tasks import (RsyncBackendTask, MinionCmdTask,
-                   NodeStopTask, HistoryRemoveNodeTask)
+                   NodeStopTask, HistoryRemoveNodeTask,
+                   WaitBackendStateTask)
 import storage
 
 
@@ -254,6 +255,14 @@ class RestoreGroupJob(Job):
                     'create_stop_file': stop_src_backend,
                     'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]})
 
+        self.tasks.append(task)
+
+        expected_statuses = [storage.Status.STALLED, storage.Status.INIT, storage.Status.RO]
+        task = WaitBackendStateTask.new(
+            self,
+            backend=str(src_backend),
+            backend_statuses=expected_statuses,
+            missing=True)
         self.tasks.append(task)
 
         move_cmd = infrastructure.move_group_cmd(
