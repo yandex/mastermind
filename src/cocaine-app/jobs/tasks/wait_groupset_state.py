@@ -15,6 +15,7 @@ class WaitGroupsetStateTask(Task):
         'groupset',
         'groupset_statuses',
         'groupset_status',  # backward compatibility
+        'sleep_period',
     )
     TASK_TIMEOUT = 30 * 60  # 30 minutes
 
@@ -30,6 +31,10 @@ class WaitGroupsetStateTask(Task):
         pass
 
     def finished(self, processor):
+        if self.sleep_period:
+            if time.time() - self.start_ts < self.sleep_period:
+                return False
+
         is_timeout = time.time() - self.start_ts > self.TASK_TIMEOUT
         if is_timeout:
             return True
