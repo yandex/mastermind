@@ -55,9 +55,6 @@ class WaitBackendStateTask(Task):
             else:
                 return False
 
-        if self.missing:
-            return False
-
         if self.backend_statuses and self.__status_matched():
             return True
 
