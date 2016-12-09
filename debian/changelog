@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.112) trusty; urgency=medium
+
+  * Fix wait backend state
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 09 Dec 2016 14:17:31 +0300
+
 mastermind-cocainev11 (2.28.111) trusty; urgency=medium
 
   * Add task for wait backends's detection and acquiring statu
