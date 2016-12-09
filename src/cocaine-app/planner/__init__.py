@@ -764,10 +764,11 @@ class Planner(object):
         failed = {}
 
         for group in groups:
-            if group.type not in [storage.Group.TYPE_DATA,
+            if group.type not in [storage.Group.TYPE_UNKNOWN,
+                                  storage.Group.TYPE_DATA,
                                   storage.Group.TYPE_UNCOUPLED,
                                   storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1]:
-                failed[group] = 'Failed group type: {}'.format(group.type)
+                failed[group.group_id] = 'Failed group type: {}'.format(group.type)
                 continue
             if group.couple is None:
                 group_jobs = self.job_processor.job_finder.jobs(
