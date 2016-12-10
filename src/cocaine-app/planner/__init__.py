@@ -1438,6 +1438,7 @@ class Planner(object):
 
         return candidates[0]
 
+    @h.concurrent_handler
     def ttl_cleanup(self, request):
         """
         TTL cleanup job. Remove all records with expired TTL
