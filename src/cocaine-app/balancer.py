@@ -157,7 +157,7 @@ class Balancer(object):
         try:
             return [group.group_id
                     for group in infrastructure.infrastructure.get_good_uncoupled_groups(
-                        including_in_service=in_service,
+                        exclude_in_service=in_service,
                         status=status)]
         except Exception:
             logger.exception('Failed to fetch uncoupled groups list')
