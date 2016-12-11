@@ -23,7 +23,6 @@ import jobs
 from manual_locks import manual_locker
 from mastermind_core.config import config
 from mastermind_core.max_group import max_group_manager
-from mastermind_core.helpers import convert_config_bytes_value
 import storage
 import timed_queue
 
@@ -1286,13 +1285,13 @@ class Infrastructure(object):
 
     def get_good_uncoupled_groups(self,
                                   max_node_backends=None,
-                                  including_in_service=False,
+                                  exclude_in_service=True,
                                   status=None,
                                   types=None,
                                   skip_groups=None,
                                   allow_alive_keys=False):
 
-        if including_in_service and self.job_finder:
+        if exclude_in_service and self.job_finder:
             in_service_group_ids = set(self.job_finder.get_uncoupled_groups_in_service())
         else:
             in_service_group_ids = None
