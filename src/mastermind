@@ -1060,6 +1060,12 @@ def ns_setup(namespace,
                  '',
                  "If this flag is 1, store filename of a key in key's attributes"
              ),
+             attributes_mimetype=(
+                 '',
+                 '',
+                 "This flag toggles the client's ability to store a key's MIME-type in "
+                 "key's attributes."
+             ),
              attributes_ttl=(
                  '',
                  '',
@@ -1156,6 +1162,7 @@ def ns_setup(namespace,
             check_for_update=check_for_update,
             custom_expiration_time=custom_expiration_time == '1',
             attributes_filename=attributes_filename == '1',
+            attributes_mimetype=attributes_mimetype == '1',
             attributes_ttl_minimum=attributes_ttl_minimum,
             attributes_ttl_maximum=attributes_ttl_maximum,
             attributes_symlink_scope_limit=attributes_symlink_scope_limit,
@@ -1257,6 +1264,9 @@ def ns_setup(namespace,
         attributes = {}
         if attributes_filename:
             attributes['filename'] = attributes_filename == '1'
+
+        if attributes_mimetype:
+            attributes['mimetype'] = attributes_mimetype == '1'
 
         ttl_attributes = {}
         if attributes_ttl:
