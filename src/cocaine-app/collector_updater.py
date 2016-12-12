@@ -222,7 +222,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                     namespaces_settings = self.namespaces_settings.fetch()
                     storage.dc_host_view.update()
                     load_manager.update(storage)
-                    weight_manager.update(storage)
+                    weight_manager.update(storage, namespaces_settings)
                     infrastructure.schedule_history_update()
 
                     if self._prepare_namespaces_states:
