@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.114) trusty; urgency=medium
+
+  * Restore: remove backend
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 12 Dec 2016 17:05:09 +0300
+
 mastermind-cocainev11 (2.28.113) trusty; urgency=medium
 
   * Restore-path: fix
