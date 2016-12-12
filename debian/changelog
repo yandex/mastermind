@@ -1,3 +1,9 @@
+mastermind (2.28.89~collector6) trusty; urgency=medium
+
+  * Get rid of unnecessary calls to uuid generator
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 12 Dec 2016 15:39:16 +0300
+
 mastermind (2.28.89~collector5) trusty; urgency=medium
 
   * Fix weight manager update
