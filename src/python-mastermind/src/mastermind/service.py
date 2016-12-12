@@ -12,7 +12,7 @@ import msgpack
 from tornado import ioloop
 from tornado.concurrent import Future
 from tornado.gen import coroutine, Return
-
+from cocaine.detail.trace import Trace
 
 class ReconnectableService(object):
 
@@ -28,7 +28,9 @@ class ReconnectableService(object):
                  delay=0.1, max_delay=60.0, delay_exp=2.0,
                  connect_timeout=None,
                  timeout=None,
-                 logger=None):
+                 logger=None,
+                 traceid=None
+                 ):
         self.delay = delay
         self.max_delay = max_delay
         self.delay_exp = delay_exp
@@ -36,6 +38,7 @@ class ReconnectableService(object):
         self.timeout = timeout
         self.attempts = attempts
         self.logger = logger or Logger()
+        self.traceid = traceid
         self._reset()
 
         addresses = addresses or ReconnectableService.DEFAULT_ADDRESS
@@ -64,7 +67,11 @@ class ReconnectableService(object):
         while True:
             try:
                 yield self._reconnect_if_needed()
-                channel = yield self.upstream.enqueue(handler)
+                trace = None
+                if self.traceid:
+                    traceid = int(self.traceid, 16)
+                    trace = Trace(traceid=traceid, spanid=traceid, parentid=0)
+                channel = yield self.upstream.enqueue(handler, trace=trace)
                 yield channel.tx.write(data)
                 yield channel.tx.close()
                 response = yield channel.rx.get(timeout=timeout or self.timeout)
@@ -110,10 +117,10 @@ class ReconnectableService(object):
             )
             self.logger.debug('Connecting to upstream service "{}", host={}, '
                               'port={}'.format(self.app_name, host, port))
-            yield self.upstream.connect()
+            yield self.upstream.connect(traceid=self.traceid)
 
         if not self.upstream._connected:
             self.logger.debug(
                 'Reconnecting to upstream service "{}"'.format(
                     self.app_name))
-            yield self.upstream.connect()
+            yield self.upstream.connect(traceid=self.traceid)
