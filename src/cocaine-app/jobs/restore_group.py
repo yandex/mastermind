@@ -319,7 +319,7 @@ class RestoreGroupJob(Job):
             storage.NodeBackend.ACTIVE_STATUSES):
 
             nb = group.node_backends[0]
-            shutdown_cmd = infrastructure._disable_node_backend_cmd(
+            shutdown_cmd = infrastructure._remove_node_backend_cmd(
                 nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id)
 
             group_file = (os.path.join(nb.base_path,
@@ -357,6 +357,7 @@ class RestoreGroupJob(Job):
                       'group_file_marker': group_file_marker_fmt,
                       'remove_group_file': group_file,
                       'unmark_backend': mark_src_backend,
+                      'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS],
                       'remove_stop_file': stop_src_backend,
                       'force_stop_file': True}
 
