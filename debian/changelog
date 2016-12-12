@@ -1,3 +1,9 @@
+mastermind (2.28.89~collector5) trusty; urgency=medium
+
+  * Fix weight manager update
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 12 Dec 2016 15:29:12 +0300
+
 mastermind (2.28.89~collector4) trusty; urgency=medium
 
   * Fix profile
