@@ -2,6 +2,7 @@
 from collections import defaultdict
 import simplejson
 import logging
+import uuid
 
 # import balancer
 from mastermind_core.config import config
@@ -109,6 +110,9 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         logger.info('Starting')
         self.update()
 
+    def new_str_traceid(self):
+        return '%x' % (uuid.uuid1().int >> 64)
+
     def _force_collector_refresh(self, groups=None):
         collector_client = MastermindClient(COLLECTOR_SERVICE_NAME)
 
@@ -165,7 +169,8 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         self.update(groups=groups)
 
     def update(self, groups=None):
-        logger.info('Fetching update from collector')
+        traceid = self.new_str_traceid()
+        logger.info('Fetching update from collector, traceid = {}'.format(traceid))
 
         with self._cluster_update_lock:
             try:
@@ -189,7 +194,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                 logger.info('Sending request to collector')
 
                 collector_client = MastermindClient(COLLECTOR_SERVICE_NAME)
-                response = collector_client.request('get_snapshot', simplejson.dumps(request))
+                response = collector_client.request('get_snapshot', simplejson.dumps(request), traceid=traceid)
             except Exception as e:
                 logger.error('Failed to fetch snapshot from collector: {}'.format(e))
                 self._schedule_next_round()
