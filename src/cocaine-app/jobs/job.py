@@ -65,7 +65,7 @@ class Job(MongoObject):
     DNET_CLIENT_ALREADY_IN_PROGRESS = -114
 
     def __init__(self, need_approving=False):
-        self.id = uuid.uuid4().hex
+        self.id = None
         self.status = (self.STATUS_NOT_APPROVED
                        if need_approving else
                        self.STATUS_NEW)
@@ -86,6 +86,8 @@ class Job(MongoObject):
             if cparam in kwargs:
                 cparams[cparam] = kwargs[cparam]
         job = cls(**cparams)
+        job.id = uuid.uuid4().hex
+
         for param in cls.PARAMS:
             setattr(job, param, kwargs.get(param))
         ts = time.time()

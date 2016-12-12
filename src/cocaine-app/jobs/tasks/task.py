@@ -10,8 +10,8 @@ class Task(object):
     STATUS_COMPLETED = 'completed'
 
     def __init__(self, job):
+        self.id = None
         self.status = self.STATUS_QUEUED
-        self.id = uuid.uuid4().hex
         self.type = None
         self.start_ts = None
         self.finish_ts = None
@@ -34,6 +34,7 @@ class Task(object):
     @classmethod
     def new(cls, job, **kwargs):
         task = cls(job)
+        task.id = uuid.uuid4().hex
         for param in cls.PARAMS:
             setattr(task, param, kwargs.get(param))
         return task
@@ -45,8 +46,7 @@ class Task(object):
         return task
 
     def load(self, data):
-        # TODO: remove 'or' part
-        self.id = data['id'] or uuid.uuid4().hex
+        self.id = data['id']
         self.status = data['status']
         self.type = data['type']
         self.start_ts = data['start_ts']
