@@ -1,3 +1,9 @@
+mastermind (2.28.89~collector7) trusty; urgency=medium
+
+  * Fix max group updating
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 12 Dec 2016 16:05:50 +0300
+
 mastermind (2.28.89~collector6) trusty; urgency=medium
 
   * Get rid of unnecessary calls to uuid generator
