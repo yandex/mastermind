@@ -10,6 +10,7 @@ import elliptics
 
 # import balancer
 from mastermind_core.config import config
+from mastermind_core.max_group import max_group_manager
 import helpers as h
 from infrastructure import infrastructure
 from jobs import Job
@@ -57,42 +58,14 @@ class NodeInfoUpdaterBase(object):
         self._tq.start()
 
     def _update_max_group(self):
-        def _do_update_max_group(response, elapsed_time=None, end_time=None):
-            if response.error.code:
-                if response.error.code == error.ELLIPTICS_NOT_FOUND:
-                    max_group = 0
-                else:
-                    raise RuntimeError(respose.error.message)
-            else:
-                max_group = int(response.data)
-
-            cur_max_group = max((g.group_id for g in storage.groups))
-            logger.info('Current max group in storage: {}'.format(cur_max_group))
-
-            if cur_max_group > max_group:
-                logger.info('Updating storage max group to {}'.format(max_group))
-                self._node.meta_session.write_data(
-                    keys.MASTERMIND_MAX_GROUP_KEY,
-                    str(cur_max_group)).get()
-
-        if not len(storage.groups):
-            logger.warn('No groups found in storage, not updating max group')
-            return
 
         try:
-            session = self._node.meta_session.clone()
-            session.set_exceptions_policy(elliptics.exceptions_policy.no_exceptions)
-            result = session.read_data(keys.MASTERMIND_MAX_GROUP_KEY)
-
-            try:
-                h.process_elliptics_async_result(
-                    result,
-                    _do_update_max_group,
-                    raise_on_error=False)
-            except Exception as e:
-                log.error('Failed to update max group number: {}'.format(e))
-        except Exception as e:
-            logger.error('Failed to read max group: {}'.format(e))
+            curr_max_group = max((g.group_id for g in storage.groups))
+            logger.info('Current max group in storage: {}'.format(curr_max_group))
+            max_group_manager.update_max_group_id(curr_max_group)
+        except:
+            logger.exception('Failed to update max group')
+            pass
 
     @h.concurrent_handler
     def force_nodes_update(self, request):

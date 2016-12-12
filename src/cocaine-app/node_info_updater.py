@@ -17,7 +17,6 @@ from load_manager import load_manager
 from mastermind import helpers as mh
 from mastermind.pool import skip_exceptions
 from mastermind_core.config import config
-from mastermind_core.max_group import max_group_manager
 from mastermind_core.response import CachedGzipResponse
 from mastermind_core import errors
 # from monitor_pool import monitor_pool
@@ -80,9 +79,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                     logger.warn('No groups found in storage')
                     return
 
-                curr_max_group = max((g.group_id for g in storage.groups))
-                logger.info('Current max group in storage: {0}'.format(curr_max_group))
-                max_group_manager.update_max_group_id(curr_max_group)
+                self._update_max_group()
 
         except Exception as e:
             logger.error('Failed to fetch node statistics: {0}\n{1}'.format(e, traceback.format_exc()))

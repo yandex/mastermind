@@ -212,10 +212,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                 self._schedule_next_round()
                 return
 
-            try:
-                self._update_max_group()
-            except Exception as e:
-                logger.error('Failed to update max group: {}'.format(e))
+            self._update_max_group()
 
             try:
                 if groups is None:
