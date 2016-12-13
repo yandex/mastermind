@@ -70,6 +70,7 @@ class NamespacesQuery(Query):
               check_for_update=None,
               custom_expiration_time=None,
               attributes_filename=None,
+              attributes_mimetype=None,
               attributes_ttl=None,
               attributes_ttl_minimum=None,
               attributes_ttl_maximum=None,
@@ -116,6 +117,8 @@ class NamespacesQuery(Query):
           custom_expiration_time: allows namespace to use expire-time argument
             for signing url
           attributes_filename: if this flag is True, store filename of a key in key's attributes
+          attributes_mimetype: this flag toggles the client's ability to store a key's
+                MIME-type in key's attributes.
           attributes_ttl: this flag toggles the client's ability to use ttl for keys.
           attributes_ttl_minimum: sets minimum ttl value for namespace's ttl attribute.
             Accepts positive integer values with one of the following postfixes:
@@ -202,6 +205,9 @@ class NamespacesQuery(Query):
         attributes = {}
         if attributes_filename:
             attributes['filename'] = attributes_filename is True
+
+        if attributes_mimetype:
+            attributes['mimetype'] = attributes_mimetype is True
 
         ttl_attributes = {}
         if attributes_ttl is not None:

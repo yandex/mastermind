@@ -150,11 +150,13 @@ class AttributesSettings(SettingsObject):
     PARENT_KEY = 'attributes'
 
     FILENAME = 'filename'
+    MIMETYPE = 'mimetype'
     TTL = 'ttl'
     SYMLINK = 'symlink'
 
     VALID_SETTING_KEYS = set([
         FILENAME,
+        MIMETYPE,
         TTL,
         SYMLINK,
     ])
@@ -178,6 +180,14 @@ class AttributesSettings(SettingsObject):
     def filename(self, value):
         self._settings[self.FILENAME] = value
 
+    @SettingsObject.settings_property
+    def mimetype(self):
+        return self._settings.get(self.MIMETYPE)
+
+    @mimetype.setter
+    def mimetype(self, value):
+        self._settings[self.MIMETYPE] = value
+
     @property
     def ttl(self):
         return self._ttl
@@ -193,6 +203,14 @@ class AttributesSettings(SettingsObject):
             if not isinstance(self._settings[self.FILENAME], bool):
                 raise ValueError(
                     'Namespace "{}": attributes filename should be boolean'.format(
+                        self.namespace
+                    )
+                )
+
+        if self.MIMETYPE in self._settings:
+            if not isinstance(self._settings[self.MIMETYPE], bool):
+                raise ValueError(
+                    'Namespace "{}": attributes mimetype should be boolean'.format(
                         self.namespace
                     )
                 )
