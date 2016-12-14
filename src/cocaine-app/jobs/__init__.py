@@ -1046,16 +1046,12 @@ class JobFinder(object):
         # each job type should have a property to determine
         # if it uses uncoupled groups.
         jobs = self.jobs(
-            types=(
-                JobTypes.TYPE_MOVE_JOB,
-                JobTypes.TYPE_RESTORE_GROUP_JOB,
-                JobTypes.TYPE_MAKE_LRC_GROUPS_JOB,
-            ),
             statuses=(Job.STATUS_NOT_APPROVED,
                       Job.STATUS_NEW,
                       Job.STATUS_EXECUTING,
                       Job.STATUS_PENDING,
-                      Job.STATUS_BROKEN))
+                      Job.STATUS_BROKEN)
+        )
 
         uncoupled_groups = []
         for job in jobs:
