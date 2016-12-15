@@ -506,7 +506,9 @@ class JobProcessor(object):
 
             # check job types priority
             STOP_ALLOWED_TYPES = (JobTypes.TYPE_RECOVER_DC_JOB,
-                                  JobTypes.TYPE_COUPLE_DEFRAG_JOB)
+                                  JobTypes.TYPE_COUPLE_DEFRAG_JOB,
+                                  JobTypes.TYPE_TTL_CLEANUP_JOB
+                                  )
 
             if job_type not in (JobTypes.TYPE_RESTORE_GROUP_JOB, JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_BACKEND_MANAGER_JOB):
                 raise
