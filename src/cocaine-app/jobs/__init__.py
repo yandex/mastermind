@@ -261,8 +261,7 @@ class JobProcessor(object):
                     except LockError:
                         pass
                     except Exception as e:
-                        logger.error('Failed to process job {0}: '
-                            '{1}\n{2}'.format(job.id, e, traceback.format_exc()))
+                        logger.exception('Failed to process job {}'.format(job.id))
                         continue
 
         except LockFailedError as e:
@@ -272,13 +271,15 @@ class JobProcessor(object):
                 e, traceback.format_exc()))
         finally:
             logger.info('Jobs execution finished')
-            self.__tq.add_task_at(self.JOBS_EXECUTE,
+            self.__tq.add_task_at(
+                self.JOBS_EXECUTE,
                 self.jobs_timer.next(),
-                self._execute_jobs)
+                self._execute_jobs
+            )
 
     def __process_job(self, job):
 
-        logger.debug('Job {0}, processing started: {1}'.format(job.id, job.dump()))
+        logger.debug('Job {}, processing started: {}'.format(job.id, job.dump()))
 
         if job.status == Job.STATUS_NEW:
             logger.info('Job {0}: setting job start time'.format(job.id))
@@ -437,13 +438,13 @@ class JobProcessor(object):
         finished_statuses = (Task.STATUS_COMPLETED, Task.STATUS_SKIPPED)
 
         if all(task.status in finished_statuses for task in job.tasks):
-            logger.info('Job {0}, tasks processing is finished'.format(job.id))
+            logger.info('Job {}, tasks processing is finished'.format(job.id))
             try:
                 job.status = Job.STATUS_COMPLETED
                 job.complete(self)
                 job._dirty = True
             except RuntimeError as e:
-                logger.error('Job {0}, failed to complete job: {1}'.format(job.id, e))
+                logger.error('Job {}, failed to complete job: {}'.format(job.id, e))
                 raise
 
     def __update_task_status(self, task):
