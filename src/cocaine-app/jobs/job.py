@@ -369,6 +369,7 @@ class Job(MongoObject):
             logger.error('Job {0}: failed to unmark required groups: {1}'.format(
                 self.id, e))
             raise
+        self._dirty = True
         ts = time.time()
         if not self.start_ts:
             self.start_ts = ts
@@ -412,6 +413,15 @@ class Job(MongoObject):
             params.update(condition(k, v))
 
         return collection.find(params).sort(sort_by, sort_by_order)
+
+    def on_execution_interrupted(self, error_msg=None):
+        ts = time.time()
+        # TODO: remove update_ts (seems that it is not used anywhere)
+        self.update_ts = ts
+        self.finish_ts = ts
+        if error_msg:
+            self.add_error_msg(error_msg)
+        self._dirty = True
 
 
 def condition(field_name, field_val):
