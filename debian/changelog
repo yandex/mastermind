@@ -1,3 +1,10 @@
+mastermind (2.28.116) trusty; urgency=medium
+
+  * Restore job: make RO group.backend
+  * Refactor job processing
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 16 Dec 2016 15:39:32 +0300
+
 mastermind (2.28.115) trusty; urgency=medium
 
   * Add mimetype namespace settings

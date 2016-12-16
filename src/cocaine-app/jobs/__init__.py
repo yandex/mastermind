@@ -261,8 +261,7 @@ class JobProcessor(object):
                     except LockError:
                         pass
                     except Exception as e:
-                        logger.error('Failed to process job {0}: '
-                            '{1}\n{2}'.format(job.id, e, traceback.format_exc()))
+                        logger.exception('Failed to process job {}'.format(job.id))
                         continue
 
         except LockFailedError as e:
@@ -272,179 +271,177 @@ class JobProcessor(object):
                 e, traceback.format_exc()))
         finally:
             logger.info('Jobs execution finished')
-            self.__tq.add_task_at(self.JOBS_EXECUTE,
+            self.__tq.add_task_at(
+                self.JOBS_EXECUTE,
                 self.jobs_timer.next(),
-                self._execute_jobs)
+                self._execute_jobs
+            )
 
     def __process_job(self, job):
 
-        logger.debug('Job {0}, processing started: {1}'.format(job.id, job.dump()))
+        logger.debug('Job {}, processing started: {}'.format(job.id, job.dump()))
 
         if job.status == Job.STATUS_NEW:
-            logger.info('Job {0}: setting job start time'.format(job.id))
-            job.start_ts = time.time()
-            job._dirty = True
             try:
                 job.on_start()
-            except Exception as e:
-                logger.error('Job {0}: failed to start job: {1}\n{2}'.format(
-                    job.id, e, traceback.format_exc()))
-                if isinstance(e, JobBrokenError):
-                    job.status = Job.STATUS_BROKEN
-                else:
-                    job.status = Job.STATUS_PENDING
-                job.add_error_msg(str(e))
-                ts = time.time()
-                job.update_ts = ts
-                job.finish_ts = ts
+                job.status = Job.STATUS_EXECUTING
+            except JobBrokenError as e:
+                logger.error('Job {}: failed to start job: {}'.format(job.id, e))
+                job.status = Job.STATUS_BROKEN
+                job.on_execution_interrupted(error_msg=str(e))
                 return
+            except Exception as e:
+                logger.exception('Job {}: failed to start job'.format(job.id))
+                job.status = Job.STATUS_PENDING
+                job.on_execution_interrupted(error_msg=str(e))
+                return
+            finally:
+                job._dirty = True
+                job.update_ts = time.time()
 
         for task in job.tasks:
 
+            if task.status == Task.STATUS_SKIPPED:
+                continue
+
+            if task.status == Task.STATUS_COMPLETED:
+                continue
+
             if task.status == Task.STATUS_QUEUED:
-                logger.info('Job {0}, executing new task {1}'.format(job.id, task))
-
+                # NOTE: task can change status to 'executing' on this step, then
+                # it is safe to continue task execution
                 try:
-                    task.on_exec_start(self)
-                    logger.info('Job {0}, task {1} preparation completed'.format(job.id, task.id))
-                except Exception as e:
-                    logger.error('Job {0}, task {1}: failed to execute task '
-                        'start handler: {2}\n{3}'.format(
-                            job.id, task.id, e, traceback.format_exc()))
-                    raise
-
-                try:
-                    task.attempts += 1
-                    self.__execute_task(task)
-                    logger.info('Job {0}, task {1} execution was successfully requested'.format(
-                        job.id, task.id))
-                except Exception as e:
-                    try:
-                        task.on_exec_stop(self)
-                    except Exception as e:
-                        logger.error('Job {0}, task {1}: failed to execute task '
-                            'stop handler: {2}\n{3}'.format(
-                                job.id, task.id, e, traceback.format_exc()))
-                        raise
-
-                    if isinstance(e, RetryError):
-                        logger.error('Job {}, task {}: retry error: {}'.format(
-                            job.id, task.id, e))
-                        if task.attempts < JOB_CONFIG.get('minions', {}).get('execute_attempts', 3):
-                            job._dirty = True
-                            break
-                        else:
-                            job.add_error_msg(str(e))
-
-                    task.status = Task.STATUS_FAILED
-                    if isinstance(e, JobBrokenError):
-                        logger.error('Job {0}, task {1}: cannot execute task, '
-                            'not applicable for current storage state: {2}'.format(
-                                job.id, task.id, e))
-                        job.status = Job.STATUS_BROKEN
-                    else:
-                        logger.error('Job {0}, task {1}: failed to execute: {2}\n{3}'.format(
-                            job.id, task.id, e, traceback.format_exc()))
-                        job.status = Job.STATUS_PENDING
-                    job.add_error_msg(str(e))
-                    ts = time.time()
-                    job.update_ts = ts
-                    job.finish_ts = ts
-                    job._dirty = True
-                    break
-
-                job.update_ts = time.time()
-                task.status = Task.STATUS_EXECUTING
-                job.status = Job.STATUS_EXECUTING
-                job._dirty = True
-
-            # this can be safely run even when task has just been switched to
-            # 'executing' state
-            if task.status == Task.STATUS_EXECUTING:
-
-                logger.info('Job {0}, task {1} status update'.format(
-                    job.id, task.id))
-                try:
-                    self.__update_task_status(task)
-                except Exception as e:
-                    logger.error('Job {0}, task {1}: failed to update status: '
-                        '{2}\n{3}'.format(job.id, task.id, e, traceback.format_exc()))
-                    job.add_error_msg(str(e))
-                    task.status = Task.STATUS_FAILED
-                    job.status = Job.STATUS_PENDING
-                    ts = time.time()
-                    job.update_ts = ts
-                    job.finish_ts = ts
-                    job._dirty = True
-                    break
-
-                if not task.finished(self):
-                    logger.debug('Job {0}, task {1} is not finished'.format(
-                        job.id, task.id))
-                    break
-
-                ts = time.time()
-                job.update_ts = ts
-                job.finish_ts = ts
-                job._dirty = True
-
-                task.status = (Task.STATUS_FAILED
-                               if task.failed(self) else
-                               Task.STATUS_COMPLETED)
-
-                try:
-                    task.on_exec_stop(self)
+                    self.__start_task(job, task)
                 except JobBrokenError as e:
-                    logger.exception(
-                        'Job {job_id}, task {task_id}: failed to execute task stop handler'.format(
-                            job_id=job.id,
-                            task_id=task.id,
+                    job.status = Job.STATUS_BROKEN
+                    job.on_execution_interrupted(error_msg=str(e))
+                    logger.error(
+                        'Job {}, task {}: cannot execute task, not applicable for current storage '
+                        'state: {}'.format(
+                            job.id,
+                            task.id,
+                            e
                         )
                     )
-                    job.add_error_msg(str(e))
-                    task.status = Task.STATUS_FAILED
-                    job.status = Job.STATUS_PENDING
-                    ts = time.time()
-                    job.update_ts = ts
-                    job.finish_ts = ts
+                    break
+                except Exception as e:
+                    job.status = job.STATUS_PENDING
+                    job.on_execution_interrupted(error_msg=str(e))
+                    logger.exception('Job {}, task {}: failed to execute'.format(job.id, task.id))
+                    break
+                finally:
+                    # TODO: move update_ts and _dirty update
                     job._dirty = True
+                    job.update_ts = time.time()
+
+                job.status = Job.STATUS_EXECUTING
+
+            if task.status == Task.STATUS_EXECUTING:
+                try:
+                    self.__update_task(job, task)
+                except Exception as e:
+                    job.status = Job.STATUS_PENDING
+                    job.on_execution_interrupted(error_msg=str(e))
                     break
 
-                except Exception:
-                    logger.exception(
-                        'Job {job_id}, task {task_id}: failed to execute task stop handler'.format(
-                            job_id=job.id,
-                            task_id=task.id,
-                        )
-                    )
-                    raise
-
-                logger.debug('Job {0}, task {1} is finished, status {2}'.format(
-                    job.id, task.id, task.status))
-
-                if task.status == Task.STATUS_FAILED:
-                    job.status = Job.STATUS_PENDING
-                    ts = time.time()
-                    job.update_ts = ts
-                    job.finish_ts = ts
+                if task.status == Task.STATUS_EXECUTING:
+                    # task is still executing, continue with the next job
                     break
                 else:
-                    continue
+                    # NOTE: this condition serves as optimization to lower mongo update query
+                    # frequency for the job
+                    # TODO: move update_ts and _dirty update (?)
+                    job._dirty = True
+                    job.update_ts = time.time()
 
-            elif task.status == Task.STATUS_FAILED:
+            if task.status == Task.STATUS_FAILED:
+                job.status = Job.STATUS_PENDING
+                job.on_execution_interrupted()
                 break
 
         finished_statuses = (Task.STATUS_COMPLETED, Task.STATUS_SKIPPED)
 
         if all(task.status in finished_statuses for task in job.tasks):
-            logger.info('Job {0}, tasks processing is finished'.format(job.id))
+            logger.info('Job {}, tasks processing is finished'.format(job.id))
             try:
                 job.status = Job.STATUS_COMPLETED
                 job.complete(self)
-                job._dirty = True
             except RuntimeError as e:
-                logger.error('Job {0}, failed to complete job: {1}'.format(job.id, e))
+                logger.error('Job {}, failed to complete job: {}'.format(job.id, e))
                 raise
+
+    def __start_task(self, job, task):
+        logger.info('Job {}, executing new task {}'.format(job.id, task))
+
+        try:
+            task.on_exec_start(self)
+            logger.info('Job {}, task {} preparation completed'.format(job.id, task.id))
+        except Exception:
+            logger.exception('Job {}, task {}: failed to execute task start handler'.format(
+                job.id,
+                task.id
+            ))
+            task.status = Task.STATUS_FAILED
+            raise
+
+        try:
+            task.attempts += 1
+            self.__execute_task(task)
+            logger.info('Job {}, task {} execution successfully started'.format(
+                job.id,
+                task.id
+            ))
+        except Exception as e:
+            try:
+                task.on_exec_stop(self)
+            except Exception:
+                logger.exception('Job {}, task {}: failed to execute task stop handler'.format(
+                    job.id,
+                    task.id
+                ))
+                task.status = Task.STATUS_FAILED
+                raise
+
+            if isinstance(e, RetryError):
+                logger.error('Job {}, task {}: retry error: {}'.format(job.id, task.id, e))
+                if task.attempts < JOB_CONFIG.get('minions', {}).get('execute_attempts', 3):
+                    # NOTE: no status change, will be retried
+                    return
+
+            task.status = Task.STATUS_FAILED
+            raise
+
+        task.status = Task.STATUS_EXECUTING
+
+    def __update_task(self, job, task):
+        logger.info('Job {}, task {} status update'.format(job.id, task.id))
+
+        try:
+            self.__update_task_status(task)
+        except Exception:
+            logger.exception('Job {}, task {}: failed to update status'.format(job.id, task.id))
+            task.status = Task.STATUS_FAILED
+            raise
+
+        if not task.finished(self):
+            logger.debug('Job {}, task {} is not finished'.format(job.id, task.id))
+            return
+
+        task.status = (Task.STATUS_FAILED
+                       if task.failed(self) else
+                       Task.STATUS_COMPLETED)
+
+        try:
+            task.on_exec_stop(self)
+        except Exception:
+            logger.exception('Job {}, task {}: failed to execute task stop handler'.format(
+                job.id,
+                task.id
+            ))
+            task.status = Task.STATUS_FAILED
+            raise
+
+        logger.debug('Job {}, task {} is finished, status {}'.format(job.id, task.id, task.status))
 
     def __update_task_status(self, task):
         if isinstance(task, MinionCmdTask):
@@ -506,7 +503,9 @@ class JobProcessor(object):
 
             # check job types priority
             STOP_ALLOWED_TYPES = (JobTypes.TYPE_RECOVER_DC_JOB,
-                                  JobTypes.TYPE_COUPLE_DEFRAG_JOB)
+                                  JobTypes.TYPE_COUPLE_DEFRAG_JOB,
+                                  JobTypes.TYPE_TTL_CLEANUP_JOB
+                                  )
 
             if job_type not in (JobTypes.TYPE_RESTORE_GROUP_JOB, JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_BACKEND_MANAGER_JOB):
                 raise
@@ -671,7 +670,6 @@ class JobProcessor(object):
 
         job.status = Job.STATUS_CANCELLED
         job.complete(self)
-        job._dirty = True
         job.save()
 
     @h.concurrent_handler
@@ -1046,16 +1044,12 @@ class JobFinder(object):
         # each job type should have a property to determine
         # if it uses uncoupled groups.
         jobs = self.jobs(
-            types=(
-                JobTypes.TYPE_MOVE_JOB,
-                JobTypes.TYPE_RESTORE_GROUP_JOB,
-                JobTypes.TYPE_MAKE_LRC_GROUPS_JOB,
-            ),
             statuses=(Job.STATUS_NOT_APPROVED,
                       Job.STATUS_NEW,
                       Job.STATUS_EXECUTING,
                       Job.STATUS_PENDING,
-                      Job.STATUS_BROKEN))
+                      Job.STATUS_BROKEN)
+        )
 
         uncoupled_groups = []
         for job in jobs:

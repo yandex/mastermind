@@ -453,7 +453,7 @@ class MultiRepository(object):
     def keys(self):
         # list comprehension should be used here to fix keys lists
         # when call to this method is performed
-        return itertools.chain(*[r.keys() for r in self._repositories.itevalues()])
+        return itertools.chain(*[r.keys() for r in self._repositories.itervalues()])
 
     def iterkeys(self):
         return itertools.chain(*(r.iterkeys() for r in self._repositories.itervalues()))

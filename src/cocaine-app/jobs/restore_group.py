@@ -237,9 +237,6 @@ class RestoreGroupJob(Job):
         mark_src_backend = self.make_path(
             self.BACKEND_DOWN_MARKER, base_path=src_backend.base_path).format(
                 backend_id=src_backend.backend_id)
-        stop_src_backend = self.make_path(
-            self.BACKEND_STOP_MARKER, base_path=src_backend.base_path).format(
-                backend_id=src_backend.backend_id)
 
         make_readonly_cmd = infrastructure._make_readonly_node_backend_cmd(
             src_backend.node.host.addr, src_backend.node.port,
@@ -252,10 +249,35 @@ class RestoreGroupJob(Job):
                 src_backend.node.host.addr, src_backend.node.port,
                 src_backend.backend_id).encode('utf-8'),
                     'mark_backend': mark_src_backend,
-                    'create_stop_file': stop_src_backend,
                     'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]})
 
         self.tasks.append(task)
+
+        if (restore_backend and restore_backend.status in storage.Status.OK):
+            mark_restore_backend = self.make_path(
+                self.BACKEND_DOWN_MARKER, base_path=restore_backend.base_path).format(
+                    backend_id=restore_backend.backend_id)
+            make_readonly_cmd = infrastructure._make_readonly_node_backend_cmd(
+                restore_backend.node.host.addr, restore_backend.node.port,
+                restore_backend.node.family, restore_backend.backend_id)
+
+            task = MinionCmdTask.new(self,
+                host=restore_backend.node.host.addr,
+                cmd=make_readonly_cmd,
+                params={'node_backend': self.node_backend(
+                    restore_backend.node.host.addr, restore_backend.node.port,
+                    restore_backend.backend_id).encode('utf-8'),
+                        'mark_backend': mark_restore_backend,
+                        'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]})
+            self.tasks.append(task)
+
+            expected_statuses = [storage.Status.STALLED, storage.Status.INIT, storage.Status.RO]
+            task = WaitBackendStateTask.new(
+                self,
+                backend=str(restore_backend),
+                backend_statuses=expected_statuses,
+                missing=True)
+            self.tasks.append(task)
 
         expected_statuses = [storage.Status.STALLED, storage.Status.INIT, storage.Status.RO]
         task = WaitBackendStateTask.new(
@@ -318,6 +340,13 @@ class RestoreGroupJob(Job):
         if (restore_backend and restore_backend.status in
             storage.NodeBackend.ACTIVE_STATUSES):
 
+            mark_restore_backend = self.make_path(
+                self.BACKEND_DOWN_MARKER, base_path=restore_backend.base_path).format(
+                    backend_id=restore_backend.backend_id)
+            stop_restore_backend = self.make_path(
+                self.BACKEND_STOP_MARKER, base_path=src_backend.base_path).format(
+                    backend_id=src_backend.backend_id)
+
             nb = group.node_backends[0]
             shutdown_cmd = infrastructure._remove_node_backend_cmd(
                 nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id)
@@ -356,10 +385,9 @@ class RestoreGroupJob(Job):
                       'group': str(self.group),
                       'group_file_marker': group_file_marker_fmt,
                       'remove_group_file': group_file,
-                      'unmark_backend': mark_src_backend,
-                      'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS],
-                      'remove_stop_file': stop_src_backend,
-                      'force_stop_file': True}
+                      'unmark_backend': mark_restore_backend,
+                      'create_stop_file': stop_restore_backend,
+                      'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]}
 
             if self.GROUP_FILE_DIR_MOVE_SRC_RENAME and group_file:
                 params['move_src'] = os.path.join(os.path.dirname(group_file))
@@ -372,7 +400,6 @@ class RestoreGroupJob(Job):
                                     cmd=shutdown_cmd,
                                     params=params)
             self.tasks.append(task)
-
 
         reconfigure_cmd = infrastructure._reconfigure_node_cmd(
             dst_host, dst_port, dst_family)
@@ -430,8 +457,6 @@ class RestoreGroupJob(Job):
                     src_backend.node.host.addr, src_backend.node.port,
                     src_backend.backend_id).encode('utf-8'),
                         'unmark_backend': mark_src_backend,
-                        'remove_stop_file': stop_src_backend,
-                        'force_stop_file': True,
                         'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]})
 
             self.tasks.append(task)
