@@ -1529,7 +1529,7 @@ class Group(object):
     @property
     def want_defrag(self):
         for nb in self.node_backends:
-            if nb.stat and nb.stat.want_defrag > 3:
+            if nb.stat and nb.stat.want_defrag > 0:
                 return True
         return False
 
