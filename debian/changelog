@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.117) trusty; urgency=medium
+
+  * Update eblob want_defrag value interpretation
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sat, 17 Dec 2016 22:40:17 +0300
+
 mastermind-cocainev11 (2.28.116) trusty; urgency=medium
 
   * Restore job: make RO group.backend
