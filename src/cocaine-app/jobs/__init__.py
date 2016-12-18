@@ -373,19 +373,23 @@ class JobProcessor(object):
     def __start_task(self, job, task):
         logger.info('Job {}, executing new task {}'.format(job.id, task))
 
+        task.add_history_record()
+
         try:
             task.on_exec_start(self)
             logger.info('Job {}, task {} preparation completed'.format(job.id, task.id))
-        except Exception:
+        except Exception as e:
             logger.exception('Job {}, task {}: failed to execute task start handler'.format(
                 job.id,
                 task.id
             ))
             task.status = Task.STATUS_FAILED
+            task.on_run_history_update(error=e)
             raise
 
         try:
             task.attempts += 1
+            task.last_run_history_record.attempts = task.last_run_history_record.attempts + 1
             self.__execute_task(task)
             logger.info('Job {}, task {} execution successfully started'.format(
                 job.id,
@@ -400,6 +404,7 @@ class JobProcessor(object):
                     task.id
                 ))
                 task.status = Task.STATUS_FAILED
+                task.on_run_history_update(error=e)
                 raise
 
             if isinstance(e, RetryError):
@@ -409,6 +414,7 @@ class JobProcessor(object):
                     return
 
             task.status = Task.STATUS_FAILED
+            task.on_run_history_update(error=e)
             raise
 
         task.status = Task.STATUS_EXECUTING
@@ -418,9 +424,13 @@ class JobProcessor(object):
 
         try:
             self.__update_task_status(task)
-        except Exception:
+        except Exception as e:
             logger.exception('Job {}, task {}: failed to update status'.format(job.id, task.id))
             task.status = Task.STATUS_FAILED
+
+            # TODO: should we call on_exec_stop here?
+
+            task.on_run_history_update(error=e)
             raise
 
         if not task.finished(self):
@@ -433,7 +443,7 @@ class JobProcessor(object):
 
         try:
             task.on_exec_stop(self)
-        except Exception:
+        except Exception as e:
             logger.exception('Job {}, task {}: failed to execute task stop handler'.format(
                 job.id,
                 task.id
@@ -441,6 +451,7 @@ class JobProcessor(object):
             task.status = Task.STATUS_FAILED
             raise
 
+        task.on_run_history_update()
         logger.debug('Job {}, task {} is finished, status {}'.format(job.id, task.id, task.status))
 
     def __update_task_status(self, task):
