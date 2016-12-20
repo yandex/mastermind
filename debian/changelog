@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.119) trusty; urgency=medium
+
+  * Set dc to 'unknown' value when strict detection is not required
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 20 Dec 2016 12:08:07 +0300
+
 mastermind-cocainev11 (2.28.118) trusty; urgency=medium
 
   * Fix groups' state update
