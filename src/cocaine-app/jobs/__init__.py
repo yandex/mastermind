@@ -283,6 +283,7 @@ class JobProcessor(object):
 
         if job.status == Job.STATUS_NEW:
             try:
+                job.start_ts = int(time.time())
                 job.on_start()
                 job.status = Job.STATUS_EXECUTING
             except JobBrokenError as e:
