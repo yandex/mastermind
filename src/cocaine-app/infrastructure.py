@@ -1388,6 +1388,7 @@ class UncoupledGroupsSelector(object):
         self._alive_keys_groups = []
         self._mismatched_type_groups = []
         self._max_backends_groups = []
+        self._unknown_dc_groups = []
 
         self._good_uncoupled_groups = []
 
@@ -1438,6 +1439,12 @@ class UncoupledGroupsSelector(object):
                 self._alive_keys_groups.append(group)
                 return
 
+            try:
+                node_backend_dc = nb.node.host.dc
+            except CacheUpstreamError:
+                self._unknown_dc_groups.append(group)
+                return
+
         if self.max_node_backends and len(group.node_backends) > self.max_node_backends:
             self._max_backends_groups.append((group, len(group.node_backends)))
             return
@@ -1480,6 +1487,7 @@ class UncoupledGroupsSelector(object):
                     for g, count in self._max_backends_groups
                 ]
             )
+        s += '; groups with unknown dcs: {}'.format([g.group_id for g in self._unknown_dc_groups])
         return s
 
 
