@@ -118,10 +118,24 @@ class Task(object):
     def on_run_history_update(self, error=None):
         last_record = self.last_run_history_record
         last_record.finish_ts = int(time.time())
-        if self.status == Task.STATUS_FAILED:
+        if self.status == Task.STATUS_FAILED or error:
             last_record.status = 'error'
-        elif error is not None:
-            last_record.status = 'error'
-            last_record.error_msg = str(error)
+            if error:
+                last_record.error_msg = str(error)
+            last_record.delayed_till_ts = self.next_retry_ts
         else:
             last_record.status = 'success'
+
+    def ready_for_retry(self, processor):
+        return False
+
+    @property
+    def next_retry_ts(self):
+        """ Timestamp of the next attempt of task retry after an error.
+
+        Task types that are subject to automatic retries should implement
+        this property.
+
+        'None' is interpreted as no automatic retry attempts.
+        """
+        return None

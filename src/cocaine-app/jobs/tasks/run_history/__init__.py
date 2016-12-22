@@ -9,6 +9,7 @@ class RunHistoryRecord(object):
     ARTIFACTS = 'artifacts'
     ERROR_MSG = 'error_msg'
     ATTEMPTS = 'attempts'
+    DELAYED_TILL_TS = 'delayed_till_ts'
 
     # for minion command tasks
     COMMAND_UID = 'command_uid'
@@ -32,6 +33,10 @@ class RunHistoryRecord(object):
     artifacts = _data_key(ARTIFACTS, "Task artifacts, custom dictionary for any task type")
     error_msg = _data_key(ERROR_MSG, "Task error message in case of an error, otherwise None")
     attempts = _data_key(ATTEMPTS, "Number of attempts to execute task")
+    delayed_till_ts = _data_key(
+        DELAYED_TILL_TS,
+        "Timestamp when the task can be retried in case of an error"
+    )
 
     command_uid = _data_key(COMMAND_UID, "Contains minion command uid")
     exit_code = _data_key(EXIT_CODE, "Contains minion command exit code")
