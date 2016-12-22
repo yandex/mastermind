@@ -3,14 +3,17 @@ from mastermind_core.config import config
 
 
 try:
-    inv = import_object(config['inventory'])
-except ImportError as e:
-    raise RuntimeError('Failed to import inventory module {inventory}: {error}'.format(
-        inventory=config['inventory'],
-        error=e,
-    ))
+    inventory_module_name = config['inventory']
 except KeyError:
     import fake_inventory as inv
+else:
+    try:
+        inv = import_object(inventory_module_name)
+    except ImportError as e:
+        raise RuntimeError('Failed to import inventory module {inventory}: {error}'.format(
+            inventory=inventory_module_name,
+            error=e,
+        ))
 
 import fake_inventory
 
