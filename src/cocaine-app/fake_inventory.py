@@ -264,3 +264,15 @@ def is_external_storage_ready(src_storage, src_storage_options, src_storage_id, 
         @convert_queue: mongo collection to implement custom check logic
     '''
     return True
+
+
+def external_storage_task_retry_ts(task, src_storage, src_storage_options):
+    '''
+    Get the next retry attempt timestamp for the task.
+
+    Parameters:
+        @task: failed task
+        @src_storage: type of source storage
+        @src_storage_options: source storage options
+    '''
+    return None
