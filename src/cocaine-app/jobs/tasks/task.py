@@ -127,6 +127,9 @@ class Task(object):
             last_record.status = 'success'
 
     def ready_for_retry(self, processor):
+        last_record = self.last_run_history_record
+        if last_record.delayed_till_ts and time.time() > last_record.delayed_till_ts:
+            return True
         return False
 
     @property

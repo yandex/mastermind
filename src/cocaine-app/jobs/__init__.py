@@ -121,6 +121,38 @@ class JobProcessor(object):
                 res_val = tuple(res_val)
             yield res_type, res_val
 
+    def _retry_jobs(self):
+
+        pending_jobs = self.job_finder.jobs(statuses=Job.STATUS_PENDING)
+
+        for job in pending_jobs:
+            try:
+                self._retry_job(job)
+            except Exception:
+                logger.exception('Job {}: failed to retry'.format(job.id))
+                continue
+
+    def _retry_job(self, job):
+        for task in job.tasks:
+            if task.status in (Task.STATUS_COMPLETED, Task.STATUS_COMPLETED):
+                continue
+            if task.status != Task.STATUS_FAILED:
+                # unexpected status, skip job processing
+                break
+
+            assert task.status == Task.STATUS_FAILED
+
+            if task.ready_for_retry(self):
+                logger.info(
+                    'Job {}, task {}: ready for retry, setting status to "queued"'.format(
+                        job.id,
+                        task.id
+                    )
+                )
+                self.__change_failed_task_status(job.id, task.id, Task.STATUS_QUEUED)
+
+            break
+
     def _ready_jobs(self):
 
         active_statuses = list(Job.ACTIVE_STATUSES)
@@ -251,6 +283,8 @@ class JobProcessor(object):
             logger.debug('Lock acquiring')
             with sync_manager.lock(self.JOBS_LOCK, blocking=False):
                 logger.debug('Lock acquired')
+
+                self._retry_jobs()
 
                 ready_jobs = self._ready_jobs()
 

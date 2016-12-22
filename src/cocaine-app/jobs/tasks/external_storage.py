@@ -1,6 +1,7 @@
 import inventory
 from jobs import TaskTypes
 from minion_cmd import MinionCmdTask
+import storage
 
 
 class ExternalStorageTask(MinionCmdTask):
@@ -23,3 +24,20 @@ class ExternalStorageTask(MinionCmdTask):
             self.parent_job.src_storage,
             self.parent_job.src_storage_options
         )
+
+    def ready_for_retry(self, processor):
+        if super(ExternalStorageTask, self).ready_for_retry(processor):
+
+            ready = inventory.is_external_storage_task_ready_for_retry(
+                self,
+                self.parent_job.src_storage,
+                self.parent_job.src_storage_options,
+                storage,
+                processor
+            )
+
+            if not ready:
+                return False
+
+            return True
+        return False
