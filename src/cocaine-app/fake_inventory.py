@@ -276,3 +276,17 @@ def external_storage_task_retry_ts(task, src_storage, src_storage_options):
         @src_storage_options: source storage options
     '''
     return None
+
+
+def is_external_storage_task_ready_for_retry(task, src_storage, src_storage_options, storage, processor):
+    '''
+    Determine if task is ready to be retried.
+
+    Parameters:
+        @task: failed task
+        @src_storage: type of source storage
+        @src_storage_options: source storage options
+        @storage: storage module
+        @processor: instance of job processor
+    '''
+    return True

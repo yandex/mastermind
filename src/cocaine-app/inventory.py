@@ -46,3 +46,10 @@ if hasattr(inv, 'external_storage_task_retry_ts'):
     external_storage_task_retry_ts = inv.external_storage_task_retry_ts
 else:
     external_storage_task_retry_ts = fake_inventory.external_storage_task_retry_ts
+
+
+# 'is_external_storage_task_ready_for_retry' is optional
+if hasattr(inv, 'is_external_storage_task_ready_for_retry'):
+    is_external_storage_task_ready_for_retry = inv.is_external_storage_task_ready_for_retry
+else:
+    is_external_storage_task_ready_for_retry = fake_inventory.is_external_storage_task_ready_for_retry
