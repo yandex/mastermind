@@ -1,3 +1,9 @@
+mastermind (2.28.123) trusty; urgency=medium
+
+  * Add default init value for task's run history delayed_till_ts
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 23 Dec 2016 17:56:27 +0300
+
 mastermind (2.28.122) trusty; urgency=medium
 
   * Implement retry jobs workflow
