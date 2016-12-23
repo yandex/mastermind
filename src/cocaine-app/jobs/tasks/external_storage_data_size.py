@@ -1,16 +1,16 @@
 import logging
 
 from jobs import TaskTypes, JobBrokenError
-from minion_cmd import MinionCmdTask
+from external_storage import ExternalStorageTask
 import storage
 
 
 logger = logging.getLogger('mm.jobs')
 
 
-class ExternalStorageDataSizeTask(MinionCmdTask):
+class ExternalStorageDataSizeTask(ExternalStorageTask):
 
-    PARAMS = MinionCmdTask.PARAMS + ('groupset_type', 'mandatory_dcs')
+    PARAMS = ExternalStorageTask.PARAMS + ('groupset_type', 'mandatory_dcs')
 
     def __init__(self, job):
         super(ExternalStorageDataSizeTask, self).__init__(job)

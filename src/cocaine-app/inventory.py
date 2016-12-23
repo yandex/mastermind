@@ -3,14 +3,17 @@ from mastermind_core.config import config
 
 
 try:
-    inv = import_object(config['inventory'])
-except ImportError as e:
-    raise RuntimeError('Failed to import inventory module {inventory}: {error}'.format(
-        inventory=config['inventory'],
-        error=e,
-    ))
+    inventory_module_name = config['inventory']
 except KeyError:
     import fake_inventory as inv
+else:
+    try:
+        inv = import_object(inventory_module_name)
+    except ImportError as e:
+        raise RuntimeError('Failed to import inventory module {inventory}: {error}'.format(
+            inventory=inventory_module_name,
+            error=e,
+        ))
 
 import fake_inventory
 
@@ -37,3 +40,16 @@ if hasattr(inv, 'is_external_storage_ready'):
     is_external_storage_ready = inv.is_external_storage_ready
 else:
     is_external_storage_ready = fake_inventory.is_external_storage_ready
+
+# 'external_storage_task_retry_ts' is optional
+if hasattr(inv, 'external_storage_task_retry_ts'):
+    external_storage_task_retry_ts = inv.external_storage_task_retry_ts
+else:
+    external_storage_task_retry_ts = fake_inventory.external_storage_task_retry_ts
+
+
+# 'is_external_storage_task_ready_for_retry' is optional
+if hasattr(inv, 'is_external_storage_task_ready_for_retry'):
+    is_external_storage_task_ready_for_retry = inv.is_external_storage_task_ready_for_retry
+else:
+    is_external_storage_task_ready_for_retry = fake_inventory.is_external_storage_task_ready_for_retry

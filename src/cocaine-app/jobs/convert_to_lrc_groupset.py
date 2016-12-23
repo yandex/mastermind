@@ -183,7 +183,7 @@ class ConvertToLrcGroupsetJob(Job):
             trace_id=trace_id,
         )
 
-        task = tasks.MinionCmdTask.new(
+        task = tasks.ExternalStorageTask.new(
             self,
             host=self.converting_host,
             cmd=convert_cmd,
@@ -203,7 +203,7 @@ class ConvertToLrcGroupsetJob(Job):
             trace_id=trace_id,
         )
 
-        task = tasks.MinionCmdTask.new(
+        task = tasks.ExternalStorageTask.new(
             self,
             host=self.converting_host,
             cmd=validate_cmd,
