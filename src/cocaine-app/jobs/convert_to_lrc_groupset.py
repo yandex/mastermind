@@ -25,6 +25,8 @@ class ConvertToLrcGroupsetJob(Job):
         'src_storage',
         'src_storage_options',
         'resources',
+        'converting_host',
+        'groupset_creation_sleep_period',
     )
 
     def __init__(self, **kwargs):
@@ -36,6 +38,21 @@ class ConvertToLrcGroupsetJob(Job):
         # TODO: for backward compatibility, remove after converting
         job = super(ConvertToLrcGroupsetJob, cls).new(*args, **kwargs)
         job.groups = cls._get_groups(job.groups)
+
+        if not job.converting_host:
+
+            if job.determine_data_size:
+                job.converting_host = random.choice(storage.hosts.values()).addr
+            else:
+                dst_groups = [
+                    [storage.groups[group_id] for group_id in groupset_group_ids]
+                    for groupset_group_ids in job.groups
+                ]
+                # random group within groupset
+                group = random.choice(
+                    random.choice(dst_groups)  # random groupset among destination groupsets
+                )
+                job.converting_host = group.node_backends[0].node.host.addr
 
         return job
 
@@ -154,12 +171,6 @@ class ConvertToLrcGroupsetJob(Job):
 
         job_tasks = []
 
-        # randomly select group where convert process will be executed
-        exec_group = random.choice(    # random group within groupset
-            random.choice(dst_groups)  # random groupset
-        )
-        node_backend = exec_group.node_backends[0]
-
         convert_cmd = inventory.make_external_storage_convert_command(
             dst_groups=dst_groups,
             groupset_type=storage.GROUPSET_LRC,
@@ -174,16 +185,8 @@ class ConvertToLrcGroupsetJob(Job):
 
         task = tasks.MinionCmdTask.new(
             self,
-            host=node_backend.node.host.addr,
+            host=self.converting_host,
             cmd=convert_cmd,
-            params={
-                'node_backend': self.node_backend(
-                    host=node_backend.node.host.addr,
-                    port=node_backend.node.port,
-                    family=node_backend.node.family,
-                    backend_id=node_backend.backend_id,
-                ),
-            }
         )
 
         job_tasks.append(task)
@@ -202,16 +205,8 @@ class ConvertToLrcGroupsetJob(Job):
 
         task = tasks.MinionCmdTask.new(
             self,
-            host=node_backend.node.host.addr,
+            host=self.converting_host,
             cmd=validate_cmd,
-            params={
-                'node_backend': self.node_backend(
-                    host=node_backend.node.host.addr,
-                    port=node_backend.node.port,
-                    family=node_backend.node.family,
-                    backend_id=node_backend.backend_id,
-                ),
-            }
         )
 
         job_tasks.append(task)
@@ -228,9 +223,6 @@ class ConvertToLrcGroupsetJob(Job):
         # randomly select node backend to run task (since we do not know any groupset
         # at this point)
 
-        # TODO: do not make a copy of all node backends
-        node_backend = random.choice(storage.node_backends.values())
-
         data_size_cmd = inventory.make_external_storage_data_size_command(
             groupset_type=storage.GROUPSET_LRC,
             groupset_settings={
@@ -244,16 +236,8 @@ class ConvertToLrcGroupsetJob(Job):
 
         return tasks.ExternalStorageDataSizeTask.new(
             self,
-            host=node_backend.node.host.addr,
+            host=self.converting_host,
             cmd=data_size_cmd,
-            params={
-                'node_backend': self.node_backend(
-                    host=node_backend.node.host.addr,
-                    port=node_backend.node.port,
-                    family=node_backend.node.family,
-                    backend_id=node_backend.backend_id,
-                ),
-            },
             groupset_type=storage.GROUPSET_LRC,
             mandatory_dcs=self.mandatory_dcs,
         )
@@ -327,7 +311,8 @@ class ConvertToLrcGroupsetJob(Job):
         return tasks.WaitGroupsetStateTask.new(
             self,
             groupset=groupset,
-            groupset_status=storage.Status.ARCHIVED,
+            groupset_statuses=[storage.Status.ARCHIVED],
+            sleep_period=self.groupset_creation_sleep_period,
         )
 
     def _read_preference_tasks(self, couple_ids):

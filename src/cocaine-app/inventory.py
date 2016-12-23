@@ -12,6 +12,9 @@ except ImportError as e:
 except KeyError:
     import fake_inventory as inv
 
+import fake_inventory
+
+
 get_dc_by_host = inv.get_dc_by_host
 get_host_tree = inv.get_host_tree
 node_shutdown_command = inv.node_shutdown_command
@@ -28,3 +31,9 @@ get_node_types = inv.get_node_types
 make_external_storage_convert_command = inv.make_external_storage_convert_command
 make_external_storage_validate_command = inv.make_external_storage_validate_command
 make_external_storage_data_size_command = inv.make_external_storage_data_size_command
+
+# 'is_external_storage_ready' is optional
+if hasattr(inv, 'is_external_storage_ready'):
+    is_external_storage_ready = inv.is_external_storage_ready
+else:
+    is_external_storage_ready = fake_inventory.is_external_storage_ready

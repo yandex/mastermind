@@ -21,7 +21,7 @@ import keys
 from mastermind_core.config import config
 from mastermind_core.db.mongo.pool import Collection
 from mastermind_core.response import CachedGzipResponse
-from mastermind_core.helpers import gzip_compress
+from mastermind_core.helpers import gzip_compress, convert_config_bytes_value
 import monitor
 import statistics
 import storage
@@ -158,7 +158,7 @@ class Balancer(object):
         try:
             return [group.group_id
                     for group in infrastructure.infrastructure.get_good_uncoupled_groups(
-                        including_in_service=in_service,
+                        exclude_in_service=in_service,
                         status=status)]
         except Exception:
             logger.exception('Failed to fetch uncoupled groups list')
@@ -695,9 +695,11 @@ class Balancer(object):
             self.infrastructure.account_ns_couples(tree, nodes, ns)
 
             units = self.infrastructure.groups_units(
-                [storage.groups[group_id]
+                [
+                    storage.groups[group_id]
                     for group_ids in groups_by_total_space.itervalues()
-                    for group_id in group_ids],
+                    for group_id in group_ids
+                ],
                 self.NODE_TYPES)
 
         except Exception as e:
@@ -1078,8 +1080,15 @@ class Balancer(object):
         options.setdefault('match_group_space', True)
         options.setdefault('init_state', storage.Status.COUPLED)
         options.setdefault('dry_run', False)
+        options.setdefault('group_total_space', None)
         options.setdefault('mandatory_groups', [])
         options.setdefault('groupsets', [])
+
+        default_group_total_space = config.get('couple_build', {}).get('default_group_total_space')
+        group_total_space = options['group_total_space'] or default_group_total_space
+        group_total_space_in_bytes = None
+        if group_total_space:
+            group_total_space_in_bytes = convert_config_bytes_value(group_total_space)
 
         options['init_state'] = options['init_state'].upper()
         if not options['init_state'] in self.VALID_COUPLE_INIT_STATES:
@@ -1111,7 +1120,8 @@ class Balancer(object):
             logger.info('Updating cluster info completed')
 
             groups_by_total_space = infrastructure.infrastructure.groups_by_total_space(
-                match_group_space=options['match_group_space']
+                match_group_space=options['match_group_space'],
+                group_total_space=group_total_space_in_bytes,
             )
 
             logger.info('groups by total space: {0}'.format(groups_by_total_space))
@@ -1127,7 +1137,8 @@ class Balancer(object):
 
         with sync_manager.lock(self.CLUSTER_CHANGES_LOCK, blocking=False):
 
-            couple_str = ':'.join(map(str, sorted(request[0], key=lambda x: int(x))))
+            group_ids = request[0]
+            couple_str = ':'.join(map(str, sorted(group_ids, key=lambda x: int(x))))
             # TODO: use 'couples' container
             if couple_str not in storage.replicas_groupsets:
                 raise KeyError('Couple %s was not found' % (couple_str))
@@ -1163,6 +1174,16 @@ class Balancer(object):
             for group in couple.groups:
                 group.parse_meta(None)
             couple.destroy()
+
+            logger.info('Removing couple {0} from groups {1} history'.format(couple_str, group_ids))
+            try:
+                self.infrastructure.uncouple_groups(group_ids=tuple(group_ids))
+            except Exception as e:
+                logger.exception('Failed to remove couple {0} from groups {1} history'.format(
+                    couple_str, group_ids
+                ))
+                raise
+            logger.info('Removed couple {0} from groups {1} history'.format(couple_str, group_ids))
 
             return True
 

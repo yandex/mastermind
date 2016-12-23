@@ -26,6 +26,16 @@ class ExternalStorageDataSizeTask(MinionCmdTask):
             except ValueError as e:
                 raise JobBrokenError(str(e))
 
+            if data_size == 0:
+                logger.info(
+                    'Job {job_id}, task {task_id}: determined data size is 0, converting is not '
+                    'required'.format(
+                        job_id=self.parent_job.id,
+                        task_id=self.id,
+                    )
+                )
+                return
+
             total_space = 0
             groupsets = []
             selected_groups = set()
@@ -92,7 +102,7 @@ class ExternalStorageDataSizeTask(MinionCmdTask):
         except ValueError:
             raise ValueError('Unexpected storage data size returned from command stdout')
 
-        if data_size <= 0:
+        if data_size < 0:
             raise ValueError('Unexpected storage data size returned from command stdout')
 
         return data_size

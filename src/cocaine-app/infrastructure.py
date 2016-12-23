@@ -219,6 +219,10 @@ class Infrastructure(object):
             if group_history.group_id not in storage.groups:
                 continue
             group = storage.groups[group_history.group_id]
+
+            # this loop responsible only for removing excess node_backend's,
+            # since adding node_backend's will proceed automatically
+            # during mastermind periodical updates
             for node_backends_set in group_history.nodes:
                 # top threshold is checked due to mongo optimization: using bottom threshold only
                 # leads to mongo using index interval [<bottom_threshold>, inf+], which matches a
@@ -247,6 +251,40 @@ class Infrastructure(object):
                         )
                         group.remove_node_backend(nb)
                         group.update_status_recursive()
+
+            # another instance of mastermind can destroy couple;
+            # now the following loop responsible only for destroying that couple
+            # in the state of this mastermind
+
+            # special case: if the first record in the history is `no couple`,
+            # then we will break the current couple of the group
+            previous_couple = group.couple.as_tuple() if group.couple else ()
+            for couple_record in group_history.couples:
+                if (
+                    not self._sync_ts <= couple_record.timestamp < new_ts or
+
+                    couple_record.type not in types_to_sync
+                ):
+                    previous_couple = couple_record.couple
+                    continue
+
+                if not couple_record.couple and group.couple:
+                    if previous_couple == group.couple.as_tuple():
+                        logger.info('Breaking couple {} due to manual couple break'.format(
+                            previous_couple
+                        ))
+                        group.couple.destroy()
+                    else:
+                        logger.error(
+                            'Applying manual couple break from history is impossible: '
+                            'we expect that group {} couple with couple {}, '
+                            'but instead it coupled with couple {}'.format(
+                                group, previous_couple, group.couple.as_tuple()
+                            )
+                        )
+
+                previous_couple = couple_record.couple
+
         self._sync_ts = new_ts
 
     def update_group_history(self, group):
@@ -339,11 +377,11 @@ class Infrastructure(object):
 
         New record is not allowed to add "no couple" record to history.
         If group is new and uncoupled such record should be provided by uncoupled group
-        init script (not implemeted at the time).
+        init script (not implemented at the time).
         In case couple is being broken "no couple" record of non-automatic type creation
         should be provided by the action-performing code.
 
-        The worlflow is following:
+        The workflow is following:
             1) if group's current couple differs from the one set in the most recent
             history record create a new couple record with current group's couple;
             2) if group's current couple is <None>, new record should not be created.
@@ -362,8 +400,7 @@ class Infrastructure(object):
             group_history.couples and group_history.couples[-1] or
             GroupCoupleRecord(couple=())
         )
-
-        if history_couple and history_couple != storage_couple:
+        if history_couple != storage_couple:
             logger.info(
                 'Group {} couple does not match, last state: {}, '
                 'current state: {}'.format(
@@ -507,6 +544,27 @@ class Infrastructure(object):
             new_nodes=GroupNodeBackendsSetRecord(set=node_backends_set),
             record_type=record_type or GroupStateRecord.HISTORY_RECORD_MANUAL
         )
+
+    def uncouple_groups(self, group_ids, record_type=None):
+        """
+        Create new record "no couple" for groups histories.
+        """
+
+        if not self.group_history_finder:
+            return
+
+        for group_id in group_ids:
+            try:
+                group_history = self.get_group_history(group_id)
+            except ValueError:
+                # NOTE: Recently created group with no history - create one
+                group_history = self._new_group_history(group_id)
+
+            self._update_group(
+                group_history=group_history,
+                new_couple=GroupCoupleRecord(couple=()),
+                record_type=record_type or GroupStateRecord.HISTORY_RECORD_MANUAL
+            )
 
     def move_group_cmd(self,
                        src_host,
@@ -755,7 +813,8 @@ class Infrastructure(object):
                 remotes.append(self.REMOTE_TPL.format(
                     host=nb.node.host.addr,
                     port=nb.node.port,
-                    family=nb.node.family,))
+                    family=nb.node.family,
+                ))
 
         if not tmp_dir:
             tmp_dir = RECOVERY_DC_CNF.get(
@@ -786,17 +845,21 @@ class Infrastructure(object):
 
         try:
             host, port, family, backend_id = request[:4]
-            port, family, backend_id = map(int, (port, family, backend_id))
-            node_backend_str = '{0}:{1}/{2}'.format(host, port, backend_id)
-            node_backend = storage.node_backends[node_backend_str]
-        except (ValueError, TypeError, KeyError):
-            raise ValueError('Node backend {0} is not found'.format(node_backend_str))
+        except ValueError:
+            raise ValueError(
+                'Request should contain parameters in the following order: '
+                'host, port, family, backend_id'
+            )
+
+        node_backend_str = '{0}:{1}/{2}'.format(host, port, backend_id)
+        node_backend = storage.node_backends[node_backend_str]
 
         cmd = self._defrag_node_backend_cmd(
             node_backend.node.host.addr,
             node_backend.node.port,
             node_backend.node.family,
-            node_backend.backend_id)
+            node_backend.backend_id,
+        )
 
         logger.info('Command for node backend {0} defragmentation was requested: {1}'.format(
             node_backend, cmd
@@ -806,7 +869,8 @@ class Infrastructure(object):
 
     def _defrag_node_backend_cmd(self, host, port, family, backend_id):
         cmd = self.DNET_DEFRAG_CMD.format(
-            host=host, port=port, family=family, backend_id=backend_id)
+            host=host, port=port, family=family, backend_id=backend_id
+        )
         return cmd
 
     def _lrc_convert_cmd(self,
@@ -1080,7 +1144,7 @@ class Infrastructure(object):
 
         self.update_groups_list(tree)
 
-    def groups_by_total_space(self, match_group_space=True, **kwargs):
+    def groups_by_total_space(self, match_group_space=True, group_total_space=None, **kwargs):
         """ Get good uncoupled groups bucketed by total space values
 
         As total space for group can vary a little depending on the hardware,
@@ -1093,6 +1157,9 @@ class Infrastructure(object):
             match_group_space: if False, all groups in the resulting mapping will
                 be bucketed to a key 'any', otherwise tolerance interval will be used
                 to bucket the groups;
+            group_total_space: groups that are used for couples should have total
+                space within 'total_space_diff_tolerance' percents within required
+                'group_total_space' (in bytes);
             **kwargs: options for selecting uncoupled groups, will be passed through
                 to get_good_uncoupled_groups;
 
@@ -1120,36 +1187,43 @@ class Infrastructure(object):
             groups_by_total_space['any'] = [group.group_id for group in suitable_groups]
             return groups_by_total_space
 
-        total_spaces = (
-            group.get_stat().total_space
-            for group in suitable_groups
-        )
-
-        # bucketing groups by approximate total space
         ts_tolerance = config.get('total_space_diff_tolerance', 0.05)
-        cur_ts_key = 0
-        for ts in sorted(total_spaces, reverse=True):
-            if abs(cur_ts_key - ts) > cur_ts_key * ts_tolerance:
-                cur_ts_key = ts
-                groups_by_total_space[cur_ts_key] = []
 
-        total_spaces = sorted(groups_by_total_space.keys(), reverse=True)
-        logger.info('group total space sizes available: {0}'.format(list(total_spaces)))
+        if group_total_space:
+            groups_by_total_space[group_total_space] = []
+            for group in suitable_groups:
+                ts = group.get_stat().total_space
+                if abs(group_total_space - ts) < group_total_space * ts_tolerance:
+                    groups_by_total_space[group_total_space].append(group.group_id)
+        else:
+            total_spaces = (
+                group.get_stat().total_space
+                for group in suitable_groups
+            )
+            # bucketing groups by approximate total space
+            cur_ts_key = 0
+            for ts in sorted(total_spaces, reverse=True):
+                if abs(cur_ts_key - ts) > cur_ts_key * ts_tolerance:
+                    cur_ts_key = ts
+                    groups_by_total_space[cur_ts_key] = []
 
-        for group in suitable_groups:
-            ts = group.get_stat().total_space
-            for ts_key in total_spaces:
-                if ts_key - ts < ts_key * ts_tolerance:
-                    groups_by_total_space[ts_key].append(group.group_id)
-                    break
-            else:
-                raise ValueError(
-                    'Failed to find total space key for group {group}, '
-                    'total space {ts}'.format(
-                        group=group,
-                        ts=ts,
+            total_spaces = sorted(groups_by_total_space.keys(), reverse=True)
+            logger.info('group total space sizes available: {0}'.format(list(total_spaces)))
+
+            for group in suitable_groups:
+                ts = group.get_stat().total_space
+                for ts_key in total_spaces:
+                    if ts_key - ts < ts_key * ts_tolerance:
+                        groups_by_total_space[ts_key].append(group.group_id)
+                        break
+                else:
+                    raise ValueError(
+                        'Failed to find total space key for group {group}, '
+                        'total space {ts}'.format(
+                            group=group,
+                            ts=ts,
+                        )
                     )
-                )
 
         return groups_by_total_space
 
@@ -1213,13 +1287,13 @@ class Infrastructure(object):
 
     def get_good_uncoupled_groups(self,
                                   max_node_backends=None,
-                                  including_in_service=False,
+                                  exclude_in_service=True,
                                   status=None,
                                   types=None,
                                   skip_groups=None,
                                   allow_alive_keys=False):
 
-        if including_in_service and self.job_finder:
+        if exclude_in_service and self.job_finder:
             in_service_group_ids = set(self.job_finder.get_uncoupled_groups_in_service())
         else:
             in_service_group_ids = None
@@ -1316,6 +1390,7 @@ class UncoupledGroupsSelector(object):
         self._alive_keys_groups = []
         self._mismatched_type_groups = []
         self._max_backends_groups = []
+        self._unknown_dc_groups = []
 
         self._good_uncoupled_groups = []
 
@@ -1366,6 +1441,12 @@ class UncoupledGroupsSelector(object):
                 self._alive_keys_groups.append(group)
                 return
 
+            try:
+                node_backend_dc = nb.node.host.dc
+            except CacheUpstreamError:
+                self._unknown_dc_groups.append(group)
+                return
+
         if self.max_node_backends and len(group.node_backends) > self.max_node_backends:
             self._max_backends_groups.append((group, len(group.node_backends)))
             return
@@ -1408,6 +1489,7 @@ class UncoupledGroupsSelector(object):
                     for g, count in self._max_backends_groups
                 ]
             )
+        s += '; groups with unknown dcs: {}'.format([g.group_id for g in self._unknown_dc_groups])
         return s
 
 

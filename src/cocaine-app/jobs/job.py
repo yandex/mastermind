@@ -48,10 +48,19 @@ class Job(MongoObject):
         STATUS_BROKEN,
     )
 
+    # NOTE: this list should be synchronized with RESOURCE_TYPES
     RESOURCE_FS = 'fs'
     RESOURCE_HOST_IN = 'host_in'
     RESOURCE_HOST_OUT = 'host_out'
     RESOURCE_CPU = 'cpu'
+
+    # NOTE: this list should be synchronized with the set of RESOURCE_* constants
+    RESOURCE_TYPES = (
+        RESOURCE_FS,
+        RESOURCE_HOST_IN,
+        RESOURCE_HOST_OUT,
+        RESOURCE_CPU,
+    )
 
     COMMON_PARAMS = ('need_approving',)
 
@@ -280,7 +289,6 @@ class Job(MongoObject):
                     )
                 )
 
-
     def mark_groups(self, session):
         for group_id, updated_meta in self._group_marks():
             s = session.clone()
@@ -338,6 +346,16 @@ class Job(MongoObject):
         '''
         return []
 
+    @property
+    def _involved_groups(self):
+        raise NotImplementedError('_involved_groups property for {} should be '
+            'implemented'.format(type(self).__name__))
+
+    @property
+    def _involved_couples(self):
+        raise NotImplementedError('_involved_couples property for {} should be '
+            'implemented'.format(type(self).__name__))
+
     def check_node_backends(self, group, node_backends_count=1):
         if len(group.node_backends) != node_backends_count:
             raise JobBrokenError('Group {0} cannot be used for job, '
@@ -353,6 +371,7 @@ class Job(MongoObject):
             logger.error('Job {0}: failed to unmark required groups: {1}'.format(
                 self.id, e))
             raise
+        self._dirty = True
         ts = time.time()
         if not self.start_ts:
             self.start_ts = ts
@@ -396,6 +415,15 @@ class Job(MongoObject):
             params.update(condition(k, v))
 
         return collection.find(params).sort(sort_by, sort_by_order)
+
+    def on_execution_interrupted(self, error_msg=None):
+        ts = time.time()
+        # TODO: remove update_ts (seems that it is not used anywhere)
+        self.update_ts = ts
+        self.finish_ts = ts
+        if error_msg:
+            self.add_error_msg(error_msg)
+        self._dirty = True
 
 
 def condition(field_name, field_val):
