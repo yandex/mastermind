@@ -117,6 +117,8 @@ class Task(object):
         return self.run_history[-1]
 
     def on_run_history_update(self, error=None):
+        if not self.run_history:
+            return
         last_record = self.last_run_history_record
         last_record.finish_ts = int(time.time())
         if self.status == Task.STATUS_FAILED or error:
@@ -128,6 +130,8 @@ class Task(object):
             last_record.status = 'success'
 
     def ready_for_retry(self, processor):
+        if not self.run_history:
+            return False
         last_record = self.last_run_history_record
         if last_record.delayed_till_ts and time.time() > last_record.delayed_till_ts:
             return True
