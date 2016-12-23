@@ -1819,6 +1819,18 @@ def status_change_log(f):
         return res
     return wrapper
 
+def memoized(attr_name):
+
+    def wrapper(f):
+
+        @functools.wraps(f)
+        def wrapped(self, *args, **kwargs):
+            if not hasattr(self, attr_name):
+                setattr(self, attr_name, f(self, *args, **kwargs))
+            return getattr(self, attr_name)
+        return wrapped
+
+    return wrapper
 
 class Groupset(object):
     def __init__(self, groups):
@@ -2237,6 +2249,7 @@ class Groupset(object):
     def __str__(self):
         return ':'.join(str(group) for group in self.groups)
 
+    @memoized('_hash')
     def __hash__(self):
         return hash(self.__str__())
 
