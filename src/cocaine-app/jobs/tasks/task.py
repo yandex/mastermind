@@ -103,6 +103,7 @@ class Task(object):
             RunHistoryRecord.ARTIFACTS: {},
             RunHistoryRecord.ERROR_MSG: None,
             RunHistoryRecord.ATTEMPTS: 0,
+            RunHistoryRecord.DELAYED_TILL_TS: None,
         })
 
     def add_history_record(self):
