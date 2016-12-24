@@ -202,7 +202,7 @@ class ExternalStorageConvertingPlanner(object):
         min_chunk_size = 100
 
         skip = 0
-        chunk_size = min(int(slots * 3), min_chunk_size)
+        chunk_size = max(int(slots * 3), min_chunk_size)
 
         dcs = LIMITS.get('dcs')
 
