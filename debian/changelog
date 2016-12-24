@@ -1,3 +1,11 @@
+mastermind-cocainev11 (2.28.125) trusty; urgency=medium
+
+  * Continue to check convert queue items if dcs filter is exhausted
+  * Fix chunk size misprint
+  * Skip checking group when removing it
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sat, 24 Dec 2016 16:13:14 +0300
+
 mastermind-cocainev11 (2.28.124) trusty; urgency=medium
 
   * Add backward compatibility with tasks without run history
