@@ -108,7 +108,6 @@ class MinionsMonitor(object):
             logger.debug('Starting async http batch, {} hosts'.format(len(urls)))
             responses = self._perform_http_requests_sync(urls)
             logger.debug('Finished async http batch, {} hosts'.format(len(urls)))
-            logger.info('Responses from minions: {}'.format(responses))
 
             logger.debug('Fetching stored minion commands state from mongo')
             stored_commands = self._fetch_stored_unfinished_commands()
