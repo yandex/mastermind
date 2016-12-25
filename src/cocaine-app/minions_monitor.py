@@ -225,7 +225,38 @@ class MinionsMonitor(object):
 
         return response_data
 
+    def _modify_state(self, state):
+        """ Modifies command's state to be able to store it in commands DB.
+
+        This is dirty hack that's required because of mongo's inability to store
+        json objects with '.' symbols in any of the its keys.
+
+        This method should be customized for every command that can have such kind of
+        artifacts.
+
+        - lrc_* commands example:
+            state['artifacts']['meta'] == {
+                "69": -6,
+                "13": -2,
+            }
+            converted to
+            state['artifacts']['errors'] == [
+                ("69", -6),
+                ("13", -2),
+            ]
+        """
+
+        if state['command'].startswith('lrc_'):
+            if 'artifacts' in state:
+                errors = state['artifacts'].get('meta', {})
+                state['artifacts']['errors'] = errors.items()
+                if 'meta' in state['artifacts']:
+                    del state['artifacts']['meta']
+        return state
+
     def _update_stored_command(self, uid, state):
+
+        state = self._modify_state(state)
 
         res = self.commands.update(
             spec={'uid': uid},
