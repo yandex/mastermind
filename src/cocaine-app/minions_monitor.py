@@ -221,11 +221,7 @@ class MinionsMonitor(object):
             )
 
             if update_stored_command:
-                try:
-                    self._update_stored_command(uid, state)
-                except Exception:
-                    logger.exception('Failed to process state for command {}'.format(uid))
-                    continue
+                self._update_stored_command(uid, state)
 
         return response_data
 
