@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.129) trusty; urgency=medium
+
+  * Increase worker startup timeout
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 26 Dec 2016 19:43:20 +0300
+
 mastermind-cocainev11 (2.28.128) trusty; urgency=medium
 
   * Process artifact's meta null value as empty dict
