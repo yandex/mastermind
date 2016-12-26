@@ -248,7 +248,8 @@ class MinionsMonitor(object):
 
         if state['command'].startswith('lrc_'):
             if 'artifacts' in state:
-                errors = state['artifacts'].get('meta', {})
+                # NOTE: 'meta' can have 'null' value (e.g. in case of success
+                errors = state['artifacts'].get('meta') or {}
                 state['artifacts']['errors'] = errors.items()
                 if 'meta' in state['artifacts']:
                     del state['artifacts']['meta']
