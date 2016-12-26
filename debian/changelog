@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.127) trusty; urgency=medium
+
+  * Do not update minion host's finish ts if any command failed to update
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 26 Dec 2016 17:31:01 +0300
+
 mastermind-cocainev11 (2.28.126) trusty; urgency=medium
 
   * Skip command states if failed to update
