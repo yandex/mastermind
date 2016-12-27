@@ -105,7 +105,7 @@ class Infrastructure(object):
         '--log {log} --log-level {log_level} --tmp {tmp_dir} --trace-id {trace_id} '
         '--wait-timeout {wait_timeout} --attempts {attempts} --batch-size {batch_size} '
         '--nproc {nproc} {safe} {remotes} --elliptics-log-level error '
-        '--remove-expired {tskv}'
+        '{remove_type} {tskv} '
     )
 
     def __init__(self):
@@ -600,7 +600,9 @@ class Infrastructure(object):
                         attempts=None,
                         wait_timeout=None,
                         batch_size=None,
-                        nproc=None):
+                        nproc=None,
+                        remove_all_older=None,
+                        remove_permanent_older=None):
 
         TTL_CLEANUP_CNF = config.get('infrastructure', {}).get('ttl_cleanup', {})
 
@@ -624,7 +626,10 @@ class Infrastructure(object):
             remotes=(' '.join('-r {}'.format(r) for r in remotes)),
             tskv='--tskv-context namespace={},couple_id={} --tskv-log syslog'.format(
                 couple.namespace, couple.groups[0].group_id
-            )
+            ),
+            remove_type=('--remove-expired' if (not remove_all_older and not remove_permanent_older) else \
+                        ('--remove-all-older {}'.format(remove_all_older) if remove_all_older else \
+                         '--remove-permanent-older {}'.format(remove_permanent_older)))
         )
 
         return cmd

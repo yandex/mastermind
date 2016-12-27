@@ -19,6 +19,8 @@ class TtlCleanupJob(Job):
         'nproc',
         'wait_timeout',
         'dry_run',
+        'remove_all_older',
+        'remove_permanent_older',
         'resources'
     )
 
@@ -66,7 +68,10 @@ class TtlCleanupJob(Job):
             attempts=self.attempts,
             nproc=self.nproc,
             trace_id=int(self.id[:16], 16),
-            safe=self.dry_run)
+            safe=self.dry_run,
+            remove_all_older=self.remove_all_older,
+            remove_permanent_older=self.remove_permanent_older
+        )
 
         logger.debug("TTl cleanup job: Set for execution task %s", ttl_cleanup_cmd)
 
