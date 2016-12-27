@@ -1386,6 +1386,29 @@ class Planner(object):
         except ValueError:
             raise ValueError('Parameter "wait_timeout" must be a number')
 
+        try:
+            remove_all_older = request.get('remove_all_older')
+            if remove_all_older:
+                remove_all_older = int(remove_all_older)
+        except ValueError:
+            raise ValueError('Parameter "remove_all_older" must be a number')
+
+        try:
+            remove_permanent_older = request.get('remove_permanent_older')
+            if remove_permanent_older:
+                remove_permanent_older = int(remove_permanent_older)
+        except ValueError:
+            raise ValueError('Parameter "remove_permanent_older" must be a number')
+
+        if remove_permanent_older and remove_all_older:
+            raise ValueError(
+                'Parameters "remove_all_older"({}) and "remove_permanent_older"({}) are '
+                'mutually exclusive'.format(
+                    remove_all_older,
+                    remove_permanent_older
+                )
+            )
+
         iter_group = storage.groups[request['iter_group']]
 
         job = self.job_processor._create_job(
@@ -1399,6 +1422,8 @@ class Planner(object):
                 'nproc': nproc,
                 'wait_timeout': wait_timeout,
                 'dry_run': request.get('dry_run'),
+                'remove_all_older': remove_all_older,
+                'remove_permanent_older': remove_permanent_older,
             },
         )
 
