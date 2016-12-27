@@ -1397,13 +1397,17 @@ class Planner(object):
             remove_permanent_older = request.get('remove_permanent_older')
             if remove_permanent_older:
                 remove_permanent_older = int(remove_permanent_older)
-                if remove_all_older:
-                    err_str ='Options "remove_all_older"({}) & "remove_permanent_older"({}) are exclusive'.format(
-                        remove_all_older, remove_permanent_older)
-                    raise RuntimeError(err_str)
         except ValueError:
             raise ValueError('Parameter "remove_permanent_older" must be a number')
 
+        if remove_permanent_older and remove_all_older:
+            raise ValueError(
+                'Parameters "remove_all_older"({}) and "remove_permanent_older"({}) are '
+                'mutually exclusive'.format(
+                    remove_all_older,
+                    remove_permanent_older
+                )
+            )
 
         iter_group = storage.groups[request['iter_group']]
 
