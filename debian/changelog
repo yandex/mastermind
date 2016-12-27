@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.130) trusty; urgency=medium
+
+  * Adding permanent options to mastermind cli
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 27 Dec 2016 18:09:47 +0300
+
 mastermind-cocainev11 (2.28.129) trusty; urgency=medium
 
   * Increase worker startup timeout
