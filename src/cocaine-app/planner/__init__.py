@@ -197,13 +197,11 @@ class Planner(object):
         # get information from mds-proxy Yt logs
         yt_group_list = self._get_yt_stat()
 
-        # get couples where ttl_cleanup wasn't run for long time
+        # get couples where ttl_cleanup wasn't run for long time (or never)
         time_group_list = self._get_idle_groups(days_of_idle=allowed_idleness_period)
 
         # remove dups
         yt_group_list = set(yt_group_list + time_group_list)
-
-        # XXX: consider namespaces without ttl
 
         for iter_group in yt_group_list:
             if iter_group not in storage.groups:
@@ -212,6 +210,12 @@ class Planner(object):
             iter_group = storage.groups[iter_group]
             if not iter_group.couple:
                 logger.error("Iter group is uncoupled {}".format(iter_group))
+                continue
+
+            ns_settings = self.namespaces_settings.get(iter_group.couple.namespace.id)
+            if not ns_settings or not ns_settings.attributes.ttl.enable:
+                logger.debug("Skipping group {} cause ns '{}' without ttl".format(
+                              iter_group.group_id, iter_group.couple.namespace.id))
                 continue
 
             try:
