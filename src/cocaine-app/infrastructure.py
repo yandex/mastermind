@@ -631,8 +631,8 @@ class Infrastructure(object):
             ),
             safe=('-S' if safe else ''),
             remotes=(' '.join('-r {}'.format(r) for r in remotes)),
-            tskv='--tskv-context namespace={},couple_id={} --tskv-log syslog'.format(
-                couple.namespace, couple.groups[0].group_id
+            tskv='--tskv-context namespace={},couple_id={} --tskv-log {}'.format(
+                couple.namespace, couple.groups[0].group_id, TTL_CLEANUP_CNF.get('tskv_log_file', 'syslog')
             ),
             remove_type=remove_type,
         )
