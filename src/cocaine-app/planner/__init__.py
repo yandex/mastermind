@@ -189,9 +189,10 @@ class Planner(object):
             types=jobs.JobTypes.TYPE_TTL_CLEANUP_JOB,
             statuses=jobs.Job.ACTIVE_STATUSES)
         if count >= max_cleanup_jobs:
-            logger.info('Found {0} unfinished ttl cleanup jobs (>= {1})'.format(
-                count, max_cleanup_jobs))
+            logger.info('Found {} unfinished ttl cleanup jobs (>= {})'.format(count, max_cleanup_jobs))
             return
+        else:
+            max_new_cleanup_jobs = max_cleanup_jobs - count
 
         # get information from mds-proxy Yt logs
         yt_group_list = self._get_yt_stat()
@@ -201,10 +202,7 @@ class Planner(object):
 
         # remove dups
         yt_group_list = set(yt_group_list + time_group_list)
-        print "yt group list {}".format(yt_group_list)
 
-        # XXX: limit by (max_cleanup_jobs - count)
-        # XXX: consider that job won't be created when it is already running
         # XXX: consider namespaces without ttl
 
         for iter_group in yt_group_list:
@@ -231,11 +229,16 @@ class Planner(object):
                         'need_approving': not self.params.get('ttl_cleanup', {}).get('autoapprove', False),
                     },
                 )
+                max_new_cleanup_jobs -= 1
+                if max_new_cleanup_jobs == 0:
+                    logger.info("Stopping job creation due to upper limitation on job count {}", max_cleanup_jobs)
+                    break
             except LockAlreadyAcquiredError as e:
                 logger.info("Failed to create a new job since couple/group are already locked {}".format(e))
                 continue
             except:
                 logger.exception("Creating job for iter group {} has excepted".format(iter_group))
+                continue
 
     @staticmethod
     def _prepare_candidates_by_dc(suitable_groups, unsuitable_dcs):
