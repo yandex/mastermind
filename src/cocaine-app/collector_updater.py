@@ -169,6 +169,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         self.update(groups=groups)
 
     def update(self, groups=None):
+        logger = logging.getLogger('mm.balancer.update')
         traceid = self.new_str_traceid()
         logger.info('Fetching update from collector, traceid = {}'.format(traceid))
 
@@ -203,28 +204,45 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
             logger.info('Applying update')
 
             try:
+                logger.info('Parsing json')
                 snapshot = simplejson.loads(response)
+                logger.info('Processing hosts')
                 self._process_hosts(snapshot['hosts'])
+                logger.info('Processing nodes')
                 self._process_nodes(snapshot['nodes'])
+                logger.info('Processing filesystems')
                 self._process_filesystems(snapshot['filesystems'])
+                logger.info('Processing backends')
                 self._process_backends(snapshot['backends'])
+                logger.info('Processing groups')
                 self._process_groups(snapshot['groups'])
+                logger.info('Processing jobs(groups)')
                 self._process_jobs(groups)
+                logger.info('Processing namespaces')
                 self._process_namespaces(snapshot['namespaces'])
+                logger.info('Processing couples')
                 self._process_couples(snapshot['couples'])
+                logger.info('Processing complete')
             except Exception as e:
                 logger.error('Failed to process update from collector: {}'.format(e))
                 self._schedule_next_round()
                 return
 
+            logger.info('self._update_max_group')
             self._update_max_group()
+            logger.info('self._update_max_group complete')
 
             try:
                 if groups is None:
+                    logger.info('self.namespaces_settings.fetch()')
                     namespaces_settings = self.namespaces_settings.fetch()
+                    logger.info('storage.dc_host_view.update()')
                     storage.dc_host_view.update()
+                    logger.info('load_manager.update(storage)')
                     load_manager.update(storage)
+                    logger.info('weight_manager.update(storage, namespaces_settings)')
                     weight_manager.update(storage, namespaces_settings)
+                    logger.info('infrastructure.schedule_history_update()')
                     infrastructure.schedule_history_update()
 
                     if self._prepare_namespaces_states:
@@ -238,6 +256,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                 logger.error('Failed to update stuff: {}'.format(e))
             finally:
                 self._schedule_next_round()
+            logger.info('NodeInfoUpdater.update() complete')
 
     def _process_hosts(self, host_states):
         for host_state in host_states:
