@@ -16,6 +16,7 @@ from weight_manager import weight_manager
 from node_info_updater_base import NodeInfoUpdaterBase
 from tornado.ioloop import IOLoop
 import time
+import gc
 
 
 logger = logging.getLogger('mm.balancer')
@@ -113,6 +114,9 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
 
     def new_str_traceid(self):
         return '%x' % (uuid.uuid1().int >> 64)
+
+    def collect_garbage(self):
+        gc.collect()
 
     def _force_collector_refresh(self, groups=None):
         collector_client = MastermindClient(COLLECTOR_SERVICE_NAME)
@@ -645,3 +649,6 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         logger.info('Scheduling next update round')
         reload_period = config.get('nodes_reload_period', 60)
         self._tq.add_task_in('update', reload_period, self.update)
+
+        logger.info('Scheduling gc')
+        self._tq.add_task_in('collect_garbage', reload_period/2, self.collect_garbage)
