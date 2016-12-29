@@ -15,6 +15,7 @@ import storage
 from weight_manager import weight_manager
 from node_info_updater_base import NodeInfoUpdaterBase
 from tornado.ioloop import IOLoop
+import time
 
 
 logger = logging.getLogger('mm.balancer')
@@ -274,6 +275,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                                 e=e,
                 ))
                 continue
+            time.sleep(0)
 
     def _process_host(self, host_id, host_state):
         if host_id not in storage.hosts:
@@ -300,6 +302,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                             e=e
                 ))
                 continue
+            time.sleep(0)
 
     def _process_node(self, node_id, node_state):
         host_id = node_state['host_id']
@@ -340,6 +343,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                     )
                 )
                 continue
+            time.sleep(0)
 
     def _process_filesystem(self, fs_id, filesystem_state):
         if fs_id not in storage.fs:
@@ -386,6 +390,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                     )
                 )
                 continue
+            time.sleep(0)
 
     def _process_backend(self, backend_id, backend_state):
         node = storage.nodes[backend_state['node_id']]
@@ -462,6 +467,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                                 e=e,
                 ))
                 continue
+            time.sleep(0)
 
     def _process_group(self, gid, group_state):
         if gid not in storage.groups:
@@ -506,6 +512,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                         jobs[job.group] = job
                     elif hasattr(job, 'couple'):
                         jobs[job.couple] = job
+                    time.sleep(0)
             except Exception as e:
                 logger.exception('Failed to fetch pending jobs: {0}'.format(e))
                 pass
@@ -516,6 +523,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         for group in groups:
             active_job = jobs.get(group.group_id) or jobs.get(group.couple) or None
             group.set_active_job(active_job)
+            time.sleep(0)
 
     def _process_namespaces(self, namespace_states):
         for namespace_state in namespace_states:
@@ -533,6 +541,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                     e=e,
                 ))
                 continue
+            time.sleep(0)
 
     def _process_namespace(self, nsid, namespace_state):
         if nsid not in storage.namespaces:
@@ -559,6 +568,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                     e=e
                 ))
                 continue
+            time.sleep(0)
 
     def _process_couple(self, couple_id, couple_state):
         if not couple_state['groupsets']:
