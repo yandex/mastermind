@@ -193,8 +193,8 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
 
                 logger.info('Sending request to collector')
 
-                collector_client = MastermindClient(COLLECTOR_SERVICE_NAME)
-                response = collector_client.request('get_snapshot', simplejson.dumps(request), traceid=traceid)
+                collector_client = MastermindClient(COLLECTOR_SERVICE_NAME, traceid=traceid)
+                response = collector_client.request('get_snapshot', simplejson.dumps(request))
             except Exception as e:
                 logger.error('Failed to fetch snapshot from collector: {}'.format(e))
                 self._schedule_next_round()
