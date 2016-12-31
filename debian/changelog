@@ -1,3 +1,10 @@
+mastermind (2.28.131) trusty; urgency=medium
+
+  * Check alive keys when selecting lrc groups for converting
+  * Add tskv_log name as a parameter of ttl_cleanup job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sat, 31 Dec 2016 18:24:16 +0300
+
 mastermind (2.28.130) trusty; urgency=medium
 
   * Adding permanent options to mastermind cli
