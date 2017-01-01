@@ -468,13 +468,22 @@ class JobProcessor(object):
             task.on_run_history_update(error=e)
             raise
 
-        if not task.finished(self):
-            logger.debug('Job {}, task {} is not finished'.format(job.id, task.id))
-            return
+        try:
+            if not task.finished(self):
+                logger.debug('Job {}, task {} is not finished'.format(job.id, task.id))
+                return
 
-        task.status = (Task.STATUS_FAILED
-                       if task.failed(self) else
-                       Task.STATUS_COMPLETED)
+            task.status = (Task.STATUS_FAILED
+                           if task.failed(self) else
+                           Task.STATUS_COMPLETED)
+        except Exception as e:
+            logger.exception('Job {}, task {}: failed to check status'.format(job.id, task.id))
+            task.status = Task.STATUS_FAILED
+
+            # TODO: should we call on_exec_stop here?
+
+            task.on_run_history_update(error=e)
+            raise
 
         try:
             task.on_exec_stop(self)

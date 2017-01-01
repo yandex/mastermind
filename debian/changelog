@@ -1,3 +1,9 @@
+mastermind (2.28.132) trusty; urgency=medium
+
+  * Change task status when failed check if it's finished
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sun, 01 Jan 2017 11:40:00 +0300
+
 mastermind (2.28.131) trusty; urgency=medium
 
   * Check alive keys when selecting lrc groups for converting
