@@ -1073,9 +1073,16 @@ class JobFinder(object):
             **kwargs
         ).count()
 
-    def jobs(self, types=None, statuses=None, ids=None, groups=None):
+    def jobs(self, types=None, statuses=None, ids=None, groups=None, sort=True):
         jobs = []
-        job_list = Job.list(
+        if sort:
+            job_listing = Job.list
+        else:
+            # TODO: replace temporary solution when 'list' method gets
+            # refactored
+            job_listing = Job.list_no_sort
+
+        job_list = job_listing(
             self.collection,
             status=statuses,
             type=types,
@@ -1103,7 +1110,8 @@ class JobFinder(object):
                       Job.STATUS_NEW,
                       Job.STATUS_EXECUTING,
                       Job.STATUS_PENDING,
-                      Job.STATUS_BROKEN)
+                      Job.STATUS_BROKEN),
+            sort=False,
         )
 
         uncoupled_groups = []

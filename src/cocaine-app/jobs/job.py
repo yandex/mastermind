@@ -402,6 +402,8 @@ class Job(MongoObject):
     def list(collection, **kwargs):
         """
         TODO: This should be moved to some kind of Mongo Session object
+        TODO: This method forces sorting which is not required by default,
+        this should be refactored
         """
         params = {}
         sort_by = kwargs.pop('sort_by', 'create_ts')
@@ -413,6 +415,25 @@ class Job(MongoObject):
             params.update(condition(k, v))
 
         return collection.find(params).sort(sort_by, sort_by_order)
+
+    @staticmethod
+    def list_no_sort(collection, **kwargs):
+        """
+        TODO: This method is a temporary solution until 'list' method
+        is refactored to stop using mandatory sorting
+        """
+        params = {}
+
+        # NOTE: this mimics 'list' method parameters processing
+        kwargs.pop('sort_by', None)
+        kwargs.pop('sort_by_order', None)
+
+        for k, v in kwargs.iteritems():
+            if v is None:
+                continue
+            params.update(condition(k, v))
+
+        return collection.find(params)
 
     def on_execution_interrupted(self, error_msg=None):
         ts = time.time()
