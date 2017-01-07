@@ -612,7 +612,7 @@ class NodeInfoUpdater(object):
                     params = {'statuses': Job.ACTIVE_STATUSES}
                     if groups:
                         params['groups'] = [g.group_id for g in groups]
-                    for job in self.job_finder.jobs(**params):
+                    for job in self.job_finder.jobs(sort=False, **params):
                         # TODO: this should definitely be done some other way
                         if hasattr(job, 'group'):
                             jobs[job.group] = job
