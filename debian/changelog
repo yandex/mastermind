@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.135) trusty; urgency=medium
+
+  * Disable job sort where it is not required
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sat, 07 Jan 2017 17:54:48 +0300
+
 mastermind-cocainev11 (2.28.134) trusty; urgency=medium
 
   * Fix excessive jobs sorting when updating groups' state
