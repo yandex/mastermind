@@ -230,7 +230,8 @@ class Planner(object):
             'max_executing_jobs', 3)
 
         active_jobs = self.job_processor.job_finder.jobs(
-            statuses=jobs.Job.ACTIVE_STATUSES
+            statuses=jobs.Job.ACTIVE_STATUSES,
+            sort=False,
         )
 
         slots = self._jobs_slots(active_jobs,
@@ -469,7 +470,8 @@ class Planner(object):
             'couple_defrag_job', {}).get('max_executing_jobs', 3)
 
         active_jobs = self.job_processor.job_finder.jobs(
-            statuses=jobs.Job.ACTIVE_STATUSES
+            statuses=jobs.Job.ACTIVE_STATUSES,
+            sort=False,
         )
         slots = self._jobs_slots(active_jobs,
                                  jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB,
@@ -775,6 +777,7 @@ class Planner(object):
                     groups=group.group_id,
                     types=jobs.JobTypes.TYPE_BACKEND_CLEANUP_JOB,
                     statuses=jobs.Job.ACTIVE_STATUSES,
+                    sort=False,
                 )
                 if group_jobs:
                     job = group_jobs[0]
@@ -795,6 +798,7 @@ class Planner(object):
                     groups=group.group_id,
                     types=self.RESTORE_AND_MANAGER_TYPES,
                     statuses=jobs.Job.ACTIVE_STATUSES,
+                    sort=False,
                 )
                 if group_jobs:
                     job = group_jobs[0]
@@ -1291,7 +1295,8 @@ class Planner(object):
                       jobs.Job.STATUS_NEW,
                       jobs.Job.STATUS_EXECUTING,
                       jobs.Job.STATUS_PENDING,
-                      jobs.Job.STATUS_BROKEN))
+                      jobs.Job.STATUS_BROKEN),
+            sort=False)
 
         def log_ns_current_state_diff(ns1, ns2, tpl):
             node_type = 'hdd'

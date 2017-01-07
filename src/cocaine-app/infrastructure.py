@@ -1289,7 +1289,7 @@ class Infrastructure(object):
         group_ids_in_service = []
         if not self.job_finder:
             return group_ids_in_service
-        for job in self.job_finder.jobs(statuses=jobs.Job.ACTIVE_STATUSES):
+        for job in self.job_finder.jobs(statuses=jobs.Job.ACTIVE_STATUSES, sort=False):
             group_ids_in_service.extend(job._involved_groups)
         return group_ids_in_service
 
