@@ -144,7 +144,7 @@ class ExternalStorageConvertingPlanner(object):
                 continue
             converting_jobs[item.job_id] = item
 
-        for job in self.job_processor.job_finder.jobs(ids=converting_jobs.keys()):
+        for job in self.job_processor.job_finder.jobs(ids=converting_jobs.keys(), sort=False):
 
             item = converting_jobs[job.id]
 
@@ -241,6 +241,7 @@ class ExternalStorageConvertingPlanner(object):
         active_jobs = self.job_processor.job_finder.jobs(
             statuses=jobs.Job.ACTIVE_STATUSES,
             types=job_type,
+            sort=False,
         )
 
         storage_state = StorageState.current()
