@@ -75,7 +75,8 @@ class MovePlanner(object):
     def _do_move_candidates(self, max_jobs_count):
 
         active_jobs = self.job_processor.job_finder.jobs(
-            statuses=jobs.Job.ACTIVE_STATUSES
+            statuses=jobs.Job.ACTIVE_STATUSES,
+            sort=False
         )
         busy_group_ids = self._busy_group_ids(active_jobs)
 
