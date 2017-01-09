@@ -181,8 +181,7 @@ def get_node_config_path(node):
     return '/etc/elliptics/elliptics.conf'
 
 
-def make_external_storage_convert_command(couple_id,
-                                          dst_groups,
+def make_external_storage_convert_command(dst_groups,
                                           groupset_type,
                                           groupset_settings,
                                           src_storage,
@@ -193,7 +192,6 @@ def make_external_storage_convert_command(couple_id,
     to a @groupset.
 
     Parameters:
-        @couple_id (int): id of a couple that will store converted data
         @dst_groups (list of lists of storage.Group): a list of destination groups that
             will store converted data, where each nested list contains groups for some
             new groupset.
@@ -205,7 +203,7 @@ def make_external_storage_convert_command(couple_id,
             implemented
 
     '''
-    raise NotImplemented
+    raise NotImplementedError()
 
 
 def make_external_storage_validate_command(couple_id,
@@ -232,7 +230,7 @@ def make_external_storage_validate_command(couple_id,
             implemented
 
     '''
-    raise NotImplemented
+    raise NotImplementedError()
 
 
 def make_external_storage_data_size_command(groupset_type,
@@ -252,4 +250,43 @@ def make_external_storage_data_size_command(groupset_type,
             implemented
 
     '''
-    raise NotImplemented
+    raise NotImplementedError()
+
+
+def is_external_storage_ready(src_storage, src_storage_options, src_storage_id, convert_queue):
+    '''
+    Check if external storage is ready to be converted.
+
+    Parameters:
+        @src_storage: type of source storage
+        @src_storage_options: source storage options
+        @src_storage_id: source storage id to check
+        @convert_queue: mongo collection to implement custom check logic
+    '''
+    return True
+
+
+def external_storage_task_retry_ts(task, src_storage, src_storage_options):
+    '''
+    Get the next retry attempt timestamp for the task.
+
+    Parameters:
+        @task: failed task
+        @src_storage: type of source storage
+        @src_storage_options: source storage options
+    '''
+    return None
+
+
+def is_external_storage_task_ready_for_retry(task, src_storage, src_storage_options, storage, processor):
+    '''
+    Determine if task is ready to be retried.
+
+    Parameters:
+        @task: failed task
+        @src_storage: type of source storage
+        @src_storage_options: source storage options
+        @storage: storage module
+        @processor: instance of job processor
+    '''
+    return True

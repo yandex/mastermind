@@ -25,6 +25,8 @@ class MinionCmdTask(Task):
     @classmethod
     def new(cls, job, **kwargs):
         task = super(MinionCmdTask, cls).new(job, **kwargs)
+        if task.params is None:
+            task.params = {}
         task.params['task_id'] = task.id
         return task
 
@@ -42,7 +44,8 @@ class MinionCmdTask(Task):
                     cmd_id=self.minion_cmd_id,
                 )
             )
-            pass
+            return
+        self._set_run_history_parameters(self.minion_cmd)
 
     def execute(self, processor):
         try:
@@ -53,7 +56,8 @@ class MinionCmdTask(Task):
             )
         except HTTPError as e:
             raise RetryError(self.attempts, e)
-        self._set_minion_task_parameters(minion_response.values()[0])
+        cmd_response = minion_response.values()[0]
+        self._set_minion_task_parameters(cmd_response)
 
     def _set_minion_task_parameters(self, minion_cmd):
         self.minion_cmd = minion_cmd
@@ -66,6 +70,14 @@ class MinionCmdTask(Task):
                 command=self.minion_cmd
             )
         )
+
+    def _set_run_history_parameters(self, minion_cmd):
+        if not self.run_history:
+            return
+        record = self.last_run_history_record
+        record.command_uid = self.minion_cmd['uid']
+        record.exit_code = self.minion_cmd['exit_code']
+        record.artifacts = self.minion_cmd.get('artifacts') or {}
 
     def human_dump(self):
         data = super(MinionCmdTask, self).human_dump()
@@ -86,3 +98,9 @@ class MinionCmdTask(Task):
 
     def __str__(self):
         return 'MinionCmdTask[id: {0}]<{1}>'.format(self.id, self.cmd)
+
+    def make_new_history_record(self):
+        record = super(MinionCmdTask, self).make_new_history_record()
+        record.command_uid = None
+        record.exit_code = None
+        return record

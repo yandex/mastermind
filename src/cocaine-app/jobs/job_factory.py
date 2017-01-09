@@ -12,30 +12,24 @@ from backend_manager import BackendManagerJob
 
 
 class JobFactory(object):
+    JOB_TYPES = {
+        JobTypes.TYPE_MOVE_JOB: MoveJob,
+        JobTypes.TYPE_RECOVER_DC_JOB: RecoverDcJob,
+        JobTypes.TYPE_COUPLE_DEFRAG_JOB: CoupleDefragJob,
+        JobTypes.TYPE_RESTORE_GROUP_JOB: RestoreGroupJob,
+        JobTypes.TYPE_MAKE_LRC_GROUPS_JOB: MakeLrcGroupsJob,
+        JobTypes.TYPE_ADD_LRC_GROUPSET_JOB: AddLrcGroupsetJob,
+        JobTypes.TYPE_CONVERT_TO_LRC_GROUPSET_JOB: ConvertToLrcGroupsetJob,
+        JobTypes.TYPE_TTL_CLEANUP_JOB: TtlCleanupJob,
+        JobTypes.TYPE_BACKEND_CLEANUP_JOB: BackendCleanupJob,
+        JobTypes.TYPE_BACKEND_MANAGER_JOB: BackendManagerJob,
+    }
 
     @staticmethod
     def make_job_type(job_type):
-        if job_type == JobTypes.TYPE_MOVE_JOB:
-            return MoveJob
-        elif job_type == JobTypes.TYPE_RECOVER_DC_JOB:
-            return RecoverDcJob
-        elif job_type == JobTypes.TYPE_COUPLE_DEFRAG_JOB:
-            return CoupleDefragJob
-        elif job_type == JobTypes.TYPE_RESTORE_GROUP_JOB:
-            return RestoreGroupJob
-        elif job_type == JobTypes.TYPE_MAKE_LRC_GROUPS_JOB:
-            return MakeLrcGroupsJob
-        elif job_type == JobTypes.TYPE_ADD_LRC_GROUPSET_JOB:
-            return AddLrcGroupsetJob
-        elif job_type == JobTypes.TYPE_CONVERT_TO_LRC_GROUPSET_JOB:
-            return ConvertToLrcGroupsetJob
-        elif job_type == JobTypes.TYPE_TTL_CLEANUP_JOB:
-            return TtlCleanupJob
-        elif job_type == JobTypes.TYPE_BACKEND_CLEANUP_JOB:
-            return BackendCleanupJob
-        elif job_type == JobTypes.TYPE_BACKEND_MANAGER_JOB:
-            return BackendManagerJob
-        raise ValueError('Unknown job type: {}'.format(job_type))
+        if job_type not in JobFactory.JOB_TYPES:
+            raise ValueError('Unknown job type: {}'.format(job_type))
+        return JobFactory.JOB_TYPES[job_type]
 
     @staticmethod
     def make_job(data):

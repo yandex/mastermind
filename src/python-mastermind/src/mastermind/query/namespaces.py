@@ -70,6 +70,7 @@ class NamespacesQuery(Query):
               check_for_update=None,
               custom_expiration_time=None,
               attributes_filename=None,
+              attributes_mimetype=None,
               attributes_ttl=None,
               attributes_ttl_minimum=None,
               attributes_ttl_maximum=None,
@@ -116,6 +117,8 @@ class NamespacesQuery(Query):
           custom_expiration_time: allows namespace to use expire-time argument
             for signing url
           attributes_filename: if this flag is True, store filename of a key in key's attributes
+          attributes_mimetype: this flag toggles the client's ability to store a key's
+                MIME-type in key's attributes.
           attributes_ttl: this flag toggles the client's ability to use ttl for keys.
           attributes_ttl_minimum: sets minimum ttl value for namespace's ttl attribute.
             Accepts positive integer values with one of the following postfixes:
@@ -135,7 +138,6 @@ class NamespacesQuery(Query):
             (key's data contains url to another key in the scope (see symlink_scope_limit defenition)
           attributes_symlink_scope_limit: scope limit for symlink, available values:
             "namespace": symlink can be a relative url to the same namespace's keys
-            "storage": symlink can be a relative url to any namespace's keys
 
         Returns:
           Namespace object representing created namespace.
@@ -203,6 +205,9 @@ class NamespacesQuery(Query):
         attributes = {}
         if attributes_filename:
             attributes['filename'] = attributes_filename is True
+
+        if attributes_mimetype:
+            attributes['mimetype'] = attributes_mimetype is True
 
         ttl_attributes = {}
         if attributes_ttl is not None:
@@ -340,6 +345,7 @@ class NamespaceQuery(Query):
                       couples=1,
                       groups=None,
                       ignore_space=False,
+                      group_total_space=None,
                       groupsets=None,
                       dry_run=False,
                       attempts=None,
@@ -365,6 +371,8 @@ class NamespaceQuery(Query):
           ignore_space:
             if this flag is set to True mastermind will couple only the groups
             having equal total space
+          group_total_space:
+            Use groups of certain total space for building couples (e.g., 916G, 256m)
           groupsets:
             a list of settings for each required groupset, where each setting object is
             of the following form:
@@ -390,6 +398,7 @@ class NamespaceQuery(Query):
         params = [couple_size, couples, {'namespace': self.id,
                                          'match_group_space': not ignore_space,
                                          'init_state': init_state,
+                                         'group_total_space': group_total_space,
                                          'groupsets': groupsets or [],
                                          'dry_run': dry_run,
                                          'mandatory_groups': groups or []}]

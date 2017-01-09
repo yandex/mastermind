@@ -57,7 +57,7 @@ class BackendCleanupJob(Job):
 
     def _stop_node_backend_task(self, group, node_backend):
 
-        shutdown_cmd = infrastructure._disable_node_backend_cmd(
+        shutdown_cmd = infrastructure._remove_node_backend_cmd(
             host=node_backend.node.host.addr,
             port=node_backend.node.port,
             family=node_backend.node.family,
