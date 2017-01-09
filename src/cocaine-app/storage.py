@@ -987,6 +987,20 @@ class NodeBackendStat(object):
                     self.files_removed, self.fragmentation, self.node_stat.load_average))
 
 
+def memoized(attr_name):
+
+    def wrapper(f):
+
+        @functools.wraps(f)
+        def wrapped(self, *args, **kwargs):
+            if not hasattr(self, attr_name):
+                setattr(self, attr_name, f(self, *args, **kwargs))
+            return getattr(self, attr_name)
+        return wrapped
+
+    return wrapper
+
+
 class Host(object):
     def __init__(self, addr):
         self.addr = addr
@@ -1033,6 +1047,7 @@ class Host(object):
 
         return False
 
+    @memoized('_hash')
     def __hash__(self):
         return hash(self.__str__())
 
@@ -1065,6 +1080,7 @@ class Node(object):
     def __str__(self):
         return '{host}:{port}'.format(host=self.host.addr, port=self.port)
 
+    @memoized('_hash')
     def __hash__(self):
         return hash(self.__str__())
 
@@ -1252,6 +1268,7 @@ class Fs(object):
     def __str__(self):
         return '{host}:{fsid}'.format(host=self.host.addr, fsid=self.fsid)
 
+    @memoized('_hash')
     def __hash__(self):
         return hash(self.__str__())
 
@@ -1441,6 +1458,7 @@ class NodeBackend(object):
     def __str__(self):
         return '%s:%d/%d' % (self.node.host.addr, self.node.port, self.backend_id)
 
+    @memoized('_hash')
     def __hash__(self):
         return hash(self.__str__())
 
@@ -1795,6 +1813,7 @@ class Group(object):
 
         return [g for g in self.couple if g is not self]
 
+    @memoized('_hash')
     def __hash__(self):
         return hash(self.group_id)
 
@@ -1819,18 +1838,6 @@ def status_change_log(f):
         return res
     return wrapper
 
-def memoized(attr_name):
-
-    def wrapper(f):
-
-        @functools.wraps(f)
-        def wrapped(self, *args, **kwargs):
-            if not hasattr(self, attr_name):
-                setattr(self, attr_name, f(self, *args, **kwargs))
-            return getattr(self, attr_name)
-        return wrapped
-
-    return wrapper
 
 class Groupset(object):
     def __init__(self, groups):
@@ -2834,6 +2841,7 @@ class Namespace(object):
     def __str__(self):
         return self.id
 
+    @memoized('_hash')
     def __hash__(self):
         return hash(str(self))
 
