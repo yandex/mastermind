@@ -331,22 +331,10 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         else:
             fs = storage.fs[fs_id]
 
-        fs.status = filesystem_state['status']
-        fs.status_text = filesystem_state['status_text']
+        fs.update(filesystem_state)
 
         stat = fs.stat
-        stat.ts = mh.elliptics_time_to_ts(filesystem_state['timestamp'])  # Why is it elliptics-like? Does it have to do anything with elliptics?
-        stat.total_space = filesystem_state['total_space']
-        stat.free_space = filesystem_state['free_space']
-
-        stat.disk_util = filesystem_state['disk_util']
-        stat.disk_util_read = filesystem_state['disk_util_read']
-        stat.disk_util_write = filesystem_state['disk_util_write']
-
-        # XXX this is not the same as in commands_stats
-        stat.disk_read_rate = filesystem_state['disk_read_rate']
-        stat.disk_write_rate = filesystem_state['disk_write_rate']
-
+        stat.update(filesystem_state)
         update_commands_stat(stat.commands_stat, filesystem_state['commands_stat'])
 
     def _process_backends(self, backend_states):
@@ -374,7 +362,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         if backend_id not in storage.node_backends:
             logger.info('Creating node backend {}'.format(backend_id))
             node_backend = storage.node_backends.add(node, backend_state['backend_id'])
-            node_backend.stat = storage.NodeBackendStat(node.stat)
+            node_backend.stat = storage.NodeBackendStat()
         else:
             node_backend = storage.node_backends[backend_id]
 
@@ -391,41 +379,12 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                 group = storage.groups[gid]
                 infrastructure.update_group_history(group)
 
-        node_backend.base_path = backend_state['base_path']
-        node_backend.read_only = backend_state['read_only']
-        node_backend.status = backend_state['status']
-        node_backend.status_text = backend_state['status_text']
+        node_backend.update(backend_state)
 
         stat = node_backend.stat
-        stat.ts = mh.elliptics_time_to_ts(backend_state['timestamp'])
-
-        stat.free_space = backend_state['free_space']
-        stat.total_space = backend_state['total_space']
-        stat.used_space = backend_state['used_space']
-
-        stat.vfs_free_space = backend_state['vfs_free_space']
-        stat.vfs_total_space = backend_state['vfs_total_space']
-        stat.vfs_used_space = backend_state['vfs_used_space']
+        stat.update(backend_state)
 
         update_commands_stat(stat.commands_stat, backend_state['commands_stat'])
-
-        stat.fragmentation = backend_state['fragmentation']
-
-        stat.files = backend_state['records']
-        stat.files_removed = backend_state['records_removed']
-        stat.files_removed_size = backend_state['records_removed_size']
-
-        stat.defrag_state = backend_state['defrag_state']
-        stat.want_defrag = backend_state['want_defrag']
-
-        stat.blob_size = backend_state['blob_size']
-        stat.blob_size_limit = backend_state['blob_size_limit']
-        stat.max_blob_base_size = backend_state['max_blob_base_size']
-
-        stat.io_blocking_size = backend_state['io_blocking_size']
-        stat.io_nonblocking_size = backend_state['io_nonblocking_size']
-
-        stat.stat_commit_errors = backend_state['stat_commit_rofs_errors_diff']
 
     def _process_groups(self, group_states):
         for group_state in group_states:
@@ -472,10 +431,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
             if new_backends or removed_backends:
                 infrastructure.update_group_history(group)
 
-        group.status = group_state['status']
-        group.status_text = group_state['status_text']
-        group.meta = group_state['metadata']
-        group._type = group_state['type']
+        group.update(group_state)
 
     def _process_jobs(self, groups=None):
         jobs = {}
