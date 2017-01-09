@@ -45,6 +45,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                  statistics=None):
         super(NodeInfoUpdater, self).__init__(node=node,
                                               job_finder=job_finder,
+                                              namespaces_settings=namespaces_settings,
                                               couple_record_finder=couple_record_finder,
                                               prepare_namespaces_states=prepare_namespaces_states,
                                               prepare_flow_stats=prepare_flow_stats,
@@ -53,7 +54,6 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         self.__node = node
         self.statistics = statistics
         self.job_finder = job_finder
-        self.namespaces_settings = namespaces_settings
         self.couple_record_finder = couple_record_finder
         self._namespaces_states = CachedGzipResponse()
         self._flow_stats = {}
@@ -97,7 +97,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         try:
 
             namespaces_settings = self.namespaces_settings.fetch()
-            with self.__cluster_update_lock:
+            with self._cluster_update_lock:
                 logger.info('Cluster updating: updating group coupling info started')
                 self.update_symm_groups_async(namespaces_settings=namespaces_settings)
 
@@ -109,8 +109,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                 self._update_flow_stats()
 
         except Exception as e:
-            logger.info('Failed to update groups: {0}\n{1}'.format(
-                e, traceback.format_exc()))
+            logger.exception('Failed to update groups')
         finally:
             logger.info('Cluster updating: updating group coupling info finished, time: {0:.3f}'.format(time.time() - start_ts))
             # TODO: change period

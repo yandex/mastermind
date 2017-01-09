@@ -4,7 +4,7 @@ import simplejson
 import logging
 
 # import balancer
-from config import config
+from mastermind_core.config import config
 from infrastructure import infrastructure
 from jobs import Job
 from load_manager import load_manager
@@ -29,6 +29,7 @@ def update_commands_stat(comm_stat, state):
     comm_stat.ell_disk_write_rate = state['ell_disk_write_rate']
     comm_stat.ell_net_read_rate = state['ell_net_read_rate']
     comm_stat.ell_net_write_rate = state['ell_net_write_rate']
+
 
 def create_groupset_if_needed(gsid, groups, gstype, nsid, status=None, status_text=None):
     for gid in groups:
@@ -79,17 +80,20 @@ def create_groupset_if_needed(gsid, groups, gstype, nsid, status=None, status_te
 
     return storage.groupsets[gsid]
 
+
 class NodeInfoUpdater(NodeInfoUpdaterBase):
     # XXX add config option for collector worker name, address?
     def __init__(self,
                  node,
                  job_finder,
+                 namespaces_settings,
                  couple_record_finder=None,
                  prepare_namespaces_states=False,
                  prepare_flow_stats=False,
                  statistics=None):
         super(NodeInfoUpdater, self).__init__(node=node,
                                               job_finder=job_finder,
+                                              namespaces_settings=namespaces_settings,
                                               couple_record_finder=couple_record_finder,
                                               prepare_namespaces_states=prepare_namespaces_states,
                                               prepare_flow_stats=prepare_flow_stats,
@@ -217,20 +221,21 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
 
             try:
                 if groups is None:
+                    namespaces_settings = self.namespaces_settings.fetch()
                     storage.dc_host_view.update()
                     load_manager.update(storage)
-                    weight_manager.update(storage)
+                    weight_manager.update(storage, namespaces_settings)
                     infrastructure.schedule_history_update()
 
                     if self._prepare_namespaces_states:
                         logger.info('Recalculating namespaces states')
-                        self._update_namespaces_states()
+                        self._update_namespaces_states(namespaces_settings)
                     if self._prepare_flow_stats:
                         logger.info('Recalculating flow stats')
                         self._update_flow_stats()
 
             except Exception as e:
-                logger.error('Failed to update stuff: {}'.format(e))
+                logger.exception('Failed to complete state update')
             finally:
                 self._schedule_next_round()
 
@@ -432,10 +437,9 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
             try:
                 self._process_group(gid, group_state)
             except Exception as e:
-                logger.error('Failed to process group {gid} '
-                             'state from collector: {e}'.format(
-                                gid=gid,
-                                e=e,
+                logger.exception('Failed to process group {gid} state from collector: {e}'.format(
+                    gid=gid,
+                    e=e,
                 ))
                 continue
 
@@ -448,12 +452,16 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         else:
             group = storage.groups[gid]
 
-            new_backends = [storage.node_backends[nbid]
+            new_backends = [
+                storage.node_backends[nbid]
                 for nbid in group_state['backends']
-                    if nbid not in group.node_backends]
+                if nbid not in group.node_backends
+            ]
 
-            removed_backends = [nb for nb in group.node_backends
-                    if str(nb) not in group_state['backends']]
+            removed_backends = [
+                nb for nb in group.node_backends
+                if str(nb) not in group_state['backends']
+            ]
 
             for nb in new_backends:
                 group.add_node_backend(nb)
@@ -541,31 +549,33 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
             # It is possible because Couple objects are never removed.
             logger.debug('Couple {} has empty groupsets'.format(couple_id))
 
-            if (couple_id in storage.groupsets):
+            if couple_id in storage.groupsets:
                 groupset = storage.groupsets[couple_id]
                 groupset.groups = []
-                groupset.status = couple_state['status'] # XXX
+                groupset.status = couple_state['status']  # XXX
                 groupset.status_text = couple_state['status_text']
 
             return
 
-        replicas_groupset_states = [state
+        replicas_groupset_states = [
+            state
             for state in couple_state['groupsets']
-                if state['type'] == GROUPSET_TYPE_REPLICAS]
+            if state['type'] == GROUPSET_TYPE_REPLICAS
+        ]
 
         if len(replicas_groupset_states) > 1:
             raise RuntimeError('Couple has {} replicas groupsets'.format(
                 len(replicas_groupset_states)
             ))
 
-        lrc_groupset_states = [state
+        lrc_groupset_states = [
+            state
             for state in couple_state['groupsets']
-                if state['type'] == GROUPSET_TYPE_LRC]
+            if state['type'] == GROUPSET_TYPE_LRC
+        ]
 
         if len(lrc_groupset_states) > 1:
-            raise RuntimeError('Couple has {} LRC groupsets'.format(
-                len(lrc_groupsets_states)
-            ))
+            raise RuntimeError('Couple has {} LRC groupsets'.format(len(lrc_groupset_states)))
 
         if replicas_groupset_states:
             gs_state = replicas_groupset_states[0]
