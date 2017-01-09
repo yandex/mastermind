@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.137) trusty; urgency=medium
+
+  * Add hash memoization for all storage objects
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 09 Jan 2017 23:48:09 +0300
+
 mastermind-cocainev11 (2.28.136) trusty; urgency=medium
 
   * Disable weight manager's intensive debug logging
