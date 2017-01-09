@@ -427,20 +427,20 @@ class CouplesBuckets(object):
 
     @staticmethod
     def is_base(couple_res):
-        logger.debug(
-            'Couple {couple}: disk_util: {disk_util}, net_write_rate {net_write_rate}, '
-            'net_read_rate {net_read_rate}, nbr_res {nbr_res}'.format(
-                couple=couple_res.couple,
-                disk_util=couple_res.disk_util,
-                net_write_rate=couple_res.net_write_rate,
-                net_read_rate=couple_res.net_read_rate,
-                nbr_res=[
-                    nbr.net_write_rate
-                    for gr in couple_res.groups_res
-                    for nbr in gr.node_backends_res
-                ],
-            )
-        )
+        # logger.debug(
+        #     'Couple {couple}: disk_util: {disk_util}, net_write_rate {net_write_rate}, '
+        #     'net_read_rate {net_read_rate}, nbr_res {nbr_res}'.format(
+        #         couple=couple_res.couple,
+        #         disk_util=couple_res.disk_util,
+        #         net_write_rate=couple_res.net_write_rate,
+        #         net_read_rate=couple_res.net_read_rate,
+        #         nbr_res=[
+        #             nbr.net_write_rate
+        #             for gr in couple_res.groups_res
+        #             for nbr in gr.node_backends_res
+        #         ],
+        #     )
+        # )
         return not CouplesBuckets.utilized(couple_res) and not couple_res.on_defragmenting_disk
 
     @staticmethod
