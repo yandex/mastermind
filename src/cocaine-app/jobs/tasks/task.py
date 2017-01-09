@@ -1,4 +1,7 @@
+import time
 import uuid
+
+from run_history import RunHistoryRecord
 
 
 class Task(object):
@@ -17,6 +20,7 @@ class Task(object):
         self.finish_ts = None
         self.attempts = 0
         self.error_msg = []
+        self.run_history = []
         self.parent_job = job
 
     def on_exec_start(self, processor):
@@ -54,6 +58,11 @@ class Task(object):
         self.error_msg = data['error_msg']
         self.attempts = data.get('attempts', 0)
 
+        self.run_history = [
+            RunHistoryRecord(run_history_record_data)
+            for run_history_record_data in data.get('run_history', [])
+        ]
+
         for param in self.PARAMS:
             val = data.get(param)
             if isinstance(val, unicode):
@@ -61,13 +70,19 @@ class Task(object):
             setattr(self, param, val)
 
     def dump(self):
-        res = {'status': self.status,
-               'id': self.id,
-               'type': self.type,
-               'start_ts': self.start_ts,
-               'finish_ts': self.finish_ts,
-               'error_msg': self.error_msg,
-               'attempts': self.attempts}
+        res = {
+            'status': self.status,
+            'id': self.id,
+            'type': self.type,
+            'start_ts': self.start_ts,
+            'finish_ts': self.finish_ts,
+            'error_msg': self.error_msg,
+            'attempts': self.attempts,
+            'run_history': [
+                run_history_record.dump()
+                for run_history_record in self.run_history
+            ],
+        }
         res.update({
             k: getattr(self, k)
             for k in self.PARAMS
@@ -78,5 +93,57 @@ class Task(object):
         return self.dump()
 
     def __str__(self):
-        raise RuntimeError('__str__ method should be implemented in '
-            'derived class')
+        raise RuntimeError('__str__ method should be implemented in derived class')
+
+    def make_new_history_record(self):
+        return RunHistoryRecord({
+            RunHistoryRecord.START_TS: None,
+            RunHistoryRecord.FINISH_TS: None,
+            RunHistoryRecord.STATUS: None,
+            RunHistoryRecord.ARTIFACTS: {},
+            RunHistoryRecord.ERROR_MSG: None,
+            RunHistoryRecord.ATTEMPTS: 0,
+            RunHistoryRecord.DELAYED_TILL_TS: None,
+        })
+
+    def add_history_record(self):
+        record = self.make_new_history_record()
+        record.start_ts = int(time.time())
+        self.run_history.append(record)
+        return record
+
+    @property
+    def last_run_history_record(self):
+        return self.run_history[-1]
+
+    def on_run_history_update(self, error=None):
+        if not self.run_history:
+            return
+        last_record = self.last_run_history_record
+        last_record.finish_ts = int(time.time())
+        if self.status == Task.STATUS_FAILED or error:
+            last_record.status = 'error'
+            if error:
+                last_record.error_msg = str(error)
+            last_record.delayed_till_ts = self.next_retry_ts
+        else:
+            last_record.status = 'success'
+
+    def ready_for_retry(self, processor):
+        if not self.run_history:
+            return False
+        last_record = self.last_run_history_record
+        if last_record.delayed_till_ts and time.time() > last_record.delayed_till_ts:
+            return True
+        return False
+
+    @property
+    def next_retry_ts(self):
+        """ Timestamp of the next attempt of task retry after an error.
+
+        Task types that are subject to automatic retries should implement
+        this property.
+
+        'None' is interpreted as no automatic retry attempts.
+        """
+        return None

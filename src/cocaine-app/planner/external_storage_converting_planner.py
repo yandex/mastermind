@@ -144,7 +144,7 @@ class ExternalStorageConvertingPlanner(object):
                 continue
             converting_jobs[item.job_id] = item
 
-        for job in self.job_processor.job_finder.jobs(ids=converting_jobs.keys()):
+        for job in self.job_processor.job_finder.jobs(ids=converting_jobs.keys(), sort=False):
 
             item = converting_jobs[job.id]
 
@@ -198,13 +198,26 @@ class ExternalStorageConvertingPlanner(object):
         return True
 
     def _convert_queue_items(self, slots):
+
+        dcs_options = []
+
+        dcs_option = LIMITS.get('dcs')
+        dcs_options.append(dcs_option)
+
+        if dcs_option is not None:
+            # continue searching for convert items if dcs filter is exhausted
+            dcs_options.append(None)
+
+        for dcs_option in dcs_options:
+            for item in self._convert_queue_items_subset(slots, dcs_option):
+                yield item
+
+    def _convert_queue_items_subset(self, slots, dcs):
         # in case of low values of 'slots'
         min_chunk_size = 100
 
         skip = 0
-        chunk_size = min(int(slots * 3), min_chunk_size)
-
-        dcs = LIMITS.get('dcs')
+        chunk_size = max(int(slots * 3), min_chunk_size)
 
         while True:
             items = self.queue.items(
@@ -228,6 +241,7 @@ class ExternalStorageConvertingPlanner(object):
         active_jobs = self.job_processor.job_finder.jobs(
             statuses=jobs.Job.ACTIVE_STATUSES,
             types=job_type,
+            sort=False,
         )
 
         storage_state = StorageState.current()

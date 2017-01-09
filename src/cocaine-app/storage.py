@@ -299,6 +299,9 @@ class Lrc(object):
                 return False
             if len(group.node_backends) != 1:
                 return False
+            nb = group.node_backends[0]
+            if nb.stat.files > 1:
+                return False
             return True
 
         def check_groupset(groups):

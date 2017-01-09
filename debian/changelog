@@ -1,8 +1,106 @@
-mastermind (2.28.121~collector1) trusty; urgency=medium
+mastermind (2.28.136~collector1) trusty; urgency=medium
 
-  * Version bump
+  * Collector worker as an external cluster information source
 
  -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 29 Sep 2016 16:38:38 +0300
+
+mastermind (2.28.136) trusty; urgency=medium
+
+  * Disable weight manager's intensive debug logging
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 09 Jan 2017 13:39:41 +0300
+
+mastermind (2.28.135) trusty; urgency=medium
+
+  * Disable job sort where it is not required
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sat, 07 Jan 2017 17:54:48 +0300
+
+mastermind (2.28.134) trusty; urgency=medium
+
+  * Fix excessive jobs sorting when updating groups' state
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sat, 07 Jan 2017 15:26:55 +0300
+
+mastermind (2.28.133) trusty; urgency=medium
+
+  * Fix excessive jobs sorting when searching for good uncoupled groups
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 04 Jan 2017 00:25:01 +0300
+
+mastermind (2.28.132) trusty; urgency=medium
+
+  * Change task status when failed check if it's finished
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sun, 01 Jan 2017 11:40:00 +0300
+
+mastermind (2.28.131) trusty; urgency=medium
+
+  * Check alive keys when selecting lrc groups for converting
+  * Add tskv_log name as a parameter of ttl_cleanup job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sat, 31 Dec 2016 18:24:16 +0300
+
+mastermind (2.28.130) trusty; urgency=medium
+
+  * Adding permanent options to mastermind cli
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 27 Dec 2016 18:09:47 +0300
+
+mastermind (2.28.129) trusty; urgency=medium
+
+  * Increase worker startup timeout
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 26 Dec 2016 19:43:20 +0300
+
+mastermind (2.28.128) trusty; urgency=medium
+
+  * Process artifact's meta null value as empty dict
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 26 Dec 2016 18:22:37 +0300
+
+mastermind (2.28.127) trusty; urgency=medium
+
+  * Do not update minion host's finish ts if any command failed to update
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 26 Dec 2016 17:31:01 +0300
+
+mastermind (2.28.126) trusty; urgency=medium
+
+  * Skip command states if failed to update
+  * Modify commands for compatibility with mongo
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sun, 25 Dec 2016 16:49:05 +0300
+
+mastermind (2.28.125) trusty; urgency=medium
+
+  * Continue to check convert queue items if dcs filter is exhausted
+  * Fix chunk size misprint
+  * Skip checking group when removing it
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sat, 24 Dec 2016 16:13:14 +0300
+
+mastermind (2.28.124) trusty; urgency=medium
+
+  * Add backward compatibility with tasks without run history
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 23 Dec 2016 20:15:59 +0300
+
+mastermind (2.28.123) trusty; urgency=medium
+
+  * Add default init value for task's run history delayed_till_ts
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 23 Dec 2016 17:56:27 +0300
+
+mastermind (2.28.122) trusty; urgency=medium
+
+  * Implement retry jobs workflow
+  * Add inventory extension for determining if the task is ready for retry
+  * Add task interface to determine next retry if possible
+  * Add inventory extension for determining retry timestamp for external storage operations
+  * Update and fixes for inventory module
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 23 Dec 2016 16:05:19 +0300
 
 mastermind (2.28.121) trusty; urgency=medium
 

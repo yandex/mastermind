@@ -2004,6 +2004,8 @@ def ttl_cleanup(iter_group,
                 nproc=('n', '', 'A number of threads in session'),
                 wait_timeout=('w', '', 'Timeout for elliptics operations'),
                 dry_run=('d', False, 'Dry-run mode'),
+                remove_all_older=('', '', 'Remove all records older than specified epoch time'),
+                remove_permament_older=('', '', 'Remove records without TTL older than specified epoch time'),
                 host=None, app=None):
     '''
     Remove records with TTL expired
@@ -2018,7 +2020,9 @@ def ttl_cleanup(iter_group,
         'attempts': attempts,
         'nproc': nproc,
         'wait_timeout': wait_timeout,
-        'dry_run': dry_run
+        'dry_run': dry_run,
+        'remove_all_older': remove_all_older,
+        'remove_permanent_older': remove_permament_older
         }
 
     res = s.run_sync(

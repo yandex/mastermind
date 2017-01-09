@@ -122,6 +122,38 @@ class JobProcessor(object):
                 res_val = tuple(res_val)
             yield res_type, res_val
 
+    def _retry_jobs(self):
+
+        pending_jobs = self.job_finder.jobs(statuses=Job.STATUS_PENDING)
+
+        for job in pending_jobs:
+            try:
+                self._retry_job(job)
+            except Exception:
+                logger.exception('Job {}: failed to retry'.format(job.id))
+                continue
+
+    def _retry_job(self, job):
+        for task in job.tasks:
+            if task.status in (Task.STATUS_COMPLETED, Task.STATUS_COMPLETED):
+                continue
+            if task.status != Task.STATUS_FAILED:
+                # unexpected status, skip job processing
+                break
+
+            assert task.status == Task.STATUS_FAILED
+
+            if task.ready_for_retry(self):
+                logger.info(
+                    'Job {}, task {}: ready for retry, setting status to "queued"'.format(
+                        job.id,
+                        task.id
+                    )
+                )
+                self.__change_failed_task_status(job.id, task.id, Task.STATUS_QUEUED)
+
+            break
+
     def _ready_jobs(self):
 
         active_statuses = list(Job.ACTIVE_STATUSES)
@@ -253,6 +285,8 @@ class JobProcessor(object):
             with sync_manager.lock(self.JOBS_LOCK, blocking=False):
                 logger.debug('Lock acquired')
 
+                self._retry_jobs()
+
                 ready_jobs = self._ready_jobs()
 
                 for job in ready_jobs:
@@ -375,19 +409,23 @@ class JobProcessor(object):
     def __start_task(self, job, task):
         logger.info('Job {}, executing new task {}'.format(job.id, task))
 
+        task.add_history_record()
+
         try:
             task.on_exec_start(self)
             logger.info('Job {}, task {} preparation completed'.format(job.id, task.id))
-        except Exception:
+        except Exception as e:
             logger.exception('Job {}, task {}: failed to execute task start handler'.format(
                 job.id,
                 task.id
             ))
             task.status = Task.STATUS_FAILED
+            task.on_run_history_update(error=e)
             raise
 
         try:
             task.attempts += 1
+            task.last_run_history_record.attempts = task.last_run_history_record.attempts + 1
             self.__execute_task(task)
             logger.info('Job {}, task {} execution successfully started'.format(
                 job.id,
@@ -402,6 +440,7 @@ class JobProcessor(object):
                     task.id
                 ))
                 task.status = Task.STATUS_FAILED
+                task.on_run_history_update(error=e)
                 raise
 
             if isinstance(e, RetryError):
@@ -411,6 +450,7 @@ class JobProcessor(object):
                     return
 
             task.status = Task.STATUS_FAILED
+            task.on_run_history_update(error=e)
             raise
 
         task.status = Task.STATUS_EXECUTING
@@ -420,22 +460,35 @@ class JobProcessor(object):
 
         try:
             self.__update_task_status(task)
-        except Exception:
+        except Exception as e:
             logger.exception('Job {}, task {}: failed to update status'.format(job.id, task.id))
             task.status = Task.STATUS_FAILED
+
+            # TODO: should we call on_exec_stop here?
+
+            task.on_run_history_update(error=e)
             raise
 
-        if not task.finished(self):
-            logger.debug('Job {}, task {} is not finished'.format(job.id, task.id))
-            return
+        try:
+            if not task.finished(self):
+                logger.debug('Job {}, task {} is not finished'.format(job.id, task.id))
+                return
 
-        task.status = (Task.STATUS_FAILED
-                       if task.failed(self) else
-                       Task.STATUS_COMPLETED)
+            task.status = (Task.STATUS_FAILED
+                           if task.failed(self) else
+                           Task.STATUS_COMPLETED)
+        except Exception as e:
+            logger.exception('Job {}, task {}: failed to check status'.format(job.id, task.id))
+            task.status = Task.STATUS_FAILED
+
+            # TODO: should we call on_exec_stop here?
+
+            task.on_run_history_update(error=e)
+            raise
 
         try:
             task.on_exec_stop(self)
-        except Exception:
+        except Exception as e:
             logger.exception('Job {}, task {}: failed to execute task stop handler'.format(
                 job.id,
                 task.id
@@ -443,6 +496,7 @@ class JobProcessor(object):
             task.status = Task.STATUS_FAILED
             raise
 
+        task.on_run_history_update()
         logger.debug('Job {}, task {} is finished, status {}'.format(job.id, task.id, task.status))
 
     def __update_task_status(self, task):
@@ -1020,9 +1074,16 @@ class JobFinder(object):
             **kwargs
         ).count()
 
-    def jobs(self, types=None, statuses=None, ids=None, groups=None):
+    def jobs(self, types=None, statuses=None, ids=None, groups=None, sort=True):
         jobs = []
-        job_list = Job.list(
+        if sort:
+            job_listing = Job.list
+        else:
+            # TODO: replace temporary solution when 'list' method gets
+            # refactored
+            job_listing = Job.list_no_sort
+
+        job_list = job_listing(
             self.collection,
             status=statuses,
             type=types,
@@ -1050,7 +1111,8 @@ class JobFinder(object):
                       Job.STATUS_NEW,
                       Job.STATUS_EXECUTING,
                       Job.STATUS_PENDING,
-                      Job.STATUS_BROKEN)
+                      Job.STATUS_BROKEN),
+            sort=False,
         )
 
         uncoupled_groups = []

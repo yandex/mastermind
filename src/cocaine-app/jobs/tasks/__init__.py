@@ -17,6 +17,7 @@ from wait_groupset_state import WaitGroupsetStateTask
 from wait_backend_state import WaitBackendStateTask
 from write_meta_key import WriteMetaKeyTask
 from change_couple_frozen_status import ChangeCoupleFrozenStatusTask
+from external_storage import ExternalStorageTask
 from external_storage_data_size import ExternalStorageDataSizeTask
 from write_external_storage_mapping import WriteExternalStorageMappingTask
 from change_couple_settings import ChangeCoupleSettingsTask
@@ -38,6 +39,7 @@ class TaskFactory(object):
         TaskTypes.TYPE_WAIT_BACKEND_STATE: WaitBackendStateTask,
         TaskTypes.TYPE_WRITE_META_KEY: WriteMetaKeyTask,
         TaskTypes.TYPE_CHANGE_COUPLE_FROZEN_STATUS: ChangeCoupleFrozenStatusTask,
+        TaskTypes.TYPE_EXTERNAL_STORAGE: ExternalStorageTask,
         TaskTypes.TYPE_EXTERNAL_STORAGE_DATA_SIZE: ExternalStorageDataSizeTask,
         TaskTypes.TYPE_WRITE_EXTERNAL_STORAGE_MAPPING: WriteExternalStorageMappingTask,
         TaskTypes.TYPE_CHANGE_COUPLE_SETTINGS: ChangeCoupleSettingsTask,

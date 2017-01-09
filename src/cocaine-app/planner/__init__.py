@@ -232,7 +232,8 @@ class Planner(object):
             'max_executing_jobs', 3)
 
         active_jobs = self.job_processor.job_finder.jobs(
-            statuses=jobs.Job.ACTIVE_STATUSES
+            statuses=jobs.Job.ACTIVE_STATUSES,
+            sort=False,
         )
 
         slots = self._jobs_slots(active_jobs,
@@ -471,7 +472,8 @@ class Planner(object):
             'couple_defrag_job', {}).get('max_executing_jobs', 3)
 
         active_jobs = self.job_processor.job_finder.jobs(
-            statuses=jobs.Job.ACTIVE_STATUSES
+            statuses=jobs.Job.ACTIVE_STATUSES,
+            sort=False,
         )
         slots = self._jobs_slots(active_jobs,
                                  jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB,
@@ -777,6 +779,7 @@ class Planner(object):
                     groups=group.group_id,
                     types=jobs.JobTypes.TYPE_BACKEND_CLEANUP_JOB,
                     statuses=jobs.Job.ACTIVE_STATUSES,
+                    sort=False,
                 )
                 if group_jobs:
                     job = group_jobs[0]
@@ -797,6 +800,7 @@ class Planner(object):
                     groups=group.group_id,
                     types=self.RESTORE_AND_MANAGER_TYPES,
                     statuses=jobs.Job.ACTIVE_STATUSES,
+                    sort=False,
                 )
                 if group_jobs:
                     job = group_jobs[0]
@@ -1293,7 +1297,8 @@ class Planner(object):
                       jobs.Job.STATUS_NEW,
                       jobs.Job.STATUS_EXECUTING,
                       jobs.Job.STATUS_PENDING,
-                      jobs.Job.STATUS_BROKEN))
+                      jobs.Job.STATUS_BROKEN),
+            sort=False)
 
         def log_ns_current_state_diff(ns1, ns2, tpl):
             node_type = 'hdd'
@@ -1388,6 +1393,29 @@ class Planner(object):
         except ValueError:
             raise ValueError('Parameter "wait_timeout" must be a number')
 
+        try:
+            remove_all_older = request.get('remove_all_older')
+            if remove_all_older:
+                remove_all_older = int(remove_all_older)
+        except ValueError:
+            raise ValueError('Parameter "remove_all_older" must be a number')
+
+        try:
+            remove_permanent_older = request.get('remove_permanent_older')
+            if remove_permanent_older:
+                remove_permanent_older = int(remove_permanent_older)
+        except ValueError:
+            raise ValueError('Parameter "remove_permanent_older" must be a number')
+
+        if remove_permanent_older and remove_all_older:
+            raise ValueError(
+                'Parameters "remove_all_older"({}) and "remove_permanent_older"({}) are '
+                'mutually exclusive'.format(
+                    remove_all_older,
+                    remove_permanent_older
+                )
+            )
+
         iter_group = storage.groups[request['iter_group']]
 
         job = self.job_processor._create_job(
@@ -1401,6 +1429,8 @@ class Planner(object):
                 'nproc': nproc,
                 'wait_timeout': wait_timeout,
                 'dry_run': request.get('dry_run'),
+                'remove_all_older': remove_all_older,
+                'remove_permanent_older': remove_permanent_older,
             },
         )
 
