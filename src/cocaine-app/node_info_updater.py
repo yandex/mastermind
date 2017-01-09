@@ -19,7 +19,10 @@ from mastermind.pool import skip_exceptions
 from mastermind_core.config import config
 from mastermind_core.response import CachedGzipResponse
 from mastermind_core import errors
-# from monitor_pool import monitor_pool
+if config.get('stat_source', 'native') != 'collector':
+    from monitor_pool import monitor_pool
+else:
+    monitor_pool = None
 import timed_queue
 import storage
 from weight_manager import weight_manager
@@ -158,11 +161,13 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         In case of any of these events we should log it and
         skip to the next monitor stat response.
         """
-        # results = monitor_pool.imap_unordered(
-        #     None,
-        #     ((ha.host, ha.port, ha.family) for ha in host_addrs)
-        # )
-        results = iter([])
+        if monitor_pool:
+            results = monitor_pool.imap_unordered(
+                None,
+                ((ha.host, ha.port, ha.family) for ha in host_addrs)
+            )
+        else:
+            results = iter([])
         logger.info('Waiting for monitor stats results')
 
         # TODO: set timeout!!!

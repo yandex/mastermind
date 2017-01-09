@@ -15,6 +15,8 @@ import storage
 from weight_manager import weight_manager
 from node_info_updater_base import NodeInfoUpdaterBase
 from tornado.ioloop import IOLoop
+import time
+import gc
 
 
 logger = logging.getLogger('mm.balancer')
@@ -113,6 +115,9 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
     def new_str_traceid(self):
         return '%x' % (uuid.uuid1().int >> 64)
 
+    def collect_garbage(self):
+        gc.collect()
+
     def _force_collector_refresh(self, groups=None):
         collector_client = MastermindClient(COLLECTOR_SERVICE_NAME)
 
@@ -169,6 +174,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         self.update(groups=groups)
 
     def update(self, groups=None):
+        logger = logging.getLogger('mm.balancer.update')
         traceid = self.new_str_traceid()
         logger.info('Fetching update from collector, traceid = {}'.format(traceid))
 
@@ -193,8 +199,8 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
 
                 logger.info('Sending request to collector')
 
-                collector_client = MastermindClient(COLLECTOR_SERVICE_NAME)
-                response = collector_client.request('get_snapshot', simplejson.dumps(request), traceid=traceid)
+                collector_client = MastermindClient(COLLECTOR_SERVICE_NAME, traceid=traceid)
+                response = collector_client.request('get_snapshot', simplejson.dumps(request))
             except Exception as e:
                 logger.error('Failed to fetch snapshot from collector: {}'.format(e))
                 self._schedule_next_round()
@@ -203,28 +209,45 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
             logger.info('Applying update')
 
             try:
+                logger.info('Parsing json')
                 snapshot = simplejson.loads(response)
+                logger.info('Processing hosts')
                 self._process_hosts(snapshot['hosts'])
+                logger.info('Processing nodes')
                 self._process_nodes(snapshot['nodes'])
+                logger.info('Processing filesystems')
                 self._process_filesystems(snapshot['filesystems'])
+                logger.info('Processing backends')
                 self._process_backends(snapshot['backends'])
+                logger.info('Processing groups')
                 self._process_groups(snapshot['groups'])
+                logger.info('Processing jobs(groups)')
                 self._process_jobs(groups)
+                logger.info('Processing namespaces')
                 self._process_namespaces(snapshot['namespaces'])
+                logger.info('Processing couples')
                 self._process_couples(snapshot['couples'])
+                logger.info('Processing complete')
             except Exception as e:
                 logger.error('Failed to process update from collector: {}'.format(e))
                 self._schedule_next_round()
                 return
 
+            logger.info('self._update_max_group')
             self._update_max_group()
+            logger.info('self._update_max_group complete')
 
             try:
                 if groups is None:
+                    logger.info('self.namespaces_settings.fetch()')
                     namespaces_settings = self.namespaces_settings.fetch()
+                    logger.info('storage.dc_host_view.update()')
                     storage.dc_host_view.update()
+                    logger.info('load_manager.update(storage)')
                     load_manager.update(storage)
+                    logger.info('weight_manager.update(storage, namespaces_settings)')
                     weight_manager.update(storage, namespaces_settings)
+                    logger.info('infrastructure.schedule_history_update()')
                     infrastructure.schedule_history_update()
 
                     if self._prepare_namespaces_states:
@@ -238,6 +261,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                 logger.error('Failed to update stuff: {}'.format(e))
             finally:
                 self._schedule_next_round()
+            logger.info('NodeInfoUpdater.update() complete')
 
     def _process_hosts(self, host_states):
         for host_state in host_states:
@@ -255,6 +279,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                                 e=e,
                 ))
                 continue
+            time.sleep(0)
 
     def _process_host(self, host_id, host_state):
         if host_id not in storage.hosts:
@@ -281,6 +306,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                             e=e
                 ))
                 continue
+            time.sleep(0)
 
     def _process_node(self, node_id, node_state):
         host_id = node_state['host_id']
@@ -321,6 +347,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                     )
                 )
                 continue
+            time.sleep(0)
 
     def _process_filesystem(self, fs_id, filesystem_state):
         if fs_id not in storage.fs:
@@ -367,6 +394,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                     )
                 )
                 continue
+            time.sleep(0)
 
     def _process_backend(self, backend_id, backend_state):
         node = storage.nodes[backend_state['node_id']]
@@ -443,6 +471,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                                 e=e,
                 ))
                 continue
+            time.sleep(0)
 
     def _process_group(self, gid, group_state):
         if gid not in storage.groups:
@@ -487,6 +516,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                         jobs[job.group] = job
                     elif hasattr(job, 'couple'):
                         jobs[job.couple] = job
+                    time.sleep(0)
             except Exception as e:
                 logger.exception('Failed to fetch pending jobs: {0}'.format(e))
                 pass
@@ -497,6 +527,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         for group in groups:
             active_job = jobs.get(group.group_id) or jobs.get(group.couple) or None
             group.set_active_job(active_job)
+            time.sleep(0)
 
     def _process_namespaces(self, namespace_states):
         for namespace_state in namespace_states:
@@ -514,6 +545,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                     e=e,
                 ))
                 continue
+            time.sleep(0)
 
     def _process_namespace(self, nsid, namespace_state):
         if nsid not in storage.namespaces:
@@ -540,6 +572,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                     e=e
                 ))
                 continue
+            time.sleep(0)
 
     def _process_couple(self, couple_id, couple_state):
         if not couple_state['groupsets']:
@@ -616,3 +649,6 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         logger.info('Scheduling next update round')
         reload_period = config.get('nodes_reload_period', 60)
         self._tq.add_task_in('update', reload_period, self.update)
+
+        logger.info('Scheduling gc')
+        self._tq.add_task_in('collect_garbage', reload_period/2, self.collect_garbage)

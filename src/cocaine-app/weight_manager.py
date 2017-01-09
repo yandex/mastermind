@@ -475,12 +475,12 @@ class CouplesBuckets(object):
         if couple_res.couple not in self.buckets_idx[bucket_id]:
             self.buckets[bucket_id].append(couple_res)
             self.buckets_idx[bucket_id].add(couple_res.couple)
-            logger.debug('Couple {} goes into bucket {} ({}){}'.format(
-                couple_res.couple,
-                bucket_id + 1,
-                self.BUCKET_ORDER[bucket_id],
-                ' (rebucketing)' if updating else ''
-            ))
+            # logger.debug('Couple {} goes into bucket {} ({}){}'.format(
+            #     couple_res.couple,
+            #     bucket_id + 1,
+            #     self.BUCKET_ORDER[bucket_id],
+            #     ' (rebucketing)' if updating else ''
+            # ))
             if updating:
                 for i, bucket in enumerate(self.buckets):
                     if i == bucket_id:
