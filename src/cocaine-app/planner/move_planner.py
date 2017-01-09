@@ -4,7 +4,6 @@ from errors import CacheUpstreamError
 from infrastructure import infrastructure
 import jobs
 from mastermind_core.config import config
-from mastermind_core.db.mongo.pool import Collection
 from mastermind_core import helpers
 import storage
 from sync import sync_manager
@@ -23,23 +22,17 @@ class MovePlanner(object):
     MOVE_CANDIDATES = 'move_candidates'
     MOVE_LOCK = 'planner/move'
 
-    def __init__(self, db, niu, job_processor, namespaces_settings):
+    def __init__(self, db, niu, job_processor):
 
         self.job_processor = job_processor
 
         self.node_info_updater = niu
-        self.namespaces_settings = namespaces_settings
-
-        self.collection = None
-
-        if config['metadata'].get('planner', {}).get('db'):
-            self.collection = Collection(db[config['metadata']['planner']['db']], 'planner')
 
     def schedule_tasks(self, tq):
 
         self._planner_tq = tq
 
-        if self.collection and MOVE_PLANNER_PARAMS.get('enabled', False):
+        if MOVE_PLANNER_PARAMS.get('enabled', False):
             self._planner_tq.add_task_in(
                 self.MOVE_CANDIDATES,
                 10,
@@ -82,7 +75,8 @@ class MovePlanner(object):
     def _do_move_candidates(self, max_jobs_count):
 
         active_jobs = self.job_processor.job_finder.jobs(
-            statuses=jobs.Job.ACTIVE_STATUSES
+            statuses=jobs.Job.ACTIVE_STATUSES,
+            sort=False
         )
         busy_group_ids = self._busy_group_ids(active_jobs)
 
@@ -290,12 +284,11 @@ class StorageState(object):
     @staticmethod
     def __dcs():
         dcs = set()
-        for group in storage.groups:
-            for nb in group.node_backends:
-                try:
-                    dcs.add(nb.node.host.dc)
-                except CacheUpstreamError:
-                    continue
+        for host in storage.hosts:
+            try:
+                dcs.add(host.dc)
+            except CacheUpstreamError:
+                continue
         return dcs
 
     @staticmethod
@@ -405,6 +398,9 @@ class StorageState(object):
         job_plans = []
 
         for job in active_jobs:
+            # TODO: generalize 'account_resources' method
+            # for res_type in jobs.Job.RESOURCE_TYPES:
+            #     self.account_resources(job, res_type)
             self.account_resources(job, jobs.Job.RESOURCE_HOST_IN)
             self.account_resources(job, jobs.Job.RESOURCE_HOST_OUT)
 
@@ -613,7 +609,7 @@ class DcState(object):
 
     def move_out_host_states(self):
 
-        move_jobs_limits = JOBS_PARAMS.get('move_job', {}).get('resources_limits', {})
+        move_jobs_limits = JOBS_PARAMS.get(jobs.JobTypes.TYPE_MOVE_JOB, {}).get('resources_limits', {})
 
         for host_state in self.hosts.itervalues():
 
@@ -771,11 +767,11 @@ class DcState(object):
             for candidate in sorted(candidates, key=candidate_sort_key):
                 yield candidate
 
-        logger.info(
-            'Dst dc "{dc}": no suitable uncoupled groups found for candidate source groups'.format(
-                dc=host_state.dc_state.dc,
+            logger.info(
+                'Dst dc "{dc}": no suitable uncoupled groups found for candidate source groups'.format(
+                    dc=host_state.dc_state.dc,
+                )
             )
-        )
 
 
 class HostState(object):
@@ -784,8 +780,8 @@ class HostState(object):
         self.host = host
         self.hostname = hostname
         self.resources = {
-            jobs.Job.RESOURCE_HOST_IN: 0,
-            jobs.Job.RESOURCE_HOST_OUT: 0,
+            res_type: 0
+            for res_type in jobs.Job.RESOURCE_TYPES
         }
         self.total_space = 0.0
         self.uncoupled_space = 0.0

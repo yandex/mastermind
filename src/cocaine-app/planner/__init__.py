@@ -230,7 +230,8 @@ class Planner(object):
             'max_executing_jobs', 3)
 
         active_jobs = self.job_processor.job_finder.jobs(
-            statuses=jobs.Job.ACTIVE_STATUSES
+            statuses=jobs.Job.ACTIVE_STATUSES,
+            sort=False,
         )
 
         slots = self._jobs_slots(active_jobs,
@@ -469,7 +470,8 @@ class Planner(object):
             'couple_defrag_job', {}).get('max_executing_jobs', 3)
 
         active_jobs = self.job_processor.job_finder.jobs(
-            statuses=jobs.Job.ACTIVE_STATUSES
+            statuses=jobs.Job.ACTIVE_STATUSES,
+            sort=False,
         )
         slots = self._jobs_slots(active_jobs,
                                  jobs.JobTypes.TYPE_COUPLE_DEFRAG_JOB,
@@ -592,17 +594,6 @@ class Planner(object):
             raise ValueError('Group {0} has {1} node backends, should have at most one'.format(
                 group.group_id, len(group.node_backends)))
 
-        if group.status not in (storage.Status.BAD, storage.Status.INIT, storage.Status.RO):
-            raise ValueError('Group {0} has {1} status, should have BAD or INIT'.format(
-                group.group_id, group.status))
-
-        if (group.node_backends and group.node_backends[0].status not in (
-                storage.Status.STALLED, storage.Status.INIT, storage.Status.RO)):
-            raise ValueError(
-                'Group {0} has node backend {1} in status {2}, '
-                'should have STALLED or INIT status'.format(
-                    group.group_id, str(group.node_backends[0]), group.node_backends[0].status))
-
         if group.couple is None:
             raise ValueError('Group {0} is uncoupled'.format(group.group_id))
 
@@ -696,10 +687,12 @@ class Planner(object):
         if last_error:
             raise last_error
 
-    def _create_backend_manager_job(self, group, force, autoapprove, cmd_type):
+    def _create_backend_manager_job(self, group, force, autoapprove, cmd_type, mark_backend=None, unmark_backend=None):
         params = {'group': group}
         params['need_approving'] = not autoapprove
         params['cmd_type'] = cmd_type
+        params['mark_backend'] = mark_backend
+        params['unmark_backend'] = unmark_backend
         last_error = None
         for _ in xrange(self.CREATE_JOB_ATTEMPTS):
             try:
@@ -769,15 +762,22 @@ class Planner(object):
         active_jobs = []
         uncoupled_groups = []
         cancelled_jobs = []
-        groups_to_ro = []
         pending_restore_jobs = []
+        failed = {}
 
         for group in groups:
+            if group.type not in [storage.Group.TYPE_UNKNOWN,
+                                  storage.Group.TYPE_DATA,
+                                  storage.Group.TYPE_UNCOUPLED,
+                                  storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1]:
+                failed[group.group_id] = 'Failed group type: {}'.format(group.type)
+                continue
             if group.couple is None:
                 group_jobs = self.job_processor.job_finder.jobs(
                     groups=group.group_id,
                     types=jobs.JobTypes.TYPE_BACKEND_CLEANUP_JOB,
                     statuses=jobs.Job.ACTIVE_STATUSES,
+                    sort=False,
                 )
                 if group_jobs:
                     job = group_jobs[0]
@@ -798,6 +798,7 @@ class Planner(object):
                     groups=group.group_id,
                     types=self.RESTORE_AND_MANAGER_TYPES,
                     statuses=jobs.Job.ACTIVE_STATUSES,
+                    sort=False,
                 )
                 if group_jobs:
                     job = group_jobs[0]
@@ -825,19 +826,7 @@ class Planner(object):
                             'Unknown job status: {}'.format(job.status)
                         )
                 else:
-                    if group.node_backends[0].status != 'RO':
-                        groups_to_ro.append(group.group_id)
-                    else:
-                        groups_to_backup.append(group.group_id)
-
-        failed = {}
-        for group in groups_to_ro:
-            cmd_type = jobs.BackendManagerJob.CMD_TYPE_MAKE_READONLY
-            try:
-                job = self._create_backend_manager_job(group, force, autoapprove, cmd_type)
-                active_jobs.append(job['id'])
-            except Exception as e:
-                failed[group] = str(e)
+                    groups_to_backup.append(group.group_id)
 
         for group in groups_to_backup:
             try:
@@ -1306,7 +1295,8 @@ class Planner(object):
                       jobs.Job.STATUS_NEW,
                       jobs.Job.STATUS_EXECUTING,
                       jobs.Job.STATUS_PENDING,
-                      jobs.Job.STATUS_BROKEN))
+                      jobs.Job.STATUS_BROKEN),
+            sort=False)
 
         def log_ns_current_state_diff(ns1, ns2, tpl):
             node_type = 'hdd'
@@ -1358,83 +1348,6 @@ class Planner(object):
 
         return candidates[0]
 
-    @h.concurrent_handler
-    def convert_external_storage_to_groupset(self, request):
-        if not request.get('src_storage'):
-            raise ValueError('Request should contain "src_storage" field')
-
-        if 'src_storage_options' not in request:
-            raise ValueError('Request should contain "src_storage_options" field')
-
-        if 'type' not in request:
-            raise ValueError('Request should contain groupset "type" field')
-
-        if 'settings' not in request:
-            raise ValueError('Request should contain "settings" field')
-
-        if 'namespace' not in request:
-            raise ValueError('Request should contain "namespace" field')
-
-        settings = request['settings']
-        Groupset = storage.groupsets.make_groupset_type(
-            type=request['type'],
-            settings=settings,
-        )
-
-        Groupset.check_settings(settings)
-
-        determine_data_size = request.get('determine_data_size', False)
-
-        if determine_data_size or request.get('groupsets', []):
-            # job will use supplied groupsets and choose additional groupsets if
-            # necessary
-            groupsets = [
-                [int(group_id) for group_id in groupset.split(':')]
-                for groupset in request.get('groupsets', [])
-            ]
-        else:
-            # choose a single groupset for job to use (and to lock before job starts)
-            groupsets = [
-                self.job_processor._select_groups_for_groupset(
-                    type=request['type'],
-                    mandatory_dcs=request.get('mandatory_dcs', []),
-                )
-            ]
-
-        for groupset in groupsets:
-            self.job_processor._check_groupset(groupset, type=request['type'])
-
-        namespace_id = request['namespace']
-        ns_settings = self.namespaces_settings.get(namespace_id)
-        if ns_settings.deleted:
-            raise ValueError('Namespace "{}" is deleted'.format(namespace_id))
-
-        if namespace_id not in storage.namespaces:
-            ns = storage.namespaces.add(namespace_id)
-        else:
-            ns = storage.namespaces[namespace_id]
-
-        if request['type'] == storage.GROUPSET_LRC:
-            job_type = jobs.JobTypes.TYPE_CONVERT_TO_LRC_GROUPSET_JOB
-        else:
-            raise ValueError('Unsupported groupset type: {}'.format(request['type']))
-
-        job = self.job_processor._create_job(
-            job_type=job_type,
-            params={
-                'ns': ns.id,
-                'groups': groupsets,
-                'mandatory_dcs': request.get('mandatory_dcs', []),
-                'part_size': settings['part_size'],
-                'scheme': settings['scheme'],
-                'determine_data_size': determine_data_size,
-                'src_storage': request['src_storage'],
-                'src_storage_options': request['src_storage_options'],
-            },
-        )
-
-        return job.dump()
-
     def ttl_cleanup(self, request):
         """
         TTL cleanup job. Remove all records with expired TTL
@@ -1478,6 +1391,29 @@ class Planner(object):
         except ValueError:
             raise ValueError('Parameter "wait_timeout" must be a number')
 
+        try:
+            remove_all_older = request.get('remove_all_older')
+            if remove_all_older:
+                remove_all_older = int(remove_all_older)
+        except ValueError:
+            raise ValueError('Parameter "remove_all_older" must be a number')
+
+        try:
+            remove_permanent_older = request.get('remove_permanent_older')
+            if remove_permanent_older:
+                remove_permanent_older = int(remove_permanent_older)
+        except ValueError:
+            raise ValueError('Parameter "remove_permanent_older" must be a number')
+
+        if remove_permanent_older and remove_all_older:
+            raise ValueError(
+                'Parameters "remove_all_older"({}) and "remove_permanent_older"({}) are '
+                'mutually exclusive'.format(
+                    remove_all_older,
+                    remove_permanent_older
+                )
+            )
+
         iter_group = storage.groups[request['iter_group']]
 
         job = self.job_processor._create_job(
@@ -1491,6 +1427,8 @@ class Planner(object):
                 'nproc': nproc,
                 'wait_timeout': wait_timeout,
                 'dry_run': request.get('dry_run'),
+                'remove_all_older': remove_all_older,
+                'remove_permanent_older': remove_permanent_older,
             },
         )
 

@@ -1,8 +1,7 @@
 import logging
 
-from jobs import JobBrokenError, TaskTypes, RetryError
+from jobs import TaskTypes, RetryError
 from minion_cmd import MinionCmdTask
-import storage
 
 
 logger = logging.getLogger('mm.jobs')
@@ -25,12 +24,6 @@ class RemoveGroupTask(MinionCmdTask):
         self.type = TaskTypes.TYPE_REMOVE_GROUP
 
     def execute(self, processor):
-        if self.group not in storage.groups:
-            raise JobBrokenError(
-                'Group {group_id} is not found in storage'.format(
-                    group_id=self.group,
-                )
-            )
         try:
             minion_response = processor.minions_monitor.remove_group(
                 self.host,

@@ -88,7 +88,7 @@ class CoupleDefragJob(Job):
         defrag_tasks = False
         for group in couple.groups:
             for nb in group.node_backends:
-                if nb.stat.want_defrag <= 1:
+                if nb.stat.want_defrag < 1:
                     continue
                 make_defrag_tasks(nb)
                 task = CoupleDefragStateCheckTask.new(self, couple=str(couple))

@@ -46,13 +46,47 @@ def percent(val):
     return '{:.2f}%'.format(val * 100.0)
 
 
-BYTES_UNITS = ['b', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB']
+BYTES_UNITS = ('B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB')
 
 
 def convert_bytes(b):
     res = float(b)
-    for unit in BYTES_UNITS:
-        if res < 1024:
+    for unit in BYTES_UNITS[:-1]:
+        if abs(res) < 1024:
             return '{:.2f} {}'.format(res, unit)
         res = res / 1024
     return '{:.2f} {}'.format(res, BYTES_UNITS[-1])
+
+
+CONFIG_BYTES_UNITS = ('T', 'G', 'M', 'K')
+
+
+def convert_config_bytes_value(value):
+
+    format_error_msg = (
+        'Unexpected bytes values: {}, expected an integer value optionally followed by one of '
+        '("T", "G", "M", "K")'
+    )
+
+    if not value:
+        raise ValueError(format_error_msg)
+
+    if value[-1].upper() in CONFIG_BYTES_UNITS:
+        bytes_part, suffix = value[:-1], value[-1].upper()
+    else:
+        bytes_part, suffix = value, None
+
+    try:
+        bytes_value = int(bytes_part)
+    except ValueError:
+        raise ValueError(format_error_msg)
+
+    if suffix == 'K':
+        return bytes_value * (1024 ** 1)
+    elif suffix == 'M':
+        return bytes_value * (1024 ** 2)
+    elif suffix == 'G':
+        return bytes_value * (1024 ** 3)
+    elif suffix == 'T':
+        return bytes_value * (1024 ** 4)
+    return bytes_value

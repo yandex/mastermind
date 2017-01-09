@@ -13,8 +13,8 @@ Build-Depends:
  cocaine-v12-framework-python,
  python-simplejson,
 Standards-Version: 3.9.2
-Homepage: https://github.com/toshic/mastermind
-Vcs-Git: git://github.com/toshic/mastermind.git
+Homepage: https://github.com/yandex/mastermind
+Vcs-Git: git://github.com/yandex/mastermind.git
 X-Python-Version: >= 2.7
 
 Package: mastermind
@@ -30,6 +30,8 @@ Depends:
  python-requests,
  cocaine-v12-runtime,
  python-mastermind (= ${binary:Version}),
+Conflicts:
+ mastermind-cocainev11
 Recommends: python-kazoo
 Description: Metabalancer for elliptics storage
 
@@ -43,6 +45,8 @@ Depends:
  python-msgpack | msgpack-python,
  python-tornado (>= 4.0),
  python-mastermind (= ${binary:Version}),
+Conflicts:
+ mastermind-utils-cocainev11
 Description: Metabalancer CLI for elliptics storage
 
 Package: python-mastermind
@@ -55,4 +59,6 @@ Depends:
  python-tornado (>= 4.0),
  cocaine-v12-framework-python,
  python-simplejson,
+Conflicts:
+ python-mastermind-cocainev11
 Description: Common components and a client library for Mastermind

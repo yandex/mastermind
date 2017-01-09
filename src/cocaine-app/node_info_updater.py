@@ -131,6 +131,10 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                                elliptics.monitor_stat_categories.commands)
 
     def update_status(self, groups):
+        if groups is not None and len(groups) == 0:
+            # otherwise empty groups list is treated as complete cluster update
+            return
+
         self.monitor_stats(groups=groups)
 
         namespaces_settings = self.namespaces_settings.fetch()
@@ -596,7 +600,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                     params = {'statuses': Job.ACTIVE_STATUSES}
                     if groups:
                         params['groups'] = [g.group_id for g in groups]
-                    for job in self.job_finder.jobs(**params):
+                    for job in self.job_finder.jobs(sort=False, **params):
                         # TODO: this should definitely be done some other way
                         if hasattr(job, 'group'):
                             jobs[job.group] = job
@@ -662,6 +666,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                 logger.error('Couple record exists, but couple {couple} is not found'.format(
                     couple=cr.couple_id,
                 ))
+                continue
             group = storage.groups[cr.couple_id]
             if not group.couple:
                 logger.error(

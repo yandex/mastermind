@@ -27,7 +27,11 @@ GROUPSET_TYPE_LRC = 'LRC'
 def update_commands_stat(comm_stat, state):
     comm_stat.ell_disk_read_rate = state['ell_disk_read_rate']
     comm_stat.ell_disk_write_rate = state['ell_disk_write_rate']
-    comm_stat.ell_net_read_rate = state['ell_net_read_rate']
+
+    # Elliptics READ* commands do not provide valid data on elliptics usage
+    # of network interface and therefore they have no reason to be used
+    # comm_stat.ell_net_read_rate = state['ell_net_read_rate']
+
     comm_stat.ell_net_write_rate = state['ell_net_write_rate']
 
 

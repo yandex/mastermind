@@ -406,7 +406,7 @@ class LRC_8_2_2_V1_Builder(object):
                     logger.debug(
                         'Found {groups_in_node} groups in node {node} '
                         'of type {type}, limit is {limit} groups'.format(
-                            grops_in_node=list(selected_groups_in_node),
+                            groups_in_node=list(selected_groups_in_node),
                             node=node['full_path'],
                             type=node['type'],
                             limit=limit,

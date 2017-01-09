@@ -46,7 +46,12 @@ class InfrastructureCache(object):
             raise CacheUpstreamError(str(e))
 
     def get_dc_by_host(self, host, strict=True):
-        tree = self.strictable(self.hosttree_cache, host, strict)
+        try:
+            tree = self.strictable(self.hosttree_cache, host, strict)
+        except CacheUpstreamError:
+            if not strict:
+                return 'unknonwn'
+            raise
         cur_node = tree
         dc_node_type = inventory.get_dc_node_type()
         while cur_node:
