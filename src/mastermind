@@ -28,6 +28,7 @@ from mastermind.query.couples import Couple
 SERVICE_BASE_APP_NAME = 'mastermind2.26'
 SERVICE_APP_NAME = SERVICE_BASE_APP_NAME
 SERVICE_CACHE_APP_NAME = SERVICE_BASE_APP_NAME + '-cache'
+SERVICE_COLLECTOR_APP_NAME = 'mastermind-collector'
 SERVICE_DEFAULT_HOST = 'localhost'
 SERVICE_DEFAULT_PORT = 10053
 
@@ -47,6 +48,11 @@ cache_app_param = ('a',
                    'app',
                    '{app}'.format(app=SERVICE_CACHE_APP_NAME),
                    'Mastermind cache application name')
+
+collector_app_param = ('a',
+                       'app',
+                       '{app}'.format(app=SERVICE_COLLECTOR_APP_NAME),
+                       'Mastermind collector application name')
 
 
 def logger_setup():
@@ -2104,6 +2110,27 @@ def convert_queue_set_priority(external_storage_id,
     return
 
 
+collectorDispatcher = Dispatcher(globaloptions=(host_param, collector_app_param))
+
+@collectorDispatcher.command(name='group')
+@log_action
+def collector_group_info(group, host=None, app=None):
+    '''Query group info from mastermind-collector'''
+    s = service(host, app)
+    group = str(group)
+
+    res = s.run_sync('group_info', group)
+    print(res)
+
+@collectorDispatcher.command(name='summary')
+@log_action
+def collector_summary(host=None, app=None):
+    '''Get mastermind-collector summary'''
+    s = service(host, app)
+    res = s.run_sync('summary', '')
+    print(res)
+
+
 d = Dispatcher(globaloptions=(app_param,))
 d.nest('group', groupDispatcher, 'Perform group action')
 d.nest('couple', coupleDispatcher, 'Perform couple action')
@@ -2114,6 +2141,7 @@ d.nest('lock', lockDispatcher, 'Acquire locks on storage infrastructure nodes')
 d.nest('unlock', unlockDispatcher, 'Release locks on storage infrastructure nodes')
 d.nest('lrc', lrcDispatcher, 'Perform actions with LRC groups or couples')
 d.nest('external-storage', externalStorageDispatcher, 'External storage management')
+d.nest('collector', collectorDispatcher, 'Perform actions with mastermind-collector')
 
 
 def command_helper(argv):
