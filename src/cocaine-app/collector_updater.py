@@ -438,7 +438,6 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         group.update(group_state)
 
     def _process_jobs(self, groups=None):
-        jobs = {}
         if self.job_finder:
             try:
                 params = {'statuses': Job.ACTIVE_STATUSES}
@@ -447,19 +446,17 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                 for job in self.job_finder.jobs(**params):
                     # TODO: this should definitely be done some other way
                     if hasattr(job, 'group'):
-                        jobs[job.group] = job
+                        if job.group in storage.groups:
+                            storage.groups[job.group].set_active_job(job)
                     elif hasattr(job, 'couple'):
-                        jobs[job.couple] = job
+                        if job.couple in storage.couples:
+                            couple = storage.couples[job.couple]
+                            for group in couple.groups:
+                                group.set_active_job(job)
+
             except Exception as e:
                 logger.exception('Failed to fetch pending jobs: {0}'.format(e))
                 pass
-
-        if not groups:
-            groups = storage.groups.keys()
-
-        for group in groups:
-            active_job = jobs.get(group.group_id) or jobs.get(group.couple) or None
-            group.set_active_job(active_job)
 
     def _process_namespaces(self, namespace_states):
         for namespace_state in namespace_states:
