@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from collections import defaultdict
 import simplejson
 import logging
 
@@ -148,7 +147,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
     def _force_nodes_update(self, groups=None):
         with self._cluster_update_lock:
             try:
-                response = _force_collector_refresh(groups)
+                response = self._force_collector_refresh(groups)
                 logger.info('Collector refresh completed: {}'.format(response))
             except Exception as e:
                 logger.error('Force collector refresh failed: {}'.format(e))
@@ -248,15 +247,14 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
             try:
                 host_id = host_state['id']
             except KeyError:
-                logger.error('Malformed response from collector, failed to get host id');
+                logger.error('Malformed response from collector, failed to get host id')
                 continue
             try:
                 self._process_host(host_id, host_state)
             except Exception as e:
-                logger.error('Failed to process host {host_id} state '
-                             'from collector: {e}'.format(
-                                host_id=host_id,
-                                e=e,
+                logger.error('Failed to process host {host_id} state from collector: {e}'.format(
+                    host_id=host_id,
+                    e=e,
                 ))
                 continue
 
@@ -279,10 +277,9 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
             try:
                 self._process_node(node_id, node_state)
             except Exception as e:
-                logger.error('Failed to process node {node_id} state from '
-                             'collector: {e}'.format(
-                            node_id=node_id,
-                            e=e
+                logger.error('Failed to process node {node_id} state from collector: {e}'.format(
+                    node_id=node_id,
+                    e=e
                 ))
                 continue
 
@@ -468,8 +465,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
             try:
                 self._process_namespace(nsid, namespace_state)
             except Exception as e:
-                logger.error('Failed to process namespace {nsid} state '
-                             'from collector: {e}'.format(
+                logger.error('Failed to process namespace {nsid} state from collector: {e}'.format(
                     nsid=nsid,
                     e=e,
                 ))
@@ -494,8 +490,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
             try:
                 self._process_couple(couple_id, couple_state)
             except Exception as e:
-                logger.error('Failed to process couple {couple_id} state '
-                             'from collector: {e}'.format(
+                logger.error('Failed to process couple {couple_id} state from collector: {e}'.format(
                     couple_id=couple_id,
                     e=e
                 ))
