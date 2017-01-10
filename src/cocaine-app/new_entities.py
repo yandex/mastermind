@@ -229,8 +229,8 @@ class NodeBackendStat(object):
             self.KEY_VFS_USED_SPACE: self.vfs_used_space + other.vfs_used_space,
 
             self.KEY_FRAGMENTATION: (
-                float(self.files_remove + other.files_removed) /
-                max(self.files_remove + other.files_removed + self.files + other.files, 1)
+                float(self.files_removed + other.files_removed) /
+                max(self.files_removed + other.files_removed + self.files + other.files, 1)
             ),
 
             self.KEY_RECORDS: self.files + other.files,
