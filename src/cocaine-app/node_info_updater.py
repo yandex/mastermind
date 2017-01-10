@@ -105,12 +105,20 @@ class NodeInfoUpdater(object):
                 logger.info('Cluster updating: updating group coupling info started')
                 self.update_symm_groups_async(namespaces_settings=namespaces_settings)
 
+            # will be calculated lazily if required
+            per_entity_stat = None
+
             if self._prepare_namespaces_states:
                 logger.info('Recalculating namespace states')
-                self._update_namespaces_states(namespaces_settings=namespaces_settings)
+                per_entity_stat = per_entity_stat or self.statistics.per_entity_stat()
+                self._update_namespaces_states(
+                    namespaces_settings=namespaces_settings,
+                    per_entity_stat=per_entity_stat,
+                )
             if self._prepare_flow_stats:
                 logger.info('Recalculating flow stats')
-                self._update_flow_stats()
+                per_entity_stat = per_entity_stat or self.statistics.per_entity_stat()
+                self._update_flow_stats(per_entity_stat)
 
         except Exception as e:
             logger.info('Failed to update groups: {0}\n{1}'.format(
@@ -704,11 +712,11 @@ class NodeInfoUpdater(object):
             logger.info('Namespaces states forced updating: finished, time: {0:.3f}'.format(
                 time.time() - start_ts))
 
-    def _update_namespaces_states(self, namespaces_settings):
+    def _update_namespaces_states(self, namespaces_settings, per_entity_stat):
         start_ts = time.time()
         logger.info('Namespaces states updating: started')
         try:
-            self._do_update_namespaces_states(namespaces_settings)
+            self._do_update_namespaces_states(namespaces_settings, per_entity_stat)
         except Exception as e:
             logger.exception('Namespaces states updating: failed')
             self._namespaces_states.set_exception(e)
@@ -716,7 +724,7 @@ class NodeInfoUpdater(object):
             logger.info('Namespaces states updating: finished, time: {0:.3f}'.format(
                 time.time() - start_ts))
 
-    def _do_update_namespaces_states(self, namespaces_settings):
+    def _do_update_namespaces_states(self, namespaces_settings, per_entity_stat=None):
         def default():
             return {
                 'settings': {},
@@ -762,7 +770,7 @@ class NodeInfoUpdater(object):
             ))
 
         # statistics
-        for ns, stats in self.statistics.per_ns_statistics().iteritems():
+        for ns, stats in self.statistics.per_ns_statistics(per_entity_stat).iteritems():
             res[ns]['statistics'] = stats
 
         # removing internal namespaces that clients should not know about
@@ -780,18 +788,18 @@ class NodeInfoUpdater(object):
             logger.info('Flow stats forced updating: finished, time: {0:.3f}'.format(
                 time.time() - start_ts))
 
-    def _update_flow_stats(self):
+    def _update_flow_stats(self, per_entity_stat):
         start_ts = time.time()
         logger.info('Flow stats updating: started')
         try:
-            self._do_update_flow_stats()
+            self._do_update_flow_stats(per_entity_stat)
         finally:
             logger.info('Flow stats updating: finished, time: {0:.3f}'.format(
                 time.time() - start_ts))
 
-    def _do_update_flow_stats(self):
+    def _do_update_flow_stats(self, per_entity_stat=None):
         try:
-            self._flow_stats = self.statistics.calculate_flow_stats()
+            self._flow_stats = self.statistics.calculate_flow_stats(per_entity_stat)
         except Exception as e:
             logger.exception('Flow stats updating: failed')
             self._flow_stats = e
