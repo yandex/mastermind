@@ -268,7 +268,6 @@ mastermind (2.28.96) trusty; urgency=medium
  -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 21 Nov 2016 17:46:21 +0300
 
 mastermind (2.28.95) trusty; urgency=medium
->>>>>>> cocaine-v12-release
 
   * Update workers to run on cocaine v12
 
@@ -527,8 +526,6 @@ mastermind (2.28.51) trusty; urgency=medium
 
  -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 03 Oct 2016 12:32:16 +0300
 
-=======
->>>>>>> Changelog, version 2.28.37~cocainev12-1
 mastermind (2.28.50) trusty; urgency=medium
 
   * Tolerate unknown command errors when failed to fetch from metadb

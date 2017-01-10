@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from collections import defaultdict
 import simplejson
 import logging
 import uuid
@@ -30,8 +29,13 @@ GROUPSET_TYPE_LRC = 'LRC'
 def update_commands_stat(comm_stat, state):
     comm_stat.ell_disk_read_rate = state['ell_disk_read_rate']
     comm_stat.ell_disk_write_rate = state['ell_disk_write_rate']
-    comm_stat.ell_net_read_rate = state['ell_net_read_rate']
+
+    # Elliptics READ* commands do not provide valid data on elliptics usage
+    # of network interface and therefore they have no reason to be used
+    # comm_stat.ell_net_read_rate = state['ell_net_read_rate']
+
     comm_stat.ell_net_write_rate = state['ell_net_write_rate']
+
 
 def create_groupset_if_needed(gsid, groups, gstype, nsid, status=None, status_text=None):
     for gid in groups:
@@ -81,6 +85,7 @@ def create_groupset_if_needed(gsid, groups, gstype, nsid, status=None, status_te
         ns.add_couple(groupset)
 
     return storage.groupsets[gsid]
+
 
 class NodeInfoUpdater(NodeInfoUpdaterBase):
     # XXX add config option for collector worker name, address?
@@ -151,7 +156,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
     def _force_nodes_update(self, groups=None):
         with self._cluster_update_lock:
             try:
-                response = _force_collector_refresh(groups)
+                response = self._force_collector_refresh(groups)
                 logger.info('Collector refresh completed: {}'.format(response))
             except Exception as e:
                 logger.error('Force collector refresh failed: {}'.format(e))
@@ -234,7 +239,10 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                 return
 
             logger.info('self._update_max_group')
-            self._update_max_group()
+            try:
+                self._update_max_group()
+            except Exception as e:
+                logger.error('Failed to update max group: {}'.format(e))
             logger.info('self._update_max_group complete')
 
             try:
@@ -258,25 +266,23 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                         self._update_flow_stats()
 
             except Exception as e:
-                logger.error('Failed to update stuff: {}'.format(e))
+                logger.exception('Failed to complete state update')
             finally:
                 self._schedule_next_round()
-            logger.info('NodeInfoUpdater.update() complete')
 
     def _process_hosts(self, host_states):
         for host_state in host_states:
             try:
                 host_id = host_state['id']
             except KeyError:
-                logger.error('Malformed response from collector, failed to get host id');
+                logger.error('Malformed response from collector, failed to get host id')
                 continue
             try:
                 self._process_host(host_id, host_state)
             except Exception as e:
-                logger.error('Failed to process host {host_id} state '
-                             'from collector: {e}'.format(
-                                host_id=host_id,
-                                e=e,
+                logger.error('Failed to process host {host_id} state from collector: {e}'.format(
+                    host_id=host_id,
+                    e=e,
                 ))
                 continue
             time.sleep(0)
@@ -300,10 +306,9 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
             try:
                 self._process_node(node_id, node_state)
             except Exception as e:
-                logger.error('Failed to process node {node_id} state from '
-                             'collector: {e}'.format(
-                            node_id=node_id,
-                            e=e
+                logger.error('Failed to process node {node_id} state from collector: {e}'.format(
+                    node_id=node_id,
+                    e=e
                 ))
                 continue
             time.sleep(0)
@@ -358,22 +363,10 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         else:
             fs = storage.fs[fs_id]
 
-        fs.status = filesystem_state['status']
-        fs.status_text = filesystem_state['status_text']
+        fs.update(filesystem_state)
 
         stat = fs.stat
-        stat.ts = mh.elliptics_time_to_ts(filesystem_state['timestamp'])  # Why is it elliptics-like? Does it have to do anything with elliptics?
-        stat.total_space = filesystem_state['total_space']
-        stat.free_space = filesystem_state['free_space']
-
-        stat.disk_util = filesystem_state['disk_util']
-        stat.disk_util_read = filesystem_state['disk_util_read']
-        stat.disk_util_write = filesystem_state['disk_util_write']
-
-        # XXX this is not the same as in commands_stats
-        stat.disk_read_rate = filesystem_state['disk_read_rate']
-        stat.disk_write_rate = filesystem_state['disk_write_rate']
-
+        stat.update(filesystem_state)
         update_commands_stat(stat.commands_stat, filesystem_state['commands_stat'])
 
     def _process_backends(self, backend_states):
@@ -402,7 +395,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         if backend_id not in storage.node_backends:
             logger.info('Creating node backend {}'.format(backend_id))
             node_backend = storage.node_backends.add(node, backend_state['backend_id'])
-            node_backend.stat = storage.NodeBackendStat(node.stat)
+            node_backend.stat = storage.NodeBackendStat()
         else:
             node_backend = storage.node_backends[backend_id]
 
@@ -419,41 +412,12 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                 group = storage.groups[gid]
                 infrastructure.update_group_history(group)
 
-        node_backend.base_path = backend_state['base_path']
-        node_backend.read_only = backend_state['read_only']
-        node_backend.status = backend_state['status']
-        node_backend.status_text = backend_state['status_text']
+        node_backend.update(backend_state)
 
         stat = node_backend.stat
-        stat.ts = mh.elliptics_time_to_ts(backend_state['timestamp'])
-
-        stat.free_space = backend_state['free_space']
-        stat.total_space = backend_state['total_space']
-        stat.used_space = backend_state['used_space']
-
-        stat.vfs_free_space = backend_state['vfs_free_space']
-        stat.vfs_total_space = backend_state['vfs_total_space']
-        stat.vfs_used_space = backend_state['vfs_used_space']
+        stat.update(backend_state)
 
         update_commands_stat(stat.commands_stat, backend_state['commands_stat'])
-
-        stat.fragmentation = backend_state['fragmentation']
-
-        stat.files = backend_state['records']
-        stat.files_removed = backend_state['records_removed']
-        stat.files_removed_size = backend_state['records_removed_size']
-
-        stat.defrag_state = backend_state['defrag_state']
-        stat.want_defrag = backend_state['want_defrag']
-
-        stat.blob_size = backend_state['blob_size']
-        stat.blob_size_limit = backend_state['blob_size_limit']
-        stat.max_blob_base_size = backend_state['max_blob_base_size']
-
-        stat.io_blocking_size = backend_state['io_blocking_size']
-        stat.io_nonblocking_size = backend_state['io_nonblocking_size']
-
-        stat.stat_commit_errors = backend_state['stat_commit_rofs_errors_diff']
 
     def _process_groups(self, group_states):
         for group_state in group_states:
@@ -465,10 +429,9 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
             try:
                 self._process_group(gid, group_state)
             except Exception as e:
-                logger.error('Failed to process group {gid} '
-                             'state from collector: {e}'.format(
-                                gid=gid,
-                                e=e,
+                logger.exception('Failed to process group {gid} state from collector: {e}'.format(
+                    gid=gid,
+                    e=e,
                 ))
                 continue
             time.sleep(0)
@@ -482,12 +445,16 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         else:
             group = storage.groups[gid]
 
-            new_backends = [storage.node_backends[nbid]
+            new_backends = [
+                storage.node_backends[nbid]
                 for nbid in group_state['backends']
-                    if nbid not in group.node_backends]
+                if nbid not in group.node_backends
+            ]
 
-            removed_backends = [nb for nb in group.node_backends
-                    if str(nb) not in group_state['backends']]
+            removed_backends = [
+                nb for nb in group.node_backends
+                if str(nb) not in group_state['backends']
+            ]
 
             for nb in new_backends:
                 group.add_node_backend(nb)
@@ -498,13 +465,9 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
             if new_backends or removed_backends:
                 infrastructure.update_group_history(group)
 
-        group.status = group_state['status']
-        group.status_text = group_state['status_text']
-        group.meta = group_state['metadata']
-        group._type = group_state['type']
+        group.update(group_state)
 
     def _process_jobs(self, groups=None):
-        jobs = {}
         if self.job_finder:
             try:
                 params = {'statuses': Job.ACTIVE_STATUSES}
@@ -513,21 +476,17 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                 for job in self.job_finder.jobs(**params):
                     # TODO: this should definitely be done some other way
                     if hasattr(job, 'group'):
-                        jobs[job.group] = job
+                        if job.group in storage.groups:
+                            storage.groups[job.group].set_active_job(job)
                     elif hasattr(job, 'couple'):
-                        jobs[job.couple] = job
-                    time.sleep(0)
+                        if job.couple in storage.couples:
+                            couple = storage.couples[job.couple]
+                            for group in couple.groups:
+                                group.set_active_job(job)
+
             except Exception as e:
                 logger.exception('Failed to fetch pending jobs: {0}'.format(e))
                 pass
-
-        if not groups:
-            groups = storage.groups.keys()
-
-        for group in groups:
-            active_job = jobs.get(group.group_id) or jobs.get(group.couple) or None
-            group.set_active_job(active_job)
-            time.sleep(0)
 
     def _process_namespaces(self, namespace_states):
         for namespace_state in namespace_states:
@@ -539,8 +498,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
             try:
                 self._process_namespace(nsid, namespace_state)
             except Exception as e:
-                logger.error('Failed to process namespace {nsid} state '
-                             'from collector: {e}'.format(
+                logger.error('Failed to process namespace {nsid} state from collector: {e}'.format(
                     nsid=nsid,
                     e=e,
                 ))
@@ -566,8 +524,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
             try:
                 self._process_couple(couple_id, couple_state)
             except Exception as e:
-                logger.error('Failed to process couple {couple_id} state '
-                             'from collector: {e}'.format(
+                logger.error('Failed to process couple {couple_id} state from collector: {e}'.format(
                     couple_id=couple_id,
                     e=e
                 ))
@@ -579,31 +536,33 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
             # It is possible because Couple objects are never removed.
             logger.debug('Couple {} has empty groupsets'.format(couple_id))
 
-            if (couple_id in storage.groupsets):
+            if couple_id in storage.groupsets:
                 groupset = storage.groupsets[couple_id]
                 groupset.groups = []
-                groupset.status = couple_state['status'] # XXX
+                groupset.status = couple_state['status']  # XXX
                 groupset.status_text = couple_state['status_text']
 
             return
 
-        replicas_groupset_states = [state
+        replicas_groupset_states = [
+            state
             for state in couple_state['groupsets']
-                if state['type'] == GROUPSET_TYPE_REPLICAS]
+            if state['type'] == GROUPSET_TYPE_REPLICAS
+        ]
 
         if len(replicas_groupset_states) > 1:
             raise RuntimeError('Couple has {} replicas groupsets'.format(
                 len(replicas_groupset_states)
             ))
 
-        lrc_groupset_states = [state
+        lrc_groupset_states = [
+            state
             for state in couple_state['groupsets']
-                if state['type'] == GROUPSET_TYPE_LRC]
+            if state['type'] == GROUPSET_TYPE_LRC
+        ]
 
         if len(lrc_groupset_states) > 1:
-            raise RuntimeError('Couple has {} LRC groupsets'.format(
-                len(lrc_groupsets_states)
-            ))
+            raise RuntimeError('Couple has {} LRC groupsets'.format(len(lrc_groupset_states)))
 
         if replicas_groupset_states:
             gs_state = replicas_groupset_states[0]

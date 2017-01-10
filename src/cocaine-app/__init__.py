@@ -48,6 +48,7 @@ if config.get('stat_source', 'native') == 'collector':
 else:
     from node_info_updater import NodeInfoUpdater
 
+logger = logging.getLogger()
 i = iter(xrange(100))
 logger.info("trace %d" % (i.next()))
 

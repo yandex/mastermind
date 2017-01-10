@@ -56,7 +56,6 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
         self.__node = node
         self.statistics = statistics
         self.job_finder = job_finder
-        self.namespaces_settings = namespaces_settings
         self.couple_record_finder = couple_record_finder
         self._namespaces_states = CachedGzipResponse()
         self._flow_stats = {}
