@@ -100,12 +100,20 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                 logger.info('Cluster updating: updating group coupling info started')
                 self.update_symm_groups_async(namespaces_settings=namespaces_settings)
 
+            # will be calculated lazily if required
+            per_entity_stat = None
+
             if self._prepare_namespaces_states:
                 logger.info('Recalculating namespace states')
-                self._update_namespaces_states(namespaces_settings)
+                per_entity_stat = per_entity_stat or self.statistics.per_entity_stat()
+                self._update_namespaces_states(
+                    namespaces_settings=namespaces_settings,
+                    per_entity_stat=per_entity_stat,
+                )
             if self._prepare_flow_stats:
                 logger.info('Recalculating flow stats')
-                self._update_flow_stats()
+                per_entity_stat = per_entity_stat or self.statistics.per_entity_stat()
+                self._update_flow_stats(per_entity_stat)
 
         except Exception:
             logger.exception('Failed to update groups')

@@ -258,12 +258,20 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                     logger.info('infrastructure.schedule_history_update()')
                     infrastructure.schedule_history_update()
 
+                    # will be calculated lazily if required
+                    per_entity_stat = None
+
                     if self._prepare_namespaces_states:
                         logger.info('Recalculating namespaces states')
-                        self._update_namespaces_states(namespaces_settings)
+                        per_entity_stat = per_entity_stat or self.statistics.per_entity_stat()
+                        self._update_namespaces_states(
+                            namespaces_settings,
+                            per_entity_stat=per_entity_stat,
+                        )
                     if self._prepare_flow_stats:
                         logger.info('Recalculating flow stats')
-                        self._update_flow_stats()
+                        per_entity_stat = per_entity_stat or self.statistics.per_entity_stat()
+                        self._update_flow_stats(per_entity_stat)
 
             except Exception as e:
                 logger.exception('Failed to complete state update')
