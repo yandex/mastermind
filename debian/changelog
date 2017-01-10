@@ -1,3 +1,10 @@
+mastermind-cocainev11 (2.28.138) trusty; urgency=medium
+
+  * Calculate storage statistics only once
+  * Disable hash memoization temporarily
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 10 Jan 2017 17:24:07 +0300
+
 mastermind-cocainev11 (2.28.137) trusty; urgency=medium
 
   * Add hash memoization for all storage objects
