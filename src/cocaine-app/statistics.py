@@ -64,10 +64,10 @@ class Statistics(object):
         data['effective_space'] += couple.effective_space
         data['effective_free_space'] += couple.effective_free_space
 
-    def per_ns_statistics(self):
+    def per_ns_statistics(self, per_entity_stat=None):
         ns_stats = {}
         try:
-            _, per_ns_stat, _ = self.per_entity_stat()
+            _, per_ns_stat, _ = per_entity_stat or self.per_entity_stat()
         except Exception:
             logger.exception('Failed to calculate namespace statistics')
             return ns_stats
@@ -263,8 +263,8 @@ class Statistics(object):
                                   len(frozen_couples) + len(bad_couples)),
                 'uncoupled_groups': len(uncoupled_groups)}
 
-    def calculate_flow_stats(self):
-        per_dc_stat, per_ns_stat, per_ns_dc_stat = self.per_entity_stat()
+    def calculate_flow_stats(self, per_entity_stat):
+        per_dc_stat, per_ns_stat, per_ns_dc_stat = per_entity_stat or self.per_entity_stat()
 
         res = self.total_stats(per_dc_stat, per_ns_stat)
         res.update({'dc': per_dc_stat,
