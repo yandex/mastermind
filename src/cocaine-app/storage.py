@@ -828,6 +828,7 @@ class Node(object):
     def __str__(self):
         return '{host}:{port}'.format(host=self.host.addr, port=self.port)
 
+    # @memoized('_hash')
     def __hash__(self):
         return hash(self.__str__())
 
@@ -860,6 +861,7 @@ class Fs(FsBase):
     def __str__(self):
         return '{host}:{fsid}'.format(host=self.host.addr, fsid=self.fsid)
 
+    # @memoized('_hash')
     def __hash__(self):
         return hash(self.__str__())
 
@@ -977,6 +979,7 @@ class NodeBackend(NodeBackendBase):
     def __str__(self):
         return '%s:%d/%d' % (self.node.host.addr, self.node.port, self.backend_id)
 
+    # @memoized('_hash')
     def __hash__(self):
         return hash(self.__str__())
 
@@ -1103,6 +1106,7 @@ class Group(GroupBase):
 
         return [g for g in self.couple if g is not self]
 
+    # @memoized('_hash')
     def __hash__(self):
         return hash(self.group_id)
 
@@ -1545,6 +1549,7 @@ class Groupset(object):
     def __str__(self):
         return ':'.join(str(group) for group in self.groups)
 
+    # @memoized('_hash')
     def __hash__(self):
         return hash(self.__str__())
 
@@ -2130,6 +2135,7 @@ class Namespace(object):
     def __str__(self):
         return self.id
 
+    # @memoized('_hash')
     def __hash__(self):
         return hash(str(self))
 
