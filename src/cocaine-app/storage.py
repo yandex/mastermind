@@ -1481,12 +1481,14 @@ class Groupset(object):
         return int(math.ceil(self.groups_effective_space * self.ns_reserved_space_percentage))
 
     @property
+    @_cached('effective_space')
     def effective_space(self):
         return int(math.floor(
             self.groups_effective_space * (1.0 - self.ns_reserved_space_percentage)
         ))
 
     @property
+    @_cached('effective_free_space')
     def effective_free_space(self):
         stat = self.get_stat()
         if not stat:
@@ -2099,10 +2101,12 @@ class Lrc822v1Groupset(Groupset):
         return 0
 
     @property
+    @_cached('effective_space')
     def effective_space(self):
         return self.groups_effective_space
 
     @property
+    @_cached('effective_free_space')
     def effective_free_space(self):
         return sum(
             g.effective_free_space

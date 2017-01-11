@@ -1,20 +1,15 @@
-mastermind (2.28.138~collector3) trusty; urgency=medium
-
-  * Collector worker as an external cluster information source
-
- -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 11 Jan 2017 16:34:14 +0300
-
-mastermind (2.28.138~collector2) trusty; urgency=medium
-
-  * Collector worker as an external cluster information source
-
- -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 11 Jan 2017 15:11:12 +0300
-
-mastermind (2.28.138~collector1) trusty; urgency=medium
+mastermind (2.28.139~collector1) trusty; urgency=medium
 
   * Collector worker as an external cluster information source
 
  -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 29 Sep 2016 16:38:38 +0300
+
+mastermind (2.28.139) trusty; urgency=medium
+
+  * Cache *effective_space counters
+  * Use light copying for namespace states
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 11 Jan 2017 18:45:04 +0300
 
 mastermind (2.28.138) trusty; urgency=medium
 
