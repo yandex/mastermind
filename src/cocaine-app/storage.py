@@ -1650,6 +1650,8 @@ class Group(object):
         return True
 
     def get_stat(self):
+        if len(self.node_backends) == 1 and self.node_backends[0].stat:
+            return self.node_backends[0].stat
         return reduce(lambda res, x: res + x, [nb.stat for nb in self.node_backends if nb.stat])
 
     def update_status_recursive(self):
