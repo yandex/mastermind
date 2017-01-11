@@ -746,7 +746,8 @@ class NodeInfoUpdater(object):
                     ns = couple.namespace
                 except ValueError:
                     continue
-                info = couple.info().serialize()
+                # NOTE: deepcopy is required to provide immutability of the cached objects
+                info = copy.deepcopy(couple.info().serialize())
                 info['hosts'] = couple.groupset_hosts()
                 if couple.lrc822v1_groupset:
                     info['groupsets'][storage.Group.TYPE_LRC_8_2_2_V1]['hosts'] = couple.lrc822v1_groupset.groupset_hosts()
