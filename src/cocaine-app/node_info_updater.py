@@ -747,10 +747,14 @@ class NodeInfoUpdater(object):
                     ns = couple.namespace
                 except ValueError:
                     continue
-                # NOTE: deepcopy is required to provide immutability of the cached objects
-                info = copy.deepcopy(couple.info().serialize())
+                # NOTE: copy is required to provide immutability of the cached objects
+                # NOTE: deepcopy is not used because it is very expensive
+                info = copy.copy(couple.info().serialize())
                 info['hosts'] = couple.groupset_hosts()
                 if couple.lrc822v1_groupset:
+                    # NOTE: copy is required to provide immutability of the cached objects
+                    # NOTE: deepcopy is not used because it is very expensive
+                    info['groupsets'][storage.Group.TYPE_LRC_8_2_2_V1] = copy.copy(info['groupsets'][storage.Group.TYPE_LRC_8_2_2_V1])
                     info['groupsets'][storage.Group.TYPE_LRC_8_2_2_V1]['hosts'] = couple.lrc822v1_groupset.groupset_hosts()
                 # couples
                 res[ns.id]['couples'].append(info)
