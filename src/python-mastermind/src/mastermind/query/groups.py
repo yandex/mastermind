@@ -123,9 +123,9 @@ class GroupDataObject(LazyDataObject):
 
         return data
 
-    def _do_serialize(self):
-        data = super(GroupDataObject, self)._do_serialize()
-        node_backends = [nb._do_serialize() for nb in data['node_backends']]
+    def serialize(self):
+        data = super(GroupDataObject, self).serialize()
+        node_backends = [nb.serialize() for nb in data['node_backends']]
         data['node_backends'] = node_backends
         return data
 
