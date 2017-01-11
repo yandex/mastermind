@@ -54,6 +54,7 @@ class Statistics(object):
     def account_effective_memory(data, couple):
         if couple.status not in storage.GOOD_STATUSES:
             return
+
         if couple.groups:
             data['effective_space'] += couple.effective_space
             data['effective_free_space'] += couple.effective_free_space

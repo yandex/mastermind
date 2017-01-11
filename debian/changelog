@@ -1,3 +1,9 @@
+mastermind (2.28.138~collector2) trusty; urgency=medium
+
+  * Collector worker as an external cluster information source
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 11 Jan 2017 15:11:12 +0300
+
 mastermind (2.28.138~collector1) trusty; urgency=medium
 
   * Collector worker as an external cluster information source
@@ -16,7 +22,6 @@ mastermind (2.28.137) trusty; urgency=medium
   * Add hash memoization for all storage objects
 
  -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 09 Jan 2017 23:48:09 +0300
->>>>>>> yandex/cocaine-v12-release
 
 mastermind (2.28.136) trusty; urgency=medium
 
@@ -282,7 +287,6 @@ mastermind (2.28.96) trusty; urgency=medium
  -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 21 Nov 2016 17:46:21 +0300
 
 mastermind (2.28.95) trusty; urgency=medium
->>>>>>> yandex/cocaine-v12-release
 
   * Update workers to run on cocaine v12
 
@@ -541,8 +545,6 @@ mastermind (2.28.51) trusty; urgency=medium
 
  -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 03 Oct 2016 12:32:16 +0300
 
-=======
->>>>>>> Changelog, version 2.28.37~cocainev12-1
 mastermind (2.28.50) trusty; urgency=medium
 
   * Tolerate unknown command errors when failed to fetch from metadb
