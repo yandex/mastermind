@@ -54,15 +54,10 @@ class Statistics(object):
     def account_effective_memory(data, couple):
         if couple.status not in storage.GOOD_STATUSES:
             return
-        try:
-            stat = couple.get_stat()
-        except ValueError:
-            return
-        if not stat:
-            return
 
-        data['effective_space'] += couple.effective_space
-        data['effective_free_space'] += couple.effective_free_space
+        if couple.groups:
+            data['effective_space'] += couple.effective_space
+            data['effective_free_space'] += couple.effective_free_space
 
     def per_ns_statistics(self, per_entity_stat=None):
         ns_stats = {}

@@ -1,3 +1,4 @@
+import copy
 import functools
 
 import mastermind.client
@@ -60,6 +61,11 @@ class LazyDataObject(object):
     def _preprocess_raw_data(self, data):
         return data
 
-    def serialize(self):
+    def _do_serialize(self):
         self._fetch_and_set_raw_data()
         return self._data
+
+    def serialize(self):
+        # NOTE: deepcopy is required to make serialized view independent
+        # of the internal structures of the serialized object
+        return copy.deepcopy(self._do_serialize())
