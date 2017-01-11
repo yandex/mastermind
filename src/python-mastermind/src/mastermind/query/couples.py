@@ -270,12 +270,12 @@ class CoupleDataObject(LazyDataObject):
 
         return data
 
-    def _do_serialize(self):
-        data = super(CoupleDataObject, self)._do_serialize()
+    def serialize(self):
+        data = super(CoupleDataObject, self).serialize()
         groups = [group.serialize() for group in data['groups']]
         data['groups'] = groups
         groupsets = {
-            groupset_id: groupset._do_serialize()
+            groupset_id: groupset.serialize()
             for groupset_id, groupset in data['groupsets'].iteritems()
         }
         data['groupsets'] = groupsets
