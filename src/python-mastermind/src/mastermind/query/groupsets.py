@@ -85,9 +85,9 @@ class GroupsetDataObject(LazyDataObject):
         data['groups'] = groups
         return data
 
-    def serialize(self):
-        data = super(GroupsetDataObject, self).serialize()
-        groups = [group.serialize() for group in data['groups']]
+    def _do_serialize(self):
+        data = super(GroupsetDataObject, self)._do_serialize()
+        groups = [group._do_serialize() for group in data['groups']]
         data['groups'] = groups
         return data
 
