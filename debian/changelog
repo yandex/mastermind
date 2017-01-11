@@ -1,3 +1,9 @@
+mastermind (2.28.138~collector3) trusty; urgency=medium
+
+  * Collector worker as an external cluster information source
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 11 Jan 2017 16:34:14 +0300
+
 mastermind (2.28.138~collector2) trusty; urgency=medium
 
   * Collector worker as an external cluster information source
