@@ -1001,6 +1001,33 @@ def memoized(attr_name):
     return wrapper
 
 
+def _cached(key):
+
+    def wrapper(f):
+        @functools.wraps(f)
+        def wrapped(self, *args, **kwargs):
+            cached_data = self._cache.get(
+                key,
+                {
+                    'data': None,
+                    'footprint': None,
+                }
+            )
+            footprint = self._get_stat_footprint()
+
+            if footprint != cached_data['footprint']:
+                self._cache[key] = {
+                    'data': f(self, *args, **kwargs),
+                    'footprint': footprint,
+                }
+
+            return self._cache[key]['data']
+
+        return wrapped
+
+    return wrapper
+
+
 class Host(object):
     def __init__(self, addr):
         self.addr = addr
@@ -1623,6 +1650,8 @@ class Group(object):
         return True
 
     def get_stat(self):
+        if len(self.node_backends) == 1 and self.node_backends[0].stat:
+            return self.node_backends[0].stat
         return reduce(lambda res, x: res + x, [nb.stat for nb in self.node_backends if nb.stat])
 
     def update_status_recursive(self):
@@ -1860,6 +1889,16 @@ class Groupset(object):
         self.status_text = 'Couple {} is not inititalized yet'.format(self)
         self.active_job = None
 
+        self._cache = {}
+
+    def _get_stat_footprint(self):
+        return [
+            nb.stat and nb.stat.ts or None
+            for group in self.groups
+            for nb in group.node_backends
+        ]
+
+    @_cached('stat')
     def get_stat(self):
         try:
             return reduce(lambda res, x: res * x, [group.get_stat() for group in self.groups])
@@ -2157,6 +2196,7 @@ class Groupset(object):
         return tuple(group.group_id for group in self.groups)
 
     def info_data(self):
+
         data = {'id': str(self),
                 'status': self.status,
                 'status_text': self.status_text,
@@ -2295,6 +2335,7 @@ class Couple(Groupset):
 
         self.settings = self.DEFAULT_SETTINGS
 
+    @_cached('info_data')
     def info_data(self):
         data = super(Couple, self).info_data()
 
@@ -2501,6 +2542,7 @@ class Lrc822v1Groupset(Groupset):
         self.scheme = Lrc.Scheme822v1.ID
         self.part_size = None
 
+    @_cached('info_data')
     def info_data(self):
         data = super(Lrc822v1Groupset, self).info_data()
 
