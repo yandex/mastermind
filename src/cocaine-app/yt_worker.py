@@ -6,6 +6,8 @@ import datetime
 
 logger = getLogger('mm.planner')
 
+class YqlTableAbsent(Exception):
+    pass
 
 class YqlWrapper(object):
 
@@ -93,33 +95,46 @@ GROUP BY
                 raise IOError("YQL ping failed {} {}".format(self._cluster, self._token[:20]))
 
             for attempt in xrange(self._attempts):
-                try:
-                    start_time = time.time()
+                # Do not handle any exceptions here. We do not expect some special event, let it be handled on upper level
 
-                    request = yql.query(query)
-                    request = request.run()
-                    logger.info("YQL query is running with id {}".format(request.operation_id))
-                    result = request.results
-                    end_time = time.time()
-                    if result.is_success:
-                        logger.info("YQL query succeeded and took {}".format(end_time-start_time))
-                        if timeout and (end_time - start_time > timeout):
-                            # XXX: need to add this condition into monitoring
-                            # Do not except here - after all we already have some successful result
-                            logger.error("YQL query({}..{}) > timeout {}".format(start_time, end_time, timeout))
-                        return result
+                start_time = time.time()
 
-                    logger.error("YQL failed #{}: {}[{}] ({},{})".format(attempt, result.status,
-                                 request.status_code, request.explain(), str(request.exc_info)))
-                    for error in result.errors:
-                        logger.error("YQL query result error {}".format(str(error)))
+                request = yql.query(query)
+                request.run()
+                logger.info("YQL query is running with id {}".format(request.operation_id))
 
+                if not request.is_ok:
+                    # Most likely there were problem on initial reading of http request.
                     time.sleep(self._delay)
-                except:
-                    logger.exception("YQL request excepted")
-                    continue  # give one more chance
+                    # XXXmonitoring
+                    logger.error("YQL error: request is not OK on attempt {}. Goto retry".format(attempt))
+                    continue
 
-        raise RuntimeError("YQL request attempts has exhausted {} {}".format(self._attempts, query))
+                result = request.results
+                end_time = time.time()
+                # is_success eq "status in COMPLETED"
+                if result.is_success:
+                    logger.info("YQL query succeeded and took {}".format(end_time-start_time))
+                    if timeout and (end_time - start_time > timeout):
+                        # XXXmonitoring: need to add this condition into monitoring
+                        # Do not except here - after all we already have some successful result
+                        logger.error("YQL error query ({}..{}) exceeds timeout {}".format(start_time, end_time, timeout))
+                    return result
+
+                # XXXmonitoring
+                logger.error("YQL error {}[{}] ({},{})".format(result.status,
+                                request.status_code, request.explain(), str(request.exc_info)))
+                logger.error("YQL request was {}".format(request))
+                for error in result.errors:
+                    if str(error).find("does not exist") != -1:
+                        # the table doesn't exist, no sense to retry
+                        raise YqlTableAbsent(error)
+                    logger.error("YQL query result error {}".format(str(error)))
+
+                # maybe some errors would be better to retry. But for now we just raise exception on any unpredicted status
+                raise IOError("YQL unexpected status {}".format(result.status))
+
+        raise IOError("YQL request attempts has exhausted {} {}".format(self._attempts, query))
 
 
     def request_expired_stat(self, aggregate_table, expired_threshold, timeout=None):
@@ -167,12 +182,14 @@ GROUP BY
         yesterday = datetime.date.today() - datetime.timedelta(days=1)
 
         # check for need to run an aggregation query
-        query = self.VALIDATE_QUERY.format(table=aggregate_table, date_iso=yesterday.isoformat())
-        res = self.send_request(query)
         try:
+            query = self.VALIDATE_QUERY.format(table=aggregate_table, date_iso=yesterday.isoformat())
+            res = self.send_request(query)
             tbl = next(x for x in res.results)
             row = next(x for x in tbl.rows)
             count = int(row[0])
+        except YqlTableAbsent:
+            count = 0
         except:
             logger.exception("Analysis of validation results has excepted")
             raise
