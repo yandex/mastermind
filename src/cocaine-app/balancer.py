@@ -216,7 +216,7 @@ class Balancer(object):
             return False
 
         return [
-            gs.info().serialize()
+            gs.info_data()
             for gs in groupsets
             if not filtered_out(gs)
         ]
@@ -226,7 +226,7 @@ class Balancer(object):
         groupset_id = str(request)
         groupset = storage.groupsets[groupset_id]
 
-        return groupset.info().serialize()
+        return groupset.info_data()
 
     @h.concurrent_handler
     def get_couples_list(self, request):
@@ -262,7 +262,7 @@ class Balancer(object):
         for c in couples:
             if filtered_out(c):
                 continue
-            data.append(c.info().serialize())
+            data.append(c.info_data())
         return data
 
     GROUP_STATES = {
@@ -311,7 +311,7 @@ class Balancer(object):
         for group in storage.groups.keys():
             if filtered_out(group):
                 continue
-            data.append(group.info().serialize())
+            data.append(group.info_data())
         return data
 
     @h.concurrent_handler
@@ -461,7 +461,7 @@ class Balancer(object):
 
         logger.info('Group %d: %s' % (group, repr(storage.groups[group])))
 
-        return storage.groups[group].info().serialize()
+        return storage.groups[group].info_data()
 
     @h.concurrent_handler
     def get_group_history(self, request):
@@ -562,7 +562,7 @@ class Balancer(object):
         logger.info('Group %s: %s' % (group, repr(group)))
         logger.info('Couple %s: %s' % (couple, repr(couple)))
 
-        return couple.info().serialize()
+        return couple.info_data()
 
     @h.concurrent_handler
     def get_couple_info_by_coupleid(self, request):
@@ -570,7 +570,7 @@ class Balancer(object):
         # TODO: use 'couples' container
         couple = storage.replicas_groupsets[couple_id]
 
-        return couple.info().serialize()
+        return couple.info_data()
 
     @h.concurrent_handler
     def update_couple_settings(self, request):
@@ -750,7 +750,7 @@ class Balancer(object):
 
                 created_couples.append(couple)
 
-                res.append(couple.info().serialize())
+                res.append(couple.info_data())
             except Exception as e:
                 logger.exception('Failed to build couple')
                 res.append(str(e))

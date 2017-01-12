@@ -1016,12 +1016,14 @@ class JobFinder(object):
         groups = options.get('groups', None)
         limit = options.get('limit', None)
         offset = int(options.get('offset', 0))
+        ids = options.get('ids', None)
 
         jobs_list = Job.list(
             self.collection,
             status=statuses,
             type=job_type,
             group=groups,
+            id=ids,
         )
         total_jobs = jobs_list.count()
 

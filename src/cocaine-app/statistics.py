@@ -1,4 +1,5 @@
 from collections import defaultdict
+import copy
 import logging
 
 from errors import CacheUpstreamError
@@ -360,7 +361,7 @@ class Statistics(object):
         res = {}
 
         if group.couple:
-            res = group.couple.info().serialize()
+            res = copy.copy(group.couple.info_data())
             res['status'] = res['couple_status']
             res['stats'] = self.__stats_to_dict(
                 group.couple.get_stat(), group.couple.effective_space)
@@ -370,12 +371,13 @@ class Statistics(object):
 
         res['groups'] = []
         for group in groups:
-            g = group.info().serialize()
+            g = copy.copy(group.info_data())
             try:
                 group_stat = group.get_stat()
             except TypeError:
                 group_stat = None
             g['stats'] = self.__stats_to_dict(group_stat, group.effective_space)
+            g['node_backends'] = copy.copy(g['node_backends'])
             for nb in g['node_backends']:
                 nb['stats'] = self.__stats_to_dict(
                     storage.node_backends[nb['addr']].stat,
