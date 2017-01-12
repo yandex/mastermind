@@ -1781,8 +1781,7 @@ class Group(object):
                                 'its group id is missing from coupling info'.format(self))
             return self.status
 
-    def info(self):
-        g = GroupInfo(self.group_id)
+    def info_data(self):
         data = {
             'id': self.group_id,
             'status': self.status,
@@ -1802,7 +1801,11 @@ class Group(object):
         if self.active_job:
             data['active_job'] = self.active_job
 
-        g._set_raw_data(data)
+        return data
+
+    def info(self):
+        g = GroupInfo(self.group_id)
+        g._set_raw_data(self.info_data())
         return g
 
     def set_active_job(self, job):
