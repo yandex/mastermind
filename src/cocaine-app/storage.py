@@ -1086,8 +1086,7 @@ class Group(GroupBase):
     def effective_free_space(self):
         return sum(nb.effective_free_space for nb in self.node_backends)
 
-    def info(self):
-        g = GroupInfo(self.group_id)
+    def info_data(self):
         data = {
             'id': self.group_id,
             'status': self.status,
@@ -1107,7 +1106,11 @@ class Group(GroupBase):
         if self.active_job:
             data['active_job'] = self.active_job
 
-        g._set_raw_data(data)
+        return data
+
+    def info(self):
+        g = GroupInfo(self.group_id)
+        g._set_raw_data(self.info_data())
         return g
 
     def set_active_job(self, job):

@@ -155,7 +155,7 @@ class NodeInfoUpdaterBase(object):
                     continue
                 # NOTE: copy is required to provide immutability of the cached objects
                 # NOTE: deepcopy is not used because it is very expensive
-                info = copy.copy(couple.info().serialize())
+                info = copy.copy(couple.info_data())
                 info['hosts'] = couple.groupset_hosts()
                 if couple.lrc822v1_groupset:
                     # NOTE: copy is required to provide immutability of the cached objects
