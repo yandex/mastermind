@@ -568,7 +568,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
             )
             if 'settings' in gs_state:
                 # TODO: store 'settings' object in gs instead of parsing its' elements
-                lrc_gs.part_size = gs_state['settings']
+                lrc_gs.part_size = gs_state['settings']['part_size']
             else:
                 # backward compatibility until collector implements 'settings'
                 part_sizes = filter(None, (g.meta['lrc'].get('part_size') for g in lrc_gs.groups))
