@@ -69,7 +69,7 @@ class ReconnectableService(object):
                 yield channel.tx.close()
                 response = yield channel.rx.get(timeout=timeout or self.timeout)
                 self._reset()
-                raise Return(msgpack.unpackb(response))
+                raise Return(msgpack.unpackb(response, use_list=False))
             except Return:
                 raise
             except Exception as e:
