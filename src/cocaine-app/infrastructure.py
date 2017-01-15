@@ -1099,7 +1099,7 @@ class Infrastructure(object):
             if nb.stat is None:
                 continue
 
-            fsid = str(nb.stat.fsid)
+            fsid = str(nb.fs.fsid)
             fsid_full_path = full_path + '|' + fsid
             if fsid_full_path not in nodes['hdd']:
                 hdd_node = {
@@ -1126,7 +1126,7 @@ class Infrastructure(object):
         for group in groups:
             for nb in group.node_backends:
                 try:
-                    hdd_path = nb.node.host.full_path + '|' + str(nb.stat.fsid)
+                    hdd_path = nb.node.host.full_path + '|' + str(nb.fs.fsid)
                 except CacheUpstreamError:
                     logger.warn('Skipping {} because of cache failure'.format(
                         nb.node.host))
@@ -1279,7 +1279,7 @@ class Infrastructure(object):
                     parts.pop()
                     parent = parent.get('parent')
 
-                nb_units['hdd'] = nb_units['host'] + '|' + str(nb.stat.fsid)
+                nb_units['hdd'] = nb_units['host'] + '|' + str(nb.fs.fsid)
 
                 units[group.group_id].append(nb_units)
 
