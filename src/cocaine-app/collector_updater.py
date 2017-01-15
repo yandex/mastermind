@@ -165,90 +165,94 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
 
         self.update()
 
-    def update_status(self, groups):
+    def update_status(self, groups=None):
         self._force_nodes_update(groups)
         self.update(groups=groups)
+
+    def _update_cluster(self):
+
+        start_ts = time.time()
+
+        try:
+            with self._cluster_update_lock:
+                logger.info('Cluster updating: started')
+                self.update()
+
+        except Exception:
+            logger.exception('Cluster updating: failed to update cluster state')
+        finally:
+            logger.info('Cluster updating: finished, time: {0:.3f}'.format(time.time() - start_ts))
+            reload_period = config.get('nodes_reload_period', 60)
+            self._tq.add_task_in('update', reload_period, self._update_cluster)
 
     def update(self, groups=None):
         logger.info('Fetching update from collector')
 
-        with self._cluster_update_lock:
-            try:
-                request = {
-                    'item_types': [
-                        'host',
-                        'node',
-                        'backend',
-                        'fs',
-                        'group',
-                        'couple',
-                        'namespace',
-                    ]
-                }
+        request = {
+            'item_types': [
+                'host',
+                'node',
+                'backend',
+                'fs',
+                'group',
+                'couple',
+                'namespace',
+            ]
+        }
 
-                if groups:
-                    filter_groups = request.setdefault('filter', {}).setdefault('groups', [])
-                    for g in groups:
-                        filter_groups.append(g.group_id)
+        if groups:
+            filter_groups = request.setdefault('filter', {}).setdefault('groups', [])
+            for g in groups:
+                filter_groups.append(g.group_id)
 
-                logger.info('Sending request to collector')
+        logger.info('Sending request to collector')
 
-                collector_client = MastermindClient(COLLECTOR_SERVICE_NAME)
-                response = collector_client.request('get_snapshot', simplejson.dumps(request))
-            except Exception as e:
-                logger.error('Failed to fetch snapshot from collector: {}'.format(e))
-                self._schedule_next_round()
-                return
+        collector_client = MastermindClient(COLLECTOR_SERVICE_NAME)
+        response = collector_client.request('get_snapshot', simplejson.dumps(request))
 
-            logger.info('Applying update')
+        logger.info('Applying update')
 
-            try:
-                snapshot = simplejson.loads(response)
-                self._process_hosts(snapshot['hosts'])
-                self._process_nodes(snapshot['nodes'])
-                self._process_filesystems(snapshot['filesystems'])
-                self._process_backends(snapshot['backends'])
-                self._process_groups(snapshot['groups'])
-                self._process_jobs(groups)
-                self._process_namespaces(snapshot['namespaces'])
-                self._process_couples(snapshot['couples'])
-            except Exception as e:
-                logger.error('Failed to process update from collector: {}'.format(e))
-                self._schedule_next_round()
-                return
+        try:
+            snapshot = simplejson.loads(response)
+            self._process_hosts(snapshot['hosts'])
+            self._process_nodes(snapshot['nodes'])
+            self._process_filesystems(snapshot['filesystems'])
+            self._process_backends(snapshot['backends'])
+            self._process_groups(snapshot['groups'])
+            self._process_jobs(groups)
+            self._process_namespaces(snapshot['namespaces'])
+            self._process_couples(snapshot['couples'])
+        except Exception:
+            logger.exception('Failed to process update from collector')
+            raise
 
-            try:
-                self._update_max_group()
-            except Exception as e:
-                logger.error('Failed to update max group: {}'.format(e))
+        try:
+            self._update_max_group()
+        except Exception as e:
+            logger.error('Failed to update max group: {}'.format(e))
+            pass
 
-            try:
-                if groups is None:
-                    namespaces_settings = self.namespaces_settings.fetch()
-                    storage.dc_host_view.update()
-                    load_manager.update(storage)
-                    weight_manager.update(storage, namespaces_settings)
-                    infrastructure.schedule_history_update()
+        if groups is None:
+            namespaces_settings = self.namespaces_settings.fetch()
+            storage.dc_host_view.update()
+            load_manager.update(storage)
+            weight_manager.update(storage, namespaces_settings)
+            infrastructure.schedule_history_update()
 
-                    # will be calculated lazily if required
-                    per_entity_stat = None
+            # will be calculated lazily if required
+            per_entity_stat = None
 
-                    if self._prepare_namespaces_states:
-                        logger.info('Recalculating namespaces states')
-                        per_entity_stat = per_entity_stat or self.statistics.per_entity_stat()
-                        self._update_namespaces_states(
-                            namespaces_settings,
-                            per_entity_stat=per_entity_stat,
-                        )
-                    if self._prepare_flow_stats:
-                        logger.info('Recalculating flow stats')
-                        per_entity_stat = per_entity_stat or self.statistics.per_entity_stat()
-                        self._update_flow_stats(per_entity_stat)
-
-            except Exception as e:
-                logger.exception('Failed to complete state update')
-            finally:
-                self._schedule_next_round()
+            if self._prepare_namespaces_states:
+                logger.info('Recalculating namespaces states')
+                per_entity_stat = per_entity_stat or self.statistics.per_entity_stat()
+                self._update_namespaces_states(
+                    namespaces_settings,
+                    per_entity_stat=per_entity_stat,
+                )
+            if self._prepare_flow_stats:
+                logger.info('Recalculating flow stats')
+                per_entity_stat = per_entity_stat or self.statistics.per_entity_stat()
+                self._update_flow_stats(per_entity_stat)
 
     def _process_hosts(self, host_states):
         for host_state in host_states:
@@ -585,8 +589,3 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
 
         if 'settings' in couple_state:
             couple.settings = couple_state['settings']
-
-    def _schedule_next_round(self):
-        logger.info('Scheduling next update round')
-        reload_period = config.get('nodes_reload_period', 60)
-        self._tq.add_task_in('update', reload_period, self.update)

@@ -139,7 +139,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                                elliptics.monitor_stat_categories.stats |
                                elliptics.monitor_stat_categories.commands)
 
-    def update_status(self, groups):
+    def update_status(self, groups=None):
         if groups is not None and len(groups) == 0:
             # otherwise empty groups list is treated as complete cluster update
             return
