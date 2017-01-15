@@ -8,6 +8,7 @@ import traceback
 import elliptics
 import msgpack
 import pymongo
+from tornado.ioloop import IOLoop
 
 import balancer
 from cache_transport import cache_task_manager
@@ -74,7 +75,8 @@ class CacheManager(object):
 
         self.__tq = timed_queue.TimedQueue()
 
-        self.nodes_update()
+        self.__tq.add_task_in(task_id='init_ioloop', secs=0, function=self._init_ioloop)
+
         self.update_cache_groups()
 
         self.top_update_timer = periodic_timer(
@@ -84,6 +86,10 @@ class CacheManager(object):
             CacheManager.MONITOR_TOP_STATS,
             self.top_update_timer.next(),
             self.monitor_top_stats)
+
+    def _init_ioloop(self):
+        io_loop = IOLoop()
+        io_loop.make_current()
 
     def _start_tq(self):
         self.__tq.start()
@@ -470,37 +476,19 @@ class CacheManager(object):
             )
             raise RuntimeError('Failed to update cache key status')
 
-    def nodes_update(self):
-        try:
-            start_ts = time.time()
-            logger.info('Cluster updating: node statistics collecting started')
-            self.niu.monitor_stats()
-        except Exception as e:
-            logger.info(
-                'Failed to fetch nodes statictics: {0}\n{1}'.format(
-                    e, traceback.format_exc()))
-        finally:
-            logger.info(
-                'Cluster updating: node statistics collecting '
-                'finished, time: {0:.3f}'.format(time.time() - start_ts))
-            reload_period = config.get('nodes_reload_period', 60)
-            self.__tq.add_task_in(
-                'node_statistics_update',
-                reload_period, self.nodes_update)
-
     def update_cache_groups(self):
         try:
             start_ts = time.time()
             logger.info(
                 'Cluster updating: updating group coupling info started')
 
-            self._mark_cache_groups()
-
-            namespaces_settings = self.namespaces_settings.fetch()
-            self.niu.update_symm_groups_async(namespaces_settings=namespaces_settings)
+            self.niu.update_status()
 
             logger.info('Detected cache groups: {0}'.format(
                 len(storage.cache_couples)))
+
+            # NOTE: marked cache groups will be available only on the next node info update cycle
+            self._mark_cache_groups()
 
         except Exception as e:
             logger.info('Failed to update groups: {0}\n{1}'.format(
@@ -543,15 +531,6 @@ class CacheManager(object):
             except Exception as e:
                 logger.error(
                     'Failed to write meta key for group {0}: {1}\n{2}'.format(
-                        group, e, traceback.format_exc()))
-                continue
-
-            try:
-                group.parse_meta(packed)
-                group.update_status()
-            except Exception as e:
-                logger.error(
-                    'Failed to update status for group {0}: {1}\n{2}'.format(
                         group, e, traceback.format_exc()))
                 continue
 
