@@ -23,7 +23,6 @@ import infrastructure
 import infrastructure_cache
 import jobs
 import couple_records
-import node_info_updater
 from mastermind_core.config import config
 from mastermind_core.db.mongo.pool import MongoReplicaSetClient
 import helpers as h
@@ -101,7 +100,7 @@ def init_infrastructure_cache_manager(W, n):
 
 
 def init_node_info_updater(n, namespaces_settings):
-    return node_info_updater.NodeInfoUpdater(n, None, namespaces_settings)
+    return NodeInfoUpdater(n, None, namespaces_settings)
 
 
 def init_infrastructure(W, n, namespaces_settings):
