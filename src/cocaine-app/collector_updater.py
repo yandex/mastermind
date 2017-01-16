@@ -570,15 +570,13 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                 status=gs_state['status'],
                 status_text=gs_state['status_text'],
             )
-            if 'settings' in gs_state:
-                # TODO: store 'settings' object in gs instead of parsing its' elements
-                lrc_gs.part_size = gs_state['settings']['part_size']
-            else:
-                # backward compatibility until collector implements 'settings'
-                part_sizes = filter(None, (g.meta['lrc'].get('part_size') for g in lrc_gs.groups))
-                if not part_sizes:
-                    raise ValueError('"part_size" is not set in metakey')
-                lrc_gs.part_size = part_sizes[0]
+
+            if 'settings' not in gs_state:
+                raise ValueError('Groupset {}: field "settings" is missed'.format(lrc_gs))
+
+            # TODO: store 'settings' object in gs instead of parsing its' elements
+            lrc_gs.part_size = gs_state['settings']['part_size']
+
             lrc_gs.couple = replicas_gs
             replicas_gs.lrc822v1_groupset = lrc_gs
 
