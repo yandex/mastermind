@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import simplejson
 import logging
+import time
 
 # import balancer
 from mastermind_core.config import config
@@ -112,7 +113,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
 
     def start(self):
         logger.info('Starting')
-        self.update()
+        self._update_cluster()
 
     def _force_collector_refresh(self, groups=None):
         collector_client = MastermindClient(COLLECTOR_SERVICE_NAME)
