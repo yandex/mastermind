@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
+import gc
 import simplejson
 import logging
 import uuid
+import time
 
 # import balancer
 from mastermind_core.config import config
@@ -14,8 +16,6 @@ import storage
 from weight_manager import weight_manager
 from node_info_updater_base import NodeInfoUpdaterBase
 from tornado.ioloop import IOLoop
-import time
-import gc
 
 
 logger = logging.getLogger('mm.balancer')
@@ -115,7 +115,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
 
     def start(self):
         logger.info('Starting')
-        self.update()
+        self._update_cluster()
 
     def new_str_traceid(self):
         return '%x' % (uuid.uuid1().int >> 64)
@@ -174,109 +174,114 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
 
         self.update()
 
-    def update_status(self, groups):
+    def update_status(self, groups=None):
         self._force_nodes_update(groups)
         self.update(groups=groups)
+
+    def _update_cluster(self):
+
+        start_ts = time.time()
+
+        try:
+            with self._cluster_update_lock:
+                logger.info('Cluster updating: started')
+                self.update()
+
+        except Exception:
+            logger.exception('Cluster updating: failed to update cluster state')
+        finally:
+            logger.info('Cluster updating: finished, time: {0:.3f}'.format(time.time() - start_ts))
+            reload_period = config.get('nodes_reload_period', 60)
+            logger.info('Scheduling gc')
+            self._tq.add_task_in('collect_garbage', reload_period/2, self.collect_garbage)
+            self._tq.add_task_in('update', reload_period, self._update_cluster)
 
     def update(self, groups=None):
         logger = logging.getLogger('mm.balancer.update')
         traceid = self.new_str_traceid()
         logger.info('Fetching update from collector, traceid = {}'.format(traceid))
 
-        with self._cluster_update_lock:
-            try:
-                request = {
-                    'item_types': [
-                        'host',
-                        'node',
-                        'backend',
-                        'fs',
-                        'group',
-                        'couple',
-                        'namespace',
-                    ]
-                }
+        request = {
+            'item_types': [
+                'host',
+                'node',
+                'backend',
+                'fs',
+                'group',
+                'couple',
+                'namespace',
+            ]
+        }
 
-                if groups:
-                    filter_groups = request.setdefault('filter', {}).setdefault('groups', [])
-                    for g in groups:
-                        filter_groups.append(g.group_id)
+        if groups:
+            filter_groups = request.setdefault('filter', {}).setdefault('groups', [])
+            for g in groups:
+                filter_groups.append(g.group_id)
 
-                logger.info('Sending request to collector')
+        logger.info('Sending request to collector')
 
-                collector_client = MastermindClient(COLLECTOR_SERVICE_NAME, traceid=traceid)
-                response = collector_client.request('get_snapshot', simplejson.dumps(request))
-            except Exception as e:
-                logger.error('Failed to fetch snapshot from collector: {}'.format(e))
-                self._schedule_next_round()
-                return
+        collector_client = MastermindClient(COLLECTOR_SERVICE_NAME)
+        response = collector_client.request('get_snapshot', simplejson.dumps(request))
 
-            logger.info('Applying update')
+        logger.info('Applying update')
 
-            try:
-                logger.info('Parsing json')
-                snapshot = simplejson.loads(response)
-                logger.info('Processing hosts')
-                self._process_hosts(snapshot['hosts'])
-                logger.info('Processing nodes')
-                self._process_nodes(snapshot['nodes'])
-                logger.info('Processing filesystems')
-                self._process_filesystems(snapshot['filesystems'])
-                logger.info('Processing backends')
-                self._process_backends(snapshot['backends'])
-                logger.info('Processing groups')
-                self._process_groups(snapshot['groups'])
-                logger.info('Processing jobs(groups)')
-                self._process_jobs(groups)
-                logger.info('Processing namespaces')
-                self._process_namespaces(snapshot['namespaces'])
-                logger.info('Processing couples')
-                self._process_couples(snapshot['couples'])
-                logger.info('Processing complete')
-            except Exception as e:
-                logger.error('Failed to process update from collector: {}'.format(e))
-                self._schedule_next_round()
-                return
+        try:
+            logger.info('Parsing json')
+            snapshot = simplejson.loads(response)
+            logger.info('Processing hosts')
+            self._process_hosts(snapshot['hosts'])
+            logger.info('Processing nodes')
+            self._process_nodes(snapshot['nodes'])
+            logger.info('Processing filesystems')
+            self._process_filesystems(snapshot['filesystems'])
+            logger.info('Processing backends')
+            self._process_backends(snapshot['backends'])
+            logger.info('Processing groups')
+            self._process_groups(snapshot['groups'])
+            logger.info('Processing jobs(groups)')
+            self._process_jobs(groups)
+            logger.info('Processing namespaces')
+            self._process_namespaces(snapshot['namespaces'])
+            logger.info('Processing couples')
+            self._process_couples(snapshot['couples'])
+            logger.info('Processing complete')
+        except Exception:
+            logger.exception('Failed to process update from collector')
+            raise
 
-            logger.info('self._update_max_group')
-            try:
-                self._update_max_group()
-            except Exception as e:
-                logger.error('Failed to update max group: {}'.format(e))
-            logger.info('self._update_max_group complete')
+        try:
+            self._update_max_group()
+        except Exception as e:
+            logger.error('Failed to update max group: {}'.format(e))
+            pass
+        logger.info('self._update_max_group complete')
 
-            try:
-                if groups is None:
-                    logger.info('self.namespaces_settings.fetch()')
-                    namespaces_settings = self.namespaces_settings.fetch()
-                    logger.info('storage.dc_host_view.update()')
-                    storage.dc_host_view.update()
-                    logger.info('load_manager.update(storage)')
-                    load_manager.update(storage)
-                    logger.info('weight_manager.update(storage, namespaces_settings)')
-                    weight_manager.update(storage, namespaces_settings)
-                    logger.info('infrastructure.schedule_history_update()')
-                    infrastructure.schedule_history_update()
+        if groups is None:
+            logger.info('self.namespaces_settings.fetch()')
+            namespaces_settings = self.namespaces_settings.fetch()
+            logger.info('storage.dc_host_view.update()')
+            storage.dc_host_view.update()
+            logger.info('load_manager.update(storage)')
+            load_manager.update(storage)
+            logger.info('weight_manager.update(storage, namespaces_settings)')
+            weight_manager.update(storage, namespaces_settings)
+            logger.info('infrastructure.schedule_history_update()')
+            infrastructure.schedule_history_update()
 
-                    # will be calculated lazily if required
-                    per_entity_stat = None
+            # will be calculated lazily if required
+            per_entity_stat = None
 
-                    if self._prepare_namespaces_states:
-                        logger.info('Recalculating namespaces states')
-                        per_entity_stat = per_entity_stat or self.statistics.per_entity_stat()
-                        self._update_namespaces_states(
-                            namespaces_settings,
-                            per_entity_stat=per_entity_stat,
-                        )
-                    if self._prepare_flow_stats:
-                        logger.info('Recalculating flow stats')
-                        per_entity_stat = per_entity_stat or self.statistics.per_entity_stat()
-                        self._update_flow_stats(per_entity_stat)
-
-            except Exception as e:
-                logger.exception('Failed to complete state update')
-            finally:
-                self._schedule_next_round()
+            if self._prepare_namespaces_states:
+                logger.info('Recalculating namespaces states')
+                per_entity_stat = per_entity_stat or self.statistics.per_entity_stat()
+                self._update_namespaces_states(
+                    namespaces_settings,
+                    per_entity_stat=per_entity_stat,
+                )
+            if self._prepare_flow_stats:
+                logger.info('Recalculating flow stats')
+                per_entity_stat = per_entity_stat or self.statistics.per_entity_stat()
+                self._update_flow_stats(per_entity_stat)
 
     def _process_hosts(self, host_states):
         for host_state in host_states:
@@ -601,15 +606,13 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                 status=gs_state['status'],
                 status_text=gs_state['status_text'],
             )
-            if 'settings' in gs_state:
-                # TODO: store 'settings' object in gs instead of parsing its' elements
-                lrc_gs.part_size = gs_state['settings']
-            else:
-                # backward compatibility until collector implements 'settings'
-                part_sizes = filter(None, (g.meta['lrc'].get('part_size') for g in lrc_gs.groups))
-                if not part_sizes:
-                    raise ValueError('"part_size" is not set in metakey')
-                lrc_gs.part_size = part_sizes[0]
+
+            if 'settings' not in gs_state:
+                raise ValueError('Groupset {}: field "settings" is missed'.format(lrc_gs))
+
+            # TODO: store 'settings' object in gs instead of parsing its' elements
+            lrc_gs.part_size = gs_state['settings']['part_size']
+
             lrc_gs.couple = replicas_gs
             replicas_gs.lrc822v1_groupset = lrc_gs
 
@@ -620,11 +623,3 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
 
         if 'settings' in couple_state:
             couple.settings = couple_state['settings']
-
-    def _schedule_next_round(self):
-        logger.info('Scheduling next update round')
-        reload_period = config.get('nodes_reload_period', 60)
-        self._tq.add_task_in('update', reload_period, self.update)
-
-        logger.info('Scheduling gc')
-        self._tq.add_task_in('collect_garbage', reload_period/2, self.collect_garbage)
