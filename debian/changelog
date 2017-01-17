@@ -1,3 +1,9 @@
+mastermind (2.28.142~collector2) trusty; urgency=medium
+
+  * Remove temporary debug log
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 17 Jan 2017 17:32:00 +0300
+
 mastermind (2.28.142~collector1) trusty; urgency=medium
 
   * Add `collector` command to mastermind-cli
