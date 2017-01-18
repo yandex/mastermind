@@ -59,6 +59,7 @@ Depends:
  python-tornado (>= 4.0),
  cocaine-framework-python (<< 0.12),
  python-simplejson,
+ yandex-yql-python,
 Conflicts:
  python-mastermind
 Description: Common components and a client library for Mastermind
