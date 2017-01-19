@@ -896,7 +896,14 @@ class Planner(object):
                     if job.status in self.RUNNING_STATUSES:
                         active_jobs.append(job.id)
                     elif job.status in self.ERROR_STATUSES:
-                        if job.group == job.src_group:
+                        cancel_job = False
+                        if job.type == jobs.JobTypes.TYPE_MOVE_JOB:
+                            cancel_job = True
+                        elsif job.type == jobs.JobTypes.TYPE_BACKEND_MANAGER_JOB:
+                            cancel_job = False
+                        else job.group == job.src_group:
+                            cancel_job = True
+                        if cancel_job:
                             try:
                                 self.job_processor._cancel_job(job)
                                 cancelled_jobs.append(job.id)
