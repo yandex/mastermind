@@ -157,6 +157,7 @@ class JobProcessor(object):
     def _ready_jobs(self):
 
         active_statuses = list(Job.ACTIVE_STATUSES)
+        active_statuses.remove(Job.STATUS_NOT_APPROVED)
 
         # TEMP: do not account broken/pending jobs' resources
         active_statuses.remove(Job.STATUS_PENDING)
@@ -183,8 +184,6 @@ class JobProcessor(object):
 
         # counting current resource usage
         for job in active_jobs:
-            if job.status == Job.STATUS_NOT_APPROVED:
-                continue
             if job.status == Job.STATUS_NEW:
                 if job.type in self.SUPPORTED_JOBS:
                     new_jobs.append(job)
