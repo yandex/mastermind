@@ -32,7 +32,9 @@ Depends:
  python-mastermind (= ${binary:Version}),
 Conflicts:
  mastermind-cocainev11
-Recommends: python-kazoo
+Recommends:
+ python-kazoo,
+ yandex-yql-python,
 Description: Metabalancer for elliptics storage
 
 Package: mastermind-utils
@@ -59,7 +61,6 @@ Depends:
  python-tornado (>= 4.0),
  cocaine-v12-framework-python,
  python-simplejson,
- yandex-yql-python,
 Conflicts:
  python-mastermind-cocainev11
 Description: Common components and a client library for Mastermind

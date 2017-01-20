@@ -19,7 +19,6 @@ from mastermind_core.db.mongo.pool import Collection
 from sync import sync_manager
 from sync.error import LockFailedError, LockAlreadyAcquiredError
 from timer import periodic_timer
-from yt_worker import YqlWrapper
 
 import timed_queue
 
@@ -103,6 +102,7 @@ class Planner(object):
             yt_attempts = self.params.get('ttl_cleanup', {}).get('yt_attempts', 3)
             yt_delay = self.params.get('ttl_cleanup', {}).get('yt_delay', 10)
 
+            from yt_worker import YqlWrapper
             yt_wrapper = YqlWrapper(cluster=yt_cluster, token=yt_token, attempts=yt_attempts, delay=yt_delay)
 
             aggregation_table = self.params.get('ttl_cleanup', {}).get('aggregation_table', "")
@@ -899,9 +899,9 @@ class Planner(object):
                         cancel_job = False
                         if job.type == jobs.JobTypes.TYPE_MOVE_JOB:
                             cancel_job = True
-                        elsif job.type == jobs.JobTypes.TYPE_BACKEND_MANAGER_JOB:
+                        elif job.type == jobs.JobTypes.TYPE_BACKEND_MANAGER_JOB:
                             cancel_job = False
-                        else job.group == job.src_group:
+                        elif job.group == job.src_group:
                             cancel_job = True
                         if cancel_job:
                             try:

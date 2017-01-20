@@ -1,3 +1,10 @@
+mastermind (2.28.144) trusty; urgency=medium
+
+  * Remove yql dependency
+  * Fix misprint
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 20 Jan 2017 15:32:35 +0300
+
 mastermind (2.28.143) trusty; urgency=medium
 
   * Fix possible old mongo sorting limit problem
