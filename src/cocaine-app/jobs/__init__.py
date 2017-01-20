@@ -123,7 +123,8 @@ class JobProcessor(object):
 
     def _retry_jobs(self):
 
-        pending_jobs = self.job_finder.jobs(statuses=Job.STATUS_PENDING)
+        pending_jobs = self.job_finder.jobs(statuses=Job.STATUS_PENDING, sort=False)
+        pending_jobs.sort(key=lambda j: j.create_ts)
 
         for job in pending_jobs:
             try:
@@ -161,7 +162,8 @@ class JobProcessor(object):
         active_statuses.remove(Job.STATUS_PENDING)
         active_statuses.remove(Job.STATUS_BROKEN)
 
-        active_jobs = self.job_finder.jobs(statuses=active_statuses)
+        active_jobs = self.job_finder.jobs(statuses=active_statuses, sort=False)
+        active_jobs.sort(key=lambda j: j.create_ts)
 
         ready_jobs = []
         new_jobs = []
@@ -565,7 +567,7 @@ class JobProcessor(object):
             if job_type not in (JobTypes.TYPE_RESTORE_GROUP_JOB, JobTypes.TYPE_MOVE_JOB, JobTypes.TYPE_BACKEND_MANAGER_JOB):
                 raise
 
-            jobs = self.job_finder.jobs(ids=job_ids)
+            jobs = self.job_finder.jobs(ids=job_ids, sort=False)
             for existing_job in jobs:
                 if self.JOB_PRIORITIES[existing_job.type] >= self.JOB_PRIORITIES[job_type]:
                     raise RuntimeError('Cannot stop job {0}, type is {1} '
@@ -635,7 +637,7 @@ class JobProcessor(object):
             with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
                 logger.debug('Lock acquired')
 
-                jobs = self.job_finder.jobs(ids=job_uids)
+                jobs = self.job_finder.jobs(ids=job_uids, sort=False)
                 self._stop_jobs(jobs)
 
         except LockFailedError as e:
@@ -1056,7 +1058,7 @@ class JobFinder(object):
         except (TypeError, IndexError):
             raise ValueError('Job ids are required')
 
-        return [j.human_dump() for j in self.jobs(ids=job_ids)]
+        return [j.human_dump() for j in self.jobs(ids=job_ids, sort=False)]
 
     def _get_job(self, job_id):
         jobs_list = Job.list(self.collection,
