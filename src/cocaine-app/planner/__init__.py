@@ -899,9 +899,9 @@ class Planner(object):
                         cancel_job = False
                         if job.type == jobs.JobTypes.TYPE_MOVE_JOB:
                             cancel_job = True
-                        elsif job.type == jobs.JobTypes.TYPE_BACKEND_MANAGER_JOB:
+                        elif job.type == jobs.JobTypes.TYPE_BACKEND_MANAGER_JOB:
                             cancel_job = False
-                        else job.group == job.src_group:
+                        elif job.group == job.src_group:
                             cancel_job = True
                         if cancel_job:
                             try:
