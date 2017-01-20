@@ -19,6 +19,8 @@ from mastermind_core.db.mongo.pool import Collection
 from sync import sync_manager
 from sync.error import LockFailedError, LockAlreadyAcquiredError
 from timer import periodic_timer
+import os
+import re
 
 import timed_queue
 
@@ -824,7 +826,10 @@ class Planner(object):
         except Exception as e:
             raise ValueError('Failed to get ip list for {0}: {1}'.format(hostname, e))
 
-        path = request['path']
+        if '*' in request['path']:
+            path = os.path.normpath(request['path']) + '/'
+        else:
+            path = os.path.normpath(request['path']) + '*/'
 
         try:
             use_uncoupled_group = bool(request['uncoupled_group'])
@@ -835,17 +840,23 @@ class Planner(object):
 
         autoapprove = bool(request.get('autoapprove', False))
 
+        group_histories = infrastructure.group_history_finder.search_by_node_backend(
+            hostname=hostname,
+            path=path
+        )
+
+        start_idx = -1
         groups = []
-        for group in storage.groups:
-            for backend in group.node_backends:
-                if backend.node.host.addr in ips and backend.base_path.startswith(path):
-                    if len(group.node_backends) == 1:
-                        groups.append(group)
-                    else:
-                        raise ValueError(
-                            'Group {} has {} node backends, currently '
-                            'only groups with 1 node backend can be used'.format(
-                                group.group_id, len(group.node_backends)))
+        path_re = re.compile(path)
+        for group_history in group_histories:
+            for node_backends_set in group_history.nodes[start_idx:]:
+                for node_backend in node_backends_set.set:
+                    if not node_backend.path:
+                        continue
+
+                    if path_re.match(node_backend.path) is not None and node_backend.hostname == hostname:
+                        groups.append(group_history.group_id)
+                        break
 
         groups_to_backup = []
         groups_to_restore = []
