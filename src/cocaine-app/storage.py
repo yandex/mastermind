@@ -2346,7 +2346,21 @@ class Couple(Groupset):
         # TODO: this should be a link to a new "Couple" instance
         self.couple = self
 
-        self.settings = self.DEFAULT_SETTINGS
+        self._settings = self.DEFAULT_SETTINGS
+
+    @property
+    def settings(self):
+        return self._settings
+
+    @settings.setter
+    def settings(self, val):
+
+        # TODO: use dedicated Cache object with 'invalidate cache' method
+        # instead of using dict
+        if 'info_data' in self._cache:
+            self._cache['info_data']['footprint'] = None
+
+        self._settings = val
 
     @_cached('info_data')
     def info_data(self):
