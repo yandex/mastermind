@@ -1,3 +1,10 @@
+mastermind-cocainev11 (2.28.145) trusty; urgency=medium
+
+  * Add couple info data invalidation on settings change
+  * Cache the latest namespaces states update result
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 20 Jan 2017 18:14:46 +0300
+
 mastermind-cocainev11 (2.28.144) trusty; urgency=medium
 
   * Remove yql dependency
