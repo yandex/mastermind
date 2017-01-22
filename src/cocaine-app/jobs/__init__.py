@@ -60,6 +60,7 @@ class JobProcessor(object):
         JobTypes.TYPE_RECOVER_DC_JOB: 15,
         JobTypes.TYPE_COUPLE_DEFRAG_JOB: 10,
         JobTypes.TYPE_MAKE_LRC_GROUPS_JOB: 5,
+        JobTypes.TYPE_MAKE_LRC_RESERVED_GROUPS_JOB: 5,
         # Priority of this jobs is zero
         # because they're not using resources
         JobTypes.TYPE_BACKEND_CLEANUP_JOB: 0,
@@ -75,6 +76,7 @@ class JobProcessor(object):
         JobTypes.TYPE_RECOVER_DC_JOB,
         JobTypes.TYPE_COUPLE_DEFRAG_JOB,
         JobTypes.TYPE_MAKE_LRC_GROUPS_JOB,
+        JobTypes.TYPE_MAKE_LRC_RESERVED_GROUPS_JOB,
         JobTypes.TYPE_ADD_LRC_GROUPSET_JOB,
         JobTypes.TYPE_CONVERT_TO_LRC_GROUPSET_JOB,
         JobTypes.TYPE_BACKEND_CLEANUP_JOB,
