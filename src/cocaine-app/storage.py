@@ -1517,9 +1517,15 @@ class Group(object):
     TYPE_DATA = 'data'
     TYPE_CACHE = 'cache'
     TYPE_UNCOUPLED_CACHE = 'uncoupled_cache'
+
     TYPE_LRC_8_2_2_V1 = 'lrc-8-2-2-v1'
     TYPE_UNCOUPLED_LRC_8_2_2_V1 = 'uncoupled_lrc-8-2-2-v1'
     TYPE_RESERVED_LRC_8_2_2_V1 = 'reserved_lrc-8-2-2-v1'
+    TYPES_LRC_8_2_2_V1 = (
+        TYPE_LRC_8_2_2_V1,
+        TYPE_UNCOUPLED_LRC_8_2_2_V1,
+        TYPE_RESERVED_LRC_8_2_2_V1,
+    )
 
     AVAILABLE_TYPES = set([
         TYPE_DATA,
