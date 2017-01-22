@@ -1,3 +1,12 @@
+mastermind-cocainev11 (2.28.146) trusty; urgency=medium
+
+  * Store couple explicitly in backend manager job's data
+  * Store couple explicitly in backend cleanup job's data
+  * Skip not approved jobs when selecting ready jobs
+  * Restore-path: use group history
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sun, 22 Jan 2017 17:41:31 +0300
+
 mastermind-cocainev11 (2.28.145) trusty; urgency=medium
 
   * Add couple info data invalidation on settings change
