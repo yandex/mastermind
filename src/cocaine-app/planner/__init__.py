@@ -784,8 +784,10 @@ class Planner(object):
             raise last_error
 
     def _create_backend_manager_job(self, group, force, autoapprove, cmd_type, mark_backend=None, unmark_backend=None):
+        couple = storage.groups[group].couple
         params = {
             'group': group,
+            'couple': str(couple) if couple else None,
             'need_approving': not autoapprove,
             'cmd_type': cmd_type,
             'mark_backend': mark_backend,
