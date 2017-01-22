@@ -1805,6 +1805,8 @@ class Group(object):
 
         if self.meta:
             data['namespace'] = self.meta.get('namespace')
+            if self.type == Group.TYPE_UNCOUPLED_LRC_8_2_2_V1:
+                data['lrc_groups'] = self.meta.get('lrc_groups')
         if self.active_job:
             data['active_job'] = self.active_job
 

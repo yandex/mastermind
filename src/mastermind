@@ -1668,6 +1668,11 @@ def lrc_group_uncoupled_list(
     in_jobs=('',
              False,
              'Include uncoupled groups that are in service (participating in jobs, etc.)'),
+    groupset_view=('g',
+                   False,
+                   'Show future lrc groupsets that can be constructed from existing uncoupled '
+                   'lrc groups (not all groups may actually be available, groupsets are listed '
+                   'from lrc groupsets\' metakeys, their state is not checked)'),
     json=('', None, 'Format as json'),
     host=None,
     app=None
@@ -1678,15 +1683,18 @@ def lrc_group_uncoupled_list(
     options = {'type': 'uncoupled_lrc-8-2-2-v1',
                'in_jobs': in_jobs,
                'state': state}
-    res = tuple(group.id for group in cl.groups.filter(**options))
 
-    # TODO: maybe res should contain lists of lrc groups prepared to be united
-    # into a groupset?
+    groups = cl.groups.filter(**options)
+
+    if groupset_view:
+        res = list(set(tuple(group._data['lrc_groups']) for group in groups))
+    else:
+        res = tuple(group.id for group in groups)
 
     if json:
         print dumps(res)
     else:
-        print res
+        pprint(res)
 
 
 @lrcGroupDispatcher.command(name='prepare-new-groups')
