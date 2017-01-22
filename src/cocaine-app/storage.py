@@ -1795,7 +1795,8 @@ class Group(object):
             'id': self.group_id,
             'status': self.status,
             'status_text': self.status_text,
-            'node_backends': [nb.info() for nb in self.node_backends]
+            'node_backends': [nb.info() for nb in self.node_backends],
+            'type': self.type,
         }
 
         data['couple'] = None
