@@ -19,6 +19,8 @@ from mastermind_core.db.mongo.pool import Collection
 from sync import sync_manager
 from sync.error import LockFailedError, LockAlreadyAcquiredError
 from timer import periodic_timer
+import os
+import re
 
 import timed_queue
 
@@ -127,7 +129,7 @@ class Planner(object):
 
         except LockFailedError:
             logger.info('TTl cleanup planner is already running')
-        except Exception as e:
+        except Exception:
             logger.exception('Failed to plan ttl cleanup')
         finally:
             logger.info('TTL cleanup planner finished')
@@ -142,7 +144,7 @@ class Planner(object):
         couple_list = self._get_yt_stat()
         for couple in couple_list:
 
-            iter_group = couple #in tskv coupld id is actually group[0] from couple id
+            iter_group = couple  # in tskv coupld id is actually group[0] from couple id
             if iter_group not in storage.groups:
                 logger.error("Not valid group is extracted from aggregation log {}".format(iter_group))
                 continue
@@ -152,20 +154,20 @@ class Planner(object):
                 continue
 
             try:
-                job = self.job_processor._create_job(
+                self.job_processor._create_job(
                     job_type=jobs.JobTypes.TYPE_TTL_CLEANUP_JOB,
                     params={
                         'iter_group': iter_group.group_id,
                         'couple': str(iter_group.couple),
                         'namespace': iter_group.couple.namespace.id,
-                        'batch_size': None, #get from config
-                        'attempts': None, #get from config
-                        'nproc': None, #get from config
-                        'wait_timeout': None, #get from config
+                        'batch_size': None,  # get from config
+                        'attempts': None,  # get from config
+                        'nproc': None,  # get from config
+                        'wait_timeout': None,  # get from config
                         'dry_run': False,
                         'need_approving': not self.params.get('ttl_cleanup', {}).get('autoapprove', False),
-                        },
-                    )
+                    },
+                )
             except:
                 logger.exception("Creating job for iter group {} has excepted".format(iter_group))
 
@@ -762,33 +764,43 @@ class Planner(object):
         last_error = None
         for _ in xrange(self.CREATE_JOB_ATTEMPTS):
             try:
+                couple = storage.groups[group].couple
                 job = self.job_processor._create_job(
                     jobs.JobTypes.TYPE_BACKEND_CLEANUP_JOB,
                     params={
                         'group': group,
+                        'couple': str(couple) if couple else None,
                         'need_approving': not autoapprove
                     },
                     force=force,
                 )
-                return job.dump()
             except Exception as e:
                 last_error = e
                 continue
+
+            return job.dump()
+
         if last_error:
             raise last_error
 
     def _create_backend_manager_job(self, group, force, autoapprove, cmd_type, mark_backend=None, unmark_backend=None):
-        params = {'group': group}
-        params['need_approving'] = not autoapprove
-        params['cmd_type'] = cmd_type
-        params['mark_backend'] = mark_backend
-        params['unmark_backend'] = unmark_backend
+        couple = storage.groups[group].couple
+        params = {
+            'group': group,
+            'couple': str(couple) if couple else None,
+            'need_approving': not autoapprove,
+            'cmd_type': cmd_type,
+            'mark_backend': mark_backend,
+            'unmark_backend': unmark_backend,
+        }
         last_error = None
         for _ in xrange(self.CREATE_JOB_ATTEMPTS):
             try:
                 job = self.job_processor._create_job(
                     jobs.JobTypes.TYPE_BACKEND_MANAGER_JOB,
-                    params, force=force)
+                    params,
+                    force=force,
+                )
                 return job.dump()
             except Exception as e:
                 last_error = e
@@ -820,11 +832,14 @@ class Planner(object):
             raise ValueError('Failed to get hostname for {0}: {1}'.format(host_or_ip, e))
 
         try:
-            ips = h.ips_set(hostname)
+            h.ips_set(hostname)
         except Exception as e:
             raise ValueError('Failed to get ip list for {0}: {1}'.format(hostname, e))
 
-        path = request['path']
+        if '*' in request['path']:
+            path = os.path.normpath(request['path']) + '/'
+        else:
+            path = os.path.normpath(request['path']) + '*/'
 
         try:
             use_uncoupled_group = bool(request['uncoupled_group'])
@@ -835,17 +850,23 @@ class Planner(object):
 
         autoapprove = bool(request.get('autoapprove', False))
 
+        group_histories = infrastructure.group_history_finder.search_by_node_backend(
+            hostname=hostname,
+            path=path
+        )
+
+        start_idx = -1
         groups = []
-        for group in storage.groups:
-            for backend in group.node_backends:
-                if backend.node.host.addr in ips and backend.base_path.startswith(path):
-                    if len(group.node_backends) == 1:
-                        groups.append(group)
-                    else:
-                        raise ValueError(
-                            'Group {} has {} node backends, currently '
-                            'only groups with 1 node backend can be used'.format(
-                                group.group_id, len(group.node_backends)))
+        path_re = re.compile(path)
+        for group_history in group_histories:
+            for node_backends_set in group_history.nodes[start_idx:]:
+                for node_backend in node_backends_set.set:
+                    if not node_backend.path:
+                        continue
+
+                    if path_re.match(node_backend.path) is not None and node_backend.hostname == hostname:
+                        groups.append(group_history.group_id)
+                        break
 
         groups_to_backup = []
         groups_to_restore = []
