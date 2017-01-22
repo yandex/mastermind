@@ -1519,6 +1519,7 @@ class Group(object):
     TYPE_UNCOUPLED_CACHE = 'uncoupled_cache'
     TYPE_LRC_8_2_2_V1 = 'lrc-8-2-2-v1'
     TYPE_UNCOUPLED_LRC_8_2_2_V1 = 'uncoupled_lrc-8-2-2-v1'
+    TYPE_RESERVED_LRC_8_2_2_V1 = 'reserved_lrc-8-2-2-v1'
 
     AVAILABLE_TYPES = set([
         TYPE_DATA,
@@ -1526,6 +1527,7 @@ class Group(object):
         TYPE_UNCOUPLED_CACHE,
         TYPE_LRC_8_2_2_V1,
         TYPE_UNCOUPLED_LRC_8_2_2_V1,
+        TYPE_RESERVED_LRC_8_2_2_V1,
     ])
 
     def __init__(self, group_id, node_backends=None):
@@ -1845,6 +1847,17 @@ class Group(object):
             'version': 2,
             'type': group_type,
             'lrc_groups': lrc_groups,
+        }
+
+    @staticmethod
+    def compose_reserved_lrc_group_meta(scheme):
+        if scheme == Lrc.Scheme822v1:
+            group_type = Group.TYPE_RESERVED_LRC_8_2_2_V1
+        else:
+            raise ValueError('Unknown scheme: {}'.format(scheme))
+        return {
+            'version': 2,
+            'type': group_type,
         }
 
     @property
