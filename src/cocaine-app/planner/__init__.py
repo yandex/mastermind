@@ -764,10 +764,12 @@ class Planner(object):
         last_error = None
         for _ in xrange(self.CREATE_JOB_ATTEMPTS):
             try:
+                couple = storage.groups[group].couple
                 job = self.job_processor._create_job(
                     jobs.JobTypes.TYPE_BACKEND_CLEANUP_JOB,
                     params={
                         'group': group,
+                        'couple': str(couple) if couple else None,
                         'need_approving': not autoapprove
                     },
                     force=force,
