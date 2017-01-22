@@ -1697,6 +1697,35 @@ def lrc_group_uncoupled_list(
         pprint(res)
 
 
+@lrcGroupDispatcher.command(name='reserved-list')
+@log_action
+def lrc_group_reserved_list(
+    state=('s',
+           'good',
+           'Filter by state (good|init|broken)'),
+    in_jobs=('',
+             False,
+             'Include uncoupled groups that are in service (participating in jobs, etc.)'),
+    json=('', None, 'Format as json'),
+    host=None,
+    app=None
+):
+    '''Get list of reserved lrc groups'''
+    cl = client(host, app)
+
+    options = {'type': 'reserved_lrc-8-2-2-v1',
+               'in_jobs': in_jobs,
+               'state': state}
+
+    groups = cl.groups.filter(**options)
+    res = tuple(group.id for group in groups)
+
+    if json:
+        print dumps(res)
+    else:
+        pprint(res)
+
+
 @lrcGroupDispatcher.command(name='prepare-new-groups')
 @log_action
 def lrc_group_prepare_new_groups(
