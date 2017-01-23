@@ -1,3 +1,9 @@
+mastermind (2.28.147) trusty; urgency=medium
+
+  * Fix caching info data for couples with only a single lrc groupset
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 23 Jan 2017 15:18:06 +0300
+
 mastermind (2.28.146) trusty; urgency=medium
 
   * Store couple explicitly in backend manager job's data
