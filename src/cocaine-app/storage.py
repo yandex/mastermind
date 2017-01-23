@@ -1903,9 +1903,12 @@ class Groupset(object):
         self._cache = {}
 
     def _get_stat_footprint(self):
+        groups = self.groups
+        if isinstance(self, Couple) and self.lrc822v1_groupset:
+            groups = groups + self.lrc822v1_groupset.groups
         return [
             nb.stat and nb.stat.ts or None
-            for group in self.groups
+            for group in groups
             for nb in group.node_backends
         ]
 
