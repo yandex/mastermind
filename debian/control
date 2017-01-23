@@ -30,6 +30,7 @@ Depends:
  cocaine-runtime (<< 0.12),
  python-requests,
  python-mastermind-cocainev11 (= ${binary:Version}),
+ elliptics-client,
 Conflicts:
  mastermind
 Recommends:
