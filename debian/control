@@ -30,9 +30,12 @@ Depends:
  python-requests,
  cocaine-v12-runtime,
  python-mastermind (= ${binary:Version}),
+ elliptics-client,
 Conflicts:
  mastermind-cocainev11
-Recommends: python-kazoo
+Recommends:
+ python-kazoo,
+ yandex-yql-python,
 Description: Metabalancer for elliptics storage
 
 Package: mastermind-utils

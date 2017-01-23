@@ -1200,9 +1200,12 @@ class Groupset(object):
         self._cache = {}
 
     def _get_stat_footprint(self):
+        groups = self.groups
+        if isinstance(self, Couple) and self.lrc822v1_groupset:
+            groups = groups + self.lrc822v1_groupset.groups
         return [
             nb.stat and nb.stat.ts or None
-            for group in self.groups
+            for group in groups
             for nb in group.node_backends
         ]
 
@@ -1643,7 +1646,21 @@ class Couple(Groupset):
         # TODO: this should be a link to a new "Couple" instance
         self.couple = self
 
-        self.settings = self.DEFAULT_SETTINGS
+        self._settings = self.DEFAULT_SETTINGS
+
+    @property
+    def settings(self):
+        return self._settings
+
+    @settings.setter
+    def settings(self, val):
+
+        # TODO: use dedicated Cache object with 'invalidate cache' method
+        # instead of using dict
+        if 'info_data' in self._cache:
+            self._cache['info_data']['footprint'] = None
+
+        self._settings = val
 
     @_cached('info_data')
     def info_data(self):

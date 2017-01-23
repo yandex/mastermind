@@ -132,6 +132,9 @@ class NodeInfoUpdaterBase(object):
                 time.time() - start_ts))
 
     def _do_update_namespaces_states(self, namespaces_settings, per_entity_stat=None):
+
+        result_ts = time.time()
+
         def default():
             return {
                 'settings': {},
@@ -141,10 +144,6 @@ class NodeInfoUpdaterBase(object):
             }
 
         res = defaultdict(default)
-
-        # settings
-        for ns_settings in namespaces_settings:
-            res[ns_settings.namespace]['settings'] = ns_settings.dump()
 
         # couples
         for couple in storage.replicas_groupsets:
@@ -185,10 +184,14 @@ class NodeInfoUpdaterBase(object):
         for ns, stats in self.statistics.per_ns_statistics(per_entity_stat).iteritems():
             res[ns]['statistics'] = stats
 
+        # settings
+        for ns_settings in namespaces_settings:
+            res[ns_settings.namespace]['settings'] = ns_settings.dump()
+
         # removing internal namespaces that clients should not know about
         res.pop(storage.Group.CACHE_NAMESPACE, None)
 
-        self._namespaces_states.set_result(dict(res))
+        self._namespaces_states.set_result(dict(res), ts=result_ts)
 
     @h.concurrent_handler
     def force_update_flow_stats(self, request):

@@ -13,7 +13,7 @@ logger = logging.getLogger('mm.jobs')
 
 class BackendManagerJob(Job):
 
-    PARAMS = ('group', 'cmd_type', 'resources', 'mark_backend', 'unmark_backend')
+    PARAMS = ('group', 'couple', 'cmd_type', 'resources', 'mark_backend', 'unmark_backend')
 
     CMD_TYPE_DISABLE = 'disable'
     CMD_TYPE_MAKE_WRITABLE = 'make_writable'
@@ -102,8 +102,6 @@ class BackendManagerJob(Job):
 
     @property
     def _involved_couples(self):
-        couples = []
-        group = storage.groups[self.group]
-        if group.couple:
-            couples.append(str(group.couple))
-        return couples
+        if not self.couple:
+            return []
+        return [self.couple]

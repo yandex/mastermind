@@ -19,6 +19,8 @@ from mastermind_core.db.mongo.pool import Collection
 from sync import sync_manager
 from sync.error import LockFailedError, LockAlreadyAcquiredError
 from timer import periodic_timer
+import os
+import re
 
 import timed_queue
 
@@ -30,11 +32,13 @@ class Planner(object):
     MOVE_CANDIDATES = 'move_candidates'
     RECOVER_DC = 'recover_dc'
     COUPLE_DEFRAG = 'couple_defrag'
+    TTL_CLEANUP = 'ttl_cleanup'
 
     RECOVERY_OP_CHUNK = 200
 
     COUPLE_DEFRAG_LOCK = 'planner/couple_defrag'
     RECOVER_DC_LOCK = 'planner/recover_dc'
+    TTL_CLEANUP_LOCK = 'planner/ttl_cleanup'
 
     def __init__(self, db, niu, job_processor, namespaces_settings):
 
@@ -55,6 +59,8 @@ class Planner(object):
         self.couple_defrag_timer = periodic_timer(
             seconds=self.params.get('couple_defrag', {}).get(
                 'couple_defrag_period', 60 * 15))
+        self.ttl_cleanup_timer = periodic_timer(
+            seconds=self.params.get('ttl_cleanup', {}).get('ttl_cleanup_period', 60 * 15))
 
         if config['metadata'].get('planner', {}).get('db'):
             self.collection = Collection(db[config['metadata']['planner']['db']], 'planner')
@@ -73,11 +79,97 @@ class Planner(object):
                     self._couple_defrag
                 )
 
+            if self.params.get('ttl_cleanup', {}).get('enabled', False):
+                self.__tq.add_task_at(
+                    self.TTL_CLEANUP,
+                    self.ttl_cleanup_timer.next(),
+                    self._ttl_cleanup_planner
+                )
+
     def _start_tq(self):
         self.__tq.start()
 
     def add_planner(self, planner):
         planner.schedule_tasks(self.__tq)
+
+    def _get_yt_stat(self):
+        """
+        Extract statistics from YT logs
+        :return: list of couples ids with expired records volume above specified
+        """
+        try:
+            # Configure parameters for work with YT
+            yt_cluster = self.params.get('ttl_cleanup', {}).get('yt_cluster', "")
+            yt_token = self.params.get('ttl_cleanup', {}).get('yt_token', "")
+            yt_attempts = self.params.get('ttl_cleanup', {}).get('yt_attempts', 3)
+            yt_delay = self.params.get('ttl_cleanup', {}).get('yt_delay', 10)
+
+            from yt_worker import YqlWrapper
+            yt_wrapper = YqlWrapper(cluster=yt_cluster, token=yt_token, attempts=yt_attempts, delay=yt_delay)
+
+            aggregation_table = self.params.get('ttl_cleanup', {}).get('aggregation_table', "")
+            base_table = self.params.get('ttl_cleanup', {}).get('tskv_log_table', "")
+            expired_threshold = self.params.get('ttl_cleanup', {}).get('ttl_threshold', 10 * float(1024 ** 3))  # 10GB
+
+            yt_wrapper.prepare_aggregate_for_yesterday(base_table, aggregation_table)
+
+            couple_list = yt_wrapper.request_expired_stat(aggregation_table, expired_threshold)
+            logger.info("YT request has completed")
+            return couple_list
+        except:
+            logger.exception("Work with YQL failed")
+            return []
+
+    def _ttl_cleanup_planner(self):
+        try:
+            logger.info('Starting ttl cleanup planner')
+
+            with sync_manager.lock(Planner.TTL_CLEANUP_LOCK, blocking=False):
+                self._do_ttl_cleanup()
+
+        except LockFailedError:
+            logger.info('TTl cleanup planner is already running')
+        except Exception:
+            logger.exception('Failed to plan ttl cleanup')
+        finally:
+            logger.info('TTL cleanup planner finished')
+            self.__tq.add_task_at(
+                self.TTL_CLEANUP,
+                self.ttl_cleanup_timer.next(),
+                self._ttl_cleanup_planner)
+
+    def _do_ttl_cleanup(self):
+        logger.info('Run ttl cleanup')
+
+        couple_list = self._get_yt_stat()
+        for couple in couple_list:
+
+            iter_group = couple  # in tskv coupld id is actually group[0] from couple id
+            if iter_group not in storage.groups:
+                logger.error("Not valid group is extracted from aggregation log {}".format(iter_group))
+                continue
+            iter_group = storage.groups[iter_group]
+            if not iter_group.couple:
+                logger.error("Iter group is uncoupled {}".format(str(iter_group)))
+                continue
+
+            try:
+                self.job_processor._create_job(
+                    job_type=jobs.JobTypes.TYPE_TTL_CLEANUP_JOB,
+                    params={
+                        'iter_group': iter_group.group_id,
+                        'couple': str(iter_group.couple),
+                        'namespace': iter_group.couple.namespace.id,
+                        'batch_size': None,  # get from config
+                        'attempts': None,  # get from config
+                        'nproc': None,  # get from config
+                        'wait_timeout': None,  # get from config
+                        'dry_run': False,
+                        'need_approving': not self.params.get('ttl_cleanup', {}).get('autoapprove', False),
+                    },
+                )
+            except:
+                logger.exception("Creating job for iter group {} has excepted".format(iter_group))
 
     @staticmethod
     def _prepare_candidates_by_dc(suitable_groups, unsuitable_dcs):
@@ -672,33 +764,43 @@ class Planner(object):
         last_error = None
         for _ in xrange(self.CREATE_JOB_ATTEMPTS):
             try:
+                couple = storage.groups[group].couple
                 job = self.job_processor._create_job(
                     jobs.JobTypes.TYPE_BACKEND_CLEANUP_JOB,
                     params={
                         'group': group,
+                        'couple': str(couple) if couple else None,
                         'need_approving': not autoapprove
                     },
                     force=force,
                 )
-                return job.dump()
             except Exception as e:
                 last_error = e
                 continue
+
+            return job.dump()
+
         if last_error:
             raise last_error
 
     def _create_backend_manager_job(self, group, force, autoapprove, cmd_type, mark_backend=None, unmark_backend=None):
-        params = {'group': group}
-        params['need_approving'] = not autoapprove
-        params['cmd_type'] = cmd_type
-        params['mark_backend'] = mark_backend
-        params['unmark_backend'] = unmark_backend
+        couple = storage.groups[group].couple
+        params = {
+            'group': group,
+            'couple': str(couple) if couple else None,
+            'need_approving': not autoapprove,
+            'cmd_type': cmd_type,
+            'mark_backend': mark_backend,
+            'unmark_backend': unmark_backend,
+        }
         last_error = None
         for _ in xrange(self.CREATE_JOB_ATTEMPTS):
             try:
                 job = self.job_processor._create_job(
                     jobs.JobTypes.TYPE_BACKEND_MANAGER_JOB,
-                    params, force=force)
+                    params,
+                    force=force,
+                )
                 return job.dump()
             except Exception as e:
                 last_error = e
@@ -730,11 +832,14 @@ class Planner(object):
             raise ValueError('Failed to get hostname for {0}: {1}'.format(host_or_ip, e))
 
         try:
-            ips = h.ips_set(hostname)
+            h.ips_set(hostname)
         except Exception as e:
             raise ValueError('Failed to get ip list for {0}: {1}'.format(hostname, e))
 
-        path = request['path']
+        if '*' in request['path']:
+            path = os.path.normpath(request['path']) + '/'
+        else:
+            path = os.path.normpath(request['path']) + '*/'
 
         try:
             use_uncoupled_group = bool(request['uncoupled_group'])
@@ -745,17 +850,23 @@ class Planner(object):
 
         autoapprove = bool(request.get('autoapprove', False))
 
+        group_histories = infrastructure.group_history_finder.search_by_node_backend(
+            hostname=hostname,
+            path=path
+        )
+
+        start_idx = -1
         groups = []
-        for group in storage.groups:
-            for backend in group.node_backends:
-                if backend.node.host.addr in ips and backend.base_path.startswith(path):
-                    if len(group.node_backends) == 1:
-                        groups.append(group)
-                    else:
-                        raise ValueError(
-                            'Group {} has {} node backends, currently '
-                            'only groups with 1 node backend can be used'.format(
-                                group.group_id, len(group.node_backends)))
+        path_re = re.compile(path)
+        for group_history in group_histories:
+            for node_backends_set in group_history.nodes[start_idx:]:
+                for node_backend in node_backends_set.set:
+                    if not node_backend.path:
+                        continue
+
+                    if path_re.match(node_backend.path) is not None and node_backend.hostname == hostname:
+                        groups.append(group_history.group_id)
+                        break
 
         groups_to_backup = []
         groups_to_restore = []
@@ -806,7 +917,14 @@ class Planner(object):
                     if job.status in self.RUNNING_STATUSES:
                         active_jobs.append(job.id)
                     elif job.status in self.ERROR_STATUSES:
-                        if job.group == job.src_group:
+                        cancel_job = False
+                        if job.type == jobs.JobTypes.TYPE_MOVE_JOB:
+                            cancel_job = True
+                        elif job.type == jobs.JobTypes.TYPE_BACKEND_MANAGER_JOB:
+                            cancel_job = False
+                        elif job.group == job.src_group:
+                            cancel_job = True
+                        if cancel_job:
                             try:
                                 self.job_processor._cancel_job(job)
                                 cancelled_jobs.append(job.id)
@@ -1348,6 +1466,7 @@ class Planner(object):
 
         return candidates[0]
 
+    @h.concurrent_handler
     def ttl_cleanup(self, request):
         """
         TTL cleanup job. Remove all records with expired TTL
@@ -1415,6 +1534,8 @@ class Planner(object):
             )
 
         iter_group = storage.groups[request['iter_group']]
+        if not iter_group.couple:
+            raise RuntimeError('Group is uncoupled? {}'.format(str(iter_group)))
 
         job = self.job_processor._create_job(
             job_type=jobs.JobTypes.TYPE_TTL_CLEANUP_JOB,
@@ -1429,6 +1550,7 @@ class Planner(object):
                 'dry_run': request.get('dry_run'),
                 'remove_all_older': remove_all_older,
                 'remove_permanent_older': remove_permanent_older,
+                'need_approving': request.get('need_approving'),
             },
         )
 

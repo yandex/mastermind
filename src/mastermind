@@ -2022,7 +2022,8 @@ def ttl_cleanup(iter_group,
         'wait_timeout': wait_timeout,
         'dry_run': dry_run,
         'remove_all_older': remove_all_older,
-        'remove_permanent_older': remove_permament_older
+        'remove_permanent_older': remove_permament_older,
+        'need_approving': True
         }
 
     res = s.run_sync(

@@ -1,5 +1,6 @@
 import json
 import threading
+import time
 
 from mastermind_core.config import config
 from mastermind_core import helpers
@@ -23,6 +24,7 @@ class CachedResponse(object):
         self.lock = threading.RLock()
         self._result = None
         self._exception = None
+        self._ts = time.time()
 
     def get_result(self, *args, **kwargs):
         """Get cached result or raise stored exception
@@ -34,15 +36,23 @@ class CachedResponse(object):
                 raise self.exception
             return self._result
 
-    def set_result(self, result):
+    def _is_fresh_result(self, ts):
+        if ts is None:
+            ts = time.time()
+        return ts > self._ts
+
+    def set_result(self, result, ts=None):
         """Set result for cached response
 
         Parameters:
             result - result of calculation;
         """
         with self.lock:
+            if not self._is_fresh_result(ts):
+                return
             self._result = result
             self._exception = None
+            self._ts = ts
 
     @property
     def exception(self):
@@ -75,11 +85,16 @@ class CachedGzipResponse(CachedResponse):
         self._compressed_result = None
         self._compression_level = compression_level
 
-    def set_result(self, result):
+    def set_result(self, result, ts=None):
         """Set result for cached response and also store its compressed version
         """
+        if not self._is_fresh_result(ts):
+            # check to prevent expensive compression step
+            return
         compressed_result = self._compress(result)
         with self.lock:
+            if not self._is_fresh_result(ts):
+                return
             super(CachedGzipResponse, self).set_result(result)
             self._compressed_result = compressed_result
 
