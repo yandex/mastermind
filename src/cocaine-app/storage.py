@@ -1015,15 +1015,15 @@ def _cached(key):
             )
             footprint = self._get_stat_footprint()
 
-            # TODO: Remove this log record
-            logger.debug('Groupset {}, key {}, footprint {}, cached footprint {}'.format(
-                self,
-                key,
-                footprint,
-                cached_data['footprint'],
-            ))
-
             if footprint != cached_data['footprint']:
+
+                # TODO: Remove this log record
+                logger.debug('Groupset {}, key {}, footprint {}, cached footprint {}'.format(
+                    self,
+                    key,
+                    footprint,
+                    cached_data['footprint'],
+                ))
                 self._cache[key] = {
                     'data': f(self, *args, **kwargs),
                     'footprint': footprint,
