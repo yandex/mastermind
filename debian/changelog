@@ -1,3 +1,9 @@
+mastermind (2.28.149) trusty; urgency=medium
+
+  * Add elliptics-client dependency
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 23 Jan 2017 18:32:58 +0300
+
 mastermind (2.28.148) trusty; urgency=medium
 
   * Fix backend manager and cleanup job locks
