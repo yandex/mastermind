@@ -138,4 +138,6 @@ class BackendCleanupJob(Job):
 
     @property
     def _involved_couples(self):
+        if not self.couple:
+            return []
         return [self.couple]
