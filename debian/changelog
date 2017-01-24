@@ -1,3 +1,15 @@
+mastermind (2.28.151) trusty; urgency=medium
+
+  * Restore-path: fix group type
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 24 Jan 2017 14:32:12 +0300
+
+mastermind (2.28.150) trusty; urgency=medium
+
+  * Alter debug logs for _cached property
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 23 Jan 2017 19:43:47 +0300
+
 mastermind (2.28.149) trusty; urgency=medium
 
   * Add elliptics-client dependency
