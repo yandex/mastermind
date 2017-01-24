@@ -253,7 +253,7 @@ class RestoreGroupJob(Job):
 
         self.tasks.append(task)
 
-        if restore_backend != src_backend and restore_backend.status in (storage.Status.OK,):
+        if restore_backend and restore_backend != src_backend and restore_backend.status in (storage.Status.OK,):
             mark_restore_backend = self.make_path(
                 self.BACKEND_DOWN_MARKER, base_path=restore_backend.base_path).format(
                     backend_id=restore_backend.backend_id)
