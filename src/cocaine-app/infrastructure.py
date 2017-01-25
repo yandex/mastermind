@@ -982,7 +982,7 @@ class Infrastructure(object):
             hostname=host,
             path=path
         )
-
+        path = self.group_history_finder.node_backend_path_to_regexp(path)
         path_re = re.compile(path)
         for group_history in group_histories:
             for node_backends_set in group_history.nodes[start_idx:]:
