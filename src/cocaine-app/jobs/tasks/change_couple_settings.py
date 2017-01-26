@@ -19,11 +19,16 @@ class ChangeCoupleSettingsTask(Task):
         self.type = TaskTypes.TYPE_CHANGE_COUPLE_SETTINGS
         self._changed = False
 
-    def update_status(self):
+    def _update_status(self, processor):
         # state update is not required.
         pass
 
-    def execute(self):
+    def _terminate(self, processor):
+        # cannot terminate task, since this task works only synchronously
+        # early cleanup phase breaks nothing
+        pass
+
+    def _execute(self, processor):
         # this task execution does not rely on common task workflow
         # of executing a command and waiting till it's finished,
         # rather it tries to execute action on 'finished' check

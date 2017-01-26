@@ -16,7 +16,7 @@ class NodeStopTask(MinionCmdTask):
         super(NodeStopTask, self).__init__(job)
         self.type = TaskTypes.TYPE_NODE_STOP_TASK
 
-    def execute(self, processor):
+    def _execute(self, processor):
 
         if self.group:
             # checking if task still applicable
@@ -66,4 +66,4 @@ class NodeStopTask(MinionCmdTask):
                     )
                 )
 
-        super(NodeStopTask, self).execute(processor)
+        super(NodeStopTask, self)._execute(processor)

@@ -38,7 +38,7 @@ class DnetClientBackendCmdTask(MinionCmdTask):
         self.cmd = TaskTypes.TYPE_DNET_CLIENT_BACKEND_CMD
         self.type = TaskTypes.TYPE_DNET_CLIENT_BACKEND_CMD
 
-    def execute(self, processor):
+    def _execute(self, processor):
         self.params['cmd_tpl'] = infrastructure.DNET_CLIENT_BACKEND_CMD_TPL
         self.params['subcommand'] = 'backend'
         try:

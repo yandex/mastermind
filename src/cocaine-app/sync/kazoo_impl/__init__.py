@@ -101,11 +101,11 @@ class ZkSyncManager(object):
         failed = False
         failed_locks = []
         result = tr.commit()
-        for i, res in enumerate(result):
+        for lockid, res in zip(locks, result):
             if isinstance(res, ZookeeperError):
                 failed = True
             if isinstance(res, NodeExistsError):
-                failed_locks.append(locks[i])
+                failed_locks.append(lockid)
 
         if failed_locks:
             holders = []

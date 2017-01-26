@@ -24,7 +24,7 @@ class CreateGroupTask(MinionCmdTask):
         self.cmd = TaskTypes.TYPE_CREATE_GROUP
         self.type = TaskTypes.TYPE_CREATE_GROUP
 
-    def execute(self, processor):
+    def _execute(self, processor):
         try:
             minion_response = processor.minions_monitor.create_group(
                 self.host,

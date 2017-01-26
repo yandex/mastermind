@@ -32,7 +32,7 @@ class MinionCmdTask(Task):
         task.params['task_id'] = task.id
         return task
 
-    def update_status(self, processor):
+    def _update_status(self, processor):
         try:
             self.minion_cmd = processor.minions_monitor._get_command(self.minion_cmd_id)
             logger.debug('Job {0}, task {1}, minion command status was updated: {2}'.format(
@@ -49,7 +49,7 @@ class MinionCmdTask(Task):
             return
         self._set_run_history_parameters(self.minion_cmd)
 
-    def execute(self, processor):
+    def _execute(self, processor):
         try:
             minion_response = processor.minions_monitor.execute(
                 self.host,
@@ -60,6 +60,9 @@ class MinionCmdTask(Task):
             raise RetryError(self.attempts, e)
         cmd_response = minion_response.values()[0]
         self._set_minion_task_parameters(cmd_response)
+
+    def _terminate(self, processor):
+        processor.minions_monitor._terminate_cmd(self.host, self.minion_cmd_id)
 
     def _set_minion_task_parameters(self, minion_cmd):
         self.minion_cmd = minion_cmd
@@ -101,8 +104,8 @@ class MinionCmdTask(Task):
     def __str__(self):
         return 'MinionCmdTask[id: {0}]<{1}>'.format(self.id, self.cmd)
 
-    def make_new_history_record(self):
-        record = super(MinionCmdTask, self).make_new_history_record()
+    def _make_new_history_record(self):
+        record = super(MinionCmdTask, self)._make_new_history_record()
         record.command_uid = None
         record.exit_code = None
         return record

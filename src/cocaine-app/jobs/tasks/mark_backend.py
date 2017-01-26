@@ -15,7 +15,7 @@ class MarkBackendTask(MinionCmdTask):
         self.cmd = TaskTypes.TYPE_MARK_BACKEND
         self.type = TaskTypes.TYPE_MARK_BACKEND
 
-    def execute(self, processor):
+    def _execute(self, processor):
         try:
             minion_response = processor.minions_monitor.minion_base_cmd(
                 self.host,

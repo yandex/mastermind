@@ -1143,6 +1143,8 @@ class Node(object):
         if isinstance(other, Node):
             return self.host.addr == other.host.addr and self.port == other.port
 
+        return False
+
     def update_commands_stats(self, node_backends):
         self.stat.update_commands_stats(node_backends)
 

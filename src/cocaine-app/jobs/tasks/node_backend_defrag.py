@@ -16,7 +16,7 @@ class NodeBackendDefragTask(MinionCmdTask):
         super(NodeBackendDefragTask, self).__init__(job)
         self.type = TaskTypes.TYPE_NODE_BACKEND_DEFRAG_TASK
 
-    def execute(self, processor):
+    def _execute(self, processor):
         # checking if task still applicable
         logger.info('Job {0}, task {1}: checking group {2} and node backend {3} '
                     'consistency'.format(
@@ -42,4 +42,4 @@ class NodeBackendDefragTask(MinionCmdTask):
             raise JobBrokenError('Task {0}: node backend {1} does not belong to '
                                  'group {2}'.format(self, self.node_backend, self.group))
 
-        super(NodeBackendDefragTask, self).execute(processor)
+        super(NodeBackendDefragTask, self)._execute(processor)
