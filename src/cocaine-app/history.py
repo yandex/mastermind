@@ -308,6 +308,16 @@ class GroupHistoryFinder(object):
             gh.collection = self.collection
             yield gh
 
+    @staticmethod
+    def node_backend_path_to_regexp(path):
+        if not path.startswith('^'):
+            path = '^' + path
+        if not path.endswith('$'):
+            path = path + '$'
+        if '.*' not in path:
+            path = path.replace('*', '.*')
+        return path
+
     def search_by_node_backend(self,
                                hostname=None,
                                port=None,
@@ -324,11 +334,7 @@ class GroupHistoryFinder(object):
         if backend_id:
             node_backend_pattern['backend_id'] = backend_id
         if path:
-            if not path.startswith('^'):
-                path = '^' + path
-            if not path.endswith('$'):
-                path = path + '$'
-            path = path.replace('*', '.*')
+            path = self.node_backend_path_to_regexp(path)
             node_backend_pattern['path'] = {'$regex': path}
 
         if not node_backend_pattern:
