@@ -21,6 +21,7 @@ from sync.error import LockFailedError, LockAlreadyAcquiredError
 from timer import periodic_timer
 import os
 import re
+from history import GroupHistoryFinder
 
 import timed_queue
 
@@ -808,7 +809,7 @@ class Planner(object):
         if last_error:
             raise last_error
 
-    def _cleanup_job_find(self, group_id, active_jobs, uncoupled_groups):
+    def _cleanup_job_find(self, group_id, active_jobs, uncoupled_groups, failed):
         group_jobs = self.job_processor.job_finder.jobs(
             groups=group_id,
             types=jobs.JobTypes.TYPE_BACKEND_CLEANUP_JOB,
@@ -821,12 +822,9 @@ class Planner(object):
             if job.status in self.RUNNING_STATUSES:
                 active_jobs.append(job.id)
             else:
-                raise RuntimeError(
-                    'Backend cleanup job failed, group: {}, status: {}'.format(
-                        group_id,
-                        job.status
-                    )
-                )
+                failed[group_id] = 'Backend cleanup job failed, group: {}, status: {}'.format(group_id,
+                                                                                              job.status
+                                                                                              )
         else:
             uncoupled_groups.append(group_id)
 
@@ -918,7 +916,8 @@ class Planner(object):
         if '*' in request['path']:
             path = os.path.normpath(request['path']) + '/'
         else:
-            path = os.path.normpath(request['path']) + '*/'
+            path = os.path.normpath(request['path']) + '/*/'
+        path = GroupHistoryFinder.node_backend_path_to_regexp(path)
         path_re = re.compile(path)
 
         try:
@@ -959,7 +958,7 @@ class Planner(object):
                 failed[group.group_id] = 'Failed group type: {}'.format(group.type)
                 continue
             if group.couple is None:
-                self._cleanup_job_find(group.group_id, active_jobs, uncoupled_groups)
+                self._cleanup_job_find(group.group_id, active_jobs, uncoupled_groups, failed)
             else:
                 self._restore_job_find(group.group_id,
                                        active_jobs,
@@ -989,8 +988,15 @@ class Planner(object):
         for group in history_groups:
             group = [x for x in group_histories if x.group_id == group][0]
 
+            # [2017-01-24 21:33:22] (xxx.example.com:1025:10/307
+            # /srv/storage/1/8/,xxx.example.com:1025:10/13458
+            # /srv/storage/45/3/)
+            if len(group.nodes[-1].set) > 1:
+                failed[group.group_id] = 'Count nodes in history > 1'
+                continue
+
             if group not in storage.groups and not group.couples:
-                active_jobs, uncoupled_groups = self._cleanup_job_find(group.group_id, active_jobs, uncoupled_groups)
+                self._cleanup_job_find(group.group_id, active_jobs, uncoupled_groups, failed)
             else:
                 if len(group.couples) > 1:
                     failed[group.group_id] = 'Count couples in history > 1'
@@ -1018,7 +1024,7 @@ class Planner(object):
 
         for group in groups_to_restore:
             try:
-                job = self.create_restore_job(group, use_uncoupled_group, None, force, autoapprove)
+                job = self._create_restore_job(group, use_uncoupled_group, None, force, autoapprove)
                 active_jobs.append(job['id'])
             except Exception as e:
                 failed[group] = str(e)

@@ -1,6 +1,6 @@
 {
     "concurrency": 10,
-    "handshake-timeout": 800,
+    "handshake-timeout": 1200,
     "heartbeat-timeout": 240,
     "log-output": true,
     "pool-limit": 5,
