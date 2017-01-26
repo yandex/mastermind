@@ -39,8 +39,10 @@ RSYNC_MODULE = config.get('restore', {}).get('rsync_use_module') and \
 RSYNC_USER = config.get('restore', {}).get('rsync_user', 'rsync')
 
 RECOVERY_DC_CNF = config.get('infrastructure', {}).get('recovery_dc', {})
+RECOVERY_DC_LRC_CNF = config.get('infrastructure', {}).get('recovery_dc_lrc', {})
 LRC_CONVERT_DC_CNF = config.get('infrastructure', {}).get('lrc_convert', {})
 LRC_VALIDATE_DC_CNF = config.get('infrastructure', {}).get('lrc_validate', {})
+LRC_RECOVERY_DC_CNF = config.get('infrastructure', {}).get('lrc_recovery', {})
 
 logger.info('Rsync module using: %s' % RSYNC_MODULE)
 logger.info('Rsync user: %s' % RSYNC_USER)
@@ -79,6 +81,12 @@ class Infrastructure(object):
         '-a {attempts} -b {batch} -l {log} -L {log_level} -n {processes_num} -M '
         '-T {trace_id} {json_stats}'
     )
+    DNET_RECOVERY_DC_LRC_CMD = (
+        'dnet_recovery dc {remotes} -g {groups} -D {tmp_dir} '
+        '-a {attempts} -b {batch} -l {log} -L {log_level} -n {processes_num} '
+        '-T {trace_id} --user-flags {user_flag} {json_stats}'
+    )
+
     REMOTE_TPL = '-r {host}:{port}:{family}'
 
     DNET_DEFRAG_CMD = (
@@ -106,6 +114,12 @@ class Infrastructure(object):
         '--wait-timeout {wait_timeout} --attempts {attempts} --batch-size {batch_size} '
         '--nproc {nproc} {safe} {remotes} --elliptics-log-level error '
         '{remove_type} {tskv}'
+    )
+
+    LRC_RECOVERY_CMD = (
+        'lrc_recover {remotes} --dst-groups {dst_groups} --wait-timeout {wait_timeout} '
+        '--part-size {part_size} --scheme {scheme} --log {log} --log-level {log_level} '
+        '--tmp {tmp_dir} --attempts {attempts} --trace-id {trace_id} {json_stats}'
     )
 
     def __init__(self):
@@ -848,6 +862,61 @@ class Infrastructure(object):
 
         return cmd
 
+    def _recover_lrc_index_shard_cmd(self,
+                                     lrc_groupset,
+                                     broken_group,
+                                     lrc_reserve_group,
+                                     json_stats=None,
+                                     trace_id=None):
+
+        shard_groups = [
+            g
+            for g in storage.Lrc.Scheme822v1.get_shard_groups(lrc_groupset, broken_group)
+        ]
+
+        dst_backend = storage.groups[lrc_reserve_group].node_backends[0]
+
+        backends = [
+            self.get_backend_by_group_id(g.group_id)
+            for g in shard_groups
+            if g.group_id != broken_group.group_id
+        ]
+
+        backends.append(dst_backend)
+
+        remotes = []
+        for nb in backends:
+            remotes.append(
+                self.REMOTE_TPL.format(
+                    host=nb.node.host.addr,
+                    port=nb.node.port,
+                    family=nb.node.family,
+                )
+            )
+
+        tmp_dir = RECOVERY_DC_LRC_CNF.get(
+            'tmp_dir',
+            '/var/tmp/dnet_recovery_lrc_{couple_id}'
+        ).format(couple_id=lrc_groupset.couple)
+
+        cmd = self.DNET_RECOVERY_DC_LRC_CMD.format(
+            remotes=' '.join(remotes),
+            groups=','.join(str(g.group_id) for g in shard_groups),
+            tmp_dir=tmp_dir,
+            attempts=RECOVERY_DC_LRC_CNF.get('attempts', 1),
+            batch=RECOVERY_DC_LRC_CNF.get('batch', 2000),
+            log=RECOVERY_DC_LRC_CNF.get('log', 'dnet_recovery.log').format(
+                couple_id=str(lrc_groupset.couple)
+            ),
+            log_level=RECOVERY_DC_LRC_CNF.get('log_level', 1),
+            processes_num=len(shard_groups),
+            trace_id=trace_id or uuid.uuid4().hex[:16],
+            user_flag=RECOVERY_DC_LRC_CNF.get('user_flag', 1),
+            json_stats='-s json' if json_stats else '',
+        )
+
+        return cmd
+
     @h.concurrent_handler
     def defrag_node_backend_cmd(self, request):
 
@@ -955,6 +1024,50 @@ class Infrastructure(object):
             trace_id=trace_id or uuid.uuid4().hex[:16],
             data_flow_rate=LRC_CONVERT_DC_CNF.get('data_flow_rate', 10),  # MB/s
             wait_timeout=LRC_CONVERT_DC_CNF.get('wait_timeout', 20),  # seconds
+        )
+
+        return cmd
+
+    def _lrc_recovery_cmd(self,
+                          lrc_groupset,
+                          broken_group,
+                          lrc_reserve_group,
+                          json_stats=None,
+                          trace_id=None):
+
+        backends = []
+        for g in lrc_groupset.groups:
+            if g.group_id == broken_group.group_id:
+                continue
+            backends.append(self.get_backend_by_group_id(g.group_id))
+
+        backends.append(lrc_reserve_group.node_backends[0])
+
+        remotes = []
+        for nb in backends:
+            remotes.append(
+                self.REMOTE_TPL.format(
+                    host=nb.node.host.addr,
+                    port=nb.node.port,
+                    family=nb.node.family,
+                )
+            )
+
+        cmd = self.LRC_RECOVERY_CMD.format(
+            remotes=' '.join(set(remotes)),
+            dst_groups=','.join(str(g.group_id) for g in lrc_groupset.groups),
+            wait_timeout=LRC_RECOVERY_DC_CNF.get('wait_timeout', 20),  # seconds
+            part_size=lrc_groupset.part_size,
+            scheme=lrc_groupset.scheme,
+            log=LRC_RECOVERY_DC_CNF.get('log', 'lrc_recovery.log').format(couple_id=lrc_groupset),
+            log_level=LRC_RECOVERY_DC_CNF.get('log_level', 1),
+            tmp_dir=LRC_RECOVERY_DC_CNF.get(
+                'tmp_dir',
+                '/var/tmp/lrc_recovery_{couple_id}'
+            ).format(couple_id=lrc_groupset.couple),
+            attempts=LRC_RECOVERY_DC_CNF.get('attempts', 1),
+            trace_id=trace_id or uuid.uuid4().hex[:16],
+            json_stats='-S json' if json_stats else '',
         )
 
         return cmd
