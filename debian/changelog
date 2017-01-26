@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.153) trusty; urgency=medium
+
+  * Fix restore path workflow
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 26 Jan 2017 13:51:42 +0300
+
 mastermind-cocainev11 (2.28.152) trusty; urgency=medium
 
   * Fix restore job
