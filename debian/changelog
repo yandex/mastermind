@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.154) trusty; urgency=medium
+
+  * Increase startup timeout
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 26 Jan 2017 14:20:02 +0300
+
 mastermind-cocainev11 (2.28.153) trusty; urgency=medium
 
   * Fix restore path workflow
