@@ -15,7 +15,7 @@ class RemoveGroupFileTask(MinionCmdTask):
         self.cmd = TaskTypes.TYPE_REMOVE_GROUP_FILE
         self.type = TaskTypes.TYPE_REMOVE_GROUP_FILE
 
-    def execute(self, processor):
+    def _execute(self, processor):
         try:
             minion_response = processor.minions_monitor.minion_base_cmd(
                 self.host,
