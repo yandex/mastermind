@@ -787,6 +787,19 @@ class NodeInfoUpdater(object):
 
         self._namespaces_states.set_result(dict(res), ts=result_ts)
 
+        for ns_id, ns_state in res.iteritems():
+            logger.debug(
+                'Namespace state: namespace: {ns}, couples: {couples_count}, weighted couples: '
+                '{weighted_couples_count}'.format(
+                    ns=ns_id,
+                    couples_count=len(ns_state['couples']),
+                    weighted_couples_count=sum(
+                        (len(size_weights) for size_weights in ns_state['weights'].itervalues()),
+                        0
+                    ),
+                )
+            )
+
     @h.concurrent_handler
     def force_update_flow_stats(self, request):
         start_ts = time.time()
