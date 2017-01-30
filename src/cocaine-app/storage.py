@@ -2238,7 +2238,7 @@ class Groupset(object):
                 # failed to determine couple's namespace
                 pass
 
-        data['groups'] = [g.info().serialize() for g in self.groups]
+        data['groups'] = [g.info_data() for g in self.groups]
 
         # Renaming 'tuple' to 'group_ids' and keeping it backward-compatible for
         # a while
@@ -2387,7 +2387,7 @@ class Couple(Groupset):
             data['used_space'] = int(stat.used_space)
 
         if self.lrc822v1_groupset:
-            data['groupsets'][Group.TYPE_LRC_8_2_2_V1] = self.lrc822v1_groupset.info().serialize()
+            data['groupsets'][Group.TYPE_LRC_8_2_2_V1] = self.lrc822v1_groupset.info_data()
 
             # NOTE: this is a temporary workaround for replicas groupset
             disabled_replicas_groupset = (
