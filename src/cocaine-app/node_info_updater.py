@@ -293,7 +293,7 @@ class NodeInfoUpdater(object):
             fs.update_status()
 
         for group in groups or storage.groups.keys():
-            logger.info('Updating status for group {0}'.format(group.group_id))
+            # logger.info('Updating status for group {0}'.format(group.group_id))
             group.update_status()
 
         if groups is None:
@@ -583,7 +583,6 @@ class NodeInfoUpdater(object):
 
             for gid in groups:
                 if gid != group.group_id:
-                    logger.info('Scheduling update for group {}'.format(gid))
                     _queue.add(gid)
 
             groupset = _create_groupset_if_needed(groups, group.type, ns_id)
@@ -612,8 +611,6 @@ class NodeInfoUpdater(object):
                 session.set_filter(elliptics.filters.all_with_ack)
                 session.add_groups([group.group_id])
 
-                logger.debug('Request to read {0} for group {1}'.format(
-                    keys.SYMMETRIC_GROUPS_KEY.replace('\0', '\\0'), group.group_id))
                 results[group.group_id] = session.read_data(keys.SYMMETRIC_GROUPS_KEY)
 
             jobs = {}
