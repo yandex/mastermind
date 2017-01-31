@@ -1,3 +1,4 @@
+import json
 import functools
 import uuid
 
@@ -5,6 +6,8 @@ import helpers
 from mastermind_core.config import config
 from mastermind_core.db.mongo import MongoObject
 from mastermind_core.db.mongo.pool import Collection
+from mastermind_core.helpers import gzip_compress
+from mastermind_core.response import CachedGzipResponse
 
 
 class ExternalStorageMapping(MongoObject):
@@ -51,6 +54,7 @@ class ExternalStorageMeta(object):
 
     def __init__(self, db):
         self.mapping = None
+        self._external_mapping = CachedGzipResponse()
         if db:
             self.mapping = Collection(db[config['metadata']['external_storage']['db']], 'mapping')
 
@@ -91,18 +95,44 @@ class ExternalStorageMeta(object):
             mappings.append(mapping)
         return mappings
 
-    @_check_mapping
     @helpers.concurrent_handler
+    @_check_mapping
     def get_external_storage_mapping(self, request):
-
-        params = {}
-
         external_storage = request.get('external_storage', None)
-        if external_storage:
-            params['external_storage'] = external_storage
+
+        if not external_storage:
+            return self._external_mapping.get_result(
+                compressed=request.get('gzip', False)
+            )
 
         res = []
-        for mapping in self.mapping_list(external_storage=external_storage):
+        mappings = self._external_mapping.get_result(
+            compressed=False
+        )
+        for mapping in mappings:
+            if mapping['external_storage'] != external_storage:
+                continue
+            res.append(mapping)
+
+        if request.get('gzip', False):
+            res = gzip_compress(json.dumps(res))
+
+        return res
+
+    def prepare_external_storage_mapping(self):
+
+        if self.mapping is None:
+            raise RuntimeError('External storage mapping is not set up')
+
+        res = []
+
+        for mapping in self.mapping_list():
             res.append(mapping.dump())
 
         return res
+
+    def update_external_storage_mapping(self, res, result_ts=None):
+        if isinstance(res, Exception):
+            self._external_mapping.set_exception(res)
+        else:
+            self._external_mapping.set_result(res, ts=result_ts)

@@ -1708,7 +1708,6 @@ class Group(object):
         # statuses = tuple(nb.update_status() for nb in self.node_backends)
         statuses = tuple(nb.status for nb in self.node_backends)
 
-        logger.info('In group {0} meta = {1}'.format(self, str(self.meta)))
         if not self.meta:
             self.status = Status.INIT
             self.status_text = ('Group {0} is in INIT state because meta key '
