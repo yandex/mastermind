@@ -1,3 +1,12 @@
+mastermind-cocainev11 (2.28.155) trusty; urgency=medium
+
+  * Remove excessive logs
+  * Cache external storage mapping along with namespaces states
+  * Add debug log for namespace state
+  * Fix info_data usage for lrc groupsets
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 31 Jan 2017 16:49:12 +0300
+
 mastermind-cocainev11 (2.28.154) trusty; urgency=medium
 
   * Increase startup timeout
