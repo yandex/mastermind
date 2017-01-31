@@ -35,7 +35,7 @@ class NodeBackendDefragTask(MinionCmdTask):
                                  'to any couple'.format(self, self.group))
 
         if group.couple.status not in storage.GOOD_STATUSES:
-            raise RetryError(10, JobBrokenError('Task {}: group {} couple status is {}'.format(
+            raise RetryError(self.attempts, JobBrokenError('Task {}: group {} couple status is {}'.format(
                 self, self.group, group.couple.status)))
 
         if node_backend not in group.node_backends:
