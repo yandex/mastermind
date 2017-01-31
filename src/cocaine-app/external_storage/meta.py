@@ -1,6 +1,5 @@
 import json
 import functools
-import time
 import uuid
 
 import helpers
