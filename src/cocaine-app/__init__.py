@@ -180,7 +180,7 @@ def init_infrastructure(jf, ghf, namespaces_settings):
     return infstruct
 
 
-def init_node_info_updater(jf, crf, statistics, namespaces_settings):
+def init_node_info_updater(jf, crf, statistics, namespaces_settings, external_storage_meta):
     logger.info("trace node info updater %d" % (i.next()))
     niu = node_info_updater.NodeInfoUpdater(
         node=n,
@@ -189,7 +189,8 @@ def init_node_info_updater(jf, crf, statistics, namespaces_settings):
         couple_record_finder=crf,
         prepare_namespaces_states=True,
         prepare_flow_stats=True,
-        statistics=statistics)
+        statistics=statistics,
+        external_storage_meta=external_storage_meta)
     niu.start()
     register_handle(niu.force_nodes_update)
     register_handle(niu.force_update_namespaces_states)
@@ -336,7 +337,7 @@ external_storage_meta = init_external_storage_meta()
 crf = init_couple_record_finder()
 ghf = init_group_history_finder()
 io = init_infrastructure(jf, ghf, namespaces_settings)
-niu = init_node_info_updater(jf, crf, b.statistics, namespaces_settings)
+niu = init_node_info_updater(jf, crf, b.statistics, namespaces_settings, external_storage_meta)
 b.niu = niu
 b.start()
 init_statistics()
