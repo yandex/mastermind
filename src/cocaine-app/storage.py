@@ -1708,7 +1708,6 @@ class Group(object):
         # statuses = tuple(nb.update_status() for nb in self.node_backends)
         statuses = tuple(nb.status for nb in self.node_backends)
 
-        logger.info('In group {0} meta = {1}'.format(self, str(self.meta)))
         if not self.meta:
             self.status = Status.INIT
             self.status_text = ('Group {0} is in INIT state because meta key '
@@ -2238,7 +2237,7 @@ class Groupset(object):
                 # failed to determine couple's namespace
                 pass
 
-        data['groups'] = [g.info().serialize() for g in self.groups]
+        data['groups'] = [g.info_data() for g in self.groups]
 
         # Renaming 'tuple' to 'group_ids' and keeping it backward-compatible for
         # a while
@@ -2387,7 +2386,7 @@ class Couple(Groupset):
             data['used_space'] = int(stat.used_space)
 
         if self.lrc822v1_groupset:
-            data['groupsets'][Group.TYPE_LRC_8_2_2_V1] = self.lrc822v1_groupset.info().serialize()
+            data['groupsets'][Group.TYPE_LRC_8_2_2_V1] = self.lrc822v1_groupset.info_data()
 
             # NOTE: this is a temporary workaround for replicas groupset
             disabled_replicas_groupset = (
