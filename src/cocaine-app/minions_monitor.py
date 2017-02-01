@@ -41,6 +41,7 @@ class MinionsMonitor(object):
     CREATE_GROUP_URL_TPL = 'http://{host}:{port}/command/create_group/'
     REMOVE_GROUP_URL_TPL = 'http://{host}:{port}/command/remove_group/'
     DNET_CLIENT_CMD_URL_TPL = 'http://{host}:{port}/command/dnet_client/'
+    MINION_BASE_CMD_URL_TPL = 'http://{host}:{port}/command/{command}/'
 
     def __init__(self, meta_db):
 
@@ -546,6 +547,26 @@ class MinionsMonitor(object):
             host=host,
             url=url,
             params=data,
+        )
+
+        # a single command execution should return a list with a single command
+        return commands_states.values()[0]
+
+    def minion_base_cmd(self, host, command, params, files=None):
+        url = self.MINION_BASE_CMD_URL_TPL.format(
+            host=self._wrap_host(host),
+            port=self.minion_port,
+            command=command,
+        )
+        data = self._update_query_parameters(
+            dst={'command': command},
+            src=params,
+        )
+        commands_states = self._perform_request(
+            host=host,
+            url=url,
+            params=data,
+            files=files,
         )
 
         # a single command execution should return a list with a single command
