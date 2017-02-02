@@ -1478,6 +1478,92 @@ class Infrastructure(object):
         logger.info('Storage max group: reserved groups: {}'.format(result))
         return result
 
+    def get_backend_by_group_id(self, group_id):
+        """ Get group's last known backend.
+
+        Searches the host the following way:
+            - if group's current state contains backend, return it
+            - if group's last history record is non-empty, fetch and return backend from it
+            - if history is empty and group's current state contains no backends, return None
+
+        NOTE: supports only single-backend groups
+
+        Returns:
+            NodeBackend object where group is known to be located recently;
+            None if group has no current backends and empty history;
+        """
+
+        assert self.group_history_finder
+
+        if group_id in storage.groups:
+            group = storage.groups[group_id]
+            if len(group.node_backends) > 1:
+                raise RuntimeError(
+                    'Failed to find backend by group id {group}: group is located on several '
+                    'backends (expected one): {backends}'.format(
+                        group=group_id,
+                        backends=', '.join(group.node_backends),
+                    )
+                )
+            if len(group.node_backends) == 1:
+                return group.node_backends[0]
+
+        # either group is not found in storage or it has no known backends,
+        # search last history record
+        group_history = self.group_history_finder.group_history(group_id)
+        if group_history:
+            last_backends_set = group_history.nodes[-1].set
+            if len(last_backends_set) > 1:
+                raise RuntimeError(
+                    'Failed to find host by group id {group}: group history contains several '
+                    'backends (expected one): {backends}'.format(
+                        group=group_id,
+                        backends=', '.join(last_backends_set)
+                    )
+                )
+            if len(last_backends_set) == 1:
+                backend_record = last_backends_set[0]
+                try:
+                    backend = storage.NodeBackend.from_history_record(backend_record)
+                except CacheUpstreamError as e:
+                    raise RuntimeError(
+                        'Failed to find host by group id {group}: {error}'.format(
+                            group=group_id,
+                            error=e,
+                        )
+                    )
+                return backend
+        else:
+            raise RuntimeError(
+                'Failed to find host by group id {group}: no group history found'.format(
+                    group=group_id,
+                )
+            )
+
+        # neither current group state nor history contains any backend
+        return None
+
+    def get_host_by_group_id(self, group_id):
+        """ Get group's last known host.
+
+        Searches the host the following way:
+            - if group's current state contains backend, return backends's host
+            - if group's last history record is non-empty, fetch and return host from it
+            - if history is empty and group's current state contains no backends, return None
+
+        NOTE: supports only single-backend groups
+
+        Returns:
+            Host object where group is known to be located recently;
+            None if group has no current backends and empty history;
+        """
+        backend = self.get_backend_by_group_id(group_id)
+        if backend is None:
+            # neither current group state nor history contains any backend
+            return None
+
+        return backend.node.host
+
 
 class UncoupledGroupsSelector(object):
 
