@@ -406,6 +406,9 @@ class JobProcessor(object):
                 job.on_execution_interrupted()
                 break
 
+            if task.status not in Task.FINISHED_STATUSES:
+                break
+
         if all(task.status in Task.FINISHED_STATUSES for task in job.tasks):
             logger.info('Job {}, tasks processing is finished'.format(job.id))
             try:
