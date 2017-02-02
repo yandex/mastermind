@@ -1780,6 +1780,44 @@ def lrc_group_prepare_new_groups(
         pprint(res)
 
 
+@lrcGroupDispatcher.command(name='restore')
+@log_action
+def lrc_group_restore(
+    group,
+    autoapprove=('a', False, 'Automatically approve jobs'),
+    json=('', None, 'Format data as json'),
+    host=None,
+    app=None
+):
+    '''Create job to restore lrc group'''
+    cl = client(host, app)
+
+    options = {
+        'lrc_groups': [int(group)],
+        'need_approving': not autoapprove,
+    }
+
+    res = cl.request(
+        'create_lrc_restore_jobs',
+        options
+    )
+
+    if not len(res):
+        print warn('Unexpected empty result')
+        sys.exit(1)
+
+    res = res[0]
+
+    if isinstance(res, basestring):
+        print warn(res)
+        sys.exit(1)
+
+    if json:
+        print dumps(res)
+    else:
+        pprint(res)
+
+
 lrcGroupsetDispatcher = Dispatcher(globaloptions=(host_param, app_param))
 lrcDispatcher.nest('groupset', lrcGroupsetDispatcher, 'LRC groupset commands')
 

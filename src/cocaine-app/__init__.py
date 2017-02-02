@@ -239,6 +239,7 @@ def init_move_planner(job_processor, niu):
 
 def init_lrc_reserve_planner(job_processor):
     planner = LrcReservePlanner(job_processor)
+    register_handle(planner.create_lrc_restore_jobs)
     return planner
 
 

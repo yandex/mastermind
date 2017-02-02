@@ -80,6 +80,28 @@ class LrcReservePlanner(object):
                 self._prepare_lrc_reserve_groups,
             )
 
+    @h.concurrent_handler
+    def create_lrc_restore_jobs(self, request):
+        if 'lrc_groups' not in request:
+            raise ValueError('Lrc groups are required')
+
+        lrc_group_ids = request['lrc_groups']
+
+        selector = LrcReserveGroupSelector(self.job_processor)
+
+        res = []
+        for lrc_group_id in lrc_group_ids:
+            try:
+                job = selector.restore_lrc_group(
+                    lrc_group_id,
+                    need_approving=request.get('need_approving', True),
+                )
+            except Exception as e:
+                res.append(str(e))
+                continue
+            res.append(job.dump())
+        return res
+
 
 class LrcReserve(object):
 
