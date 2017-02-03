@@ -1,3 +1,9 @@
+mastermind (2.28.155~collector2) trusty; urgency=medium
+
+  * Fix misprint
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 03 Feb 2017 14:29:53 +0300
+
 mastermind (2.28.155~collector1) trusty; urgency=medium
 
   * Add `collector` command to mastermind-cli
