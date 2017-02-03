@@ -80,12 +80,12 @@ class Planner(object):
         #             self._couple_defrag
         #         )
 
-            if self.params.get('ttl_cleanup', {}).get('enabled', False):
-                self.__tq.add_task_at(
-                    self.TTL_CLEANUP,
-                    self.ttl_cleanup_timer.next(),
-                    self._ttl_cleanup_planner
-                )
+        #     if self.params.get('ttl_cleanup', {}).get('enabled', False):
+        #         self.__tq.add_task_at(
+        #             self.TTL_CLEANUP,
+        #             self.ttl_cleanup_timer.next(),
+        #             self._ttl_cleanup_planner
+        #         )
 
     def _start_tq(self):
         # self.__tq.start()
