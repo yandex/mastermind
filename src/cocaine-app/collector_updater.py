@@ -94,14 +94,16 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                  couple_record_finder=None,
                  prepare_namespaces_states=False,
                  prepare_flow_stats=False,
-                 statistics=None):
+                 statistics=None,
+                 external_storage_meta=None):
         super(NodeInfoUpdater, self).__init__(node=node,
                                               job_finder=job_finder,
                                               namespaces_settings=namespaces_settings,
                                               couple_record_finder=couple_record_finder,
                                               prepare_namespaces_states=prepare_namespaces_states,
                                               prepare_flow_stats=prepare_flow_stats,
-                                              statistics=statistics)
+                                              statistics=statistics,
+                                              external_storage_meta=external_storage_meta)
 
         self._tq.add_task_in(task_id='init_ioloop', secs=0, function=self._init_ioloop)
 
@@ -246,7 +248,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
             if self._prepare_namespaces_states:
                 logger.info('Recalculating namespaces states')
                 per_entity_stat = per_entity_stat or self.statistics.per_entity_stat()
-                self._update_namespaces_states(
+                self._do_update_cached_responses(
                     namespaces_settings,
                     per_entity_stat=per_entity_stat,
                 )

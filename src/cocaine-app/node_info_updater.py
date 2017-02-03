@@ -43,14 +43,16 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                  couple_record_finder=None,
                  prepare_namespaces_states=False,
                  prepare_flow_stats=False,
-                 statistics=None):
+                 statistics=None,
+                 external_storage_meta=None):
         super(NodeInfoUpdater, self).__init__(node=node,
                                               job_finder=job_finder,
                                               namespaces_settings=namespaces_settings,
                                               couple_record_finder=couple_record_finder,
                                               prepare_namespaces_states=prepare_namespaces_states,
                                               prepare_flow_stats=prepare_flow_stats,
-                                              statistics=statistics)
+                                              statistics=statistics,
+                                              external_storage_meta=external_storage_meta)
         logger.info("Created NodeInfoUpdater")
         self.__node = node
         self.statistics = statistics
@@ -108,7 +110,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
             if self._prepare_namespaces_states:
                 logger.info('Recalculating namespace states')
                 per_entity_stat = per_entity_stat or self.statistics.per_entity_stat()
-                self._update_namespaces_states(
+                self._do_update_cached_responses(
                     namespaces_settings=namespaces_settings,
                     per_entity_stat=per_entity_stat,
                 )
@@ -117,8 +119,8 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                 per_entity_stat = per_entity_stat or self.statistics.per_entity_stat()
                 self._update_flow_stats(per_entity_stat)
 
-        except Exception as e:
-            logger.exception('Failed to update groups')
+        except Exception:
+            logger.exception('Failed to update groups, critical error')
         finally:
             logger.info('Cluster updating: updating group coupling info finished, time: {0:.3f}'.format(time.time() - start_ts))
             # TODO: change period
@@ -280,7 +282,7 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
             fs.update_status()
 
         for group in groups or storage.groups.keys():
-            logger.info('Updating status for group {0}'.format(group.group_id))
+            # logger.info('Updating status for group {0}'.format(group.group_id))
             group.update_status()
 
         if groups is None:
@@ -570,7 +572,6 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
 
             for gid in groups:
                 if gid != group.group_id:
-                    logger.info('Scheduling update for group {}'.format(gid))
                     _queue.add(gid)
 
             groupset = _create_groupset_if_needed(groups, group.type, ns_id)
@@ -599,8 +600,6 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                 session.set_filter(elliptics.filters.all_with_ack)
                 session.add_groups([group.group_id])
 
-                logger.debug('Request to read {0} for group {1}'.format(
-                    keys.SYMMETRIC_GROUPS_KEY.replace('\0', '\\0'), group.group_id))
                 results[group.group_id] = session.read_data(keys.SYMMETRIC_GROUPS_KEY)
 
             jobs = {}

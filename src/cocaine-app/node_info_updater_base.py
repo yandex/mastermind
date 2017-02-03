@@ -36,7 +36,8 @@ class NodeInfoUpdaterBase(object):
                  couple_record_finder,
                  prepare_namespaces_states,
                  prepare_flow_stats,
-                 statistics):
+                 statistics,
+                 external_storage_meta):
         self._node = node
         self.statistics = statistics
         self.job_finder = job_finder
@@ -52,6 +53,7 @@ class NodeInfoUpdaterBase(object):
         if prepare_flow_stats and statistics is None:
             raise AssertionError('Statistics is required for flow stats calculation')
         self._prepare_namespaces_states = prepare_namespaces_states
+        self.external_storage_meta = external_storage_meta
         self._prepare_flow_stats = prepare_flow_stats
 
     def _start_tq(self):
@@ -60,10 +62,10 @@ class NodeInfoUpdaterBase(object):
     def _update_max_group(self):
         def _do_update_max_group(response, elapsed_time=None, end_time=None):
             if response.error.code:
-                if response.error.code == error.ELLIPTICS_NOT_FOUND:
+                if response.error.code == errors.ELLIPTICS_NOT_FOUND:
                     max_group = 0
                 else:
-                    raise RuntimeError(respose.error.message)
+                    raise RuntimeError(response.error.message)
             else:
                 max_group = int(response.data)
 
@@ -91,7 +93,7 @@ class NodeInfoUpdaterBase(object):
                     _do_update_max_group,
                     raise_on_error=False)
             except Exception as e:
-                log.error('Failed to update max group number: {}'.format(e))
+                logger.error('Failed to update max group number: {}'.format(e))
         except Exception as e:
             logger.error('Failed to read max group: {}'.format(e))
 
@@ -111,7 +113,7 @@ class NodeInfoUpdaterBase(object):
         logger.info('Namespaces states forced updating: started')
         try:
             namespaces_settings = self.namespaces_settings.fetch()
-            self._do_update_namespaces_states(namespaces_settings)
+            self._do_update_cached_responses(namespaces_settings)
         except Exception as e:
             logger.exception('Namespaces states forced updating: failed')
             self._namespaces_states.set_exception(e)
@@ -119,21 +121,56 @@ class NodeInfoUpdaterBase(object):
             logger.info('Namespaces states forced updating: finished, time: {0:.3f}'.format(
                 time.time() - start_ts))
 
-    def _update_namespaces_states(self, namespaces_settings, per_entity_stat):
-        start_ts = time.time()
-        logger.info('Namespaces states updating: started')
+    def _do_update_cached_responses(self, namespaces_settings, per_entity_stat=None):
+
+        cache_update_start_ts = time.time()
+        logger.info('Cached responses updating: started')
+
         try:
-            self._do_update_namespaces_states(namespaces_settings, per_entity_stat)
+            result_ts = time.time()
+
+            start_ts = time.time()
+            logger.info('Namespaces states updating: started')
+            namespaces_states = self._calculate_namespaces_states(
+                namespaces_settings,
+                per_entity_stat=per_entity_stat,
+            )
+            logger.info('Namespaces states updating: result prepared, time: {:.3f}'.format(
+                time.time() - start_ts
+            ))
+
+            if self.external_storage_meta:
+                start_ts = time.time()
+                logger.info('External storage mapping updating: started')
+                external_storage_mapping = self.external_storage_meta.prepare_external_storage_mapping()
+                logger.info('External storage mapping updating: result prepared, time: {:.3f}'.format(
+                    time.time() - start_ts
+                ))
+
         except Exception as e:
-            logger.exception('Namespaces states updating: failed')
+            logger.exception('Cached responses updating: failed')
             self._namespaces_states.set_exception(e)
+            self.external_storage_meta.update_external_storage_mapping(e)
+            return
+        else:
+            self._namespaces_states.set_result(
+                namespaces_states,
+                ts=result_ts,
+            )
+            logger.info('Namespaces states updating: finished')
+
+            if self.external_storage_meta:
+                self.external_storage_meta.update_external_storage_mapping(
+                    external_storage_mapping,
+                    result_ts=result_ts,
+                )
+                logger.info('External storage mapping updating: finished')
         finally:
-            logger.info('Namespaces states updating: finished, time: {0:.3f}'.format(
-                time.time() - start_ts))
+            logger.info('Cached responses updating: finished, time: {:.3f}'.format(
+                time.time() - cache_update_start_ts
+            ))
 
-    def _do_update_namespaces_states(self, namespaces_settings, per_entity_stat=None):
-
-        result_ts = time.time()
+    def _calculate_namespaces_states(self, namespaces_settings, per_entity_stat=None):
 
         def default():
             return {
@@ -191,7 +228,20 @@ class NodeInfoUpdaterBase(object):
         # removing internal namespaces that clients should not know about
         res.pop(storage.Group.CACHE_NAMESPACE, None)
 
-        self._namespaces_states.set_result(dict(res), ts=result_ts)
+        for ns_id, ns_state in res.iteritems():
+            logger.debug(
+                'Namespace state: namespace: {ns}, couples: {couples_count}, weighted couples: '
+                '{weighted_couples_count}'.format(
+                    ns=ns_id,
+                    couples_count=len(ns_state['couples']),
+                    weighted_couples_count=sum(
+                        (len(size_weights) for size_weights in ns_state['weights'].itervalues()),
+                        0
+                    ),
+                )
+            )
+
+        return dict(res)
 
     @h.concurrent_handler
     def force_update_flow_stats(self, request):
