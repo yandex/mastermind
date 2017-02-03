@@ -1,14 +1,95 @@
-mastermind (2.28.142~collector2) trusty; urgency=medium
-
-  * Remove temporary debug log
-
- -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 17 Jan 2017 17:32:00 +0300
-
-mastermind (2.28.142~collector1) trusty; urgency=medium
+mastermind (2.28.155~collector1) trusty; urgency=medium
 
   * Add `collector` command to mastermind-cli
 
  -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 12 Jan 2017 17:58:41 +0300
+
+mastermind (2.28.155) trusty; urgency=medium
+
+  * Remove excessive logs
+  * Cache external storage mapping along with namespaces states
+  * Add debug log for namespace state
+  * Fix info_data usage for lrc groupsets
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 31 Jan 2017 16:49:12 +0300
+
+mastermind (2.28.154) trusty; urgency=medium
+
+  * Increase startup timeout
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 26 Jan 2017 14:20:02 +0300
+
+mastermind (2.28.153) trusty; urgency=medium
+
+  * Fix restore path workflow
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 26 Jan 2017 13:51:42 +0300
+
+mastermind (2.28.152) trusty; urgency=medium
+
+  * Fix restore job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 24 Jan 2017 17:26:08 +0300
+
+mastermind (2.28.151) trusty; urgency=medium
+
+  * Restore-path: fix group type
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 24 Jan 2017 14:32:12 +0300
+
+mastermind (2.28.150) trusty; urgency=medium
+
+  * Alter debug logs for _cached property
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 23 Jan 2017 19:43:47 +0300
+
+mastermind (2.28.149) trusty; urgency=medium
+
+  * Add elliptics-client dependency
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 23 Jan 2017 18:32:58 +0300
+
+mastermind (2.28.148) trusty; urgency=medium
+
+  * Fix backend manager and cleanup job locks
+  * Fix caching info data for couples with only a single lrc groupset
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 23 Jan 2017 17:05:59 +0300
+
+mastermind (2.28.147) trusty; urgency=medium
+
+  * Fix caching info data for couples with only a single lrc groupset
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 23 Jan 2017 15:18:06 +0300
+
+mastermind (2.28.146) trusty; urgency=medium
+
+  * Store couple explicitly in backend manager job's data
+  * Store couple explicitly in backend cleanup job's data
+  * Skip not approved jobs when selecting ready jobs
+  * Restore-path: use group history
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sun, 22 Jan 2017 17:41:31 +0300
+
+mastermind (2.28.145) trusty; urgency=medium
+
+  * Add couple info data invalidation on settings change
+  * Cache the latest namespaces states update result
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 20 Jan 2017 18:14:46 +0300
+
+mastermind (2.28.144) trusty; urgency=medium
+
+  * Remove yql dependency
+  * Fix misprint
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 20 Jan 2017 15:32:35 +0300
+
+mastermind (2.28.143) trusty; urgency=medium
+
+  * Fix possible old mongo sorting limit problem
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 20 Jan 2017 14:17:52 +0300
 
 mastermind (2.28.142) trusty; urgency=medium
 

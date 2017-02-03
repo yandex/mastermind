@@ -836,6 +836,14 @@ def _cached(key):
             footprint = self._get_stat_footprint()
 
             if footprint != cached_data['footprint']:
+
+                # TODO: Remove this log record
+                logger.debug('Groupset {}, key {}, footprint {}, cached footprint {}'.format(
+                    self,
+                    key,
+                    footprint,
+                    cached_data['footprint'],
+                ))
                 self._cache[key] = {
                     'data': f(self, *args, **kwargs),
                     'footprint': footprint,
@@ -1212,9 +1220,12 @@ class Groupset(object):
         self._cache = {}
 
     def _get_stat_footprint(self):
+        groups = self.groups
+        if isinstance(self, Couple) and self.lrc822v1_groupset:
+            groups = groups + self.lrc822v1_groupset.groups
         return [
             nb.stat and nb.stat.ts or None
-            for group in self.groups
+            for group in groups
             for nb in group.node_backends
         ]
 
@@ -1544,7 +1555,7 @@ class Groupset(object):
                 # failed to determine couple's namespace
                 pass
 
-        data['groups'] = [g.info().serialize() for g in self.groups]
+        data['groups'] = [g.info_data() for g in self.groups]
 
         # Renaming 'tuple' to 'group_ids' and keeping it backward-compatible for
         # a while
@@ -1655,7 +1666,21 @@ class Couple(Groupset):
         # TODO: this should be a link to a new "Couple" instance
         self.couple = self
 
-        self.settings = self.DEFAULT_SETTINGS
+        self._settings = self.DEFAULT_SETTINGS
+
+    @property
+    def settings(self):
+        return self._settings
+
+    @settings.setter
+    def settings(self, val):
+
+        # TODO: use dedicated Cache object with 'invalidate cache' method
+        # instead of using dict
+        if 'info_data' in self._cache:
+            self._cache['info_data']['footprint'] = None
+
+        self._settings = val
 
     @_cached('info_data')
     def info_data(self):
@@ -1679,7 +1704,7 @@ class Couple(Groupset):
             data['used_space'] = int(stat.used_space)
 
         if self.lrc822v1_groupset:
-            data['groupsets'][Group.TYPE_LRC_8_2_2_V1] = self.lrc822v1_groupset.info().serialize()
+            data['groupsets'][Group.TYPE_LRC_8_2_2_V1] = self.lrc822v1_groupset.info_data()
 
             # NOTE: this is a temporary workaround for replicas groupset
             disabled_replicas_groupset = (

@@ -143,7 +143,7 @@ def init_infrastructure(jf, ghf, namespaces_settings):
     return infstruct
 
 
-def init_node_info_updater(jf, crf, statistics, namespaces_settings):
+def init_node_info_updater(jf, crf, statistics, namespaces_settings, external_storage_meta):
     logger.info("trace node info updater %d" % (i.next()))
     niu = NodeInfoUpdater(
         node=n,
@@ -152,7 +152,8 @@ def init_node_info_updater(jf, crf, statistics, namespaces_settings):
         couple_record_finder=crf,
         prepare_namespaces_states=True,
         prepare_flow_stats=True,
-        statistics=statistics)
+        statistics=statistics,
+        external_storage_meta=external_storage_meta)
     logger.info('node info updater: starting')
     niu.start()
     logger.info('node info updater: started')
@@ -306,7 +307,7 @@ try:
     logger.info('Group history finder module initialized')
     io = init_infrastructure(jf, ghf, namespaces_settings)
     logger.info('Infrastructure module initialized')
-    niu = init_node_info_updater(jf, crf, b.statistics, namespaces_settings)
+    niu = init_node_info_updater(jf, crf, b.statistics, namespaces_settings, external_storage_meta)
     logger.info('Node info updater module initialized')
     b.niu = niu
     b.start()

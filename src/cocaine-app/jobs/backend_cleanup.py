@@ -19,7 +19,7 @@ class BackendCleanupJob(Job):
         'backend_cleanup_group_file_dir_rename'
     )
 
-    PARAMS = ('group', 'resources')
+    PARAMS = ('group', 'couple', 'resources')
 
     def __init__(self, **kwargs):
         super(BackendCleanupJob, self).__init__(**kwargs)
@@ -138,8 +138,6 @@ class BackendCleanupJob(Job):
 
     @property
     def _involved_couples(self):
-        couples = []
-        group = storage.groups[self.group]
-        if group.couple:
-            couples.append(str(group.couple))
-        return couples
+        if not self.couple:
+            return []
+        return [self.couple]

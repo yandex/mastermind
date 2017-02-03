@@ -984,6 +984,8 @@ class Infrastructure(object):
             hostname=host,
             path=path
         )
+        path = self.group_history_finder.node_backend_path_to_regexp(path)
+        path_re = re.compile(path)
         for group_history in group_histories:
             for node_backends_set in group_history.nodes[start_idx:]:
                 for node_backend in node_backends_set.set:
@@ -991,7 +993,7 @@ class Infrastructure(object):
                     if not node_backend.path:
                         continue
 
-                    if re.match(path, node_backend.path) is not None and node_backend.hostname == host:
+                    if path_re.match(node_backend.path) is not None and node_backend.hostname == host:
                         entries.append((group_history, node_backends_set))
                         break
 
