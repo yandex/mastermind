@@ -1,3 +1,9 @@
+mastermind (2.28.156) trusty; urgency=medium
+
+  * Use minion task
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 03 Feb 2017 16:31:25 +0300
+
 mastermind (2.28.155) trusty; urgency=medium
 
   * Remove excessive logs
