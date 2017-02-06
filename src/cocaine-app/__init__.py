@@ -33,6 +33,7 @@ import minions_monitor
 import node_info_updater
 from planner import Planner
 from planner.move_planner import MovePlanner
+from planner.lrc_reserve_groups import LrcReservePlanner
 from planner.external_storage_converting_planner import ExternalStorageConvertingPlanner
 from manual_locks import manual_locker
 from namespaces import NamespacesSettings
@@ -169,7 +170,7 @@ def init_minions():
     return m
 
 
-def init_planner(job_processor, niu, namespaces_settings, move_planner, external_storage_converting_planner):
+def init_planner(job_processor, niu, namespaces_settings, move_planner, external_storage_converting_planner, lrc_reserve_group_planner):
     planner = Planner(meta_db, niu, job_processor, namespaces_settings)
     helpers.register_handle(W, planner.restore_group)
     helpers.register_handle(W, planner.move_group)
@@ -181,12 +182,20 @@ def init_planner(job_processor, niu, namespaces_settings, move_planner, external
         planner.add_planner(move_planner)
     if external_storage_converting_planner:
         planner.add_planner(external_storage_converting_planner)
+    if lrc_reserve_group_planner:
+        planner.add_planner(lrc_reserve_group_planner)
 
     return planner
 
 
 def init_move_planner(job_processor, niu):
     planner = MovePlanner(meta_db, niu, job_processor)
+    return planner
+
+
+def init_lrc_reserve_planner(job_processor):
+    planner = LrcReservePlanner(job_processor)
+    helpers.register_handle(W, planner.create_lrc_restore_jobs)
     return planner
 
 
@@ -311,7 +320,8 @@ try:
     if j:
         move_planner = init_move_planner(j, niu)
         external_storage_converting_planner = init_external_storage_converting_planner(j, namespaces_settings)
-        po = init_planner(j, niu, namespaces_settings, move_planner, external_storage_converting_planner)
+        lrc_reserve_planner = init_lrc_reserve_planner(j)
+        po = init_planner(j, niu, namespaces_settings, move_planner, external_storage_converting_planner, lrc_reserve_planner)
         j.planner = po
     else:
         po = None

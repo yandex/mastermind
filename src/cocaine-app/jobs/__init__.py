@@ -20,6 +20,7 @@ from make_lrc_groups import MakeLrcGroupsJob
 from add_lrc_groupset import AddLrcGroupsetJob
 from job_factory import JobFactory
 from restore_group import RestoreGroupJob
+from restore_lrc_group import RestoreLrcGroupJob
 from backend_cleanup import BackendCleanupJob
 from backend_manager import BackendManagerJob
 from convert_to_lrc_groupset import ConvertToLrcGroupsetJob
@@ -50,6 +51,7 @@ class JobProcessor(object):
 
     JOB_PRIORITIES = {
         JobTypes.TYPE_RESTORE_GROUP_JOB: 25,
+        JobTypes.TYPE_RESTORE_LRC_GROUP_JOB: 25,
         JobTypes.TYPE_MOVE_JOB: 20,
         JobTypes.TYPE_TTL_CLEANUP_JOB: 19,
         JobTypes.TYPE_BACKEND_MANAGER_JOB: 18,
@@ -58,6 +60,7 @@ class JobProcessor(object):
         JobTypes.TYPE_RECOVER_DC_JOB: 15,
         JobTypes.TYPE_COUPLE_DEFRAG_JOB: 10,
         JobTypes.TYPE_MAKE_LRC_GROUPS_JOB: 5,
+        JobTypes.TYPE_MAKE_LRC_RESERVED_GROUPS_JOB: 5,
         # Priority of this jobs is zero
         # because they're not using resources
         JobTypes.TYPE_BACKEND_CLEANUP_JOB: 0,
@@ -67,11 +70,13 @@ class JobProcessor(object):
     # jobs with other types will be skipped
     SUPPORTED_JOBS = set([
         JobTypes.TYPE_RESTORE_GROUP_JOB,
+        JobTypes.TYPE_RESTORE_LRC_GROUP_JOB,
         JobTypes.TYPE_MOVE_JOB,
         JobTypes.TYPE_TTL_CLEANUP_JOB,
         JobTypes.TYPE_RECOVER_DC_JOB,
         JobTypes.TYPE_COUPLE_DEFRAG_JOB,
         JobTypes.TYPE_MAKE_LRC_GROUPS_JOB,
+        JobTypes.TYPE_MAKE_LRC_RESERVED_GROUPS_JOB,
         JobTypes.TYPE_ADD_LRC_GROUPSET_JOB,
         JobTypes.TYPE_CONVERT_TO_LRC_GROUPSET_JOB,
         JobTypes.TYPE_BACKEND_CLEANUP_JOB,

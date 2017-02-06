@@ -244,6 +244,23 @@ class Lrc(object):
 
             return False
 
+        @staticmethod
+        def get_shard_groups(lrc_groupset, group):
+            group_idx = lrc_groupset.groups.index(group)
+            for shard_idxs in Lrc.Scheme822v1.INDEX_SHARD_INDICES:
+                if group_idx in shard_idxs:
+                    return [
+                        lrc_groupset.groups[idx]
+                        for idx in sorted(shard_idxs)
+                    ]
+
+            raise RuntimeError(
+                'Failed to determine shard for group {} in lrc groupset {}'.format(
+                    group,
+                    lrc_groupset,
+                )
+            )
+
         builder = lrc_builder.LRC_8_2_2_V1_Builder
 
     @staticmethod
@@ -1484,6 +1501,44 @@ class NodeBackend(object):
 
         return res
 
+    @staticmethod
+    def from_history_record(backend_record):
+        """ Construct NodeBackend object from history backend record.
+
+        NOTE: if storage does not contain objects from history record (Host, Node, NodeBackend,
+        etc.), such objects will not be automatically added to storage during execution of this
+        method.
+
+        Raises:
+            CacheUpstreamError - if failed to resolve hostname to an IP address.
+
+        Returns:
+            NodeBackend object.
+        """
+        addr = cache.get_ip_address_by_host(backend_record.hostname)
+
+        host = storage.hosts.get(addr, Host(addr))
+        node_id = '{}:{}'.format(host, backend_record.port)
+        node = storage.nodes.get(
+            node_id,
+            Node(
+                host=host,
+                port=backend_record.port,
+                family=backend_record.family,
+            )
+        )
+        backend_id = '{}/{}'.format(node, backend_record.backend_id)
+        backend = node_backends.get(
+            backend_id,
+            NodeBackend(
+                node=node,
+                backend_id=backend_record.backend_id,
+            ),
+        )
+        if not backend.base_path:
+            backend.base_path = backend_record.path
+        return backend
+
     def __repr__(self):
         return ('<Node backend object: node=%s, backend_id=%d, '
                 'status=%s, read_only=%s, stat=%s>' % (
@@ -1517,8 +1572,15 @@ class Group(object):
     TYPE_DATA = 'data'
     TYPE_CACHE = 'cache'
     TYPE_UNCOUPLED_CACHE = 'uncoupled_cache'
+
     TYPE_LRC_8_2_2_V1 = 'lrc-8-2-2-v1'
     TYPE_UNCOUPLED_LRC_8_2_2_V1 = 'uncoupled_lrc-8-2-2-v1'
+    TYPE_RESERVED_LRC_8_2_2_V1 = 'reserved_lrc-8-2-2-v1'
+    TYPES_LRC_8_2_2_V1 = (
+        TYPE_LRC_8_2_2_V1,
+        TYPE_UNCOUPLED_LRC_8_2_2_V1,
+        TYPE_RESERVED_LRC_8_2_2_V1,
+    )
 
     AVAILABLE_TYPES = set([
         TYPE_DATA,
@@ -1526,6 +1588,7 @@ class Group(object):
         TYPE_UNCOUPLED_CACHE,
         TYPE_LRC_8_2_2_V1,
         TYPE_UNCOUPLED_LRC_8_2_2_V1,
+        TYPE_RESERVED_LRC_8_2_2_V1,
     ])
 
     def __init__(self, group_id, node_backends=None):
@@ -1793,7 +1856,8 @@ class Group(object):
             'id': self.group_id,
             'status': self.status,
             'status_text': self.status_text,
-            'node_backends': [nb.info() for nb in self.node_backends]
+            'node_backends': [nb.info() for nb in self.node_backends],
+            'type': self.type,
         }
 
         data['couple'] = None
@@ -1805,6 +1869,8 @@ class Group(object):
 
         if self.meta:
             data['namespace'] = self.meta.get('namespace')
+            if self.type == Group.TYPE_UNCOUPLED_LRC_8_2_2_V1:
+                data['lrc_groups'] = self.meta.get('lrc_groups')
         if self.active_job:
             data['active_job'] = self.active_job
 
@@ -1843,6 +1909,17 @@ class Group(object):
             'version': 2,
             'type': group_type,
             'lrc_groups': lrc_groups,
+        }
+
+    @staticmethod
+    def compose_reserved_lrc_group_meta(scheme):
+        if scheme == Lrc.Scheme822v1:
+            group_type = Group.TYPE_RESERVED_LRC_8_2_2_V1
+        else:
+            raise ValueError('Unknown scheme: {}'.format(scheme))
+        return {
+            'version': 2,
+            'type': group_type,
         }
 
     @property
@@ -2576,10 +2653,7 @@ class Lrc822v1Groupset(Groupset):
         data = super(Lrc822v1Groupset, self).info_data()
 
         data['type'] = GROUPSET_LRC
-        data['settings'] = {
-            'scheme': self.scheme,
-            'part_size': self.part_size,
-        }
+        data['settings'] = self.groupset_settings
         if self.couple:
             data['couple'] = str(self.couple)
         else:

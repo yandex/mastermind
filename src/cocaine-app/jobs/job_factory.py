@@ -3,8 +3,10 @@ from move import MoveJob
 from recover_dc import RecoverDcJob
 from couple_defrag import CoupleDefragJob
 from restore_group import RestoreGroupJob
+from restore_lrc_group import RestoreLrcGroupJob
 from backend_cleanup import BackendCleanupJob
 from make_lrc_groups import MakeLrcGroupsJob
+from make_lrc_reserved_groups import MakeLrcReservedGroupsJob
 from add_lrc_groupset import AddLrcGroupsetJob
 from convert_to_lrc_groupset import ConvertToLrcGroupsetJob
 from ttl_cleanup import TtlCleanupJob
@@ -17,12 +19,14 @@ class JobFactory(object):
         JobTypes.TYPE_RECOVER_DC_JOB: RecoverDcJob,
         JobTypes.TYPE_COUPLE_DEFRAG_JOB: CoupleDefragJob,
         JobTypes.TYPE_RESTORE_GROUP_JOB: RestoreGroupJob,
+        JobTypes.TYPE_RESTORE_LRC_GROUP_JOB: RestoreLrcGroupJob,
         JobTypes.TYPE_MAKE_LRC_GROUPS_JOB: MakeLrcGroupsJob,
         JobTypes.TYPE_ADD_LRC_GROUPSET_JOB: AddLrcGroupsetJob,
         JobTypes.TYPE_CONVERT_TO_LRC_GROUPSET_JOB: ConvertToLrcGroupsetJob,
         JobTypes.TYPE_TTL_CLEANUP_JOB: TtlCleanupJob,
         JobTypes.TYPE_BACKEND_CLEANUP_JOB: BackendCleanupJob,
         JobTypes.TYPE_BACKEND_MANAGER_JOB: BackendManagerJob,
+        JobTypes.TYPE_MAKE_LRC_RESERVED_GROUPS_JOB: MakeLrcReservedGroupsJob,
     }
 
     @staticmethod

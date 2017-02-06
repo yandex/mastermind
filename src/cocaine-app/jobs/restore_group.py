@@ -28,7 +28,6 @@ class RestoreGroupJob(Job):
     MERGE_GROUP_FILE_MARKER_PATH = config.get('restore', {}).get('merge_group_file_marker')
     GROUP_FILE_DIR_MOVE_DST_RENAME = config.get('restore', {}).get('group_file_dir_move_dst_rename')
     MERGE_GROUP_FILE_DIR_MOVE_SRC_RENAME = config.get('restore', {}).get('merge_group_file_dir_move_src_rename')
-    BACKEND_STOP_MARKER = config.get('restore', {}).get('backend_stop_marker')
 
     PARAMS = ('group', 'src_group', 'uncoupled_group', 'uncoupled_group_fsid',
               'merged_groups', 'resources')

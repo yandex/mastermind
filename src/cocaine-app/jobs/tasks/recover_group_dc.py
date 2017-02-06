@@ -29,13 +29,6 @@ class RecoverGroupDcTask(MinionCmdTask):
         if not group_id in storage.groups:
             raise JobBrokenError('Group {0} is not found'.format(group_id))
 
-        group = storage.groups[group_id]
-
-        if group.status != storage.Status.COUPLED:
-            raise JobBrokenError('Task {0}: group {1} has status {2}, '
-                'should be {3}'.format(self, self.group,
-                                       group.status, storage.Status.COUPLED))
-
     def execute(self, processor):
 
         # checking if task still applicable
