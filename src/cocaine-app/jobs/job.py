@@ -68,10 +68,14 @@ class Job(MongoObject):
     GROUP_FILE_DIR_MOVE_SRC_RENAME = RESTORE_CFG.get('group_file_dir_move_src_rename')
     BACKEND_DOWN_MARKER = RESTORE_CFG.get('backend_down_marker')
     IDS_FILE_PATH = RESTORE_CFG.get('ids_file')
+    BACKEND_STOP_MARKER = RESTORE_CFG.get('backend_stop_marker')
 
     BACKEND_COMMANDS_CFG = config.get('backend_commands', {})
 
     DNET_CLIENT_ALREADY_IN_PROGRESS = -114
+
+    # Invalid argument
+    DNET_CLIENT_UNKNOWN_BACKEND = -22
 
     def __init__(self, need_approving=False):
         self.id = uuid.uuid4().hex
