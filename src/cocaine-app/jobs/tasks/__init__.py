@@ -29,6 +29,7 @@ from create_ids_file import CreateIdsFileTask
 from create_group_file import CreateGroupFileTask
 from remove_group_file import RemoveGroupFileTask
 from create_file_marker import CreateFileMarkerTask
+from lrc_recovery import LrcRecoveryTask
 
 
 class TaskFactory(object):
@@ -59,6 +60,7 @@ class TaskFactory(object):
         TaskTypes.TYPE_UNMARK_BACKEND: UnmarkBackendTask,
         TaskTypes.TYPE_REMOVE_GROUP_FILE: RemoveGroupFileTask,
         TaskTypes.TYPE_CREATE_FILE_MARKER: CreateFileMarkerTask,
+        TaskTypes.TYPE_LRC_RECOVERY_TASK: LrcRecoveryTask,
     }
 
     @staticmethod

@@ -68,6 +68,9 @@ def convert_config_bytes_value(value):
         '("T", "G", "M", "K")'
     )
 
+    if isinstance(value, (int, long)):
+        return value
+
     if not value:
         raise ValueError(format_error_msg)
 
