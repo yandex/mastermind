@@ -2653,10 +2653,7 @@ class Lrc822v1Groupset(Groupset):
         data = super(Lrc822v1Groupset, self).info_data()
 
         data['type'] = GROUPSET_LRC
-        data['settings'] = {
-            'scheme': self.scheme,
-            'part_size': self.part_size,
-        }
+        data['settings'] = self.groupset_settings
         if self.couple:
             data['couple'] = str(self.couple)
         else:
