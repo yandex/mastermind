@@ -244,6 +244,23 @@ class Lrc(object):
 
             return False
 
+        @staticmethod
+        def get_shard_groups(lrc_groupset, group):
+            group_idx = lrc_groupset.groups.index(group)
+            for shard_idxs in Lrc.Scheme822v1.INDEX_SHARD_INDICES:
+                if group_idx in shard_idxs:
+                    return [
+                        lrc_groupset.groups[idx]
+                        for idx in sorted(shard_idxs)
+                    ]
+
+            raise RuntimeError(
+                'Failed to determine shard for group {} in lrc groupset {}'.format(
+                    group,
+                    lrc_groupset,
+                )
+            )
+
         builder = lrc_builder.LRC_8_2_2_V1_Builder
 
     @staticmethod
