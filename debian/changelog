@@ -1,3 +1,18 @@
+mastermind-cocainev11 (2.28.157) trusty; urgency=medium
+
+  * Remove check for group existence when executing create group task
+  * Add NodeBackend helper method to create NodeBackend object from backend history record
+  * Add lrc group restore cli command
+  * Implement LrcReserveGroupSelector that selects appropriate lrc reserve groups and creates lrc restore jobs
+  * Add helper for fetching last known host for group by its id
+  * Add reserved groups list to cli commands
+  * Implement lrc reserve planner
+  * Implement make lrc reserved group job
+  * Add groupset view for uncoupled lrc groups list cli command
+  * Add lrc recover job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 06 Feb 2017 18:27:54 +0300
+
 mastermind-cocainev11 (2.28.156) trusty; urgency=medium
 
   * Use minion task
