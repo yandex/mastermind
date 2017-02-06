@@ -1484,6 +1484,44 @@ class NodeBackend(object):
 
         return res
 
+    @staticmethod
+    def from_history_record(backend_record):
+        """ Construct NodeBackend object from history backend record.
+
+        NOTE: if storage does not contain objects from history record (Host, Node, NodeBackend,
+        etc.), such objects will not be automatically added to storage during execution of this
+        method.
+
+        Raises:
+            CacheUpstreamError - if failed to resolve hostname to an IP address.
+
+        Returns:
+            NodeBackend object.
+        """
+        addr = cache.get_ip_address_by_host(backend_record.hostname)
+
+        host = storage.hosts.get(addr, Host(addr))
+        node_id = '{}:{}'.format(host, backend_record.port)
+        node = storage.nodes.get(
+            node_id,
+            Node(
+                host=host,
+                port=backend_record.port,
+                family=backend_record.family,
+            )
+        )
+        backend_id = '{}/{}'.format(node, backend_record.backend_id)
+        backend = node_backends.get(
+            backend_id,
+            NodeBackend(
+                node=node,
+                backend_id=backend_record.backend_id,
+            ),
+        )
+        if not backend.base_path:
+            backend.base_path = backend_record.path
+        return backend
+
     def __repr__(self):
         return ('<Node backend object: node=%s, backend_id=%d, '
                 'status=%s, read_only=%s, stat=%s>' % (
