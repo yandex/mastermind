@@ -298,6 +298,9 @@ class LrcReserve(object):
 
             yield uncoupled_group
 
+            # optimize sorting and removing (not all groups but hosts?) (dict?)
+            self._uncoupled_groups[dc].remove(uncoupled_group)
+
     def _account_selected_group(self, group, dc):
         count_lrc_groups = self._count_lrc_reserved_groups_number(group)
 
@@ -309,8 +312,8 @@ class LrcReserve(object):
         self._dc_reserved_space.setdefault(dc, 0)
         self._dc_reserved_space[dc] += group.get_stat().total_space
 
-        # optimize sorting and removing (not all groups but hosts?) (dict?)
-        self._uncoupled_groups[dc].remove(group)
+        # NOTE: uncoupled group is removed from _uncoupled_groups[dc] on
+        # _select_uncoupled_group generator execution
 
     def _account_job(self, job):
         logger.info('Accounting job {}'.format(job.id))
