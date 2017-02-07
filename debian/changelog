@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.160) trusty; urgency=medium
+
+  * Add backend to history record only when its statistics is fresh
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 07 Feb 2017 18:42:10 +0300
+
 mastermind-cocainev11 (2.28.159) trusty; urgency=medium
 
   * Skip acquiring global 'jobs' lock when stopping jobs
