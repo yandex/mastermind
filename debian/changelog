@@ -1,3 +1,10 @@
+mastermind-cocainev11 (2.28.159) trusty; urgency=medium
+
+  * Skip acquiring global 'jobs' lock when stopping jobs
+  * Check lrc groupset status before creating restore job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 07 Feb 2017 14:19:48 +0300
+
 mastermind-cocainev11 (2.28.158) trusty; urgency=medium
 
   * Stop trying to use uncoupled group for reserve groups planning if job
