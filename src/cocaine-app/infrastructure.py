@@ -342,7 +342,12 @@ class Infrastructure(object):
             - <None> if node backends set should not be updated.
         """
 
-        current_state_node_backends_set = GroupNodeBackendsSet(
+        if group_history.nodes:
+            history_node_backends_set = group_history.nodes[-1]
+        else:
+            history_node_backends_set = GroupNodeBackendsSetRecord(set=GroupNodeBackendsSet())
+
+        fresh_state_node_backends_set = GroupNodeBackendsSet(
             GroupNodeBackendRecord(**{
                 'hostname': nb.node.host.hostname,
                 'port': nb.node.port,
@@ -350,36 +355,32 @@ class Infrastructure(object):
                 'backend_id': nb.backend_id,
                 'path': nb.base_path,
             })
-            for nb in group.node_backends if nb.stat
+            for nb in group.node_backends
+            if nb.stat and nb.stat.ts > history_node_backends_set.timestamp
         )
 
-        if not current_state_node_backends_set:
+        if not fresh_state_node_backends_set:
             return None
-
-        if group_history.nodes:
-            history_node_backends_set = group_history.nodes[-1]
-        else:
-            history_node_backends_set = GroupNodeBackendsSetRecord(set=GroupNodeBackendsSet())
 
         # extended node backends set which includes newly seen nodes,
         # do not discard lost nodes
         unaccounted_history_node_backends_set = GroupNodeBackendsSet(
             nb
             for nb in history_node_backends_set.set
-            if nb not in current_state_node_backends_set
+            if nb not in fresh_state_node_backends_set
         )
-        ext_current_state_node_backends_set = GroupNodeBackendsSetRecord(
-            set=current_state_node_backends_set + unaccounted_history_node_backends_set
+        ext_state_node_backends_set = GroupNodeBackendsSetRecord(
+            set=fresh_state_node_backends_set + unaccounted_history_node_backends_set
         )
 
-        if ext_current_state_node_backends_set != history_node_backends_set:
+        if ext_state_node_backends_set != history_node_backends_set:
             logger.info(
                 'Group {} info does not match, last state: {}, '
-                'current state: {}'.format(
-                    group.group_id, history_node_backends_set, ext_current_state_node_backends_set
+                'current state with fresh backends: {}'.format(
+                    group.group_id, history_node_backends_set, ext_state_node_backends_set
                 )
             )
-            return ext_current_state_node_backends_set
+            return ext_state_node_backends_set
 
         return None
 
