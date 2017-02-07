@@ -435,13 +435,24 @@ class LrcReserveGroupSelector(object):
 
         logger.info('Selecting lrc reserve group for restoring group {}'.format(group_id))
 
+        group = storage.groups[group_id]
+        if not isinstance(group.couple, storage.Lrc822v1Groupset):
+            raise ValueError('Group {} does not belong to lrc groupset'.format(group))
+
+        if group.couple.status == storage.Status.ARCHIVED:
+            raise ValueError(
+                'Group {} will not be restored, groupset is in good state, status "{}"'.format(
+                    group,
+                    group.couple.status,
+                )
+            )
+
         host = infrastructure.infrastructure.get_host_by_group_id(group_id)
         if host is None:
             raise RuntimeError('Cannot determine host for group {}'.format(group_id))
 
         lrc_group_dc = host.dc
 
-        group = storage.groups[group_id]
         nodes_usage = self._nodes_usage_by_groups(group.couple.groups)
 
         host_nodes = self.host_nodes_by_dc.setdefault(
