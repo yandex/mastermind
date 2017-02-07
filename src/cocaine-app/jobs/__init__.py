@@ -585,10 +585,16 @@ class JobProcessor(object):
                         existing_job.id, existing_job.type))
 
             logger.info('Stopping jobs: {0}'.format(job_ids))
-            logger.debug('Lock acquiring')
-            with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
-                logger.debug('Lock acquired')
-                self._stop_jobs(jobs)
+
+            # TODO: Lock is preferable here to prevent concurrent job processing, but it is not
+            # acquired anymore for performance reasons. Think on acquiring per-job lock when
+            # processing a job.
+
+            # logger.debug('Lock acquiring')
+            # with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
+            #     logger.debug('Lock acquired')
+            #     self._stop_jobs(jobs)
+            self._stop_jobs(jobs)
 
             logger.info('Retrying job creation')
             job = JobType.new(self.session, **params)
