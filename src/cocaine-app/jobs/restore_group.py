@@ -456,14 +456,14 @@ class RestoreGroupJob(Job):
                       }
 
             task = CreateFileMarkerTask.new(self,
-                                            host=dst_host,
+                                            host=nb.node.host.addr,
                                             params=params)
 
             self.tasks.append(task)
 
             params = {'remove_group_file': group_file}
             task = RemoveGroupFileTask.new(self,
-                                           host=dst_host,
+                                           host=nb.node.host.addr,
                                            params=params)
 
             self.tasks.append(task)
@@ -475,14 +475,14 @@ class RestoreGroupJob(Job):
                     nb.base_path, self.GROUP_FILE_DIR_MOVE_SRC_RENAME)
                 params['stop_backend'] = stop_restore_backend
                 task = MovePathTask.new(self,
-                                        host=dst_host,
+                                        host=nb.node.host.addr,
                                         params=params)
 
                 self.tasks.append(task)
 
             params = {'unmark_backend': mark_restore_backend}
             task = UnmarkBackendTask.new(self,
-                                         host=dst_host,
+                                         host=nb.node.host.addr,
                                          params=params)
 
             self.tasks.append(task)
