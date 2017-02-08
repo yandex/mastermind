@@ -1307,6 +1307,9 @@ class Infrastructure(object):
         suitable_groups = self.get_good_uncoupled_groups(**kwargs)
         groups_by_total_space = {}
 
+        if len(suitable_groups) == 0:
+            logger.warn("No suitable uncoupled groups found")
+
         if not match_group_space:
             groups_by_total_space['any'] = [group.group_id for group in suitable_groups]
             return groups_by_total_space
@@ -1608,6 +1611,7 @@ class UncoupledGroupsSelector(object):
         self._reset()
 
         groups = self.groups or storage.groups.keys()
+
         for group in groups:
             self._dispatch_group(group)
 
