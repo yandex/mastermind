@@ -317,7 +317,6 @@ class LrcReserve(object):
                 )
             )
 
-
     @staticmethod
     def _count_lrc_reserved_groups_number(group):
         ts = group.get_stat().total_space
@@ -398,8 +397,8 @@ class LrcReserveDistributionClusterTree(cluster_tree.ClusterTree):
     def _account_make_lrc_reserved_groups_job(self, job):
         logger.info('Accounting job {}'.format(job.id))
         if job.host not in storage.hosts:
-           logger.warn('Accounting job {} failed, host {} is not found in storage'.format(job.id, job.host))
-           return
+            logger.warn('Accounting job {} failed, host {} is not found in storage'.format(job.id, job.host))
+            return
 
         host = storage.hosts[job.host]
         host_node = self.hosts[host.hostname]
@@ -659,7 +658,7 @@ class LrcReserveClusterTree(cluster_tree.ClusterTree):
             self._account_restore_job(job)
         elif job.type == jobs.JobTypes.TYPE_RESTORE_LRC_GROUP_JOB:
             self._account_restore_lrc_group_job(job)
-        super(LrcReserveClusterTree, self).acount_job(job)
+        super(LrcReserveClusterTree, self).account_job(job)
 
     def _account_restore_job(self, job):
         for host_addr in job.resources[jobs.Job.RESOURCE_HOST_IN]:
