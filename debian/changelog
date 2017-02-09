@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.164) trusty; urgency=medium
+
+  * Fix lrc group restore
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 09 Feb 2017 19:11:03 +0300
+
 mastermind-cocainev11 (2.28.163) trusty; urgency=medium
 
   * Use only appropriate groups on lrc reserve planning
