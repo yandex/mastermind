@@ -94,6 +94,7 @@ class LrcReservePlanner(object):
             try:
                 job = selector.restore_lrc_group(
                     lrc_group_id,
+                    check_status=request.get('check_status', True),
                     need_approving=request.get('need_approving', True),
                 )
             except Exception as e:
@@ -494,7 +495,7 @@ class LrcReserveGroupSelector(object):
                         return False
         return True
 
-    def restore_lrc_group(self, group_id, need_approving=True):
+    def restore_lrc_group(self, group_id, check_status=True, need_approving=True):
 
         logger.info('Selecting lrc reserve group for restoring group {}'.format(group_id))
 
@@ -502,13 +503,14 @@ class LrcReserveGroupSelector(object):
         if not isinstance(group.couple, storage.Lrc822v1Groupset):
             raise ValueError('Group {} does not belong to lrc groupset'.format(group))
 
-        if group.couple.status == storage.Status.ARCHIVED:
-            raise ValueError(
-                'Group {} will not be restored, groupset is in good state, status "{}"'.format(
-                    group,
-                    group.couple.status,
+        if check_status:
+            if group.couple.status == storage.Status.ARCHIVED:
+                raise ValueError(
+                    'Group {} will not be restored, groupset is in good state, status "{}"'.format(
+                        group,
+                        group.couple.status,
+                    )
                 )
-            )
 
         host = infrastructure.infrastructure.get_host_by_group_id(group_id)
         if host is None:
