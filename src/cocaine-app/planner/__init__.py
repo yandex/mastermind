@@ -4,6 +4,7 @@ from logging import getLogger
 import socket
 import storage
 import time
+import datetime
 
 import pymongo
 
@@ -139,19 +140,82 @@ class Planner(object):
                 self.ttl_cleanup_timer.next(),
                 self._ttl_cleanup_planner)
 
+    def _get_idle_groups(self, days_of_idle):
+        """
+        Iterates all over couples. Find couples where ttl_cleanup hasn't run for more than 'days of idle'
+        :param days_of_idle: how long the group could be idle
+        :return: list of groups[0] from couples
+        """
+
+        idle_groups = []
+
+        # the epoch time when executed jobs are considered meaningful
+        idleness_threshold = time.time() - datetime.timedelta(days=days_of_idle).total_seconds()
+
+        couples_data = self.collection.find().sort('cleanup_ts', pymongo.ASCENDING)
+        if couples_data.count() < len(storage.replicas_groupsets):
+            logger.info('Sync cleanup data is required: {0} records/{1} couples'.format(
+                couples_data.count(), len(storage.replicas_groupsets)))
+            self.sync_historic_data(recover_ts=0, cleanup_ts=int(time.time()))
+            couples_data = self.collection.find().sort('cleanup_ts', pymongo.ASCENDING)
+
+        for couple_data in couples_data:
+            c = couple_data['couple']
+
+            # if couple_data doesn't contain cleanup_ts field then cleanup_ts has never been run on this couple
+            # and None < idleness_threshold
+            ts = couple_data.get('cleanup_ts')
+            if ts > idleness_threshold:
+                # all couples after this one have more "fresh" job worked for them
+                logger.debug("Found lazy couples {}".format(idle_groups))
+                return idle_groups
+
+            # couple has format "gr0:gr1:...:grN". We are interested only in the group #0
+            idle_groups.append(int(c.split(":")[0]))
+
+        logger.debug("Find lazy couples {}".format(idle_groups))
+        return idle_groups
+
     def _do_ttl_cleanup(self):
         logger.info('Run ttl cleanup')
 
-        couple_list = self._get_yt_stat()
-        for couple in couple_list:
+        max_cleanup_jobs = config.get('jobs', {}).get('ttl_cleanup_job', {}).get(
+            'max_executing_jobs', 100)
 
-            iter_group = couple  # in tskv coupld id is actually group[0] from couple id
+        allowed_idleness_period = config.get('jobs', {}).get('ttl_cleanup_job', {}).get(
+            'max_idle_days', 270)
+
+        count = self.job_processor.job_finder.jobs_count(
+            types=jobs.JobTypes.TYPE_TTL_CLEANUP_JOB,
+            statuses=jobs.Job.ACTIVE_STATUSES)
+        if count >= max_cleanup_jobs:
+            logger.info('Found {} unfinished ttl cleanup jobs (>= {})'.format(count, max_cleanup_jobs))
+            return
+        else:
+            max_new_cleanup_jobs = max_cleanup_jobs - count
+
+        # get information from mds-proxy Yt logs
+        yt_group_list = self._get_yt_stat()
+
+        # get couples where ttl_cleanup wasn't run for long time (or never)
+        time_group_list = self._get_idle_groups(days_of_idle=allowed_idleness_period)
+
+        # remove dups
+        yt_group_list = set(yt_group_list + time_group_list)
+
+        for iter_group in yt_group_list:
             if iter_group not in storage.groups:
                 logger.error("Not valid group is extracted from aggregation log {}".format(iter_group))
                 continue
             iter_group = storage.groups[iter_group]
             if not iter_group.couple:
-                logger.error("Iter group is uncoupled {}".format(str(iter_group)))
+                logger.error("Iter group is uncoupled {}".format(iter_group))
+                continue
+
+            ns_settings = self.namespaces_settings.get(iter_group.couple.namespace.id)
+            if not ns_settings or not ns_settings.attributes.ttl.enable:
+                logger.debug("Skipping group {} cause ns '{}' without ttl".format(
+                              iter_group.group_id, iter_group.couple.namespace.id))
                 continue
 
             try:
@@ -169,8 +233,16 @@ class Planner(object):
                         'need_approving': not self.params.get('ttl_cleanup', {}).get('autoapprove', False),
                     },
                 )
+                max_new_cleanup_jobs -= 1
+                if max_new_cleanup_jobs == 0:
+                    logger.info("Stopping job creation due to upper limitation on job count {}", max_cleanup_jobs)
+                    break
+            except LockAlreadyAcquiredError as e:
+                logger.info("Failed to create a new job since couple/group are already locked {}".format(e))
+                continue
             except:
                 logger.exception("Creating job for iter group {} has excepted".format(iter_group))
+                continue
 
     @staticmethod
     def _prepare_candidates_by_dc(suitable_groups, unsuitable_dcs):
@@ -369,9 +441,13 @@ class Planner(object):
 
         logger.info('Successfully created {0} recover dc jobs'.format(created_jobs))
 
-    def sync_recover_data(self):
+    def sync_historic_data(self, recover_ts, cleanup_ts):
+        """
+        Update mongo DB storing (couple, recore_ts, cleanup_ts)
+        Remove legacy records, add fresh ones
+        """
 
-        recover_data_couples = set()
+        hist_data_couples = set()
 
         offset = 0
         while True:
@@ -381,19 +457,17 @@ class Planner(object):
                 skip=offset, limit=self.RECOVERY_OP_CHUNK)
             count = 0
             for rdc in cursor:
-                recover_data_couples.add(rdc['couple'])
+                hist_data_couples.add(rdc['couple'])
                 count += 1
             offset += count
 
             if count < self.RECOVERY_OP_CHUNK:
                 break
 
-        ts = int(time.time())
-
         storage_couples = set(str(c) for c in storage.replicas_groupsets.keys())
 
-        add_couples = list(storage_couples - recover_data_couples)
-        remove_couples = list(recover_data_couples - storage_couples)
+        add_couples = list(storage_couples - hist_data_couples)
+        remove_couples = list(hist_data_couples - storage_couples)
 
         logger.info('Couples to add to recover data list: {0}'.format(add_couples))
         logger.info('Couples to remove from recover data list: {0}'.format(remove_couples))
@@ -404,10 +478,11 @@ class Planner(object):
             bulk_add_couples = add_couples[offset:offset + self.RECOVERY_OP_CHUNK]
             for couple in bulk_add_couples:
                 bulk_op.insert({'couple': couple,
-                                'recover_ts': ts})
+                                'recover_ts': recover_ts,
+                                'ttl_cleanup_ts': cleanup_ts})
             res = bulk_op.execute()
             if res['nInserted'] != len(bulk_add_couples):
-                raise ValueError('failed to add couples recover data: {0}/{1} ({2})'.format(
+                raise ValueError('failed to add couples historic data: {0}/{1} ({2})'.format(
                     res['nInserted'], len(bulk_add_couples), res))
             offset += res['nInserted']
 
@@ -418,7 +493,7 @@ class Planner(object):
             bulk_op.find({'couple': {'$in': bulk_remove_couples}}).remove()
             res = bulk_op.execute()
             if res['nRemoved'] != len(bulk_remove_couples):
-                raise ValueError('failed to remove couples recover data: {0}/{1} ({2})'.format(
+                raise ValueError('failed to remove couples historic data: {0}/{1} ({2})'.format(
                     res['nRemoved'], len(bulk_remove_couples), res))
             offset += res['nRemoved']
 
@@ -443,7 +518,7 @@ class Planner(object):
         if cursor.count() < len(storage.replicas_groupsets):
             logger.info('Sync recover data is required: {0} records/{1} couples'.format(
                 cursor.count(), len(storage.replicas_groupsets)))
-            self.sync_recover_data()
+            self.sync_historic_data(recover_ts=int(time.time()), cleanup_ts=0)
             cursor = self.collection.find().sort('recover_ts',
                                                  pymongo.ASCENDING)
 
@@ -513,15 +588,36 @@ class Planner(object):
 
         return [candidate[0] for candidate in candidates[-count:]]
 
-    def update_recover_ts(self, couple_id, ts):
-        ts = int(ts)
+    def update_historic_ts(self, couple_id, recover_ts=None, cleanup_ts=None):
+        """
+        Update records in mongo with corresponding times
+        :param couple_id: couple_id
+        :param recover_ts: epoch time if we need to update recover_ts time else None
+        :param cleanup_ts: epoch time if we need to update ttl_cleanup time else None
+        """
+
+        updated_values = {}
+        if recover_ts:
+            updated_values['recover_ts'] = int(recover_ts)
+        if cleanup_ts:
+            updated_values['cleanup_ts'] = int(cleanup_ts)
+
+        if len(updated_values) == 0:
+            return
+
         res = self.collection.update(
             {'couple': couple_id},
-            {'couple': couple_id, 'recover_ts': ts},
+            {"$set": updated_values},
             upsert=True)
         if res['ok'] != 1:
-            logger.error('Unexpected mongo response during recover ts update: {0}'.format(res))
+            logger.error('Unexpected mongo response during update of historic data: {0}'.format(res))
             raise RuntimeError('Mongo operation result: {0}'.format(res['ok']))
+
+    def update_recover_ts(self, couple_id, ts):
+        self.update_historic_ts(couple_id, recover_ts=ts)
+
+    def update_cleanup_ts(self, couple_id, ts):
+        self.update_historic_ts(couple_id, cleanup_ts=ts)
 
     def _couple_defrag(self):
         try:

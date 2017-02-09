@@ -502,9 +502,8 @@ class CacheManager(object):
             logger.info('Detected cache groups: {0}'.format(
                 len(storage.cache_couples)))
 
-        except Exception as e:
-            logger.info('Failed to update groups: {0}\n{1}'.format(
-                e, traceback.format_exc()))
+        except:
+            logger.exception('Failed to update groups')
         finally:
             logger.info(
                 'Cluster updating: updating group coupling info '

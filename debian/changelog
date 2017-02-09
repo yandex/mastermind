@@ -1,3 +1,9 @@
+mastermind (2.28.162) trusty; urgency=medium
+
+  * Use cluster tree for lrc reserve planning
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 09 Feb 2017 16:08:03 +0300
+
 mastermind (2.28.161) trusty; urgency=medium
 
   * Fix restore job

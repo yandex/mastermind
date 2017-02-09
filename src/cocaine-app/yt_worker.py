@@ -168,7 +168,7 @@ GROUP BY
                 except ValueError:
                     logger.exception("couple {} is invalid".format(str(row[0])))
                 else:
-                    logger.debug("couple {} is valid".format(couple))
+                    logger.debug("couple {} has more then {} expired bytes".format(couple, expired_threshold))
                     valid_couples.append(couple)
 
         return valid_couples

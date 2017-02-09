@@ -740,10 +740,6 @@ class Balancer(object):
                     groupsets=options['groupsets'],
                     dry_run=options['dry_run'])
 
-                if couple is None:
-                    # not enough valid groups
-                    break
-
                 self.infrastructure.account_ns_groups(nodes, couple.groups)
                 self.infrastructure.update_groups_list(tree)
 
@@ -898,13 +894,26 @@ class Balancer(object):
                       init_state,
                       groupsets,
                       dry_run=False):
+        """
+        Build couple from
+        :param ns_current_state:
+        :param units:
+        :param size:
+        :param groups_by_total_space:
+        :param mandatory_groups:
+        :param namespace:
+        :param init_state:
+        :param groupsets:
+        :param dry_run:
+        :return: couple. Excepts if None
+        """
 
         while True:
             groups_to_couple = self.__choose_groups_to_couple(
                 ns_current_state, units, size, groups_by_total_space, mandatory_groups)
 
             if not groups_to_couple:
-                return None
+                raise RuntimeError("Failed to find groups to couple")
 
             groupsets_groups = []
 
@@ -919,10 +928,7 @@ class Balancer(object):
                             )
                         )
                     except StopIteration:
-                        logger.error(
-                            'Failed to find appropriate groups for LRC groupset construction'
-                        )
-                        return None
+                        raise RuntimeError("Failed to find appropriate groups for LRC groupset construction")
                     groupsets_groups.append(lrc_uncoupled_group_ids)
 
             involved_groups = groups_to_couple + [
@@ -1012,6 +1018,7 @@ class Balancer(object):
                                 self.infrastructure.update_group_history(group)
 
                     except Exception:
+                        logger.exception("Failed to write groupset metakey {}".format(couple))
                         couple.destroy()
                         for couple_groupset in couple_groupsets:
                             couple_groupset.destroy()

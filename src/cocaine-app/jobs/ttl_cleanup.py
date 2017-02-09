@@ -4,6 +4,7 @@ from job_types import JobTypes
 import logging
 import storage
 from infrastructure import infrastructure
+import time
 
 logger = logging.getLogger('mm.jobs')
 
@@ -99,3 +100,7 @@ class TtlCleanupJob(Job):
     def _involved_couples(self):
         # Addressing by iter_group may cause an exception. See comment in _involved_groups
         return [str(storage.groups[self.iter_group].couple)]
+
+    def on_complete(self, processor):
+        couple = str(storage.groups[self.iter_group].couple)
+        processor.planner.update_cleanup_ts(couple, time.time())
