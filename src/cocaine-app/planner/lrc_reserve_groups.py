@@ -115,75 +115,60 @@ class LrcReserve(object):
         self._dcs = set()
         self._dc_reserved_space = {}
 
-        self._uncoupled_groups = self._uncoupled_groups_by_dc()
-
-        logger.debug('Uncoupled groups for lrc reserved planner: {}'.format(
-            ', '.join(
-                '{dc}: {count}'.format(dc=dc, count=len(groups))
-                for dc, groups in self._uncoupled_groups.iteritems()
-            )
-        ))
-
-        self._lrc_tree, self._lrc_nodes = self._build_lrc_tree()
-
-        self._account_jobs()
-
-        logger.debug('Uncoupled groups for lrc reserved planner: {}'.format(
-            ', '.join(
-                '{dc}: {count}'.format(dc=dc, count=len(groups))
-                for dc, groups in self._uncoupled_groups.iteritems()
-            )
-        ))
-
         self._dc_required_space = helpers.convert_config_bytes_value(
             LRC_RESERVE_PLANNER_PARAMS.get('reserved_space_per_dc', 0)
         )
 
-    def _build_lrc_tree(self):
-        node_types = (self.DC_NODE_TYPE,) + ('host',)
-        tree, nodes = infrastructure.infrastructure.filtered_cluster_tree(node_types)
+        self._lrc_reserve_cluster_tree = self._build_cluster_tree()
 
+    def _build_cluster_tree(self):
         # NOTE:
         # lrc groups that are currently being processed by running build jobs
         # are not accounted here because there is no easy and
         # straightforward way to do this. This is not crucial
         # at the moment.
-        lrc_groups = []
+        groups = []
+        group_types = (
+            storage.Group.TYPE_UNCOUPLED,
+            storage.Group.TYPE_RESERVED_LRC_8_2_2_V1,
+        )
         for group in storage.groups.keys():
-            if group.type not in storage.Group.TYPES_LRC_8_2_2_V1:
+            if group.type not in group_types:
                 continue
             if len(group.node_backends) != 1:
                 continue
 
-            lrc_groups.append(group)
+            groups.append(group)
 
-            nb = group.node_backends[0]
-            try:
-                dc = nb.node.host.dc
-            except CacheUpstreamError:
-                continue
-            self._dcs.add(dc)
-
-            if group.type == storage.Group.TYPE_RESERVED_LRC_8_2_2_V1:
-                self._dc_reserved_space.setdefault(dc, 0)
-                self._dc_reserved_space[dc] += nb.stat.total_space
-
-        # TODO: rename, nothing about "ns" here
-        infrastructure.infrastructure.account_ns_groups(nodes, lrc_groups)
-        infrastructure.infrastructure.update_groups_list(tree)
-
-        return tree, nodes
-
-    def _account_jobs(self):
-
-        running_jobs = self.job_processor.job_finder.jobs(
-            types=jobs.JobTypes.TYPE_MAKE_LRC_RESERVED_GROUPS_JOB,
-            statuses=jobs.Job.ACTIVE_STATUSES,
-            sort=False,
+        tree = LrcReserveDistributionClusterTree(
+            groups,
+            job_processor=self.job_processor,
+            node_types=(self.DC_NODE_TYPE, 'host'),
+            on_account_job=self._account_job,
+            on_account_group=self._account_group,
         )
+        return tree
 
-        for job in running_jobs:
-            self._account_job(job)
+    def _account_job(self, job):
+        if job.type == jobs.JobTypes.TYPE_MAKE_LRC_RESERVED_GROUPS_JOB:
+            dc = job.dc
+            self._dc_reserved_space.setdefault(dc, 0)
+            self._dc_reserved_space[dc] += job.total_space * len(job.lrc_groups)
+
+    def _account_group(self, hdd_node, group):
+        cur_node = hdd_node
+        while cur_node and cur_node.type != self.DC_NODE_TYPE:
+            cur_node = cur_node.parent
+
+        if not cur_node:
+            raise RuntimeError('Dc for hdd_node {} is not found'.format(hdd_node))
+
+        dc = cur_node.name
+        self._dcs.add(dc)
+
+        if group.type == storage.Group.TYPE_RESERVED_LRC_8_2_2_V1:
+            self._dc_reserved_space.setdefault(dc, 0)
+            self._dc_reserved_space[dc] += group.get_stat().total_space
 
     def _uncoupled_groups_by_dc(self):
 
@@ -228,6 +213,7 @@ class LrcReserve(object):
             self.make_jobs_for_dc(dc)
 
     def make_jobs_for_dc(self, dc):
+
         self._dc_reserved_space.setdefault(dc, 0)
 
         logger.info('Reserved space for lrc groups in dc {}: {} (required {})'.format(
@@ -236,46 +222,103 @@ class LrcReserve(object):
             helpers.convert_bytes(self._dc_required_space),
         ))
 
-        uncoupled_groups = self._select_uncoupled_group(dc)
-
         while self._dc_reserved_space[dc] < self._dc_required_space:
-            try:
-                uncoupled_group = next(uncoupled_groups)
-            except StopIteration:
-                logger.info('Dc {}: no more uncoupled groups available'.format(dc))
+
+            job = None
+
+            host_nodes = self._lrc_reserve_cluster_tree.dcs[dc].sorted_subset(type='host')
+            for host_node, uncoupled_group in self._select_uncoupled_groups(dc, host_nodes):
+
+                logger.info(
+                    'Dc {}: selected uncoupled group {} on host {}'.format(
+                        dc,
+                        uncoupled_group,
+                        host_node.name,
+                    )
+                )
+
+                new_groups_count = self._count_lrc_reserved_groups_number(uncoupled_group)
+                new_groups_ids = infrastructure.infrastructure.reserve_group_ids(new_groups_count)
+
+                try:
+                    job = self.job_processor._create_job(
+                        jobs.JobTypes.TYPE_MAKE_LRC_RESERVED_GROUPS_JOB,
+                        {
+                            'uncoupled_group': uncoupled_group.group_id,
+                            'dc': dc,
+                            'host': uncoupled_group.node_backends[0].node.host.addr,
+                            'lrc_groups': new_groups_ids,
+                            'scheme': storage.Lrc.Scheme822v1.ID,
+                            'total_space': LRC_GROUP_TOTAL_SPACE,
+                            'autoapprove': LRC_RESERVE_PLANNER_PARAMS.get('autoapprove', False)
+                        }
+                    )
+                except LockFailedError as e:
+                    logger.error(e)
+                    continue
+
+                logger.info('Dc {}: created job {}'.format(dc, job.id))
+
+                self._lrc_reserve_cluster_tree.account_job(job)
+                host_nodes.consume(host_node)
+
                 break
 
-            new_groups_count = self._count_lrc_reserved_groups_number(uncoupled_group)
-            new_groups_ids = infrastructure.infrastructure.reserve_group_ids(new_groups_count)
-
-            logger.info('Dc {}: selected uncoupled group {}'.format(dc, uncoupled_group))
-
-            try:
-                job = self.job_processor._create_job(
-                    jobs.JobTypes.TYPE_MAKE_LRC_RESERVED_GROUPS_JOB,
-                    {
-                        'uncoupled_group': uncoupled_group.group_id,
-                        'dc': dc,
-                        'host': uncoupled_group.node_backends[0].node.host.addr,
-                        'lrc_groups': new_groups_ids,
-                        'scheme': storage.Lrc.Scheme822v1.ID,
-                        'total_space': LRC_GROUP_TOTAL_SPACE,
-                        'autoapprove': LRC_RESERVE_PLANNER_PARAMS.get('autoapprove', False)
-                    }
-                )
-            except LockFailedError as e:
-                logger.error(e)
-                continue
-
-            logger.error('Dc {}: create job {}'.format(dc, job.id))
-
-            self._account_selected_group(uncoupled_group, dc)
+            if not job:
+                logger.info('Dc {}: no more uncoupled groups'.format(dc))
+                break
 
             logger.info('Reserved space for lrc groups in dc {}: {} (required {})'.format(
                 dc,
                 helpers.convert_bytes(self._dc_reserved_space[dc]),
                 helpers.convert_bytes(self._dc_required_space),
             ))
+
+    def _select_uncoupled_groups(self, dc, host_nodes):
+
+        for host_node in host_nodes:
+
+            if not host_node.artifacts.uncoupled_groups:
+                raise StopIteration
+
+            for uncoupled_group in self._select_uncoupled_group_on_host_node(host_node):
+                yield host_node, uncoupled_group
+
+    def _select_uncoupled_group_on_host_node(self, host_node):
+        lrc_reserve_groups_by_hdd_node = {}
+        for group, hdd_node in host_node.artifacts.lrc_reserved_groups.iteritems():
+            if hdd_node is None:
+                # failed to determine hdd_node for group, skipping
+                continue
+            lrc_reserve_groups_by_hdd_node.setdefault(hdd_node, 0)
+            lrc_reserve_groups_by_hdd_node[hdd_node] += 1
+
+        uncoupled_groups_by_hdd_node = {}
+        for uncoupled_group, hdd_node in host_node.artifacts.uncoupled_groups.iteritems():
+            uncoupled_groups_by_hdd_node.setdefault(hdd_node, []).append(uncoupled_group)
+            lrc_reserve_groups_by_hdd_node.setdefault(hdd_node, 0)
+
+        hdd_nodes = sorted(
+            lrc_reserve_groups_by_hdd_node.iteritems(),
+            key=lambda h: (uncoupled_groups_by_hdd_node.get(h[0]) is None, h[1])
+        )
+
+        for hdd_node, _ in hdd_nodes:
+            logger.debug('Trying to use candidate uncoupled groups on host {}, hdd {}'.format(
+                host_node.name, hdd_node.name
+            ))
+            for uncoupled_group in uncoupled_groups_by_hdd_node.get(hdd_node, []):
+                yield uncoupled_group
+        else:
+            logger.info(
+                'Host node {host}, hdd node {hdd}, no more uncoupled groups (uncoupled groups on '
+                'host: {host_uncoupled_groups})'.format(
+                    host=host_node.name,
+                    hdd=hdd_node.name,
+                    host_uncoupled_groups=len(host_node.artifacts.uncoupled_groups)
+                )
+            )
+
 
     @staticmethod
     def _count_lrc_reserved_groups_number(group):
@@ -289,61 +332,98 @@ class LrcReserve(object):
         host_lrc_groups = self._lrc_nodes['host'].get(host.full_path, {}).get('groups', [])
         return len(host_lrc_groups)
 
-    def _select_uncoupled_group(self, dc):
-        while self._uncoupled_groups.get(dc, []):
-            uncoupled_group = min(
-                self._uncoupled_groups[dc],
-                key=self._lrc_groups_on_host,
-            )
-
-            yield uncoupled_group
-
-            # optimize sorting and removing (not all groups but hosts?) (dict?)
-            self._uncoupled_groups[dc].remove(uncoupled_group)
-
-    def _account_selected_group(self, group, dc):
-        count_lrc_groups = self._count_lrc_reserved_groups_number(group)
-
-        host = group.node_backends[0].node.host
-
-        host_lrc_groups = self._lrc_nodes['host'].get(host.full_path, {}).get('groups', set())
-        host_lrc_groups.update(DummyGroup() for _ in xrange(count_lrc_groups))
-
-        self._dc_reserved_space.setdefault(dc, 0)
-        self._dc_reserved_space[dc] += group.get_stat().total_space
-
-        # NOTE: uncoupled group is removed from _uncoupled_groups[dc] on
-        # _select_uncoupled_group generator execution
-
-    def _account_job(self, job):
-        logger.info('Accounting job {}'.format(job.id))
-
-        dc = job.dc
-
-        self._dcs.add(dc)
-
-        if job.host in storage.hosts:
-            host = storage.hosts[job.host]
-            host_lrc_groups = self._lrc_nodes['host'].get(host.full_path, {}).get('groups', set())
-            for group_id in job.lrc_groups:
-                if group_id not in storage.groups or storage.groups[group_id] not in host_lrc_groups:
-                    host_lrc_groups.add(DummyGroup())
-
-        total_space = job.total_space * len(job.lrc_groups)
-        self._dc_reserved_space.setdefault(dc, 0)
-        self._dc_reserved_space[dc] += total_space
-
-        if job.uncoupled_group in storage.groups:
-            # optimize sorting and removing (not all groups but hosts?) (dict?)
-            try:
-                self._uncoupled_groups[dc].remove(storage.groups[job.uncoupled_group])
-            except ValueError:
-                # uncoupled group was already skipped, it is expected
-                pass
-
 
 class DummyGroup(object):
     pass
+
+
+class LrcReserveDistributionArtifacts(object):
+
+    __slots__ = (
+        'uncoupled_groups',
+        'uncoupled_groups_space',
+        'lrc_reserved_groups',
+        'lrc_reserved_groups_space',
+    )
+
+    def __init__(self):
+        self.uncoupled_groups = {}
+        self.uncoupled_groups_space = 0
+        self.lrc_reserved_groups = {}
+        self.lrc_reserved_groups_space = 0
+
+
+class LrcReserveDistributionNode(cluster_tree.Node):
+
+    ArtifactsType = LrcReserveDistributionArtifacts
+
+    def key(self):
+        lrc_reserved_groups_space = self.artifacts.lrc_reserved_groups_space
+        uncoupled_groups_space = self.artifacts.uncoupled_groups_space
+        return (
+            # a trick to move all host nodes with 0 uncoupled groups to the end of sorted set
+            len(self.artifacts.uncoupled_groups) == 0,
+
+            float(lrc_reserved_groups_space) /
+            ((lrc_reserved_groups_space + uncoupled_groups_space) or 1)
+        )
+
+
+class LrcReserveDistributionClusterTree(cluster_tree.ClusterTree):
+
+    NodeType = LrcReserveDistributionNode
+
+    def find_jobs(self):
+        return self.job_processor.job_finder.jobs(
+            types=(
+                jobs.JobTypes.TYPE_MAKE_LRC_RESERVED_GROUPS_JOB,
+            ),
+            statuses=jobs.Job.ACTIVE_STATUSES,
+            sort=False,
+        )
+
+    def account_group(self, hdd_node, group):
+        host_node = hdd_node.parent
+        if group.type == storage.Group.TYPE_UNCOUPLED:
+            host_node.artifacts.uncoupled_groups[group] = hdd_node
+            host_node.artifacts.uncoupled_groups_space += group.get_stat().total_space
+        if group.type == storage.Group.TYPE_RESERVED_LRC_8_2_2_V1:
+            host_node.artifacts.lrc_reserved_groups[group] = hdd_node
+            host_node.artifacts.lrc_reserved_groups_space += group.get_stat().total_space
+        super(LrcReserveDistributionClusterTree, self).account_group(hdd_node, group)
+
+    def account_job(self, job):
+        if job.type == jobs.JobTypes.TYPE_MAKE_LRC_RESERVED_GROUPS_JOB:
+            self._account_make_lrc_reserved_groups_job(job)
+        super(LrcReserveDistributionClusterTree, self).account_job(job)
+
+    def _account_make_lrc_reserved_groups_job(self, job):
+        logger.info('Accounting job {}'.format(job.id))
+        if job.host not in storage.hosts:
+           logger.warn('Accounting job {} failed, host {} is not found in storage'.format(job.id, job.host))
+           return
+
+        host = storage.hosts[job.host]
+        host_node = self.hosts[host.hostname]
+
+        hdd_node = None
+
+        if job.uncoupled_group in host_node.artifacts.uncoupled_groups:
+            del host_node.artifacts.uncoupled_groups[job.uncoupled_group]
+            uncoupled_group = storage.groups[job.uncoupled_group]
+            total_space = uncoupled_group.get_stat().total_space
+            host_node.artifacts.uncoupled_groups_space -= total_space
+
+            if uncoupled_group.node_backends:
+                fs_id = str(uncoupled_group.node_backends[0].fs)
+                hdd_node = self.hdds[fs_id]
+
+        for group_id in job.lrc_groups:
+            if group_id not in host_node.artifacts.lrc_reserved_groups:
+                if hdd_node:
+                    # TODO: hdd_node can be undefined!
+                    host_node.artifacts.lrc_reserved_groups[group_id] = hdd_node
+                host_node.artifacts.lrc_reserved_groups_space += job.total_space
 
 
 class LrcReserveGroupSelector(object):
@@ -581,6 +661,7 @@ class LrcReserveClusterTree(cluster_tree.ClusterTree):
             self._account_restore_job(job)
         elif job.type == jobs.JobTypes.TYPE_RESTORE_LRC_GROUP_JOB:
             self._account_restore_lrc_group_job(job)
+        super(LrcReserveClusterTree, self).acount_job(job)
 
     def _account_restore_job(self, job):
         for host_addr in job.resources[jobs.Job.RESOURCE_HOST_IN]:
