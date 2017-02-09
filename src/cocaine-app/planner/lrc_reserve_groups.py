@@ -118,8 +118,25 @@ class LrcReserve(object):
         self._dc_required_space = helpers.convert_config_bytes_value(
             LRC_RESERVE_PLANNER_PARAMS.get('reserved_space_per_dc', 0)
         )
+        self._total_space_options = [
+            helpers.convert_config_bytes_value(ts)
+            for ts in LRC_RESERVE_PLANNER_PARAMS.get('uncoupled_groups_total_space', [])
+        ]
 
         self._lrc_reserve_cluster_tree = self._build_cluster_tree()
+
+    def _uncoupled_group_match_ts(self, uncoupled_group):
+
+        if not self._total_space_options:
+            return True
+
+        ts = uncoupled_group.get_stat().total_space
+
+        for option_ts in self._total_space_options:
+            if abs(option_ts - ts) < option_ts * self.TS_TOLERANCE:
+                return True
+
+        return False
 
     def _build_cluster_tree(self):
         # NOTE:
@@ -137,6 +154,12 @@ class LrcReserve(object):
             max_node_backends=1,
             types=(storage.Group.TYPE_UNCOUPLED,),
         )
+
+        uncoupled_groups = [
+            g
+            for g in uncoupled_groups
+            if self._uncoupled_group_match_ts(g)
+        ]
 
         tree = LrcReserveDistributionClusterTree(
             reserve_lrc_groups + uncoupled_groups,
@@ -168,43 +191,6 @@ class LrcReserve(object):
             self._dc_reserved_space.setdefault(dc, 0)
             self._dc_reserved_space[dc] += group.get_stat().total_space
 
-    def _uncoupled_groups_by_dc(self):
-
-        total_space_options = [
-            helpers.convert_config_bytes_value(ts)
-            for ts in LRC_RESERVE_PLANNER_PARAMS.get('uncoupled_groups_total_space', [])
-        ]
-
-        groups_by_total_space = infrastructure.infrastructure.groups_by_total_space(
-            match_group_space=True,
-            max_node_backends=1,
-        )
-
-        def _match_ts(ts):
-            if not total_space_options:
-                return True
-
-            for option_ts in total_space_options:
-                if abs(option_ts - ts) < option_ts * self.TS_TOLERANCE:
-                    return True
-
-            return False
-
-        uncoupled_groups_by_dc = {}
-
-        for ts, group_ids in groups_by_total_space.iteritems():
-            if not _match_ts(ts):
-                continue
-
-            for group_id in group_ids:
-                group = storage.groups[group_id]
-                try:
-                    dc = group.node_backends[0].node.host.dc
-                except CacheUpstreamError:
-                    continue
-                uncoupled_groups_by_dc.setdefault(dc, []).append(group)
-
-        return uncoupled_groups_by_dc
 
     def make_jobs(self):
         for dc in self._dcs:
