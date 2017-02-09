@@ -1517,9 +1517,9 @@ class NodeBackend(object):
         """
         addr = cache.get_ip_address_by_host(backend_record.hostname)
 
-        host = storage.hosts.get(addr, Host(addr))
+        host = hosts.get(addr, Host(addr))
         node_id = '{}:{}'.format(host, backend_record.port)
-        node = storage.nodes.get(
+        node = nodes.get(
             node_id,
             Node(
                 host=host,
