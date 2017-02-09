@@ -1729,6 +1729,7 @@ def lrc_group_prepare_new_groups(
 def lrc_group_restore(
     group,
     autoapprove=('a', False, 'Automatically approve jobs'),
+    no_check_status=('', False, 'Create lrc restore job without checking lrc groupset status'),
     json=('', None, 'Format data as json'),
     host=None,
     app=None
@@ -1738,6 +1739,7 @@ def lrc_group_restore(
 
     options = {
         'lrc_groups': [int(group)],
+        'check_status': not no_check_status,
         'need_approving': not autoapprove,
     }
 

@@ -1,3 +1,10 @@
+mastermind (2.28.165) trusty; urgency=medium
+
+  * Add --no-check-status option to skip lrc groupset status checking on restore
+  * Fix uncoupled groups total space checking in lrc reserve planner
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 09 Feb 2017 19:58:15 +0300
+
 mastermind (2.28.164) trusty; urgency=medium
 
   * Fix lrc group restore
