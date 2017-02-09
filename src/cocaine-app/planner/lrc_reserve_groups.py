@@ -127,21 +127,19 @@ class LrcReserve(object):
         # are not accounted here because there is no easy and
         # straightforward way to do this. This is not crucial
         # at the moment.
-        groups = []
-        group_types = (
-            storage.Group.TYPE_UNCOUPLED,
-            storage.Group.TYPE_RESERVED_LRC_8_2_2_V1,
+        reserve_lrc_groups = infrastructure.infrastructure.get_good_uncoupled_groups(
+            max_node_backends=1,
+            types=(storage.Group.TYPE_RESERVED_LRC_8_2_2_V1,),
+            status=storage.Status.COUPLED,
+            allow_alive_keys=True,  # because of metakey
         )
-        for group in storage.groups.keys():
-            if group.type not in group_types:
-                continue
-            if len(group.node_backends) != 1:
-                continue
-
-            groups.append(group)
+        uncoupled_groups = infrastructure.infrastructure.get_good_uncoupled_groups(
+            max_node_backends=1,
+            types=(storage.Group.TYPE_UNCOUPLED,),
+        )
 
         tree = LrcReserveDistributionClusterTree(
-            groups,
+            reserve_lrc_groups + uncoupled_groups,
             job_processor=self.job_processor,
             node_types=(self.DC_NODE_TYPE, 'host'),
             on_account_job=self._account_job,
