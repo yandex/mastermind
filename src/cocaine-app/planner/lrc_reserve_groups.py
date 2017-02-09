@@ -581,6 +581,7 @@ class LrcReserveClusterTree(cluster_tree.ClusterTree):
             self._account_restore_job(job)
         elif job.type == jobs.JobTypes.TYPE_RESTORE_LRC_GROUP_JOB:
             self._account_restore_lrc_group_job(job)
+        super(LrcReserveClusterTree, self).acount_job(job)
 
     def _account_restore_job(self, job):
         for host_addr in job.resources[jobs.Job.RESOURCE_HOST_IN]:

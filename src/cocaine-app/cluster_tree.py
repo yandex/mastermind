@@ -104,7 +104,12 @@ class ClusterTree(object):
 
     NodeType = Node
 
-    def __init__(self, groups, job_processor=None, node_types=None):
+    def __init__(self,
+                 groups,
+                 job_processor=None,
+                 node_types=None,
+                 on_account_group=None,
+                 on_account_job=None):
         # "easy access" indexes
         # TODO: indexes for all node types?
         self.dcs = {}
@@ -113,9 +118,14 @@ class ClusterTree(object):
 
         self.job_processor = job_processor
 
+        if on_account_group:
+            self._on_account_group = on_account_group
+        if on_account_job:
+            self._on_account_job = on_account_job
+
         # NOTE: inventory functions are called here and not at global module level because of
         # possible implementation errors in third-party inventory implementation
-        self._node_types = node_types or inventory.get_node_types()
+        self._node_types = list(node_types or inventory.get_node_types())
         self._dc_node_type = inventory.get_dc_node_type()
 
         self._root = RootNode()
@@ -225,6 +235,7 @@ class ClusterTree(object):
                     continue
                 fs_id = str(nb.fs)
                 self.hdds[fs_id].groups[group] = group
+                self.account_group(self.hdds[fs_id], group)
 
     def find_jobs(self):
         raise NotImplementedError()
@@ -233,12 +244,21 @@ class ClusterTree(object):
         for job in self.find_jobs():
             self.account_job(job)
 
+    def account_group(self, hdd_node, group):
+        self._on_account_group(hdd_node, group)
+
     def account_job(self, job):
-        raise NotImplementedError()
+        self._on_account_job(job)
 
     def sort(self, nodes):
         for node in sorted(nodes):
             yield node
+
+    def _on_account_group(self, hdd_node, group):
+        pass
+
+    def _on_account_job(self, job):
+        pass
 
 
 class NodesSubset(object):
