@@ -2639,6 +2639,10 @@ class Couple(Groupset):
             if not isinstance(settings['frozen'], bool):
                 raise ValueError('Replicas groupset "frozen" setting must be bool')
 
+    @property
+    def couple_id(self):
+        return int(str(self).split(':')[0])
+
 
 class Lrc822v1Groupset(Groupset):
     def __init__(self, groups):
