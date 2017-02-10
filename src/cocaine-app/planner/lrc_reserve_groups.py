@@ -559,6 +559,9 @@ class LrcReserveGroupSelector(object):
                 except LockFailedError as e:
                     logger.error(e)
                     continue
+                except Exception:
+                    logger.exception('Failed to create lrc restore job')
+                    raise
 
                 break
             else:

@@ -13,6 +13,9 @@ import tasks
 
 logger = logging.getLogger('mm.jobs')
 
+LRC_CFG = config.get('lrc', {}).get('lrc-8-2-2-v1', {})
+LRC_RESTORE_CFG = LRC_CFG.get('restore', {})
+
 
 class RestoreLrcGroupJob(Job):
     PARAMS = (
@@ -75,6 +78,12 @@ class RestoreLrcGroupJob(Job):
         self.tasks.extend(
             self._lrc_recover_tasks()
         )
+
+        if LRC_RESTORE_CFG.get('external_storage_validation', False):
+            self.tasks.extend(
+                self._lrc_validate_task(processor)
+            )
+
         self.tasks.extend(
             self._write_metakey_to_restored_group_task(processor)
         )
@@ -361,6 +370,59 @@ class RestoreLrcGroupJob(Job):
                 self,
                 group=self.group,
                 metakey=metakey,
+            )
+        )
+
+        return job_tasks
+
+    def _lrc_validate_task(self, processor):
+        job_tasks = []
+
+        lrc_groupset = storage.groups[self.group].couple
+        couple = lrc_groupset.couple
+
+        mappings = processor.external_storage_meta.mapping_list(
+            couple=[couple.couple_id]
+        )
+
+        if len(mappings) == 0:
+            logger.debug(
+                'Failed to find external storage mapping for couple {}, couple was not converted '
+                'from external storage'.format(
+                    couple
+                )
+            )
+            return []
+
+        mapping = mappings[0]
+
+        dst_groups = []
+        for couple_id in mapping.couples:
+            couple = storage.couples[str(couple_id)]
+            dst_groups.append([
+                group
+                for group in couple.lrc822v1_groupset.groups
+            ])
+
+        lrc_reserve_group = storage.groups[self.lrc_reserve_group]
+        logger.info('LRC RESERVE GROUP: {} {}'.format(lrc_reserve_group, type(lrc_reserve_group)))
+        nb = lrc_reserve_group.node_backends[0]
+
+        validate_cmd = inventory.make_external_storage_validate_command(
+            dst_groups=dst_groups,
+            groupset_type=storage.GROUPSET_LRC,
+            groupset_settings=lrc_groupset.groupset_settings,
+            src_storage=mapping.external_storage,
+            src_storage_options=mapping.external_storage_options,
+            additional_backends=[nb],
+            trace_id=self.id[:16],
+        )
+
+        job_tasks.append(
+            tasks.ExternalStorageTask.new(
+                self,
+                host=nb.node.host.addr,
+                cmd=validate_cmd,
             )
         )
 

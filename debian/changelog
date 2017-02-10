@@ -1,3 +1,10 @@
+mastermind (2.28.166) trusty; urgency=medium
+
+  * Add optional external storage validation task for lrc restore
+  * Fix restore job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 10 Feb 2017 19:38:49 +0300
+
 mastermind (2.28.165) trusty; urgency=medium
 
   * Add --no-check-status option to skip lrc groupset status checking on restore
