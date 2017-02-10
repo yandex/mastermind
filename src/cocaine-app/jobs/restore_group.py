@@ -183,16 +183,6 @@ class RestoreGroupJob(Job):
 
                 self.tasks.append(task)
 
-                if merged_path:
-                    params = {}
-                    params['move_src'] = os.path.dirname(merged_group_file)
-                    params['move_dst'] = merged_path
-                    task = MovePathTask.new(self,
-                                            host=merged_nb.node.host.addr,
-                                            params=params)
-
-                    self.tasks.append(task)
-
                 if merged_group_file_marker:
                     params = {'group': str(group_id)}
                     params['group_file_marker'] = merged_group_file_marker.format(
@@ -205,10 +195,13 @@ class RestoreGroupJob(Job):
 
                     self.tasks.append(task)
 
-                    params = {'remove_group_file': merged_group_file}
-                    task = RemoveGroupFileTask.new(self,
-                                                   host=dst_host,
-                                                   params=params)
+                if merged_path:
+                    params = {}
+                    params['move_src'] = os.path.dirname(merged_group_file)
+                    params['move_dst'] = merged_path
+                    task = MovePathTask.new(self,
+                                            host=merged_nb.node.host.addr,
+                                            params=params)
 
                     self.tasks.append(task)
 
@@ -430,7 +423,8 @@ class RestoreGroupJob(Job):
 
             params = {'node_backend': str(nb).encode('utf-8'),
                       'group': str(self.group),
-                      'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]}
+                      'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS,
+                                        self.DNET_CLIENT_UNKNOWN_BACKEND]}
 
             task = NodeStopTask.new(self,
                                     group=self.group,
@@ -452,19 +446,13 @@ class RestoreGroupJob(Job):
                 dst_base_path=dst_base_path,
                 dst_backend_id=dst_backend_id)
             params = {'group': str(self.group),
-                      'group_file_marker': group_file_marker_fmt
+                      'group_file_marker': group_file_marker_fmt,
+                      'stop_backend': stop_restore_backend
                       }
 
             task = CreateFileMarkerTask.new(self,
                                             host=nb.node.host.addr,
                                             params=params)
-
-            self.tasks.append(task)
-
-            params = {'remove_group_file': group_file}
-            task = RemoveGroupFileTask.new(self,
-                                           host=nb.node.host.addr,
-                                           params=params)
 
             self.tasks.append(task)
 
