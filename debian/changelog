@@ -1,3 +1,9 @@
+mastermind (2.28.167) trusty; urgency=medium
+
+  * Restore-path: clean reserved-lrc groups
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 14 Feb 2017 15:26:39 +0300
+
 mastermind (2.28.166) trusty; urgency=medium
 
   * Add optional external storage validation task for lrc restore
