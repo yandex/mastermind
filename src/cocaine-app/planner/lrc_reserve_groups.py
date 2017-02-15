@@ -1,6 +1,5 @@
 import logging
 
-from errors import CacheUpstreamError
 import helpers as h
 import cluster_tree
 import infrastructure
@@ -191,7 +190,6 @@ class LrcReserve(object):
         if group.type == storage.Group.TYPE_RESERVED_LRC_8_2_2_V1:
             self._dc_reserved_space.setdefault(dc, 0)
             self._dc_reserved_space[dc] += group.get_stat().total_space
-
 
     def make_jobs(self):
         for dc in self._dcs:
