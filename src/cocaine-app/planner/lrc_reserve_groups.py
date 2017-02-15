@@ -433,15 +433,15 @@ class LrcReserveGroupSelector(object):
         self.host_nodes_by_dc = {}
 
     @staticmethod
-    def _nodes_usage_by_groups(groups):
+    def _nodes_usage_by_groups(group_ids):
 
         nodes_usage = {}
 
-        for group in groups:
+        for group_id in group_ids:
             # in case if any group is down we are trying to get it's host from history
-            host = infrastructure.infrastructure.get_host_by_group_id(group.group_id)
+            host = infrastructure.infrastructure.get_host_by_group_id(group_id)
             if host is None:
-                raise RuntimeError('Cannot determine host for group {}'.format(group))
+                raise RuntimeError('Cannot determine host for group {}'.format(group_id))
 
             group_nodes_usage = LrcReserveGroupSelector._nodes_usage_by_host(host)
 
@@ -516,69 +516,46 @@ class LrcReserveGroupSelector(object):
 
         lrc_group_dc = host.dc
 
-        nodes_usage = self._nodes_usage_by_groups(group.couple.groups)
-
         host_nodes = self.host_nodes_by_dc.setdefault(
             lrc_group_dc,
             self._prepare_nodes_subset(lrc_group_dc)
         )
 
-        for host_node in host_nodes:
+        nodes_usage = self._nodes_usage_by_groups(g.group_id for g in group.couple.groups)
+
+        for host_node, lrc_reserve_group in self._groups_on_host_nodes(group, host_nodes, nodes_usage):
 
             job = None
 
-            # NOTE: nodes of type 'host' are guaranteed to have 'addr' attribute
-            host = storage.hosts[host_node.addr]
-            logger.debug('Group {}: checking candidate lrc reserve groups on host {}'.format(
-                group_id,
-                host.hostname,
-            ))
+            logger.debug(
+                'Trying to create job using lrc reserve group {}'.format(lrc_reserve_group)
+            )
+            try:
+                job = self.job_processor._create_job(
+                    jobs.JobTypes.TYPE_RESTORE_LRC_GROUP_JOB,
+                    {
+                        'group': group_id,
+                        'lrc_reserve_group': lrc_reserve_group.group_id,
+                        'need_approving': need_approving,
 
-            host_nodes_usage = self._nodes_usage_by_host(host)
-
-            if not self._is_cluster_node_limits_matched(host, nodes_usage, host_nodes_usage):
-                continue
-
-            for lrc_reserve_group in self._groups_on_host_node(host_node):
-                logger.debug(
-                    'Trying to create job using lrc reserve group {}'.format(lrc_reserve_group)
+                    },
+                    force=True,
                 )
-                try:
-                    job = self.job_processor._create_job(
-                        jobs.JobTypes.TYPE_RESTORE_LRC_GROUP_JOB,
-                        {
-                            'group': group_id,
-                            'lrc_reserve_group': lrc_reserve_group.group_id,
-                            'need_approving': need_approving,
-
-                        },
-                        force=True,
-                    )
-                except LockFailedError as e:
-                    logger.error(e)
-                    continue
-                except Exception:
-                    logger.exception('Failed to create lrc restore job')
-                    raise
-
-                break
-            else:
-                logger.debug(
-                    'Group {}: no appropriate lrc reserve groups are found on host {}'.format(
-                        group_id,
-                        host.hostname,
-                    )
-                )
+            except LockFailedError as e:
+                logger.error(e)
                 continue
+            except Exception:
+                logger.exception('Failed to create lrc restore job')
+                raise
 
-            if job:
-                # rearrange host nodes order if required after successful job creation
-                self.reserve_lrc_tree.account_job(job)
-                host_nodes.consume(host_node)
-                break
+            # rearrange host nodes order if required after successful job creation
+            self.reserve_lrc_tree.account_job(job)
+            host_nodes.consume(host_node)
+            break
+
         else:
             raise RuntimeError(
-                'Failed to find any lrc reserve group to restore group {}'.format(group_id)
+                'Failed to find any lrc reserve group to restore group {}'.format(group.group_id)
             )
 
         return job
@@ -589,7 +566,37 @@ class LrcReserveGroupSelector(object):
 
     def _hdd_sort_key(self, hdd_node):
         host_node = hdd_node.parent
-        return host_node.artifacts.running_lrc_restore_jobs.get(hdd_node.name, 0)
+        return (
+            host_node.artifacts.running_lrc_restore_jobs.get(hdd_node.name, 0),
+            len(hdd_node.groups),
+        )
+
+    def _groups_on_host_nodes(self, group, host_nodes, nodes_usage):
+
+        for host_node in host_nodes:
+
+            # NOTE: nodes of type 'host' are guaranteed to have 'addr' attribute
+            host = storage.hosts[host_node.addr]
+            logger.debug('Group {}: checking candidate lrc reserve groups on host {}'.format(
+                group.group_id,
+                host.hostname,
+            ))
+
+            host_nodes_usage = self._nodes_usage_by_host(host)
+
+            if not self._is_cluster_node_limits_matched(host, nodes_usage, host_nodes_usage):
+                continue
+
+            for lrc_reserve_group in self._groups_on_host_node(host_node):
+                yield host_node, lrc_reserve_group
+            else:
+                logger.debug(
+                    'Group {}: no appropriate lrc reserve groups are found on host {}'.format(
+                        group.group_id,
+                        host.hostname,
+                    )
+                )
+                continue
 
     def _groups_on_host_node(self, host_node):
         sorted_hdd_nodes = sorted(host_node.children.itervalues(), key=self._hdd_sort_key)
