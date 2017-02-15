@@ -429,7 +429,7 @@ class LrcReserveGroupSelector(object):
         self.reserve_lrc_tree = LrcReserveClusterTree(
             reserve_lrc_groups,
             job_processor=self.job_processor,
-            # node_types=(inventory.get_dc_node_type(), 'host'),
+            node_types=(inventory.get_dc_node_type(), 'host'),
         )
 
         self.host_nodes_by_dc = {}
