@@ -1,3 +1,11 @@
+mastermind-cocainev11 (2.28.168) trusty; urgency=medium
+
+  * Add uncoupled lrc group restore cli handle
+  * Add restore uncoupled lrc group job
+  * Fix cluster tree building when failed to determine host tree
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 16 Feb 2017 15:14:27 +0300
+
 mastermind-cocainev11 (2.28.167) trusty; urgency=medium
 
   * Restore-path: clean reserved-lrc groups
