@@ -720,6 +720,19 @@ class LrcReserveGroupSelector(object):
 
     def _groups_on_host_nodes(self, group, host_nodes, nodes_usage):
 
+        group_nb = infrastructure.infrastructure.get_backend_by_group_id(group.group_id)
+        skip_hdd_node = None
+        if group_nb.fs:
+            fs_id = str(group_nb.fs)
+            try:
+                skip_host_node = self.reserve_lrc_tree.hosts[group_nb.node.host.hostname]
+                for hdd_node in skip_host_node.children.itervalues():
+                    if hdd_node.name == fs_id:
+                        skip_hdd_node = hdd_node
+                        break
+            except CacheUpstreamError:
+                pass
+
         for host_node in host_nodes:
 
             # NOTE: nodes of type 'host' are guaranteed to have 'addr' attribute
@@ -734,7 +747,8 @@ class LrcReserveGroupSelector(object):
             if not self._is_cluster_node_limits_matched(host, nodes_usage, host_nodes_usage):
                 continue
 
-            for lrc_reserve_group in self._groups_on_host_node(host_node):
+            for lrc_reserve_group in self._groups_on_host_node(host_node=host_node,
+                                                               skip_hdd_node=skip_hdd_node):
                 yield host_node, lrc_reserve_group
             else:
                 logger.debug(
@@ -745,9 +759,12 @@ class LrcReserveGroupSelector(object):
                 )
                 continue
 
-    def _groups_on_host_node(self, host_node):
+    def _groups_on_host_node(self, host_node, skip_hdd_node=None):
         sorted_hdd_nodes = sorted(host_node.children.itervalues(), key=self._hdd_sort_key)
         for hdd_node in sorted_hdd_nodes:
+            if skip_hdd_node and hdd_node is skip_hdd_node:
+                logger.debug('Skipping hdd {}'.format(hdd_node.name))
+                continue
             for group in hdd_node.groups.itervalues():
                 yield group
 
