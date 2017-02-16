@@ -201,6 +201,9 @@ class ClusterTree(object):
 
         # Adding hdd level to cluster tree
         for fs in storage.fs:
+            if fs.host.hostname not in self.hosts:
+                # failed to fetch host tree
+                continue
             host_node = self.hosts[fs.host.hostname]
 
             fs_id = str(fs)
@@ -234,6 +237,9 @@ class ClusterTree(object):
                     ))
                     continue
                 fs_id = str(nb.fs)
+                if fs_id not in self.hdds:
+                    # failed to fetch host tree
+                    continue
                 self.hdds[fs_id].groups[group] = group
                 self.account_group(self.hdds[fs_id], group)
 

@@ -11,6 +11,7 @@ class JobTypes(object):
     TYPE_BACKEND_CLEANUP_JOB = 'backend_cleanup_job'
     TYPE_BACKEND_MANAGER_JOB = 'backend_manager_job'
     TYPE_RESTORE_LRC_GROUP_JOB = 'restore_lrc_group_job'
+    TYPE_RESTORE_UNCOUPLED_LRC_GROUP_JOB = 'restore_uncoupled_lrc_group_job'
     TYPE_MAKE_LRC_RESERVED_GROUPS_JOB = 'make_lrc_reserved_groups_job'
 
     AVAILABLE_TYPES = (
@@ -22,6 +23,7 @@ class JobTypes(object):
         TYPE_BACKEND_CLEANUP_JOB,
         TYPE_BACKEND_MANAGER_JOB,
         TYPE_RESTORE_LRC_GROUP_JOB,
+        TYPE_RESTORE_UNCOUPLED_LRC_GROUP_JOB,
         TYPE_MAKE_LRC_RESERVED_GROUPS_JOB,
     )
 

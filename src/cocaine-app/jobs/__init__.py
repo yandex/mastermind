@@ -64,6 +64,7 @@ class JobProcessor(object):
         # Priority of this jobs is zero
         # because they're not using resources
         JobTypes.TYPE_BACKEND_CLEANUP_JOB: 0,
+        JobTypes.TYPE_RESTORE_UNCOUPLED_LRC_GROUP_JOB: 0,
     }
 
     # job types that should be processed by processor,
@@ -71,6 +72,7 @@ class JobProcessor(object):
     SUPPORTED_JOBS = set([
         JobTypes.TYPE_RESTORE_GROUP_JOB,
         JobTypes.TYPE_RESTORE_LRC_GROUP_JOB,
+        JobTypes.TYPE_RESTORE_UNCOUPLED_LRC_GROUP_JOB,
         JobTypes.TYPE_MOVE_JOB,
         JobTypes.TYPE_TTL_CLEANUP_JOB,
         JobTypes.TYPE_RECOVER_DC_JOB,

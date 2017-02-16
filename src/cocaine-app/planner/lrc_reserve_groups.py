@@ -1,6 +1,5 @@
 import logging
 
-from errors import CacheUpstreamError
 import helpers as h
 import cluster_tree
 import infrastructure
@@ -98,6 +97,31 @@ class LrcReservePlanner(object):
                     need_approving=request.get('need_approving', True),
                 )
             except Exception as e:
+                logger.exception(e)
+                res.append(str(e))
+                continue
+            res.append(job.dump())
+        return res
+
+    @h.concurrent_handler
+    def create_uncoupled_lrc_restore_jobs(self, request):
+        if 'uncoupled_lrc_groups' not in request:
+            raise ValueError('Uncoupled lrc groups are required')
+
+        lrc_group_ids = request['uncoupled_lrc_groups']
+
+        selector = LrcReserveGroupSelector(self.job_processor)
+
+        res = []
+        for lrc_group_id in lrc_group_ids:
+            try:
+                job = selector.restore_uncoupled_lrc_group(
+                    lrc_group_id,
+                    check_status=request.get('check_status', True),
+                    need_approving=request.get('need_approving', True),
+                )
+            except Exception as e:
+                logger.exception(e)
                 res.append(str(e))
                 continue
             res.append(job.dump())
@@ -191,7 +215,6 @@ class LrcReserve(object):
         if group.type == storage.Group.TYPE_RESERVED_LRC_8_2_2_V1:
             self._dc_reserved_space.setdefault(dc, 0)
             self._dc_reserved_space[dc] += group.get_stat().total_space
-
 
     def make_jobs(self):
         for dc in self._dcs:
@@ -429,21 +452,21 @@ class LrcReserveGroupSelector(object):
         self.reserve_lrc_tree = LrcReserveClusterTree(
             reserve_lrc_groups,
             job_processor=self.job_processor,
-            # node_types=(inventory.get_dc_node_type(), 'host'),
+            node_types=(inventory.get_dc_node_type(), 'host'),
         )
 
         self.host_nodes_by_dc = {}
 
     @staticmethod
-    def _nodes_usage_by_groups(groups):
+    def _nodes_usage_by_groups(group_ids):
 
         nodes_usage = {}
 
-        for group in groups:
+        for group_id in group_ids:
             # in case if any group is down we are trying to get it's host from history
-            host = infrastructure.infrastructure.get_host_by_group_id(group.group_id)
+            host = infrastructure.infrastructure.get_host_by_group_id(group_id)
             if host is None:
-                raise RuntimeError('Cannot determine host for group {}'.format(group))
+                raise RuntimeError('Cannot determine host for group {}'.format(group_id))
 
             group_nodes_usage = LrcReserveGroupSelector._nodes_usage_by_host(host)
 
@@ -500,11 +523,12 @@ class LrcReserveGroupSelector(object):
         logger.info('Selecting lrc reserve group for restoring group {}'.format(group_id))
 
         group = storage.groups[group_id]
-        if not isinstance(group.couple, storage.Lrc822v1Groupset):
+        lrc_groupset = group.couple
+        if not isinstance(lrc_groupset, storage.Lrc822v1Groupset):
             raise ValueError('Group {} does not belong to lrc groupset'.format(group))
 
         if check_status:
-            if group.couple.status == storage.Status.ARCHIVED:
+            if lrc_groupset.status == storage.Status.ARCHIVED:
                 raise ValueError(
                     'Group {} will not be restored, groupset is in good state, status "{}"'.format(
                         group,
@@ -518,69 +542,167 @@ class LrcReserveGroupSelector(object):
 
         lrc_group_dc = host.dc
 
-        nodes_usage = self._nodes_usage_by_groups(group.couple.groups)
+        host_nodes = self.host_nodes_by_dc.setdefault(
+            lrc_group_dc,
+            self._prepare_nodes_subset(lrc_group_dc)
+        )
+
+        nodes_usage = self._nodes_usage_by_groups(g.group_id for g in group.couple.groups)
+
+        for host_node, lrc_reserve_group in self._groups_on_host_nodes(group, host_nodes, nodes_usage):
+
+            job = None
+
+            logger.debug(
+                'Trying to create job using lrc reserve group {}'.format(lrc_reserve_group)
+            )
+            try:
+                job = self.job_processor._create_job(
+                    jobs.JobTypes.TYPE_RESTORE_LRC_GROUP_JOB,
+                    {
+                        'group': group_id,
+                        'lrc_reserve_group': lrc_reserve_group.group_id,
+                        'need_approving': need_approving,
+
+                    },
+                    force=True,
+                )
+            except LockFailedError as e:
+                logger.error(e)
+                continue
+            except Exception:
+                logger.exception('Failed to create lrc restore job')
+                raise
+
+            # rearrange host nodes order if required after successful job creation
+            self.reserve_lrc_tree.account_job(job)
+            host_nodes.consume(host_node)
+            break
+
+        else:
+            raise RuntimeError(
+                'Failed to find any lrc reserve group to restore group {}'.format(group.group_id)
+            )
+
+        return job
+
+    def _is_prepared_uncoupled_group(self, group, candidate_group):
+        if candidate_group.type != storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1:
+            return False
+
+        if not candidate_group.meta:
+            return False
+
+        if group.group_id not in candidate_group.meta['lrc_groups']:
+            return False
+
+        return candidate_group.meta['lrc_groups']
+
+    def _get_prepared_uncoupled_group_ids(self, group):
+        if group.meta:
+            return group.meta['lrc_groups']
+
+        # optimistic search - by trying to hit in range of 12 lrc stripe groups
+        stripe_size = storage.Lrc.Scheme822v1.STRIPE_SIZE
+        for group_id in xrange(group.group_id - stripe_size + 1, group.group_id + stripe_size):
+            if group_id not in storage.groups:
+                continue
+
+            candidate_group = storage.groups[group_id]
+
+            if self._is_prepared_uncoupled_group(group, candidate_group):
+                return candidate_group.meta['lrc_groups']
+
+        # if optimistic search fails, we need to iterate through all uncoupled
+        # lrc groups to find prepared uncoupled groups for <group>
+        for candidate_group in storage.groups:
+            if self._is_prepared_uncoupled_group(group, candidate_group):
+                return candidate_group.meta['lrc_groups']
+
+        raise RuntimeError(
+            'Failed to fetch prepared uncoupled groups for group {}, cannot construct '
+            'metakey'.format(
+                group,
+            )
+        )
+
+    def restore_uncoupled_lrc_group(self, group_id, check_status=True, need_approving=True):
+
+        logger.info(
+            'Selecting lrc reserve group for restoring uncoupled lrc group {}'.format(group_id)
+        )
+
+        group = storage.groups[group_id]
+        if group.couple is not None:
+            raise ValueError(
+                'Group {} is not an uncoupled lrc group, belongs to couple {}'.format(
+                    group,
+                    group.couple,
+                )
+            )
+
+        if check_status:
+            if group.status != storage.Status.INIT:
+                raise ValueError(
+                    'Group {} will not be restored, group has status "{}", expected "{}"'.format(
+                        group,
+                        group.status,
+                        storage.Status.INIT,
+                    )
+                )
+
+        prepared_uncoupled_group_ids = self._get_prepared_uncoupled_group_ids(group)
+
+        host = infrastructure.infrastructure.get_host_by_group_id(group_id)
+        if host is None:
+            raise RuntimeError('Cannot determine host for group {}'.format(group_id))
+
+        lrc_group_dc = host.dc
 
         host_nodes = self.host_nodes_by_dc.setdefault(
             lrc_group_dc,
             self._prepare_nodes_subset(lrc_group_dc)
         )
 
-        for host_node in host_nodes:
+        nodes_usage = self._nodes_usage_by_groups(
+            [gid for gid in prepared_uncoupled_group_ids if gid != group_id]
+        )
+
+        for host_node, lrc_reserve_group in self._groups_on_host_nodes(group, host_nodes, nodes_usage):
 
             job = None
 
-            # NOTE: nodes of type 'host' are guaranteed to have 'addr' attribute
-            host = storage.hosts[host_node.addr]
-            logger.debug('Group {}: checking candidate lrc reserve groups on host {}'.format(
-                group_id,
-                host.hostname,
-            ))
+            logger.debug(
+                'Trying to create job using lrc reserve group {}'.format(lrc_reserve_group)
+            )
+            try:
+                job = self.job_processor._create_job(
+                    jobs.JobTypes.TYPE_RESTORE_UNCOUPLED_LRC_GROUP_JOB,
+                    {
+                        'group': group_id,
+                        'lrc_reserve_group': lrc_reserve_group.group_id,
+                        'lrc_groups': prepared_uncoupled_group_ids,
+                        'scheme': storage.Lrc.Scheme822v1.ID,
+                        'need_approving': need_approving,
 
-            host_nodes_usage = self._nodes_usage_by_host(host)
-
-            if not self._is_cluster_node_limits_matched(host, nodes_usage, host_nodes_usage):
-                continue
-
-            for lrc_reserve_group in self._groups_on_host_node(host_node):
-                logger.debug(
-                    'Trying to create job using lrc reserve group {}'.format(lrc_reserve_group)
+                    },
+                    force=True,
                 )
-                try:
-                    job = self.job_processor._create_job(
-                        jobs.JobTypes.TYPE_RESTORE_LRC_GROUP_JOB,
-                        {
-                            'group': group_id,
-                            'lrc_reserve_group': lrc_reserve_group.group_id,
-                            'need_approving': need_approving,
-
-                        },
-                        force=True,
-                    )
-                except LockFailedError as e:
-                    logger.error(e)
-                    continue
-                except Exception:
-                    logger.exception('Failed to create lrc restore job')
-                    raise
-
-                break
-            else:
-                logger.debug(
-                    'Group {}: no appropriate lrc reserve groups are found on host {}'.format(
-                        group_id,
-                        host.hostname,
-                    )
-                )
+            except LockFailedError as e:
+                logger.error(e)
                 continue
+            except Exception:
+                logger.exception('Failed to create restore uncoupled lrc group job')
+                raise
 
-            if job:
-                # rearrange host nodes order if required after successful job creation
-                self.reserve_lrc_tree.account_job(job)
-                host_nodes.consume(host_node)
-                break
+            # rearrange host nodes order if required after successful job creation
+            self.reserve_lrc_tree.account_job(job)
+            host_nodes.consume(host_node)
+            break
+
         else:
             raise RuntimeError(
-                'Failed to find any lrc reserve group to restore group {}'.format(group_id)
+                'Failed to find any lrc reserve group to restore uncoupled lrc group {}'.format(group.group_id)
             )
 
         return job
@@ -591,7 +713,37 @@ class LrcReserveGroupSelector(object):
 
     def _hdd_sort_key(self, hdd_node):
         host_node = hdd_node.parent
-        return host_node.artifacts.running_lrc_restore_jobs.get(hdd_node.name, 0)
+        return (
+            host_node.artifacts.running_lrc_restore_jobs.get(hdd_node.name, 0),
+            len(hdd_node.groups),
+        )
+
+    def _groups_on_host_nodes(self, group, host_nodes, nodes_usage):
+
+        for host_node in host_nodes:
+
+            # NOTE: nodes of type 'host' are guaranteed to have 'addr' attribute
+            host = storage.hosts[host_node.addr]
+            logger.debug('Group {}: checking candidate lrc reserve groups on host {}'.format(
+                group.group_id,
+                host.hostname,
+            ))
+
+            host_nodes_usage = self._nodes_usage_by_host(host)
+
+            if not self._is_cluster_node_limits_matched(host, nodes_usage, host_nodes_usage):
+                continue
+
+            for lrc_reserve_group in self._groups_on_host_node(host_node):
+                yield host_node, lrc_reserve_group
+            else:
+                logger.debug(
+                    'Group {}: no appropriate lrc reserve groups are found on host {}'.format(
+                        group.group_id,
+                        host.hostname,
+                    )
+                )
+                continue
 
     def _groups_on_host_node(self, host_node):
         sorted_hdd_nodes = sorted(host_node.children.itervalues(), key=self._hdd_sort_key)
@@ -639,6 +791,7 @@ class LrcReserveClusterTree(cluster_tree.ClusterTree):
             types=(
                 jobs.JobTypes.TYPE_RESTORE_GROUP_JOB,
                 jobs.JobTypes.TYPE_RESTORE_LRC_GROUP_JOB,
+                jobs.JobTypes.TYPE_RESTORE_UNCOUPLED_LRC_GROUP_JOB,
             ),
             statuses=jobs.Job.ACTIVE_STATUSES,
             sort=False,
@@ -649,6 +802,8 @@ class LrcReserveClusterTree(cluster_tree.ClusterTree):
             self._account_restore_job(job)
         elif job.type == jobs.JobTypes.TYPE_RESTORE_LRC_GROUP_JOB:
             self._account_restore_lrc_group_job(job)
+        elif job.type == jobs.JobTypes.TYPE_RESTORE_UNCOUPLED_LRC_GROUP_JOB:
+            self._account_restore_uncoupled_lrc_group_job(job)
         super(LrcReserveClusterTree, self).account_job(job)
 
     def _account_restore_job(self, job):
@@ -688,5 +843,26 @@ class LrcReserveClusterTree(cluster_tree.ClusterTree):
                         host_node.name,
                     )
                 )
+                del hdd_node.groups[job.lrc_reserve_group]
+                break
+
+    def _account_restore_uncoupled_lrc_group_job(self, job):
+        logger.debug('Accounting job {}'.format(job.id))
+
+        host = infrastructure.infrastructure.get_host_by_group_id(job.lrc_reserve_group)
+
+        if host is None:
+            return
+
+        host_node = self.hosts.get(host.hostname)
+        if host_node is None:
+            return
+
+        for hdd_node in host_node.children.itervalues():
+            if job.lrc_reserve_group in hdd_node.groups:
+                logger.debug('Removing reserve group {} from hdd node {}'.format(
+                    job.lrc_reserve_group,
+                    hdd_node.name,
+                ))
                 del hdd_node.groups[job.lrc_reserve_group]
                 break
