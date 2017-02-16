@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.169) trusty; urgency=medium
+
+  * Skip hdds where restored group is located
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 16 Feb 2017 17:20:09 +0300
+
 mastermind-cocainev11 (2.28.168) trusty; urgency=medium
 
   * Add uncoupled lrc group restore cli handle
