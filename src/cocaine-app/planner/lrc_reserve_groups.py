@@ -632,24 +632,25 @@ class LrcReserveGroupSelector(object):
             'Selecting lrc reserve group for restoring uncoupled lrc group {}'.format(group_id)
         )
 
-        group = storage.groups[group_id]
-        if group.couple is not None:
-            raise ValueError(
-                'Group {} is not an uncoupled lrc group, belongs to couple {}'.format(
-                    group,
-                    group.couple,
-                )
-            )
-
-        if check_status:
-            if group.status != storage.Status.INIT:
+        if group_id in storage.groups:
+            group = storage.groups[group_id]
+            if group.couple is not None:
                 raise ValueError(
-                    'Group {} will not be restored, group has status "{}", expected "{}"'.format(
+                    'Group {} is not an uncoupled lrc group, belongs to couple {}'.format(
                         group,
-                        group.status,
-                        storage.Status.INIT,
+                        group.couple,
                     )
                 )
+
+            if check_status:
+                if group.status != storage.Status.INIT:
+                    raise ValueError(
+                        'Group {} will not be restored, group has status "{}", expected "{}"'.format(
+                            group,
+                            group.status,
+                            storage.Status.INIT,
+                        )
+                    )
 
         prepared_uncoupled_group_ids = self._get_prepared_uncoupled_group_ids(group)
 
