@@ -1820,6 +1820,46 @@ def lrc_group_restore(
         pprint(res)
 
 
+@lrcGroupDispatcher.command(name='uncoupled-group-restore')
+@log_action
+def lrc_group_uncoupled_group_restore(
+    group,
+    autoapprove=('a', False, 'Automatically approve jobs'),
+    no_check_status=('', False, 'Create restore lrc uncoupled job without checking group status'),
+    json=('', None, 'Format data as json'),
+    host=None,
+    app=None
+):
+    '''Create job to restore an uncoupled lrc group'''
+    cl = client(host, app)
+
+    options = {
+        'uncoupled_lrc_groups': [int(group)],
+        'check_status': not no_check_status,
+        'need_approving': not autoapprove,
+    }
+
+    res = cl.request(
+        'create_uncoupled_lrc_restore_jobs',
+        options
+    )
+
+    if not len(res):
+        print warn('Unexpected empty result')
+        sys.exit(1)
+
+    res = res[0]
+
+    if isinstance(res, basestring):
+        print warn(res)
+        sys.exit(1)
+
+    if json:
+        print dumps(res)
+    else:
+        pprint(res)
+
+
 lrcGroupsetDispatcher = Dispatcher(globaloptions=(host_param, app_param))
 lrcDispatcher.nest('groupset', lrcGroupsetDispatcher, 'LRC groupset commands')
 
