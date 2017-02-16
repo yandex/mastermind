@@ -97,6 +97,31 @@ class LrcReservePlanner(object):
                     need_approving=request.get('need_approving', True),
                 )
             except Exception as e:
+                logger.exception(e)
+                res.append(str(e))
+                continue
+            res.append(job.dump())
+        return res
+
+    @h.concurrent_handler
+    def create_uncoupled_lrc_restore_jobs(self, request):
+        if 'uncoupled_lrc_groups' not in request:
+            raise ValueError('Uncoupled lrc groups are required')
+
+        lrc_group_ids = request['uncoupled_lrc_groups']
+
+        selector = LrcReserveGroupSelector(self.job_processor)
+
+        res = []
+        for lrc_group_id in lrc_group_ids:
+            try:
+                job = selector.restore_uncoupled_lrc_group(
+                    lrc_group_id,
+                    check_status=request.get('check_status', True),
+                    need_approving=request.get('need_approving', True),
+                )
+            except Exception as e:
+                logger.exception(e)
                 res.append(str(e))
                 continue
             res.append(job.dump())
@@ -498,11 +523,12 @@ class LrcReserveGroupSelector(object):
         logger.info('Selecting lrc reserve group for restoring group {}'.format(group_id))
 
         group = storage.groups[group_id]
-        if not isinstance(group.couple, storage.Lrc822v1Groupset):
+        lrc_groupset = group.couple
+        if not isinstance(lrc_groupset, storage.Lrc822v1Groupset):
             raise ValueError('Group {} does not belong to lrc groupset'.format(group))
 
         if check_status:
-            if group.couple.status == storage.Status.ARCHIVED:
+            if lrc_groupset.status == storage.Status.ARCHIVED:
                 raise ValueError(
                     'Group {} will not be restored, groupset is in good state, status "{}"'.format(
                         group,
@@ -556,6 +582,127 @@ class LrcReserveGroupSelector(object):
         else:
             raise RuntimeError(
                 'Failed to find any lrc reserve group to restore group {}'.format(group.group_id)
+            )
+
+        return job
+
+    def _is_prepared_uncoupled_group(self, group, candidate_group):
+        if candidate_group.type != storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1:
+            return False
+
+        if not candidate_group.meta:
+            return False
+
+        if group.group_id not in candidate_group.meta['lrc_groups']:
+            return False
+
+        return candidate_group.meta['lrc_groups']
+
+    def _get_prepared_uncoupled_group_ids(self, group):
+        if group.meta:
+            return group.meta['lrc_groups']
+
+        # optimistic search - by trying to hit in range of 12 lrc stripe groups
+        stripe_size = storage.Lrc.Scheme822v1.STRIPE_SIZE
+        for group_id in xrange(group.group_id - stripe_size + 1, group.group_id + stripe_size):
+            if group_id not in storage.groups:
+                continue
+
+            candidate_group = storage.groups[group_id]
+
+            if self._is_prepared_uncoupled_group(group, candidate_group):
+                return candidate_group.meta['lrc_groups']
+
+        # if optimistic search fails, we need to iterate through all uncoupled
+        # lrc groups to find prepared uncoupled groups for <group>
+        for candidate_group in storage.groups:
+            if self._is_prepared_uncoupled_group(group, candidate_group):
+                return candidate_group.meta['lrc_groups']
+
+        raise RuntimeError(
+            'Failed to fetch prepared uncoupled groups for group {}, cannot construct '
+            'metakey'.format(
+                group,
+            )
+        )
+
+    def restore_uncoupled_lrc_group(self, group_id, check_status=True, need_approving=True):
+
+        logger.info(
+            'Selecting lrc reserve group for restoring uncoupled lrc group {}'.format(group_id)
+        )
+
+        group = storage.groups[group_id]
+        if group.couple is not None:
+            raise ValueError(
+                'Group {} is not an uncoupled lrc group, belongs to couple {}'.format(
+                    group,
+                    group.couple,
+                )
+            )
+
+        if check_status:
+            if group.status != storage.Status.INIT:
+                raise ValueError(
+                    'Group {} will not be restored, group has status "{}", expected "{}"'.format(
+                        group,
+                        group.status,
+                        storage.Status.INIT,
+                    )
+                )
+
+        prepared_uncoupled_group_ids = self._get_prepared_uncoupled_group_ids(group)
+
+        host = infrastructure.infrastructure.get_host_by_group_id(group_id)
+        if host is None:
+            raise RuntimeError('Cannot determine host for group {}'.format(group_id))
+
+        lrc_group_dc = host.dc
+
+        host_nodes = self.host_nodes_by_dc.setdefault(
+            lrc_group_dc,
+            self._prepare_nodes_subset(lrc_group_dc)
+        )
+
+        nodes_usage = self._nodes_usage_by_groups(
+            [gid for gid in prepared_uncoupled_group_ids if gid != group_id]
+        )
+
+        for host_node, lrc_reserve_group in self._groups_on_host_nodes(group, host_nodes, nodes_usage):
+
+            job = None
+
+            logger.debug(
+                'Trying to create job using lrc reserve group {}'.format(lrc_reserve_group)
+            )
+            try:
+                job = self.job_processor._create_job(
+                    jobs.JobTypes.TYPE_RESTORE_UNCOUPLED_LRC_GROUP_JOB,
+                    {
+                        'group': group_id,
+                        'lrc_reserve_group': lrc_reserve_group.group_id,
+                        'lrc_groups': prepared_uncoupled_group_ids,
+                        'scheme': storage.Lrc.Scheme822v1.ID,
+                        'need_approving': need_approving,
+
+                    },
+                    force=True,
+                )
+            except LockFailedError as e:
+                logger.error(e)
+                continue
+            except Exception:
+                logger.exception('Failed to create restore uncoupled lrc group job')
+                raise
+
+            # rearrange host nodes order if required after successful job creation
+            self.reserve_lrc_tree.account_job(job)
+            host_nodes.consume(host_node)
+            break
+
+        else:
+            raise RuntimeError(
+                'Failed to find any lrc reserve group to restore uncoupled lrc group {}'.format(group.group_id)
             )
 
         return job
