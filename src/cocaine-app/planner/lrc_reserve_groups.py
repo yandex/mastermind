@@ -791,6 +791,7 @@ class LrcReserveClusterTree(cluster_tree.ClusterTree):
             types=(
                 jobs.JobTypes.TYPE_RESTORE_GROUP_JOB,
                 jobs.JobTypes.TYPE_RESTORE_LRC_GROUP_JOB,
+                jobs.JobTypes.TYPE_RESTORE_UNCOUPLED_LRC_GROUP_JOB,
             ),
             statuses=jobs.Job.ACTIVE_STATUSES,
             sort=False,
@@ -801,6 +802,8 @@ class LrcReserveClusterTree(cluster_tree.ClusterTree):
             self._account_restore_job(job)
         elif job.type == jobs.JobTypes.TYPE_RESTORE_LRC_GROUP_JOB:
             self._account_restore_lrc_group_job(job)
+        elif job.type == jobs.JobTypes.TYPE_RESTORE_UNCOUPLED_LRC_GROUP_JOB:
+            self._account_restore_uncoupled_lrc_group_job(job)
         super(LrcReserveClusterTree, self).account_job(job)
 
     def _account_restore_job(self, job):
@@ -840,5 +843,26 @@ class LrcReserveClusterTree(cluster_tree.ClusterTree):
                         host_node.name,
                     )
                 )
+                del hdd_node.groups[job.lrc_reserve_group]
+                break
+
+    def _account_restore_uncoupled_lrc_group_job(self, job):
+        logger.debug('Accounting job {}'.format(job.id))
+
+        host = infrastructure.infrastructure.get_host_by_group_id(job.lrc_reserve_group)
+
+        if host is None:
+            return
+
+        host_node = self.hosts.get(host.hostname)
+        if host_node is None:
+            return
+
+        for hdd_node in host_node.children.itervalues():
+            if job.lrc_reserve_group in hdd_node.groups:
+                logger.debug('Removing reserve group {} from hdd node {}'.format(
+                    job.lrc_reserve_group,
+                    hdd_node.name,
+                ))
                 del hdd_node.groups[job.lrc_reserve_group]
                 break
