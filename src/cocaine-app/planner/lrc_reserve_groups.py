@@ -719,7 +719,7 @@ class LrcReserveGroupSelector(object):
         host_node = hdd_node.parent
         return (
             host_node.artifacts.running_lrc_restore_jobs.get(hdd_node.name, 0),
-            len(hdd_node.groups),
+            -len(hdd_node.groups),
         )
 
     def _groups_on_host_nodes(self, group_id, host_nodes, nodes_usage):
