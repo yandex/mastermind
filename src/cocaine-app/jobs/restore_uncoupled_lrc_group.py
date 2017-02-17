@@ -105,7 +105,7 @@ class RestoreUncoupledLrcGroupJob(Job):
             nb.backend_id,
         )
         job_tasks.append(
-            tasks.NodeStopTask.new(
+            tasks.MinionCmdTask.new(
                 self,
                 group=self.group,
                 host=nb.node.host.addr,
