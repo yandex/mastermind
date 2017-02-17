@@ -22,6 +22,7 @@ class RestoreUncoupledLrcGroupJob(Job):
         'group',
         'lrc_reserve_group',
         'lrc_groups',
+        'group_is_cleaned',
         'scheme',
         'resources',
     )
@@ -37,9 +38,10 @@ class RestoreUncoupledLrcGroupJob(Job):
 
     def create_tasks(self, processor):
 
-        self.tasks.extend(
-            self._remove_old_group_tasks()
-        )
+        if not self.group_is_cleaned:
+            self.tasks.extend(
+                self._remove_old_group_tasks()
+            )
         self.tasks.extend(
             self._remove_lrc_reserve_group_tasks()
         )
@@ -105,7 +107,7 @@ class RestoreUncoupledLrcGroupJob(Job):
             nb.backend_id,
         )
         job_tasks.append(
-            tasks.NodeStopTask.new(
+            tasks.MinionCmdTask.new(
                 self,
                 group=self.group,
                 host=nb.node.host.addr,
