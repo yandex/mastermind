@@ -152,19 +152,19 @@ class Planner(object):
         # the epoch time when executed jobs are considered meaningful
         idleness_threshold = time.time() - datetime.timedelta(days=days_of_idle).total_seconds()
 
-        couples_data = self.collection.find().sort('cleanup_ts', pymongo.ASCENDING)
+        couples_data = self.collection.find().sort('ttl_cleanup_ts', pymongo.ASCENDING)
         if couples_data.count() < len(storage.replicas_groupsets):
             logger.info('Sync cleanup data is required: {0} records/{1} couples'.format(
                 couples_data.count(), len(storage.replicas_groupsets)))
             self.sync_historic_data(recover_ts=0, cleanup_ts=int(time.time()))
-            couples_data = self.collection.find().sort('cleanup_ts', pymongo.ASCENDING)
+            couples_data = self.collection.find().sort('ttl_cleanup_ts', pymongo.ASCENDING)
 
         for couple_data in couples_data:
             c = couple_data['couple']
 
             # if couple_data doesn't contain cleanup_ts field then cleanup_ts has never been run on this couple
             # and None < idleness_threshold
-            ts = couple_data.get('cleanup_ts')
+            ts = couple_data.get('ttl_cleanup_ts')
             if ts > idleness_threshold:
                 # all couples after this one have more "fresh" job worked for them
                 logger.debug("Found lazy couples {}".format(idle_groups))
@@ -600,7 +600,7 @@ class Planner(object):
         if recover_ts:
             updated_values['recover_ts'] = int(recover_ts)
         if cleanup_ts:
-            updated_values['cleanup_ts'] = int(cleanup_ts)
+            updated_values['ttl_cleanup_ts'] = int(cleanup_ts)
 
         if len(updated_values) == 0:
             return
