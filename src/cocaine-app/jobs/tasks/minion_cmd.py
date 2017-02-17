@@ -16,6 +16,8 @@ class MinionCmdTask(Task):
     PARAMS = ('group', 'host', 'cmd', 'params', 'minion_cmd_id')
     TASK_TIMEOUT = 6000
 
+    MINION_RESTART_EXIT_CODE = 666
+
     def __init__(self, job):
         super(MinionCmdTask, self).__init__(job)
         self.minion_cmd = None
@@ -104,3 +106,14 @@ class MinionCmdTask(Task):
         record.command_uid = None
         record.exit_code = None
         return record
+
+    @property
+    def next_retry_ts(self):
+        last_record = self.last_run_history_record
+        if last_record.status != 'error':
+            return None
+
+        if last_record.exit_code == self.MINION_RESTART_EXIT_CODE:
+            return int(time.time())
+
+        return super(MinionCmdTask, self).next_retry_ts
