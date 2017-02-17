@@ -1,3 +1,10 @@
+mastermind-cocainev11 (2.28.174) trusty; urgency=medium
+
+  * Skip removing group from old location if it was already cleaned
+  * Skip checks of group availability
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 17 Feb 2017 17:38:05 +0300
+
 mastermind-cocainev11 (2.28.173) trusty; urgency=medium
 
   * Fix hdd selection for restoring lrc groups
