@@ -586,43 +586,45 @@ class LrcReserveGroupSelector(object):
 
         return job
 
-    def _is_prepared_uncoupled_group(self, group, candidate_group):
+    def _is_prepared_uncoupled_group(self, group_id, candidate_group):
         if candidate_group.type != storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1:
             return False
 
         if not candidate_group.meta:
             return False
 
-        if group.group_id not in candidate_group.meta['lrc_groups']:
+        if group_id not in candidate_group.meta['lrc_groups']:
             return False
 
-        return candidate_group.meta['lrc_groups']
+        return True
 
-    def _get_prepared_uncoupled_group_ids(self, group):
-        if group.meta:
-            return group.meta['lrc_groups']
+    def _get_prepared_uncoupled_group_ids(self, group_id):
+        if group_id in storage.groups:
+            group = storage.groups[group_id]
+            if group.meta:
+                return group.meta['lrc_groups']
 
         # optimistic search - by trying to hit in range of 12 lrc stripe groups
         stripe_size = storage.Lrc.Scheme822v1.STRIPE_SIZE
-        for group_id in xrange(group.group_id - stripe_size + 1, group.group_id + stripe_size):
-            if group_id not in storage.groups:
+        for candidate_group_id in xrange(group_id - stripe_size + 1, group_id + stripe_size):
+            if candidate_group_id not in storage.groups:
                 continue
 
-            candidate_group = storage.groups[group_id]
+            candidate_group = storage.groups[candidate_group_id]
 
-            if self._is_prepared_uncoupled_group(group, candidate_group):
+            if self._is_prepared_uncoupled_group(group_id, candidate_group):
                 return candidate_group.meta['lrc_groups']
 
         # if optimistic search fails, we need to iterate through all uncoupled
-        # lrc groups to find prepared uncoupled groups for <group>
+        # lrc groups to find prepared uncoupled groups for group with id <group_id>
         for candidate_group in storage.groups:
-            if self._is_prepared_uncoupled_group(group, candidate_group):
+            if self._is_prepared_uncoupled_group(group_id, candidate_group):
                 return candidate_group.meta['lrc_groups']
 
         raise RuntimeError(
             'Failed to fetch prepared uncoupled groups for group {}, cannot construct '
             'metakey'.format(
-                group,
+                group_id,
             )
         )
 
@@ -652,7 +654,7 @@ class LrcReserveGroupSelector(object):
                         )
                     )
 
-        prepared_uncoupled_group_ids = self._get_prepared_uncoupled_group_ids(group)
+        prepared_uncoupled_group_ids = self._get_prepared_uncoupled_group_ids(group_id)
 
         host = infrastructure.infrastructure.get_host_by_group_id(group_id)
         if host is None:
