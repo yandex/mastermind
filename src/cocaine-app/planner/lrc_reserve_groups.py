@@ -672,6 +672,13 @@ class LrcReserveGroupSelector(object):
             [gid for gid in prepared_uncoupled_group_ids if gid != group_id]
         )
 
+        group_history = infrastructure.infrastructure.get_group_history(group_id)
+
+        group_is_cleaned = False
+        if group_history and group_history.nodes:
+            if len(group_history.nodes[-1].set) == 0:
+                group_is_cleaned = True
+
         for host_node, lrc_reserve_group in self._groups_on_host_nodes(group_id, host_nodes, nodes_usage):
 
             job = None
@@ -686,6 +693,7 @@ class LrcReserveGroupSelector(object):
                         'group': group_id,
                         'lrc_reserve_group': lrc_reserve_group.group_id,
                         'lrc_groups': prepared_uncoupled_group_ids,
+                        'group_is_cleaned': group_is_cleaned,
                         'scheme': storage.Lrc.Scheme822v1.ID,
                         'need_approving': need_approving,
 

@@ -1525,7 +1525,7 @@ class Infrastructure(object):
                 return group.node_backends[0]
 
         # either group is not found in storage or it has no known backends,
-        # search last history record
+        # search last non-empty history record
         last_non_empty_backends_set = self._last_non_empty_backends_set(group_id)
         if last_non_empty_backends_set:
             if len(last_non_empty_backends_set) > 1:
