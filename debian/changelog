@@ -1,3 +1,9 @@
+mastermind (2.28.171) trusty; urgency=medium
+
+  * Fix restore uncoupled lrc job creation
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 17 Feb 2017 13:06:53 +0300
+
 mastermind (2.28.170) trusty; urgency=medium
 
   * Tolerate uncoupled lrc groups that are not found in storage
