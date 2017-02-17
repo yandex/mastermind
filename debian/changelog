@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.172) trusty; urgency=medium
+
+  * Use last non-empty history record to determine group's backend
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 17 Feb 2017 14:59:12 +0300
+
 mastermind-cocainev11 (2.28.171) trusty; urgency=medium
 
   * Fix restore uncoupled lrc job creation
