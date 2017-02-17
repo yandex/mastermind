@@ -2,6 +2,7 @@ import logging
 
 import helpers as h
 import cluster_tree
+from errors import CacheUpstreamError
 import infrastructure
 import inventory
 import jobs
@@ -671,7 +672,7 @@ class LrcReserveGroupSelector(object):
             [gid for gid in prepared_uncoupled_group_ids if gid != group_id]
         )
 
-        for host_node, lrc_reserve_group in self._groups_on_host_nodes(group, host_nodes, nodes_usage):
+        for host_node, lrc_reserve_group in self._groups_on_host_nodes(group_id, host_nodes, nodes_usage):
 
             job = None
 
@@ -721,9 +722,9 @@ class LrcReserveGroupSelector(object):
             len(hdd_node.groups),
         )
 
-    def _groups_on_host_nodes(self, group, host_nodes, nodes_usage):
+    def _groups_on_host_nodes(self, group_id, host_nodes, nodes_usage):
 
-        group_nb = infrastructure.infrastructure.get_backend_by_group_id(group.group_id)
+        group_nb = infrastructure.infrastructure.get_backend_by_group_id(group_id)
         skip_hdd_node = None
         if group_nb.fs:
             fs_id = str(group_nb.fs)
@@ -741,7 +742,7 @@ class LrcReserveGroupSelector(object):
             # NOTE: nodes of type 'host' are guaranteed to have 'addr' attribute
             host = storage.hosts[host_node.addr]
             logger.debug('Group {}: checking candidate lrc reserve groups on host {}'.format(
-                group.group_id,
+                group_id,
                 host.hostname,
             ))
 
@@ -756,7 +757,7 @@ class LrcReserveGroupSelector(object):
             else:
                 logger.debug(
                     'Group {}: no appropriate lrc reserve groups are found on host {}'.format(
-                        group.group_id,
+                        group_id,
                         host.hostname,
                     )
                 )

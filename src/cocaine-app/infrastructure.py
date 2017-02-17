@@ -1482,6 +1482,18 @@ class Infrastructure(object):
         logger.info('Storage max group: reserved groups: {}'.format(result))
         return result
 
+    def _last_non_empty_backends_set(self, group_id):
+        group_history = self.group_history_finder.group_history(group_id)
+
+        if group_history:
+            for nb_set_record in reversed(group_history.nodes):
+                if len(nb_set_record.set) == 0:
+                    continue
+
+                return nb_set_record.set
+
+        return None
+
     def get_backend_by_group_id(self, group_id):
         """ Get group's last known backend.
 
@@ -1514,19 +1526,18 @@ class Infrastructure(object):
 
         # either group is not found in storage or it has no known backends,
         # search last history record
-        group_history = self.group_history_finder.group_history(group_id)
-        if group_history:
-            last_backends_set = group_history.nodes[-1].set
-            if len(last_backends_set) > 1:
+        last_non_empty_backends_set = self._last_non_empty_backends_set(group_id)
+        if last_non_empty_backends_set:
+            if len(last_non_empty_backends_set) > 1:
                 raise RuntimeError(
                     'Failed to find host by group id {group}: group history contains several '
                     'backends (expected one): {backends}'.format(
                         group=group_id,
-                        backends=', '.join(last_backends_set)
+                        backends=', '.join(last_non_empty_backends_set)
                     )
                 )
-            if len(last_backends_set) == 1:
-                backend_record = last_backends_set[0]
+            if len(last_non_empty_backends_set) == 1:
+                backend_record = last_non_empty_backends_set[0]
                 try:
                     backend = storage.NodeBackend.from_history_record(backend_record)
                 except CacheUpstreamError as e:
@@ -1539,7 +1550,8 @@ class Infrastructure(object):
                 return backend
         else:
             raise RuntimeError(
-                'Failed to find host by group id {group}: no group history found'.format(
+                'Failed to find host by group id {group}: group history does not contain '
+                'appropriate records'.format(
                     group=group_id,
                 )
             )
