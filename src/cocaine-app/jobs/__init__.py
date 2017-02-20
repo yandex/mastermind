@@ -173,6 +173,13 @@ class JobProcessor(object):
         active_jobs = self.job_finder.jobs(statuses=active_statuses, sort=False)
         active_jobs.sort(key=lambda j: j.create_ts)
 
+        # in the case of smart scheduler, it plans jobs in accordance with resource consumption
+        # while scheduler is not the only source of jobs, jobs created manually are difficult to predict and
+        # we suppose that there are not much of them
+        # so for the smart-scheduler case we could assume that all active jobs could be executed
+        if config.get('scheduler', {}).get('enabled', False):
+            return active_jobs
+
         ready_jobs = []
         new_jobs = []
 
