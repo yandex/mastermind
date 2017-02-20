@@ -22,7 +22,7 @@ import timed_queue
 logger = getLogger('mm.sched')
 
 
-class Planner(object):
+class Scheduler(object):
 
     RESOURCE_GROUP = "group"
 
