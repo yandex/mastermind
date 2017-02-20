@@ -596,7 +596,7 @@ class JobProcessor(object):
             # with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
             #     logger.debug('Lock acquired')
             #     self._stop_jobs(jobs)
-            self._stop_jobs(jobs)
+            self.stop_jobs_list(jobs)
 
             logger.info('Retrying job creation')
             job = JobType.new(self.session, **params)
@@ -650,7 +650,7 @@ class JobProcessor(object):
                 logger.debug('Lock acquired')
 
                 jobs = self.job_finder.jobs(ids=job_uids, sort=False)
-                self._stop_jobs(jobs)
+                self.stop_jobs_list(jobs)
 
         except LockFailedError as e:
             raise
@@ -661,7 +661,7 @@ class JobProcessor(object):
 
         return [job.dump() for job in jobs]
 
-    def _stop_jobs(self, jobs):
+    def stop_jobs_list(self, jobs):
 
         executing_jobs = []
 
