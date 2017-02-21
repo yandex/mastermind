@@ -1,3 +1,9 @@
+mastermind (2.28.155~collector3) trusty; urgency=medium
+
+  * Treat 'null' dc as unkown
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 21 Feb 2017 15:44:59 +0300
+
 mastermind (2.28.155~collector2) trusty; urgency=medium
 
   * Fix misprint
