@@ -1,3 +1,4 @@
+from errors import CacheUpstreamError
 from infrastructure_cache import cache
 from mastermind import helpers as mh
 import storage
@@ -6,23 +7,30 @@ import storage
 class Host(object):
     def __init__(self, addr):
         self.addr = addr
-        self.dc = None
+        self._dc = None
         self.hostname = None
         self.nodes = []
 
     def update(self, state):
-        if 'dc' in state:
-            self.dc = state['dc']
-        if 'name' in state:
-            self.hostname = state['name']
+        self.hostname = state['name']
+        self._dc = state['dc']
 
     @property
     def hostname_or_not(self):
         return self.hostname
 
     @property
+    def dc(self):
+        if self._dc is None:
+            raise CacheUpstreamError('Host {} ({}): dc is unknown'.format(
+                self.hostname,
+                self.addr,
+            ))
+        return self._dc
+
+    @property
     def dc_or_not(self):
-        return self.dc
+        return self._dc
 
     @property
     def parents(self):
