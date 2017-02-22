@@ -1,3 +1,10 @@
+mastermind-cocainev11 (2.28.176) trusty; urgency=medium
+
+  * Add 'uncoupled_groups_total_space' for lrc uncoupled groups prepare handle
+  * Fix uncoupled lrc groups accounting during prepare
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 22 Feb 2017 18:22:02 +0300
+
 mastermind-cocainev11 (2.28.175) trusty; urgency=medium
 
   * Fix creating lrc group jobs when group has no backends
