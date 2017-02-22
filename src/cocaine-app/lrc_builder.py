@@ -7,6 +7,7 @@ import infrastructure
 import inventory
 from jobs.job_types import JobTypes
 from mastermind_core.config import config
+from mastermind_core import helpers
 import storage
 
 
@@ -25,6 +26,7 @@ class LRC_8_2_2_V1_Builder(object):
     DC_NODE_TYPE = inventory.get_dc_node_type()
 
     CFG = LRC_CFG.get('lrc-8-2-2-v1', {})
+    TS_TOLERANCE = config.get('total_space_diff_tolerance', 0.05)
 
     # Builder can be configured to restrict the number
     # of selected groups for building an lrc groupset
@@ -44,6 +46,11 @@ class LRC_8_2_2_V1_Builder(object):
         self.lrc_tree = None
         self.lrc_nodes = None
         self.job_processor = job_processor
+
+        self._total_space_options = [
+            helpers.convert_config_bytes_value(ts)
+            for ts in self.CFG.get('uncoupled_groups_total_space', [])
+        ]
 
     def build(self, count, mandatory_dcs=None):
         """ Create jobs for preparing at least `count` lrc groupsets
@@ -168,6 +175,17 @@ class LRC_8_2_2_V1_Builder(object):
 
         return tree, nodes
 
+    def _uncoupled_group_ts_match(self, uncoupled_group_ts):
+
+        if not self._total_space_options:
+            return True
+
+        for option_ts in self._total_space_options:
+            if abs(option_ts - uncoupled_group_ts) < option_ts * self.TS_TOLERANCE:
+                return True
+
+        return False
+
     def _select_groups(self, mandatory_dcs, skip_groups=None):
         """ Get generator producing groups for lrc groupset
 
@@ -206,6 +224,15 @@ class LRC_8_2_2_V1_Builder(object):
         mandatory_dcs.extend([None] * (self.DCS_COUNT - len(mandatory_dcs)))
 
         for ts, group_ids in groups_by_total_space.iteritems():
+
+            if not self._uncoupled_group_ts_match(ts):
+                logger.debug(
+                    'Selecting among groups with total space {total_space}: skipped due to '
+                    '"uncoupled_groups_total_space" settings'.format(
+                        total_space=ts,
+                    )
+                )
+                continue
 
             logger.debug(
                 'Selecting among groups with total space {total_space}: {groups}'.format(
