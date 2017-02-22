@@ -642,7 +642,7 @@ class Infrastructure(object):
                 'tmp_dir',
                 '/var/tmp/ttl_cleanup_{couple_id}'
             ).format(
-                couple_id=couple,
+                couple_id=couple.groups[0].group_id,
             ),
             safe=('-S' if safe else ''),
             remotes=(' '.join('-r {}'.format(r) for r in remotes)),
