@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.175) trusty; urgency=medium
+
+  * Fix creating lrc group jobs when group has no backends
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 22 Feb 2017 14:00:42 +0300
+
 mastermind-cocainev11 (2.28.174) trusty; urgency=medium
 
   * Skip removing group from old location if it was already cleaned
