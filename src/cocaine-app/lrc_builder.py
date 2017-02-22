@@ -441,7 +441,11 @@ class LRC_8_2_2_V1_Builder(object):
             host = nb.node.host
             hdd_full_path = host.full_path + '|' + str(nb.fs.fsid)
             hdd_node = self.lrc_nodes['hdd'][hdd_full_path]
-            hdd_node.setdefault('groups', set()).add(group_id)
+
+            # each uncoupled group is being split into LRC_GROUPS_PER_GROUP groups
+            hdd_node.setdefault('groups', set()).update(
+                DummyGroup() for _ in xrange(self.LRC_GROUPS_PER_GROUP)
+            )
 
         infrastructure.infrastructure.update_groups_list(self.lrc_tree)
 
@@ -462,3 +466,7 @@ class LRC_8_2_2_V1_Builder(object):
             group_ids,
             key=lrc_groups_on_host,
         )
+
+
+class DummyGroup(object):
+    pass
