@@ -550,7 +550,7 @@ class LrcReserveGroupSelector(object):
 
         nodes_usage = self._nodes_usage_by_groups(g.group_id for g in group.couple.groups)
 
-        for host_node, lrc_reserve_group in self._groups_on_host_nodes(group, host_nodes, nodes_usage):
+        for host_node, lrc_reserve_group in self._groups_on_host_nodes(group_id, host_nodes, nodes_usage):
 
             job = None
 
