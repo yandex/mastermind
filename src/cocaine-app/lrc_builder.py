@@ -5,6 +5,7 @@ from mastermind.utils.tree_picker import TreePicker
 
 import infrastructure
 import inventory
+import jobs
 from jobs.job_types import JobTypes
 from mastermind_core.config import config
 from mastermind_core import helpers
@@ -172,6 +173,18 @@ class LRC_8_2_2_V1_Builder(object):
         # TODO: rename, nothing about "ns" here
         infrastructure.infrastructure.account_ns_groups(nodes, lrc_groups)
         infrastructure.infrastructure.update_groups_list(tree)
+
+        make_lrc_groups_jobs = self.job_processor.job_finder.jobs(
+            types=(
+                JobTypes.TYPE_MAKE_LRC_GROUPS_JOB,
+            ),
+            statuses=jobs.Job.ACTIVE_STATUSES,
+            sort=False,
+        )
+
+        for job in make_lrc_groups_jobs:
+            logger.debug('Accounting job {}'.format(job.id))
+            self._account_lrc_groups(uncoupled_group_ids=job.uncoupled_groups)
 
         return tree, nodes
 
@@ -346,7 +359,15 @@ class LRC_8_2_2_V1_Builder(object):
 
                     yield selected_groups
 
-                    self._account_selected_groups(tree, nodes, selected_groups)
+                    self._account_selected_groups(
+                        tree,
+                        nodes,
+                        [
+                            group_id
+                            for dc_group_ids in selected_groups
+                            for group_id in dc_group_ids
+                        ]
+                    )
 
             except StopIteration:
                 # here, one of the following happened:
@@ -453,21 +474,27 @@ class LRC_8_2_2_V1_Builder(object):
             2) selected groups are added to the lrc groups tree
             to keep group selection properties;
         """
-        group_ids = set(
-            group_id
-            for dc_group_ids in group_ids
-            for group_id in dc_group_ids
-        )
+        group_ids = set(group_ids)
         for hdd_node in nodes['hdd'].itervalues():
             hdd_node['groups'] = hdd_node.get('groups', set()) - group_ids
 
         infrastructure.infrastructure.update_groups_list(tree)
 
-        for group_id in group_ids:
-            nb = storage.groups[group_id].node_backends[0]
+        self._account_lrc_groups(uncoupled_group_ids=group_ids)
+
+    def _account_lrc_groups(self, uncoupled_group_ids):
+        for group_id in uncoupled_group_ids:
+            nb = infrastructure.infrastructure.get_backend_by_group_id(group_id)
+            if not nb.fs:
+                continue
             host = nb.node.host
             hdd_full_path = host.full_path + '|' + str(nb.fs.fsid)
             hdd_node = self.lrc_nodes['hdd'][hdd_full_path]
+
+            logger.debug('Adding {} groups count to hdd {}'.format(
+                self.LRC_GROUPS_PER_GROUP,
+                hdd_full_path
+            ))
 
             # each uncoupled group is being split into LRC_GROUPS_PER_GROUP groups
             hdd_node.setdefault('groups', set()).update(
