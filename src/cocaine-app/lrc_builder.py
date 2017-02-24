@@ -134,7 +134,8 @@ class LRC_8_2_2_V1_Builder(object):
             for LRC groupset construction;
         """
 
-        self.lrc_tree, self.lrc_nodes = self._build_lrc_tree()
+        self.lrc_tree, self.lrc_nodes = None, None
+        self._build_lrc_tree()
 
         selected_groups = self._select_groups(
             mandatory_dcs or [],
@@ -173,6 +174,8 @@ class LRC_8_2_2_V1_Builder(object):
         # TODO: rename, nothing about "ns" here
         infrastructure.infrastructure.account_ns_groups(nodes, lrc_groups)
         infrastructure.infrastructure.update_groups_list(tree)
+
+        self.lrc_tree, self.lrc_nodes = tree, nodes
 
         make_lrc_groups_jobs = self.job_processor.job_finder.jobs(
             types=(
