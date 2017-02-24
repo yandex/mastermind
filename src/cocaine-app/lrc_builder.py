@@ -519,10 +519,17 @@ class LRC_8_2_2_V1_Builder(object):
             host_lrc_groups_ids = self.lrc_nodes['host'][host.full_path].get('groups', [])
             return len(host_lrc_groups_ids)
 
-        return min(
+        selected_group_id = min(
             group_ids,
             key=lrc_groups_on_host,
         )
+        selected_group = storage.groups[selected_group_id]
+        logger.debug('Selected uncoupled group: {}, host {}, lrc groups on host: {}'.format(
+            selected_group_id,
+            selected_group.node_backends[0].node.host.hostname,
+            lrc_groups_on_host(selected_group_id),
+        ))
+        return selected_group_id
 
 
 class DummyGroup(object):
