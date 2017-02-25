@@ -1,3 +1,9 @@
+mastermind (2.28.179) trusty; urgency=medium
+
+  * Distribute new lrc groups by hdds on a host
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sat, 25 Feb 2017 19:56:09 +0300
+
 mastermind (2.28.178) trusty; urgency=medium
 
   * Fix make lrc groups job accounting
