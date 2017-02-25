@@ -515,20 +515,27 @@ class LRC_8_2_2_V1_Builder(object):
 
         def lrc_groups_on_host(group_id):
             group = storage.groups[group_id]
-            host = group.node_backends[0].node.host
-            host_lrc_groups_ids = self.lrc_nodes['host'][host.full_path].get('groups', [])
-            return len(host_lrc_groups_ids)
+            nb = group.node_backends[0]
+            host = nb.node.host
+            host_full_path = host.full_path
+            host_lrc_groups_ids = self.lrc_nodes['host'][host_full_path].get('groups', [])
+
+            hdd_full_path = host_full_path + '|' + str(nb.fs.fsid)
+            hdd_lrc_groups_ids = self.lrc_nodes['hdd'][hdd_full_path].get('groups', [])
+
+            return len(host_lrc_groups_ids), len(hdd_lrc_groups_ids)
 
         selected_group_id = min(
             group_ids,
             key=lrc_groups_on_host,
         )
         selected_group = storage.groups[selected_group_id]
-        logger.debug('Selected uncoupled group: {}, host {}, lrc groups on host: {}'.format(
+        logger.debug('Selected uncoupled group: {}, host {}, key: {}'.format(
             selected_group_id,
             selected_group.node_backends[0].node.host.hostname,
             lrc_groups_on_host(selected_group_id),
         ))
+
         return selected_group_id
 
 
