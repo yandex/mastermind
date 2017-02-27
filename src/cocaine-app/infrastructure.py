@@ -216,16 +216,19 @@ class Infrastructure(object):
         This method implements the described strategy by performing search and applying
         records that are found.
         """
-        new_ts = int(time.time())
+        new_ts = self._sync_ts
 
         types_to_sync = (
             GroupStateRecord.HISTORY_RECORD_MANUAL,
             GroupStateRecord.HISTORY_RECORD_JOB
         )
 
+        # NOTE: using bottom threshold only leads to mongo using index interval
+        # [<bottom_threshold>, inf+], which matches a lot less number of records than
+        # [inf-, <top_threshold>] (apparently mongo can use only one interval end for range queries)
         for group_history in self.group_history_finder.search_by_history_record(
             type=types_to_sync,
-            start_ts=self._sync_ts
+            start_ts=self._sync_ts,
         ):
             logger.debug('Found updated group history for group {}'.format(group_history.group_id))
             if group_history.group_id not in storage.groups:
@@ -236,12 +239,12 @@ class Infrastructure(object):
             # since adding node_backend's will proceed automatically
             # during mastermind periodical updates
             for node_backends_set in group_history.nodes:
-                # top threshold is checked due to mongo optimization: using bottom threshold only
-                # leads to mongo using index interval [<bottom_threshold>, inf+], which matches a
-                # lot less number of records than [inf-, <top_threshold>] (apparently mongo can use
-                # only one interval end for range queries)
-                if not self._sync_ts <= node_backends_set.timestamp < new_ts:
+
+                new_ts = max(new_ts, node_backends_set.timestamp)
+
+                if node_backends_set.timestamp < self._sync_ts:
                     continue
+
                 if node_backends_set.type not in types_to_sync:
                     continue
 
@@ -272,9 +275,11 @@ class Infrastructure(object):
             # then we will break the current couple of the group
             previous_couple = group.couple.as_tuple() if group.couple else ()
             for couple_record in group_history.couples:
-                if (
-                    not self._sync_ts <= couple_record.timestamp < new_ts or
 
+                new_ts = max(new_ts, couple_record.timestamp)
+
+                if (
+                    couple_record.timestamp < self._sync_ts or
                     couple_record.type not in types_to_sync
                 ):
                     previous_couple = couple_record.couple

@@ -1,3 +1,12 @@
+mastermind (2.28.180) trusty; urgency=medium
+
+  * Account restore lrc jobs in statuses
+  * Update lrc reserve group status before using for restoring uncoupled lrc group
+  * Update uncoupled group status before using for reserved groups
+  * Update timestamp low threshold from history records
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 27 Feb 2017 20:19:06 +0300
+
 mastermind (2.28.179) trusty; urgency=medium
 
   * Distribute new lrc groups by hdds on a host
