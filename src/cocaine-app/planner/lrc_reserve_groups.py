@@ -246,6 +246,30 @@ class LrcReserve(object):
                     )
                 )
 
+                try:
+                    logger.info('Updating group {} status'.format(uncoupled_group))
+                    self.job_processor.node_info_updater.update_status(groups=[uncoupled_group])
+                except Exception as e:
+                    logger.exception('Failed to update group {} status'.format(uncoupled_group))
+                    continue
+
+                # TODO: This check should be generalized
+                if uncoupled_group.status != storage.Status.INIT:
+                    logger.error('Selected uncoupled group {} has status {}, expected {}'.format(
+                        uncoupled_group,
+                        uncoupled_group.status,
+                        storage.Status.INIT,
+                    ))
+                    continue
+
+                if uncoupled_group.type != storage.Group.TYPE_UNCOUPLED:
+                    logger.error('Selected uncoupled group {} has type {}, expected {}'.format(
+                        uncoupled_group,
+                        uncoupled_group.type,
+                        storage.Group.TYPE_UNCOUPLED,
+                    ))
+                    continue
+
                 new_groups_count = self._count_lrc_reserved_groups_number(uncoupled_group)
                 new_groups_ids = infrastructure.infrastructure.reserve_group_ids(new_groups_count)
 
