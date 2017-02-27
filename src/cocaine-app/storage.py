@@ -2007,12 +2007,12 @@ class Groupset(object):
             if self.active_job['status'] in running_job_statuses:
                 return Status(
                     code=Status.SERVICE_ACTIVE,
-                    text='Couple {} has active job {}'.format(self, self.active_job['id']),
+                    text='Groupset {} has active job {}'.format(self, self.active_job['id']),
                 )
             else:
                 return Status(
                     code=Status.SERVICE_STALLED,
-                    text='Couple {} has stalled job {}'.format(self, self.active_job['id']),
+                    text='Groupset {} has stalled job {}'.format(self, self.active_job['id']),
                 )
         return None
 
