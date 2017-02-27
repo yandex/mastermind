@@ -2000,18 +2000,19 @@ class Groupset(object):
             JobTypes.TYPE_MOVE_JOB,
             JobTypes.TYPE_RESTORE_GROUP_JOB,
             JobTypes.TYPE_ADD_LRC_GROUPSET_JOB,
+            JobTypes.TYPE_RESTORE_LRC_GROUP_JOB,
         )
         running_job_statuses = (jobs.job.Job.STATUS_NEW, jobs.job.Job.STATUS_EXECUTING)
         if self.active_job and self.active_job['type'] in service_job_types:
             if self.active_job['status'] in running_job_statuses:
                 return Status(
                     code=Status.SERVICE_ACTIVE,
-                    text='Couple {} has active job {}'.format(self, self.active_job['id']),
+                    text='Groupset {} has active job {}'.format(self, self.active_job['id']),
                 )
             else:
                 return Status(
                     code=Status.SERVICE_STALLED,
-                    text='Couple {} has stalled job {}'.format(self, self.active_job['id']),
+                    text='Groupset {} has stalled job {}'.format(self, self.active_job['id']),
                 )
         return None
 
