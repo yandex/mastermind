@@ -19,11 +19,16 @@ class ExternalStorageTask(MinionCmdTask):
         assert hasattr(self.parent_job, 'src_storage')
         assert hasattr(self.parent_job, 'src_storage_options')
 
-        return inventory.external_storage_task_retry_ts(
+        retry_ts = inventory.external_storage_task_retry_ts(
             self,
             self.parent_job.src_storage,
             self.parent_job.src_storage_options
         )
+
+        if retry_ts:
+            return retry_ts
+
+        return super(ExternalStorageTask, self).next_retry_ts
 
     def ready_for_retry(self, processor):
         if super(ExternalStorageTask, self).ready_for_retry(processor):
