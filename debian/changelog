@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.181) trusty; urgency=medium
+
+  * Fix retry timestamp for external storage convert tasks
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 28 Feb 2017 15:42:08 +0300
+
 mastermind-cocainev11 (2.28.180) trusty; urgency=medium
 
   * Account restore lrc jobs in statuses
