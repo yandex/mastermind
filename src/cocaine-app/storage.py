@@ -2001,6 +2001,7 @@ class Groupset(object):
             JobTypes.TYPE_RESTORE_GROUP_JOB,
             JobTypes.TYPE_ADD_LRC_GROUPSET_JOB,
             JobTypes.TYPE_RESTORE_LRC_GROUP_JOB,
+            JobTypes.TYPE_COUPLE_DEFRAG_JOB,
         )
         running_job_statuses = (jobs.job.Job.STATUS_NEW, jobs.job.Job.STATUS_EXECUTING)
         if self.active_job and self.active_job['type'] in service_job_types:
