@@ -1,3 +1,9 @@
+mastermind (2.28.182) trusty; urgency=medium
+
+  * Fix retry ts calculation for non-convert jobs
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 01 Mar 2017 14:59:33 +0300
+
 mastermind (2.28.181) trusty; urgency=medium
 
   * Fix retry timestamp for external storage convert tasks

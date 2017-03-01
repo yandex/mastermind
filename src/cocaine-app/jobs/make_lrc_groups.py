@@ -170,6 +170,18 @@ class MakeLrcGroupsJob(Job):
             )
         )
 
+        # remove nb from uncoupled group's history
+        job_tasks.append(
+            tasks.HistoryRemoveNodeTask.new(
+                self,
+                group=uncoupled_group.group_id,
+                host=nb.node.host.addr,
+                port=nb.node.port,
+                family=nb.node.family,
+                backend_id=nb.backend_id,
+            )
+        )
+
         return job_tasks
 
     def _create_new_lrc_groups_tasks(self, node_backend, lrc_group_ids):

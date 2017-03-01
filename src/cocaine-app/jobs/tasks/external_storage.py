@@ -16,17 +16,16 @@ class ExternalStorageTask(MinionCmdTask):
         if last_record.status != 'error':
             return None
 
-        assert hasattr(self.parent_job, 'src_storage')
-        assert hasattr(self.parent_job, 'src_storage_options')
+        # TODO: move src_storage and src_storage_options to task params
+        if hasattr(self.parent_job, 'src_storage') and hasattr(self.parent_job, 'src_storage_options'):
+            retry_ts = inventory.external_storage_task_retry_ts(
+                self,
+                self.parent_job.src_storage,
+                self.parent_job.src_storage_options
+            )
 
-        retry_ts = inventory.external_storage_task_retry_ts(
-            self,
-            self.parent_job.src_storage,
-            self.parent_job.src_storage_options
-        )
-
-        if retry_ts:
-            return retry_ts
+            if retry_ts:
+                return retry_ts
 
         return super(ExternalStorageTask, self).next_retry_ts
 
