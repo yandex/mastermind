@@ -137,6 +137,13 @@ class MoveJob(Job):
             dst_base_path=self.dst_base_path,
             dst_backend_id=self.dst_backend_id)
 
+    @property
+    def _required_group_types(self):
+        return {
+            group_id: storage.Group.TYPE_UNCOUPLED
+            for group_id in [self.uncoupled_group] + self.merged_groups
+        }
+
     def create_tasks(self, processor):
 
         for group_id in self.merged_groups or []:

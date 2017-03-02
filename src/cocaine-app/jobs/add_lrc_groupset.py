@@ -89,6 +89,13 @@ class AddLrcGroupsetJob(Job):
                 )
             )
 
+    @property
+    def _required_group_types(self):
+        return {
+            group_id: storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1
+            for group_id in self.groups
+        }
+
     def create_tasks(self, processor):
         """Create tasks for adding new lrc groupset to a couple
 
