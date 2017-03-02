@@ -11,3 +11,7 @@ class RetryError(Exception):
 
     def __str__(self):
         return 'error at attempt {0}: {1}'.format(self.attempts, self.original_e)
+
+
+class JobRequirementError(Exception):
+    pass

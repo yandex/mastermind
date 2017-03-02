@@ -61,6 +61,12 @@ class RestoreLrcGroupJob(Job):
 
         self.resources = resources
 
+    @property
+    def _required_group_types(self):
+        return {
+            self.lrc_reserve_group: storage.Group.TYPE_RESERVED_LRC_8_2_2_V1,
+        }
+
     def create_tasks(self, processor):
 
         self.tasks.extend(

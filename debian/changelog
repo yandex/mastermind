@@ -1,3 +1,14 @@
+mastermind (2.28.183) trusty; urgency=medium
+
+  * Fix bug with analyzing failed locks on couple build
+  * Update uncoupled group check during couple build
+  * Add involved uncoupled groups for backend manager and backend cleanup jobs
+  * Check required group types after acquiring locks on groups during job creation
+  * Smart-scheduler: API for periodic run, limitation on a number of executing jobs, resource accounting logic, job history
+  * Account defrag jobs in service statuses
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 02 Mar 2017 19:47:57 +0300
+
 mastermind (2.28.182) trusty; urgency=medium
 
   * Fix retry ts calculation for non-convert jobs

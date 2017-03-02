@@ -6,6 +6,7 @@ from errors import CacheUpstreamError
 import infrastructure
 import inventory
 import jobs
+from jobs.error import JobRequirementError
 from mastermind_core.config import config
 from mastermind_core import helpers
 import storage
@@ -246,29 +247,6 @@ class LrcReserve(object):
                     )
                 )
 
-                try:
-                    logger.info('Updating group {} status'.format(uncoupled_group))
-                    self.job_processor.node_info_updater.update_status(groups=[uncoupled_group])
-                except Exception as e:
-                    logger.exception('Failed to update group {} status'.format(uncoupled_group))
-                    continue
-
-                # TODO: This check should be generalized
-                if uncoupled_group.status != storage.Status.INIT:
-                    logger.error('Selected uncoupled group {} has status {}, expected {}'.format(
-                        uncoupled_group,
-                        uncoupled_group.status,
-                        storage.Status.INIT,
-                    ))
-                    continue
-
-                if uncoupled_group.type != storage.Group.TYPE_UNCOUPLED:
-                    logger.error('Selected uncoupled group {} has type {}, expected {}'.format(
-                        uncoupled_group,
-                        uncoupled_group.type,
-                        storage.Group.TYPE_UNCOUPLED,
-                    ))
-                    continue
 
                 new_groups_count = self._count_lrc_reserved_groups_number(uncoupled_group)
                 new_groups_ids = infrastructure.infrastructure.reserve_group_ids(new_groups_count)
@@ -286,7 +264,7 @@ class LrcReserve(object):
                             'autoapprove': LRC_RESERVE_PLANNER_PARAMS.get('autoapprove', False)
                         }
                     )
-                except LockFailedError as e:
+                except (LockFailedError, JobRequirementError) as e:
                     logger.error(e)
                     continue
 
@@ -592,7 +570,7 @@ class LrcReserveGroupSelector(object):
                     },
                     force=True,
                 )
-            except LockFailedError as e:
+            except (LockFailedError, JobRequirementError) as e:
                 logger.error(e)
                 continue
             except Exception:
@@ -712,30 +690,6 @@ class LrcReserveGroupSelector(object):
             )
 
             try:
-                logger.info('Updating group {} status'.format(lrc_reserve_group))
-                self.job_processor.node_info_updater.update_status(groups=[lrc_reserve_group])
-            except Exception as e:
-                logger.exception('Failed to update group {} status'.format(lrc_reserve_group))
-                continue
-
-            # TODO: This check should be generalized
-            if lrc_reserve_group.status != storage.Status.COUPLED:
-                logger.error('Selected lrc reserve group {} has status {}, expected {}'.format(
-                    lrc_reserve_group,
-                    lrc_reserve_group.status,
-                    storage.Status.COUPLED,
-                ))
-                continue
-
-            if lrc_reserve_group.type != storage.Group.TYPE_RESERVED_LRC_8_2_2_V1:
-                logger.error('Selected lrc reserve group {} has type {}, expected {}'.format(
-                    lrc_reserve_group,
-                    lrc_reserve_group.type,
-                    storage.Group.TYPE_RESERVED_LRC_8_2_2_V1,
-                ))
-                continue
-
-            try:
                 job = self.job_processor._create_job(
                     jobs.JobTypes.TYPE_RESTORE_UNCOUPLED_LRC_GROUP_JOB,
                     {
@@ -749,7 +703,7 @@ class LrcReserveGroupSelector(object):
                     },
                     force=True,
                 )
-            except LockFailedError as e:
+            except (LockFailedError, JobRequirementError) as e:
                 logger.error(e)
                 continue
             except Exception:

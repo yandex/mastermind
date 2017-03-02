@@ -6,7 +6,7 @@ import traceback
 
 import elliptics
 
-from error import JobBrokenError, RetryError
+from error import JobBrokenError, RetryError, JobRequirementError
 import helpers as h
 from job_types import JobTypes, TaskTypes
 from job import Job
@@ -172,6 +172,13 @@ class JobProcessor(object):
 
         active_jobs = self.job_finder.jobs(statuses=active_statuses, sort=False)
         active_jobs.sort(key=lambda j: j.create_ts)
+
+        # in the case of smart scheduler, it plans jobs in accordance with resource consumption
+        # while scheduler is not the only source of jobs, jobs created manually are difficult to predict and
+        # we suppose that there are not much of them
+        # so for the smart-scheduler case we could assume that all active jobs could be executed
+        if config.get('scheduler', {}).get('enabled', False):
+            return active_jobs
 
         ready_jobs = []
         new_jobs = []
@@ -542,7 +549,7 @@ class JobProcessor(object):
 
             job = self._create_job(job_type, params, force=force)
 
-        except LockFailedError:
+        except (LockFailedError, JobRequirementError):
             raise
         except Exception:
             logger.exception('Failed to create job')
@@ -557,7 +564,7 @@ class JobProcessor(object):
         JobType = JobFactory.make_job_type(job_type)
 
         try:
-            job = JobType.new(self.session, **params)
+            job = JobType.new(self, self.session, **params)
         except LockAlreadyAcquiredError as e:
             if not force:
                 raise
@@ -596,27 +603,12 @@ class JobProcessor(object):
             # with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
             #     logger.debug('Lock acquired')
             #     self._stop_jobs(jobs)
-            self._stop_jobs(jobs)
+            self.stop_jobs_list(jobs)
 
             logger.info('Retrying job creation')
-            job = JobType.new(self.session, **params)
+            job = JobType.new(self, self.session, **params)
 
         job.collection = self.job_finder.collection
-
-        inv_group_ids = job._involved_groups
-        try:
-            logger.info('Job {0}: updating groups {1} status'.format(job.id, inv_group_ids))
-            self.node_info_updater.update_status(
-                groups=[
-                    storage.groups[ig]
-                    for ig in inv_group_ids
-                    if ig in storage.groups
-                ]
-            )
-        except Exception as e:
-            logger.info('Job {0}: failed to update groups status: {1}\n{2}'.format(
-                job.id, e, traceback.format_exc()))
-            pass
 
         try:
             job.create_tasks(self)
@@ -650,7 +642,7 @@ class JobProcessor(object):
                 logger.debug('Lock acquired')
 
                 jobs = self.job_finder.jobs(ids=job_uids, sort=False)
-                self._stop_jobs(jobs)
+                self.stop_jobs_list(jobs)
 
         except LockFailedError as e:
             raise
@@ -661,7 +653,7 @@ class JobProcessor(object):
 
         return [job.dump() for job in jobs]
 
-    def _stop_jobs(self, jobs):
+    def stop_jobs_list(self, jobs):
 
         executing_jobs = []
 

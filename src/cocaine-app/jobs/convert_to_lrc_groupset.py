@@ -84,6 +84,14 @@ class ConvertToLrcGroupsetJob(Job):
 
         self.resources = resources
 
+    @property
+    def _required_group_types(self):
+        return {
+            group_id: storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1
+            for groupset_group_ids in self.groups
+            for group_id in groupset_group_ids
+        }
+
     def create_tasks(self, processor):
         """Create tasks for adding new lrc groupset to a couple
 
