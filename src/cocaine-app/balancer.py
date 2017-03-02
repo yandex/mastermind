@@ -949,12 +949,12 @@ class Balancer(object):
                 logger.info('Chosen groups to couple: {0}'.format(groups_to_couple))
 
                 unsuitable_group_ids = get_unsuitable_uncoupled_group_ids(
-                    self.node,
-                    involved_groups,
+                    self.niu,
+                    groups_to_couple,
                 )
                 if unsuitable_group_ids:
                     logger.error(
-                        'Groups {} cannot be coupled: failed to ensure empty metakey '
+                        'Groups {} cannot be coupled: failed to pass uncoupled check '
                         'for groups {}'.format(
                             involved_groups,
                             unsuitable_group_ids,
@@ -1690,45 +1690,39 @@ def kill_symm_group(n, couple):
         raise RuntimeError(s)
 
 
-def get_unsuitable_uncoupled_group_ids(n, group_ids):
-    logger.info('Checking empty meta key for groups {0}'.format(group_ids))
+def get_unsuitable_uncoupled_group_ids(node_info_updater, group_ids):
+    logger.info('Checking uncoupled groups {}'.format(group_ids))
 
-    s = elliptics.Session(n)
-    wait_timeout = (
-        config
-        .get('elliptics', {})
-        .get('wait_timeout')
-    ) or config.get('wait_timeout', 5)
-    s.set_timeout(wait_timeout)
-    s.set_exceptions_policy(elliptics.exceptions_policy.no_exceptions)
-    s.set_filter(elliptics.filters.all_final)
-
-    results = {}
-    for group_id in group_ids:
-        session = s.clone()
-        session.add_groups([group_id])
-
-        logger.debug('Request to check {0} for group {1}'.format(
-            keys.SYMMETRIC_GROUPS_KEY.replace('\0', '\\0'), group_id))
-        results[group_id] = session.read_data(keys.SYMMETRIC_GROUPS_KEY)
-
-    unsuitable_uncoupled_groups = []
-
-    def update_unsuitable_groups(entry, group_id, elapsed_time=None, end_time=None):
-        if entry.error.code != -2:
-            # -2 is the one and only sign that this uncoupled group is suitable
-            unsuitable_uncoupled_groups.append(group_id)
-
-    while results:
-        group_id, result = results.popitem()
-        h.process_elliptics_async_result(
-            result=result,
-            processor=update_unsuitable_groups,
-            group_id=group_id,
-            raise_on_error=False
+    try:
+        node_info_updater.update_status(
+            groups=[storage.groups[group_id] for group_id in group_ids]
         )
+    except Exception as e:
+        logger.exception('Failed to update uncoupled groups status')
+        raise
 
-    return unsuitable_uncoupled_groups
+    unsuitable_group_ids = []
+    for group_id in group_ids:
+        uncoupled_group = storage.groups[group_id]
+        if uncoupled_group.type != storage.Group.TYPE_UNCOUPLED:
+            logger.error('Group {}: type is {}, expected {}'.format(
+                uncoupled_group.group_id,
+                uncoupled_group.type,
+                storage.Group.TYPE_UNCOUPLED,
+            ))
+            unsuitable_group_ids.append(group_id)
+            continue
+        stat = uncoupled_group.get_stat()
+        if stat.files > 0:
+            logger.error('Group {} has {} alive keys, expected {}'.format(
+                uncoupled_group.group_id,
+                stat.files,
+                0,
+            ))
+            unsuitable_group_ids.append(group_id)
+            continue
+
+    return unsuitable_group_ids
 
 
 def write_groupset_metakey(n, couple, groupset, settings, rollback_on_error=True):
