@@ -324,7 +324,7 @@ class Lrc(object):
 
         global groups
 
-        for group in groups:
+        for group in groups.keys():
             if not check_group(group):
                 continue
 
