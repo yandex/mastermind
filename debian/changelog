@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.184) trusty; urgency=medium
+
+  * Fix dictionary size change during iteration
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 02 Mar 2017 22:10:51 +0300
+
 mastermind-cocainev11 (2.28.183) trusty; urgency=medium
 
   * Fix bug with analyzing failed locks on couple build
