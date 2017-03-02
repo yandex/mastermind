@@ -246,29 +246,6 @@ class LrcReserve(object):
                     )
                 )
 
-                try:
-                    logger.info('Updating group {} status'.format(uncoupled_group))
-                    self.job_processor.node_info_updater.update_status(groups=[uncoupled_group])
-                except Exception as e:
-                    logger.exception('Failed to update group {} status'.format(uncoupled_group))
-                    continue
-
-                # TODO: This check should be generalized
-                if uncoupled_group.status != storage.Status.INIT:
-                    logger.error('Selected uncoupled group {} has status {}, expected {}'.format(
-                        uncoupled_group,
-                        uncoupled_group.status,
-                        storage.Status.INIT,
-                    ))
-                    continue
-
-                if uncoupled_group.type != storage.Group.TYPE_UNCOUPLED:
-                    logger.error('Selected uncoupled group {} has type {}, expected {}'.format(
-                        uncoupled_group,
-                        uncoupled_group.type,
-                        storage.Group.TYPE_UNCOUPLED,
-                    ))
-                    continue
 
                 new_groups_count = self._count_lrc_reserved_groups_number(uncoupled_group)
                 new_groups_ids = infrastructure.infrastructure.reserve_group_ids(new_groups_count)
@@ -710,30 +687,6 @@ class LrcReserveGroupSelector(object):
             logger.debug(
                 'Trying to create job using lrc reserve group {}'.format(lrc_reserve_group)
             )
-
-            try:
-                logger.info('Updating group {} status'.format(lrc_reserve_group))
-                self.job_processor.node_info_updater.update_status(groups=[lrc_reserve_group])
-            except Exception as e:
-                logger.exception('Failed to update group {} status'.format(lrc_reserve_group))
-                continue
-
-            # TODO: This check should be generalized
-            if lrc_reserve_group.status != storage.Status.COUPLED:
-                logger.error('Selected lrc reserve group {} has status {}, expected {}'.format(
-                    lrc_reserve_group,
-                    lrc_reserve_group.status,
-                    storage.Status.COUPLED,
-                ))
-                continue
-
-            if lrc_reserve_group.type != storage.Group.TYPE_RESERVED_LRC_8_2_2_V1:
-                logger.error('Selected lrc reserve group {} has type {}, expected {}'.format(
-                    lrc_reserve_group,
-                    lrc_reserve_group.type,
-                    storage.Group.TYPE_RESERVED_LRC_8_2_2_V1,
-                ))
-                continue
 
             try:
                 job = self.job_processor._create_job(
