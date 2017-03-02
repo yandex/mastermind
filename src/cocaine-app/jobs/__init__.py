@@ -6,7 +6,7 @@ import traceback
 
 import elliptics
 
-from error import JobBrokenError, RetryError
+from error import JobBrokenError, RetryError, JobRequirementError
 import helpers as h
 from job_types import JobTypes, TaskTypes
 from job import Job
@@ -549,7 +549,7 @@ class JobProcessor(object):
 
             job = self._create_job(job_type, params, force=force)
 
-        except LockFailedError:
+        except (LockFailedError, JobRequirementError):
             raise
         except Exception:
             logger.exception('Failed to create job')

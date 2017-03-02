@@ -6,6 +6,7 @@ from errors import CacheUpstreamError
 import infrastructure
 import inventory
 import jobs
+from jobs.error import JobRequirementError
 from mastermind_core.config import config
 from mastermind_core import helpers
 import storage
@@ -263,7 +264,7 @@ class LrcReserve(object):
                             'autoapprove': LRC_RESERVE_PLANNER_PARAMS.get('autoapprove', False)
                         }
                     )
-                except LockFailedError as e:
+                except (LockFailedError, JobRequirementError) as e:
                     logger.error(e)
                     continue
 
@@ -569,7 +570,7 @@ class LrcReserveGroupSelector(object):
                     },
                     force=True,
                 )
-            except LockFailedError as e:
+            except (LockFailedError, JobRequirementError) as e:
                 logger.error(e)
                 continue
             except Exception:
@@ -702,7 +703,7 @@ class LrcReserveGroupSelector(object):
                     },
                     force=True,
                 )
-            except LockFailedError as e:
+            except (LockFailedError, JobRequirementError) as e:
                 logger.error(e)
                 continue
             except Exception:
