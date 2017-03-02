@@ -651,11 +651,12 @@ class Balancer(object):
 
     @staticmethod
     def _remove_unusable_groups(groups_by_total_space, groups):
+        groups_to_remove = groups[:]
         for ts, group_ids in groups_by_total_space.iteritems():
-            for group_to_remove in groups[:]:
+            for group_to_remove in groups_to_remove[:]:
                 if group_to_remove in group_ids:
                     group_ids.remove(group_to_remove)
-                    groups.remove(group_to_remove)
+                    groups_to_remove.remove(group_to_remove)
 
     @contextmanager
     def _locked_uncoupled_groups(self, uncoupled_groups, groups_by_total_space, comment=''):
