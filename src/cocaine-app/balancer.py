@@ -666,9 +666,16 @@ class Balancer(object):
         except LockAlreadyAcquiredError as e:
             failed_group_ids = [locks[lock_id] for lock_id in e.lock_ids]
             self._remove_unusable_groups(groups_by_total_space, failed_group_ids)
+            logger.error('Failed to acquire locks {} of {}'.format(
+                e.lock_ids,
+                locks.keys(),
+            ))
             yield [ug for ug in uncoupled_groups if ug not in failed_group_ids]
 
         else:
+
+            logger.info('Locks successfully acquired: {}'.format(locks.keys()))
+
             try:
                 yield uncoupled_groups
             finally:
