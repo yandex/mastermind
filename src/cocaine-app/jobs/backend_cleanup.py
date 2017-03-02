@@ -141,3 +141,11 @@ class BackendCleanupJob(Job):
         if not self.couple:
             return []
         return [self.couple]
+
+    @property
+    def involved_uncoupled_groups(self):
+        if self.group in storage:
+            group = storage.groups[self.group]
+            if group.type == storage.Group.TYPE_UNCOUPLED:
+                return [self.group]
+        return []
