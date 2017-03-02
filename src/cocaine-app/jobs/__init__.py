@@ -6,7 +6,7 @@ import traceback
 
 import elliptics
 
-from error import JobBrokenError, RetryError
+from error import JobBrokenError, RetryError, JobRequirementError
 import helpers as h
 from job_types import JobTypes, TaskTypes
 from job import Job
@@ -549,7 +549,7 @@ class JobProcessor(object):
 
             job = self._create_job(job_type, params, force=force)
 
-        except LockFailedError:
+        except (LockFailedError, JobRequirementError):
             raise
         except Exception:
             logger.exception('Failed to create job')
@@ -564,7 +564,7 @@ class JobProcessor(object):
         JobType = JobFactory.make_job_type(job_type)
 
         try:
-            job = JobType.new(self.session, **params)
+            job = JobType.new(self, self.session, **params)
         except LockAlreadyAcquiredError as e:
             if not force:
                 raise
@@ -606,24 +606,9 @@ class JobProcessor(object):
             self.stop_jobs_list(jobs)
 
             logger.info('Retrying job creation')
-            job = JobType.new(self.session, **params)
+            job = JobType.new(self, self.session, **params)
 
         job.collection = self.job_finder.collection
-
-        inv_group_ids = job._involved_groups
-        try:
-            logger.info('Job {0}: updating groups {1} status'.format(job.id, inv_group_ids))
-            self.node_info_updater.update_status(
-                groups=[
-                    storage.groups[ig]
-                    for ig in inv_group_ids
-                    if ig in storage.groups
-                ]
-            )
-        except Exception as e:
-            logger.info('Job {0}: failed to update groups status: {1}\n{2}'.format(
-                job.id, e, traceback.format_exc()))
-            pass
 
         try:
             job.create_tasks(self)

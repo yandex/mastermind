@@ -36,6 +36,12 @@ class RestoreUncoupledLrcGroupJob(Job):
     def _set_resources(self):
         self.resources = {}
 
+    @property
+    def _required_group_types(self):
+        return {
+            self.lrc_reserve_group: storage.Group.TYPE_RESERVED_LRC_8_2_2_V1,
+        }
+
     def create_tasks(self, processor):
 
         if not self.group_is_cleaned:

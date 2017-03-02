@@ -4,11 +4,12 @@ import os.path
 import time
 import uuid
 
-from error import JobBrokenError
+from error import JobBrokenError, JobRequirementError
 import helpers as h
 import keys
 from mastermind_core.db.mongo import MongoObject
 from mastermind_core.config import config
+import storage
 from sync import sync_manager
 from sync.error import (
     LockError,
@@ -91,8 +92,8 @@ class Job(MongoObject):
         self.error_msg = []
 
     @classmethod
-    def new(cls, session, **kwargs):
-        super(Job, cls).new(session, **kwargs)
+    def new(cls, job_processor, session, **kwargs):
+        super(Job, cls).new(job_processor, session, **kwargs)
 
         cparams = {}
         for cparam in cls.COMMON_PARAMS:
@@ -124,13 +125,112 @@ class Job(MongoObject):
             raise
 
         try:
-            job.mark_groups(session)
-        except Exception as e:
-            logger.error('Job {0}: failed to mark required groups: {1}'.format(job.id, e))
+            try:
+                job._update_groups(job_processor.node_info_updater)
+                job._ensure_group_types()
+            except Exception as e:
+                raise JobRequirementError(str(e))
+
+            try:
+                job.mark_groups(session)
+            except Exception as e:
+                logger.error('Job {0}: failed to mark required groups: {1}'.format(job.id, e))
+                raise
+
+        except Exception:
             job.release_locks()
             raise
 
         return job
+
+    @property
+    def _required_group_types(self):
+        """ Return dictionary that maps group id to required group type.
+
+        Groups will be updated synchronously and their types will be checked against
+        corresponding required group types (see _ensure_group_types()).
+        """
+        return {}
+
+    def _update_groups(self, node_info_updater):
+        group_ids = set()
+
+        # _involved_groups may include groups that are not yet created or are unavailable
+        group_ids.update(
+            group_id
+            for group_id in self._involved_groups
+            if group_id in storage.groups
+        )
+
+        group_ids.update(self._required_group_types.iterkeys())
+
+        groups = []
+        for group_id in group_ids:
+            try:
+                groups.append(storage.groups[group_id])
+            except KeyError as e:
+                raise RuntimeError(
+                    'Cannot update status of group {}: {}'.format(group_id, e)
+                )
+
+        try:
+            node_info_updater.update_status(groups=groups)
+        except Exception as e:
+            error_msg = 'Failed to update groups statuses: {}'.format(e)
+            logger.exception(error_msg)
+            raise RuntimeError(error_msg)
+
+    def _ensure_group_types(self):
+        for group_id, group_type in self._required_group_types.iteritems():
+            group = storage.groups[group_id]
+            if group.type != group_type:
+                raise ValueError(
+                    'Group {} has type "{}", expected type "{}"'.format(
+                        group_id,
+                        group.type,
+                        group_type,
+                    )
+                )
+
+            # TODO: customize by group type
+            if group_type == storage.Group.TYPE_UNCOUPLED:
+                stat = group.get_stat()
+                if stat.files > 0:
+                    raise ValueError('Uncoupled group {} has {} alive keys, expected {}'.format(
+                        group.group_id,
+                        stat.files,
+                        0,
+                    ))
+
+            elif group_type == storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1:
+                stat = group.get_stat()
+                if stat.files > 1:
+                    raise ValueError('Uncoupled lrc group {} has {} alive keys, expected {}'.format(
+                        group.group_id,
+                        stat.files,
+                        1,
+                    ))
+                if group.status != storage.Status.COUPLED:
+                    raise ValueError('Uncoupled lrc group {} has status "{}", expected "{}"'.format(
+                        group.group_id,
+                        group.status,
+                        storage.Status.COUPLED,
+                    ))
+
+            elif group_type == storage.Group.TYPE_RESERVED_LRC_8_2_2_V1:
+                stat = group.get_stat()
+                if stat.files > 1:
+                    raise ValueError('Reserved lrc group {} has {} alive keys, expected {}'.format(
+                        group.group_id,
+                        stat.files,
+                        1,
+                    ))
+                if group.status != storage.Status.COUPLED:
+                    raise ValueError('Reserved lrc group {} has status "{}", expected "{}"'.format(
+                        group.group_id,
+                        group.status,
+                        storage.Status.COUPLED,
+                    ))
 
     def _check_job(self):
         """Check job parameters and prerequisites.

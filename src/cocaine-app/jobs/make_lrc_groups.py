@@ -30,6 +30,13 @@ class MakeLrcGroupsJob(Job):
     def _set_resources(self):
         self.resources = {}
 
+    @property
+    def _required_group_types(self):
+        return {
+            group_id: storage.Group.TYPE_UNCOUPLED
+            for group_id in self.uncoupled_groups
+        }
+
     def create_tasks(self, processor):
         """ Create tasks for new lrc groups construction
 

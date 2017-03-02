@@ -29,6 +29,12 @@ class MakeLrcReservedGroupsJob(Job):
     def _set_resources(self):
         self.resources = {}
 
+    @property
+    def _required_group_types(self):
+        return {
+            self.uncoupled_group: storage.Group.TYPE_UNCOUPLED,
+        }
+
     def create_tasks(self, processor):
         """ Create tasks for new lrc reserved groups construction
         This job prepares lrc groups that can later be used for lrc groupset restoring.

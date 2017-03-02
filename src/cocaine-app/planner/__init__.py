@@ -14,6 +14,7 @@ from infrastructure import infrastructure, UncoupledGroupsSelector
 from infrastructure_cache import cache
 import inventory
 import jobs
+from jobs.error import JobRequirementError
 from manual_locks import manual_locker
 from mastermind_core.config import config
 from mastermind_core.db.mongo.pool import Collection
@@ -239,6 +240,9 @@ class Planner(object):
                     break
             except LockAlreadyAcquiredError as e:
                 logger.info("Failed to create a new job since couple/group are already locked {}".format(e))
+                continue
+            except JobRequirementError as e:
+                logger.error("Failed to create a new job since failed to meet job requirements {}".format(e))
                 continue
             except:
                 logger.exception("Creating job for iter group {} has excepted".format(iter_group))
@@ -1175,7 +1179,7 @@ class Planner(object):
                                 jobs.JobTypes.TYPE_MOVE_JOB,
                                 job_params, force=True)
                             res['jobs'].append(job.dump())
-                        except LockAlreadyAcquiredError as e:
+                        except (LockAlreadyAcquiredError, JobRequirementError) as e:
                             logger.error(
                                 'Failed to create move job for group {}, attempt {}/{}'.format(
                                     group.group_id,
