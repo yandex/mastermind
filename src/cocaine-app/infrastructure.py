@@ -1205,7 +1205,7 @@ class Infrastructure(object):
 
         nodes['hdd'] = {}
 
-        for nb in storage.node_backends:
+        for nb in storage.node_backends.keys():
 
             try:
                 full_path = nb.node.host.full_path
