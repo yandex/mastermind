@@ -564,7 +564,7 @@ class JobProcessor(object):
         JobType = JobFactory.make_job_type(job_type)
 
         try:
-            job = JobType.new(self.session, **params)
+            job = JobType.new(self, self.session, **params)
         except LockAlreadyAcquiredError as e:
             if not force:
                 raise
@@ -606,7 +606,7 @@ class JobProcessor(object):
             self.stop_jobs_list(jobs)
 
             logger.info('Retrying job creation')
-            job = JobType.new(self.session, **params)
+            job = JobType.new(self, self.session, **params)
 
         job.collection = self.job_finder.collection
 

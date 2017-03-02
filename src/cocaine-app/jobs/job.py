@@ -91,8 +91,8 @@ class Job(MongoObject):
         self.error_msg = []
 
     @classmethod
-    def new(cls, session, **kwargs):
-        super(Job, cls).new(session, **kwargs)
+    def new(cls, job_processor, session, **kwargs):
+        super(Job, cls).new(job_processor, session, **kwargs)
 
         cparams = {}
         for cparam in cls.COMMON_PARAMS:
