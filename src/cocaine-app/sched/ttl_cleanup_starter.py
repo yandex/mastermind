@@ -14,10 +14,11 @@ logger = logging.getLogger('mm.sched.ttl_cleanup')
 
 class TtlCleanupStarter(object):
     def __init__(self, scheduler):
-        scheduler.register_periodic_func(self._do_ttl_cleanup,
-                                         period_default=60*60*24,  # once per day
-                                         starter_name="ttl_cleanup")
         self.params = config.get('scheduler', {}).get('ttl_cleanup', {})
+        period_val = self.params.get("ttl_cleanup_period", 60*60*24)  # once per day default
+        scheduler.register_periodic_func(self._do_ttl_cleanup,
+                                         period_val=period_val,
+                                         starter_name="ttl_cleanup")
         self.scheduler = scheduler
 
     def _get_from_yt_groups_with_expired_data(self):
@@ -84,10 +85,10 @@ class TtlCleanupStarter(object):
         allowed_idleness_period = self.params.get('max_idle_days', 270)
 
         # get couples where ttl_cleanup wasn't run for long time (or never)
-        time_group_list = self._get_idle_groups(days_of_idle=allowed_idleness_period)
+        time_group_list = self._get_idle_group_ids(days_of_idle=allowed_idleness_period)
 
         # get information from mds-proxy YT logs
-        yt_group_list = self._get_yt_stat()
+        yt_group_list = self._get_from_yt_groups_with_expired_data()
 
         # remove dups
         gid_list = set(yt_group_list + time_group_list)
