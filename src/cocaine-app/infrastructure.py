@@ -880,7 +880,7 @@ class Infrastructure(object):
             for g in storage.Lrc.Scheme822v1.get_shard_groups(lrc_groupset, broken_group)
         ]
 
-        dst_backend = storage.groups[lrc_reserve_group].node_backends[0]
+        dst_backend = lrc_reserve_group.node_backends[0]
 
         backends = [
             self.get_backend_by_group_id(g.group_id)
@@ -900,6 +900,11 @@ class Infrastructure(object):
                 )
             )
 
+        # broken group is replaced by reserved group since broken group will be destroyed after
+        # restore is fully completed to a reserve group
+        modified_shard_groups = shard_groups[:]
+        modified_shard_groups[modified_shard_groups.index(broken_group)] = lrc_reserve_group
+
         tmp_dir = RECOVERY_DC_LRC_CNF.get(
             'tmp_dir',
             '/var/tmp/dnet_recovery_lrc_{couple_id}'
@@ -907,7 +912,7 @@ class Infrastructure(object):
 
         cmd = self.DNET_RECOVERY_DC_LRC_CMD.format(
             remotes=' '.join(remotes),
-            groups=','.join(str(g.group_id) for g in shard_groups),
+            groups=','.join(str(g.group_id) for g in modified_shard_groups),
             tmp_dir=tmp_dir,
             attempts=RECOVERY_DC_LRC_CNF.get('attempts', 1),
             batch=RECOVERY_DC_LRC_CNF.get('batch', 2000),
@@ -915,7 +920,7 @@ class Infrastructure(object):
                 couple_id=str(lrc_groupset.couple)
             ),
             log_level=RECOVERY_DC_LRC_CNF.get('log_level', 1),
-            processes_num=len(shard_groups),
+            processes_num=len(modified_shard_groups),
             trace_id=trace_id or uuid.uuid4().hex[:16],
             user_flag=RECOVERY_DC_LRC_CNF.get('user_flag', 1),
             json_stats='-s json' if json_stats else '',
@@ -1059,9 +1064,14 @@ class Infrastructure(object):
                 )
             )
 
+        # broken group is replaced by reserved group since broken group will be destroyed after
+        # restore is fully completed to a reserve group
+        modified_groups = lrc_groupset.groups[:]
+        modified_groups[modified_groups.index(broken_group)] = lrc_reserve_group
+
         cmd = self.LRC_RECOVERY_CMD.format(
             remotes=' '.join(set(remotes)),
-            dst_groups=','.join(str(g.group_id) for g in lrc_groupset.groups),
+            dst_groups=','.join(str(g.group_id) for g in modified_groups),
             wait_timeout=LRC_RECOVERY_DC_CNF.get('wait_timeout', 20),  # seconds
             part_size=lrc_groupset.part_size,
             scheme=lrc_groupset.scheme,
