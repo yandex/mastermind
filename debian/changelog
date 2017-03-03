@@ -1,3 +1,9 @@
+mastermind (2.28.186) trusty; urgency=medium
+
+  * Add job_processor to balancer
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 03 Mar 2017 17:08:55 +0300
+
 mastermind (2.28.185) trusty; urgency=medium
 
   * Fix misprint

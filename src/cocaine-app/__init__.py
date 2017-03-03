@@ -337,6 +337,7 @@ try:
     m = init_minions()
     logger.info('Minions module initialized')
     j = init_job_processor(jf, m, niu, external_storage_meta, crf)
+    b.job_processor = j
     logger.info('Job processor module initialized')
     if j:
         po = init_planner(j, niu, namespaces_settings)

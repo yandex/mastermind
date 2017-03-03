@@ -56,6 +56,7 @@ class Balancer(object):
         self.infrastructure = None
         self.statistics = statistics.Statistics(self)
         self.niu = None
+        self.job_processor = None
         self.namespaces_settings = namespaces_settings
 
         self._cached_keys = CachedGzipResponse()
@@ -928,7 +929,7 @@ class Balancer(object):
             for groupset in groupsets:
                 if groupset['type'] == 'lrc':
                     scheme = storage.Lrc.make_scheme(groupset['settings']['scheme'])
-                    builder = scheme.builder()
+                    builder = scheme.builder(job_processor=self.job_processor)
                     try:
                         lrc_uncoupled_group_ids = next(
                             builder.select_uncoupled_groups(
