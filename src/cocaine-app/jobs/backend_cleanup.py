@@ -144,7 +144,7 @@ class BackendCleanupJob(Job):
 
     @property
     def involved_uncoupled_groups(self):
-        if self.group in storage:
+        if self.group in storage.groups:
             group = storage.groups[self.group]
             if group.type == storage.Group.TYPE_UNCOUPLED:
                 return [self.group]
