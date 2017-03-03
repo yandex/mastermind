@@ -370,6 +370,7 @@ b.start()
 init_statistics()
 m = init_minions()
 j = init_job_processor(jf, m, niu, external_storage_meta, crf)
+b.job_processor = j
 if j:
     po = init_planner(j, niu, namespaces_settings)
     j.planner = po
