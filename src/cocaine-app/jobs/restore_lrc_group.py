@@ -70,18 +70,6 @@ class RestoreLrcGroupJob(Job):
     def create_tasks(self, processor):
 
         self.tasks.extend(
-            self._remove_old_group_tasks()
-        )
-        self.tasks.extend(
-            self._remove_lrc_reserve_group_tasks()
-        )
-        self.tasks.extend(
-            self._create_new_lrc_group_tasks()
-        )
-
-        # TODO: think on adding a task to write 'reserved' group metakey to a new group
-
-        self.tasks.extend(
             self._lrc_recover_tasks()
         )
 
@@ -89,6 +77,14 @@ class RestoreLrcGroupJob(Job):
             self.tasks.extend(
                 self._lrc_validate_task(processor)
             )
+
+        self.tasks.extend(
+            self._remove_old_group_tasks()
+        )
+
+        self.tasks.extend(
+            self._replace_lrc_reserve_group_tasks()
+        )
 
         self.tasks.extend(
             self._write_metakey_to_restored_group_task(processor)
@@ -173,48 +169,36 @@ class RestoreLrcGroupJob(Job):
 
         return job_tasks
 
-    def _remove_lrc_reserve_group_tasks(self):
+    def _replace_lrc_reserve_group_tasks(self):
 
         job_tasks = []
 
-        group = storage.groups[self.lrc_reserve_group]
+        lrc_reserve_group = storage.groups[self.lrc_reserve_group]
 
-        if len(group.node_backends) != 1:
+        if len(lrc_reserve_group.node_backends) != 1:
             raise JobBrokenError(
-                'Uncoupled group {} has {} backends, expected 1 backend'.format(
+                'Lrc reserve group {} has {} backends, expected 1 backend'.format(
                     group,
-                    len(group.node_backends),
+                    len(lrc_reserve_group.node_backends),
                 )
             )
 
-        nb = group.node_backends[0]
+        nb = lrc_reserve_group.node_backends[0]
 
-        job_tasks.append(
-            tasks.RemoveGroupTask.new(
-                self,
-                group=group.group_id,
-                host=nb.node.host.addr,
-                params={
-                    'group': str(group.group_id),
-                    'group_base_path': nb.base_path,
-                },
-            )
-        )
-
-        remove_backend_cmd = infrastructure._remove_node_backend_cmd(
+        disable_backend_cmd = infrastructure._disable_node_backend_cmd(
             nb.node.host.addr,
             nb.node.port,
             nb.node.family,
             nb.backend_id,
         )
         job_tasks.append(
-            tasks.NodeStopTask.new(
+            tasks.MinionCmdTask.new(
                 self,
-                group=group.group_id,
+                group=lrc_reserve_group.group_id,
                 host=nb.node.host.addr,
-                cmd=remove_backend_cmd,
+                cmd=disable_backend_cmd,
                 params={
-                    'group': str(group.group_id),
+                    'group': str(lrc_reserve_group.group_id),
                     'success_codes': [self.DNET_CLIENT_UNKNOWN_BACKEND]
                 },
             )
@@ -223,7 +207,7 @@ class RestoreLrcGroupJob(Job):
         job_tasks.append(
             tasks.HistoryRemoveNodeTask.new(
                 self,
-                group=group.group_id,
+                group=lrc_reserve_group.group_id,
                 host=nb.node.host.addr,
                 port=nb.node.port,
                 family=nb.node.family,
@@ -231,27 +215,23 @@ class RestoreLrcGroupJob(Job):
             )
         )
 
-        return job_tasks
+        broken_group = storage.groups[self.group]
 
-    def _create_new_lrc_group_tasks(self):
-        job_tasks = []
-
-        reserve_group = storage.groups[self.lrc_reserve_group]
-        nb = reserve_group.node_backends[0]
-        group_base_path_root_dir = os.path.dirname(nb.base_path.rstrip('/'))
-
-        total_space = nb.stat.total_space
+        group_file = (
+            os.path.join(nb.base_path, self.GROUP_FILE_PATH)
+            if self.GROUP_FILE_PATH else
+            ''
+        )
 
         job_tasks.append(
-            tasks.CreateGroupTask.new(
+            tasks.CreateGroupFileTask.new(
                 self,
-                group=self.group,
+                group=broken_group.group_id,
                 host=nb.node.host.addr,
                 params={
-                    'total_space': total_space,
-                    'group': str(self.group),
-                    'group_base_path_root_dir': group_base_path_root_dir,
-                },
+                    'group': str(broken_group.group_id),
+                    'group_file': group_file,
+                }
             )
         )
 
@@ -271,19 +251,21 @@ class RestoreLrcGroupJob(Job):
             )
         )
 
+        enable_backend_cmd = infrastructure._enable_node_backend_cmd(
+            nb.node.host.addr,
+            nb.node.port,
+            nb.node.family,
+            nb.backend_id,
+        )
         job_tasks.append(
-            tasks.DnetClientBackendCmdTask.new(
+            tasks.MinionCmdTask.new(
                 self,
-                group=self.group,
+                group=broken_group.group_id,
                 host=nb.node.host.addr,
+                cmd=enable_backend_cmd,
                 params={
-                    'host': nb.node.host.addr,
-                    'port': nb.node.port,
-                    'family': nb.node.family,
-                    'dnet_client_command': 'enable',
-                    'group': self.group,
-                    'config_path': inventory.get_node_config_path(nb.node),
-                    'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS],
+                    'group': str(broken_group.group_id),
+                    'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]
                 },
             )
         )
@@ -384,7 +366,8 @@ class RestoreLrcGroupJob(Job):
     def _lrc_validate_task(self, processor):
         job_tasks = []
 
-        lrc_groupset = storage.groups[self.group].couple
+        broken_group = storage.groups[self.group]
+        lrc_groupset = broken_group.couple
         couple = lrc_groupset.couple
 
         mappings = processor.external_storage_meta.mapping_list(
@@ -400,19 +383,18 @@ class RestoreLrcGroupJob(Job):
             )
             return []
 
+        lrc_reserve_group = storage.groups[self.lrc_reserve_group]
         mapping = mappings[0]
 
         dst_groups = []
         for couple_id in mapping.couples:
-            couple = storage.couples[str(couple_id)]
-            dst_groups.append([
-                group
-                for group in couple.lrc822v1_groupset.groups
-            ])
-
-        lrc_reserve_group = storage.groups[self.lrc_reserve_group]
-        logger.info('LRC RESERVE GROUP: {} {}'.format(lrc_reserve_group, type(lrc_reserve_group)))
-        nb = lrc_reserve_group.node_backends[0]
+            mapped_couple = storage.couples[str(couple_id)]
+            if mapped_couple == couple:
+                couple_groups = mapped_couple.lrc822v1_groupset.groups[:]
+                couple_groups[couple_groups.index(broken_group)] = lrc_reserve_group
+            else:
+                couple_groups = mapped_couple.lrc822v1_groupset.groups
+            dst_groups.append(couple_groups)
 
         validate_cmd = inventory.make_external_storage_validate_command(
             dst_groups=dst_groups,
@@ -420,9 +402,11 @@ class RestoreLrcGroupJob(Job):
             groupset_settings=lrc_groupset.groupset_settings,
             src_storage=mapping.external_storage,
             src_storage_options=mapping.external_storage_options,
-            additional_backends=[nb],
+            # additional_backends=[nb],
             trace_id=self.id[:16],
         )
+
+        nb = lrc_reserve_group.node_backends[0]
 
         job_tasks.append(
             tasks.ExternalStorageTask.new(
