@@ -387,6 +387,7 @@ class RestoreLrcGroupJob(Job):
         mapping = mappings[0]
 
         dst_groups = []
+        check_dst_groups = []
         for couple_id in mapping.couples:
             mapped_couple = storage.couples[str(couple_id)]
             if mapped_couple == couple:
@@ -395,6 +396,7 @@ class RestoreLrcGroupJob(Job):
             else:
                 couple_groups = mapped_couple.lrc822v1_groupset.groups
             dst_groups.append(couple_groups)
+            check_dst_groups.append(mapped_couple.lrc822v1_groupset.groups)
 
         validate_cmd = inventory.make_external_storage_validate_command(
             dst_groups=dst_groups,
@@ -402,6 +404,7 @@ class RestoreLrcGroupJob(Job):
             groupset_settings=lrc_groupset.groupset_settings,
             src_storage=mapping.external_storage,
             src_storage_options=mapping.external_storage_options,
+            check_dst_groups=check_dst_groups,
             # additional_backends=[nb],
             trace_id=self.id[:16],
         )

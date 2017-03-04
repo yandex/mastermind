@@ -105,7 +105,7 @@ class Infrastructure(object):
         'lrc_validate {remotes} --src-groups {src_groups} --dst-groups {dst_groups} '
         '--part-size {part_size} --scheme {scheme} --log {log} --log-level {log_level} '
         '--tmp {tmp_dir} --attempts {attempts} --trace-id {trace_id} '
-        '--data-flow-rate {data_flow_rate} --wait-timeout {wait_timeout}'
+        '--data-flow-rate {data_flow_rate} --wait-timeout {wait_timeout} {check_dst_groups}'
     )
 
     TTL_CLEANUP_CMD = (
@@ -1006,6 +1006,7 @@ class Infrastructure(object):
                           dst_groups,
                           part_size,
                           scheme,
+                          check_dst_groups=None,
                           trace_id=None):
 
         remotes = []
@@ -1035,6 +1036,7 @@ class Infrastructure(object):
             trace_id=trace_id or uuid.uuid4().hex[:16],
             data_flow_rate=LRC_CONVERT_DC_CNF.get('data_flow_rate', 10),  # MB/s
             wait_timeout=LRC_CONVERT_DC_CNF.get('wait_timeout', 20),  # seconds
+            check_dst_groups=','.join(str(g.group_id) for g in dst_groups),
         )
 
         return cmd
