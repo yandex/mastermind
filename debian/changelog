@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.187) trusty; urgency=medium
+
+  * Add check_dst_groups parameter for validation during lrc restore job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sat, 04 Mar 2017 18:27:37 +0300
+
 mastermind-cocainev11 (2.28.186) trusty; urgency=medium
 
   * Add job_processor to balancer
