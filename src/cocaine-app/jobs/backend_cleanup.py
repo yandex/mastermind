@@ -5,7 +5,7 @@ from error import JobBrokenError
 from infrastructure import infrastructure
 from job import Job
 from job_types import JobTypes
-from tasks import NodeStopTask, MinionCmdTask, HistoryRemoveNodeTask
+from tasks import NodeStopTask, MinionCmdTask, HistoryRemoveNodeTask, MovePathTask
 import storage
 
 
@@ -31,17 +31,15 @@ class BackendCleanupJob(Job):
     def create_tasks(self, processor):
         group = storage.groups[self.group]
 
-        if len(group.node_backends) == 1:
-            node_backend = group.node_backends[0]
-        else:
+        node_backend = infrastructure.get_backend_by_group_id(self.group)
+        if node_backend is None:
             raise JobBrokenError(
-                'Group {} has {} node backends, currently '
-                'only groups with 1 node backend can be used'.format(
-                    group.group_id, len(group.node_backends)))
+                "Group {group} does not have any known backends".format(group=self.group)
+            )
 
         tasks = []
 
-        tasks.append(
+        tasks.extend(
             self._stop_node_backend_task(group, node_backend)
         )
 
@@ -56,6 +54,7 @@ class BackendCleanupJob(Job):
         self.tasks = tasks
 
     def _stop_node_backend_task(self, group, node_backend):
+        job_tasks = []
 
         shutdown_cmd = infrastructure._remove_node_backend_cmd(
             host=node_backend.node.host.addr,
@@ -75,25 +74,43 @@ class BackendCleanupJob(Job):
             'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS],
         }
 
+        job_tasks.append(
+            NodeStopTask.new(
+                self,
+                group=group.group_id,
+                uncoupled=True,
+                host=node_backend.node.host.addr,
+                cmd=shutdown_cmd,
+                params=params
+            )
+        )
+
         group_file = (os.path.join(node_backend.base_path,
                                    self.GROUP_FILE_PATH)
                       if self.GROUP_FILE_PATH else
                       '')
+
+        stop_backend = self.make_path(
+            self.BACKEND_STOP_MARKER, base_path=node_backend.base_path).format(
+                backend_id=node_backend.backend_id)
+
         if self.BACKEND_CLEANUP_GROUP_FILE_DIR_RENAME and group_file:
+            params = {}
             params['move_src'] = os.path.join(os.path.dirname(group_file))
             params['move_dst'] = os.path.join(
                 node_backend.base_path,
                 self.BACKEND_CLEANUP_GROUP_FILE_DIR_RENAME
             )
+            params['stop_backend'] = stop_backend
 
-        return NodeStopTask.new(
-            self,
-            group=group.group_id,
-            uncoupled=True,
-            host=node_backend.node.host.addr,
-            cmd=shutdown_cmd,
-            params=params
-        )
+            job_tasks.append(
+                MovePathTask.new(
+                    self,
+                    host=node_backend.node.host.addr,
+                    params=params)
+            )
+
+        return job_tasks
 
     def _reconfigure_node_task(self, node_backend):
 
