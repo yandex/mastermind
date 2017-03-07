@@ -90,11 +90,11 @@ class BackendCleanupJob(Job):
                       if self.GROUP_FILE_PATH else
                       '')
 
-        stop_backend = self.make_path(
-            self.BACKEND_STOP_MARKER, base_path=node_backend.base_path).format(
-                backend_id=node_backend.backend_id)
-
         if self.BACKEND_CLEANUP_GROUP_FILE_DIR_RENAME and group_file:
+            stop_backend = self.make_path(
+                self.BACKEND_STOP_MARKER, base_path=node_backend.base_path).format(
+                    backend_id=node_backend.backend_id)
+
             params = {}
             params['move_src'] = os.path.join(os.path.dirname(group_file))
             params['move_dst'] = os.path.join(

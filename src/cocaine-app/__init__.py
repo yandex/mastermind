@@ -216,10 +216,12 @@ def init_smart_scheduler(job_processor):
     scheduler = Scheduler(meta_db, job_processor)
     return scheduler
 
+
 def init_move_planner(job_processor, niu):
     from planner.move_planner import MovePlanner
     planner = MovePlanner(meta_db, niu, job_processor)
     return planner
+
 
 def init_lrc_reserve_planner(job_processor):
     from planner.lrc_reserve_groups import LrcReservePlanner
@@ -227,6 +229,7 @@ def init_lrc_reserve_planner(job_processor):
     register_handle(planner.create_lrc_restore_jobs)
     register_handle(planner.create_uncoupled_lrc_restore_jobs)
     return planner
+
 
 def init_external_storage_converting_planner(job_processor, namespaces_settings):
     if not config['metadata'].get('external_storage', {}).get('db'):
@@ -243,6 +246,7 @@ def init_external_storage_converting_planner(job_processor, namespaces_settings)
     register_handle(planner.get_convert_queue_item)
     register_handle(planner.update_convert_queue_item)
     return planner
+
 
 def init_planner(job_processor, niu, namespaces_settings):
 
@@ -265,11 +269,11 @@ def init_planner(job_processor, niu, namespaces_settings):
 
     # Turn on the specifialized planners
     if move_planner:
-        planner.add_planner(move_planner)
+        planner.add_planner(move_planner, planner_name=planner.MOVE_PLANNER)
     if external_storage_converting_planner:
-       planner.add_planner(external_storage_converting_planner)
+        planner.add_planner(external_storage_converting_planner, planner_name=planner.EXTERNAL_STORAGE_CONVERTING_PLANNER)
     if lrc_reserve_group_planner:
-        planner.add_planner(lrc_reserve_group_planner)
+        planner.add_planner(lrc_reserve_group_planner, planner_name=planner.LRC_RESERVE_GROUP_PLANNER)
 
     # Turn on planner as the main scheduling mechanism
     return planner
