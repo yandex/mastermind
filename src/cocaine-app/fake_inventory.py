@@ -212,7 +212,6 @@ def make_external_storage_validate_command(couple_id,
                                            groupset_settings,
                                            src_storage,
                                            src_storage_options,
-                                           check_dst_groups=None,
                                            additional_backends=None,
                                            trace_id=None):
     '''
@@ -230,13 +229,8 @@ def make_external_storage_validate_command(couple_id,
         @src_storage_options (dict): source storage options (data unit to convert, etc.)
         @trace_id (str): trace id that should be used by the command if tracing is
             implemented
-        @check_dst_groups (list of lists of storage.Group): a list of original destination
-            groups that were used during converting, where each nested list contains groups
-            for some new groupset. This list will be validated against meta data in lrc groupset
-            if not None, otherwise dst_groups will be used
         @additional_backends (list): additional backends to use for validation tasks
             (like validation after groupset restore when group was moved to another host)
-
     '''
     raise NotImplementedError()
 

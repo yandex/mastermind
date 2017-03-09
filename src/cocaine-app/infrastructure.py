@@ -119,7 +119,7 @@ class Infrastructure(object):
     LRC_RECOVERY_CMD = (
         'lrc_recover {remotes} --dst-groups {dst_groups} --wait-timeout {wait_timeout} '
         '--part-size {part_size} --scheme {scheme} --log {log} --log-level {log_level} '
-        '--tmp {tmp_dir} --attempts {attempts} --trace-id {trace_id} {json_stats}'
+        '--tmp {tmp_dir} --attempts {attempts} {copy_groups} --trace-id {trace_id} {json_stats}'
     )
 
     def __init__(self):
@@ -1043,18 +1043,16 @@ class Infrastructure(object):
 
     def _lrc_recovery_cmd(self,
                           lrc_groupset,
-                          broken_group,
-                          lrc_reserve_group,
+                          copy_groups=None,
                           json_stats=None,
                           trace_id=None):
 
-        backends = []
-        for g in lrc_groupset.groups:
-            if g.group_id == broken_group.group_id:
-                continue
-            backends.append(self.get_backend_by_group_id(g.group_id))
+        if copy_groups is None:
+            copy_groups = []
 
-        backends.append(lrc_reserve_group.node_backends[0])
+        backends = []
+        for g in lrc_groupset.groups + [dst_group for _, dst_group in copy_groups]:
+            backends.append(self.get_backend_by_group_id(g.group_id))
 
         remotes = []
         for nb in backends:
@@ -1066,14 +1064,18 @@ class Infrastructure(object):
                 )
             )
 
-        # broken group is replaced by reserved group since broken group will be destroyed after
-        # restore is fully completed to a reserve group
-        modified_groups = lrc_groupset.groups[:]
-        modified_groups[modified_groups.index(broken_group)] = lrc_reserve_group
+        copy_groups_params = []
+        for src_group, dst_group in copy_groups:
+            copy_groups_params.append(
+                '{src_group}-{dst_group}'.format(
+                    src_group=src_group.group_id,
+                    dst_group=dst_group.group_id,
+                )
+            )
 
         cmd = self.LRC_RECOVERY_CMD.format(
             remotes=' '.join(set(remotes)),
-            dst_groups=','.join(str(g.group_id) for g in modified_groups),
+            dst_groups=','.join(str(g.group_id) for g in lrc_groupset.groups),
             wait_timeout=LRC_RECOVERY_DC_CNF.get('wait_timeout', 20),  # seconds
             part_size=lrc_groupset.part_size,
             scheme=lrc_groupset.scheme,
@@ -1084,6 +1086,11 @@ class Infrastructure(object):
                 '/var/tmp/lrc_recovery_{couple_id}'
             ).format(couple_id=lrc_groupset.couple),
             attempts=LRC_RECOVERY_DC_CNF.get('attempts', 1),
+            copy_groups=(
+                '--copy-groups {}'.format(','.join(copy_groups_params))
+                if copy_groups_params else
+                ''
+            ),
             trace_id=trace_id or uuid.uuid4().hex[:16],
             json_stats='-S json' if json_stats else '',
         )
