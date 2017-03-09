@@ -224,11 +224,11 @@ def init_planner(job_processor, niu, namespaces_settings):
 
     # Turn on the specifialized planners
     if move_planner:
-        planner.add_planner(move_planner)
+        planner.add_planner(move_planner, planner_name=planner.MOVE_PLANNER)
     if external_storage_converting_planner:
-        planner.add_planner(external_storage_converting_planner)
+        planner.add_planner(external_storage_converting_planner, planner_name=planner.EXTERNAL_STORAGE_CONVERTING_PLANNER)
     if lrc_reserve_group_planner:
-        planner.add_planner(lrc_reserve_group_planner)
+        planner.add_planner(lrc_reserve_group_planner, planner_name=planner.LRC_RESERVE_GROUP_PLANNER)
 
     # Turn on planner as the main scheduling mechanism
     return planner

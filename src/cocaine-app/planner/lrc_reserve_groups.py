@@ -127,6 +127,7 @@ class LrcReservePlanner(object):
                 res.append(str(e))
                 continue
             res.append(job.dump())
+
         return res
 
 

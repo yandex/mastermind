@@ -261,8 +261,8 @@ class RestoreGroupJob(Job):
 
                 self.tasks.append(task)
 
-        src_backend = src_group.node_backends[0]
-        restore_backend = group.node_backends and group.node_backends[0]
+        src_backend = infrastructure.get_backend_by_group_id(src_group.group_id)
+        restore_backend = infrastructure.get_backend_by_group_id(group.group_id)
 
         mark_src_backend = self.make_path(
             self.BACKEND_DOWN_MARKER, base_path=src_backend.base_path).format(
@@ -406,7 +406,7 @@ class RestoreGroupJob(Job):
                 self.BACKEND_STOP_MARKER, base_path=restore_backend.base_path).format(
                     backend_id=restore_backend.backend_id)
 
-            nb = group.node_backends[0]
+            nb = restore_backend
             shutdown_cmd = infrastructure._remove_node_backend_cmd(
                 nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id)
 
