@@ -318,8 +318,7 @@ class RestoreLrcGroupJob(Job):
 
         recover_cmd = infrastructure._lrc_recovery_cmd(
             lrc_groupset=lrc_groupset,
-            broken_group=broken_group,
-            lrc_reserve_group=lrc_reserve_group,
+            copy_groups=[(broken_group, lrc_reserve_group)],
             trace_id=self.id[:16],
             json_stats=True,
         )
