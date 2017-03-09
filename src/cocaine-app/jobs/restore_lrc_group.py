@@ -73,11 +73,6 @@ class RestoreLrcGroupJob(Job):
             self._lrc_recover_tasks()
         )
 
-        if LRC_RESTORE_CFG.get('external_storage_validation', False):
-            self.tasks.extend(
-                self._lrc_validate_task(processor)
-            )
-
         self.tasks.extend(
             self._remove_old_group_tasks()
         )
@@ -89,6 +84,11 @@ class RestoreLrcGroupJob(Job):
         self.tasks.extend(
             self._write_metakey_to_restored_group_task(processor)
         )
+
+        if LRC_RESTORE_CFG.get('external_storage_validation', False):
+            self.tasks.extend(
+                self._lrc_validate_task(processor)
+            )
 
     def _remove_old_group_tasks(self):
         job_tasks = []
@@ -178,7 +178,7 @@ class RestoreLrcGroupJob(Job):
         if len(lrc_reserve_group.node_backends) != 1:
             raise JobBrokenError(
                 'Lrc reserve group {} has {} backends, expected 1 backend'.format(
-                    group,
+                    lrc_reserve_group,
                     len(lrc_reserve_group.node_backends),
                 )
             )
@@ -382,20 +382,15 @@ class RestoreLrcGroupJob(Job):
             )
             return []
 
-        lrc_reserve_group = storage.groups[self.lrc_reserve_group]
         mapping = mappings[0]
 
         dst_groups = []
-        check_dst_groups = []
         for couple_id in mapping.couples:
             mapped_couple = storage.couples[str(couple_id)]
-            if mapped_couple == couple:
-                couple_groups = mapped_couple.lrc822v1_groupset.groups[:]
-                couple_groups[couple_groups.index(broken_group)] = lrc_reserve_group
-            else:
-                couple_groups = mapped_couple.lrc822v1_groupset.groups
-            dst_groups.append(couple_groups)
-            check_dst_groups.append(mapped_couple.lrc822v1_groupset.groups)
+            dst_groups.append(mapped_couple.lrc822v1_groupset.groups)
+
+        lrc_reserve_group = storage.groups[self.lrc_reserve_group]
+        nb = lrc_reserve_group.node_backends[0]
 
         validate_cmd = inventory.make_external_storage_validate_command(
             dst_groups=dst_groups,
@@ -403,12 +398,9 @@ class RestoreLrcGroupJob(Job):
             groupset_settings=lrc_groupset.groupset_settings,
             src_storage=mapping.external_storage,
             src_storage_options=mapping.external_storage_options,
-            check_dst_groups=check_dst_groups,
-            # additional_backends=[nb],
+            additional_backends=[nb],
             trace_id=self.id[:16],
         )
-
-        nb = lrc_reserve_group.node_backends[0]
 
         job_tasks.append(
             tasks.ExternalStorageTask.new(
