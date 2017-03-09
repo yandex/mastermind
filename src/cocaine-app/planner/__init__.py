@@ -948,9 +948,8 @@ class Planner(object):
                                                                                               )
         else:
             nb = infrastructure.get_backend_by_group_id(group_id)
-            ra = nb.stat.files - nb.stat.files_removed
-            if ra > 1:
-                failed[group_id] = 'Create backend cleanup job failed. Records_alive > 1 ({})'.format(ra)
+            if nb and nb.stat and nb.stat.files > 1:
+                failed[group_id] = 'Create backend cleanup job failed. Records_alive > 1 ({})'.format(nb.stat.files)
             else:
                 try:
                     job = self._create_backend_cleanup_job(group_id, force, autoapprove)
