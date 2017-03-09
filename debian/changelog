@@ -1,3 +1,12 @@
+mastermind-cocainev11 (2.28.188) trusty; urgency=medium
+
+  * Make lrc validate task the last one in lrc restore job, remove check groups
+  * Restore-path: restore lrc groups
+  * Use get_backend_by_group_id for restore_group job
+  * Use get_backend_by_group_id for backend_cleanup job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 09 Mar 2017 18:32:19 +0300
+
 mastermind-cocainev11 (2.28.187) trusty; urgency=medium
 
   * Add check_dst_groups parameter for validation during lrc restore job
