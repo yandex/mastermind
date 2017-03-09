@@ -12,6 +12,7 @@ from errors import CacheUpstreamError
 import helpers as h
 from infrastructure import infrastructure, UncoupledGroupsSelector
 from infrastructure_cache import cache
+from planner.lrc_reserve_groups import LrcReserveGroupSelector
 import inventory
 import jobs
 from jobs.error import JobRequirementError
@@ -42,6 +43,9 @@ class Planner(object):
     COUPLE_DEFRAG_LOCK = 'planner/couple_defrag'
     RECOVER_DC_LOCK = 'planner/recover_dc'
     TTL_CLEANUP_LOCK = 'planner/ttl_cleanup'
+    MOVE_PLANNER = 'move_planner'
+    EXTERNAL_STORAGE_CONVERTING_PLANNER = 'external_storage_converting_planner'
+    LRC_RESERVE_GROUP_PLANNER = 'lrc_reserve_group_planner'
 
     def __init__(self, db, niu, job_processor, namespaces_settings):
 
@@ -49,6 +53,7 @@ class Planner(object):
 
         logger.info('Planner initializing')
         self.candidates = []
+        self.planners = {}
         self.job_processor = job_processor
         self.__max_plan_length = self.params.get('move', {}).get('max_plan_length', 5)
         self.__tq = timed_queue.TimedQueue()
@@ -92,7 +97,8 @@ class Planner(object):
     def _start_tq(self):
         self.__tq.start()
 
-    def add_planner(self, planner):
+    def add_planner(self, planner, planner_name):
+        self.planners[planner_name] = planner
         planner.schedule_tasks(self.__tq)
 
     def _get_yt_stat(self):
@@ -790,6 +796,9 @@ class Planner(object):
         if group.couple is None:
             raise ValueError('Group {0} is uncoupled'.format(group.group_id))
 
+        if group.couple.couple.lrc822v1_groupset is not None:
+            raise ValueError("Group {0} have lrc822v1 groupset {1}".format(group.group_id, group.couple))
+
         candidates = []
         if src_group is None:
             for g in group.coupled_groups:
@@ -846,9 +855,6 @@ class Planner(object):
                       jobs.Job.STATUS_BROKEN]
     RESTORE_TYPES = [jobs.JobTypes.TYPE_MOVE_JOB,
                      jobs.JobTypes.TYPE_RESTORE_GROUP_JOB]
-    RESTORE_AND_MANAGER_TYPES = [jobs.JobTypes.TYPE_MOVE_JOB,
-                                 jobs.JobTypes.TYPE_RESTORE_GROUP_JOB,
-                                 jobs.JobTypes.TYPE_BACKEND_MANAGER_JOB]
 
     def _create_restore_job(self, group, use_uncoupled_group, src_group, force, autoapprove):
         last_error = None
@@ -884,32 +890,47 @@ class Planner(object):
         if last_error:
             raise last_error
 
-    def _create_backend_manager_job(self, group, force, autoapprove, cmd_type, mark_backend=None, unmark_backend=None):
-        couple = storage.groups[group].couple
-        params = {
-            'group': group,
-            'couple': str(couple) if couple else None,
-            'need_approving': not autoapprove,
-            'cmd_type': cmd_type,
-            'mark_backend': mark_backend,
-            'unmark_backend': unmark_backend,
-        }
+    def _create_restore_uncoupled_lrc_job(self, group, force, autoapprove):
         last_error = None
+
+        selector = LrcReserveGroupSelector(self.job_processor)
         for _ in xrange(self.CREATE_JOB_ATTEMPTS):
             try:
-                job = self.job_processor._create_job(
-                    jobs.JobTypes.TYPE_BACKEND_MANAGER_JOB,
-                    params,
-                    force=force,
+                job = selector.restore_uncoupled_lrc_group(
+                    group,
+                    check_status=not force,
+                    need_approving=not autoapprove
                 )
-                return job.dump()
             except Exception as e:
                 last_error = e
                 continue
+
+            return job
+
         if last_error:
             raise last_error
 
-    def _cleanup_job_find(self, group_id, active_jobs, uncoupled_groups, failed):
+    def _create_restore_lrc_job(self, group, force, autoapprove):
+        last_error = None
+
+        selector = LrcReserveGroupSelector(self.job_processor)
+        for _ in xrange(self.CREATE_JOB_ATTEMPTS):
+            try:
+                job = selector.restore_lrc_group(
+                    group,
+                    check_status=not force,
+                    need_approving=not autoapprove
+                )
+            except Exception as e:
+                last_error = e
+                continue
+
+            return job
+
+        if last_error:
+            raise last_error
+
+    def _backend_cleanup_group(self, group_id, active_jobs, failed, force=False, autoapprove=False):
         group_jobs = self.job_processor.job_finder.jobs(
             groups=group_id,
             types=jobs.JobTypes.TYPE_BACKEND_CLEANUP_JOB,
@@ -926,23 +947,88 @@ class Planner(object):
                                                                                               job.status
                                                                                               )
         else:
-            uncoupled_groups.append(group_id)
+            nb = infrastructure.get_backend_by_group_id(group_id)
+            ra = nb.stat.files - nb.stat.files_removed
+            if ra > 1:
+                failed[group_id] = 'Create backend cleanup job failed. Records_alive > 1 ({})'.format(ra)
+            else:
+                try:
+                    job = self._create_backend_cleanup_job(group_id, force, autoapprove)
+                    active_jobs.append(job['id'])
+                except Exception as e:
+                    failed[group_id] = str(e)
 
-        return active_jobs, uncoupled_groups
+        return active_jobs, failed
 
-    def _restore_job_find(self,
-                          group_id,
-                          active_jobs,
-                          groups_to_backup,
-                          groups_to_restore,
-                          cancelled_jobs,
-                          pending_restore_jobs,
-                          restore_only=False
-                          ):
+    def _restore_uncoupled_lrc_group(self, group_id, active_jobs, failed, force=False, autoapprove=False):
+        # TODO: find and stop convert_to_lrc_groupset_job
+        group_jobs = self.job_processor.job_finder.jobs(
+            groups=group_id,
+            types=jobs.JobTypes.TYPE_RESTORE_UNCOUPLED_LRC_GROUP_JOB,
+            statuses=jobs.Job.ACTIVE_STATUSES,
+            sort=False,
+        )
+        if group_jobs:
+            job = group_jobs[0]
+
+            if job.status in self.RUNNING_STATUSES:
+                active_jobs.append(job.id)
+            else:
+                failed[group_id] = 'Restore uncoupled lrc job failed, group: {}, status: {}'.format(
+                    group_id,
+                    job.status
+                )
+        else:
+            try:
+                job = self._create_restore_uncoupled_lrc_job(group_id, force, autoapprove)
+                active_jobs.append(job.id)
+            except Exception as e:
+                failed[group_id] = str(e)
+
+        return active_jobs, failed
+
+    def _restore_lrc_group(self, group_id, active_jobs, failed, force=False, autoapprove=False):
+        # TODO: find restore_lrc_group_job
+        group_jobs = self.job_processor.job_finder.jobs(
+            groups=group_id,
+            types=jobs.JobTypes.TYPE_RESTORE_LRC_GROUP_JOB,
+            statuses=jobs.Job.ACTIVE_STATUSES,
+            sort=False,
+        )
+        if group_jobs:
+            job = group_jobs[0]
+
+            if job.status in self.RUNNING_STATUSES:
+                active_jobs.append(job.id)
+            else:
+                failed[group_id] = 'Restore lrc job failed, group: {}, status: {}'.format(
+                    group_id,
+                    job.status
+                )
+        else:
+            try:
+                job = self._create_restore_lrc_job(group_id, force, autoapprove)
+                active_jobs.append(job.id)
+            except Exception as e:
+                failed[group_id] = str(e)
+
+        return active_jobs, failed
+
+    def _restore_group(self,
+                       group_id,
+                       active_jobs,
+                       cancelled_jobs,
+                       pending_restore_jobs,
+                       failed,
+                       use_uncoupled_group,
+                       force,
+                       autoapprove,
+                       restore_only=False
+                       ):
 
         group_jobs = self.job_processor.job_finder.jobs(
             groups=group_id,
-            types=self.RESTORE_AND_MANAGER_TYPES,
+            types=self.RESTORE_TYPES,
             statuses=jobs.Job.ACTIVE_STATUSES,
             sort=False,
         )
@@ -955,8 +1041,6 @@ class Planner(object):
                 cancel_job = False
                 if job.type == jobs.JobTypes.TYPE_MOVE_JOB:
                     cancel_job = True
-                elif job.type == jobs.JobTypes.TYPE_BACKEND_MANAGER_JOB:
-                    cancel_job = False
                 elif job.group == job.src_group:
                     cancel_job = True
                 if cancel_job:
@@ -966,24 +1050,34 @@ class Planner(object):
                     except Exception as e:
                         logger.exception('Failed to cancel job {}'.format(job.id))
                         raise ValueError('Failed to cancel job {}: {}'.format(job.id, e))
-                    groups_to_restore.append(group_id)
+                    try:
+                        job = self._create_restore_job(group_id, use_uncoupled_group, None, force, autoapprove)
+                        active_jobs.append(job['id'])
+                    except Exception as e:
+                        failed[group_id] = str(e)
                 else:
                     # Jobs in pending or broken states that were
                     # working with fallback can be restored only
                     # manually
                     pending_restore_jobs.append(job.id)
-            elif job.status == jobs.Job.STATUS_CANCELLED:
-                groups_to_restore.append(group_id)
             else:
                 raise ValueError(
                     'Unknown job status: {}'.format(job.status)
                 )
         else:
             if restore_only:
-                groups_to_restore.append(group_id)
+                try:
+                    job = self._create_restore_job(group_id, use_uncoupled_group, None, force, autoapprove)
+                    active_jobs.append(job['id'])
+                except Exception as e:
+                    failed[group_id] = str(e)
             else:
-                groups_to_backup.append(group_id)
-        return active_jobs, groups_to_backup, groups_to_restore, cancelled_jobs, pending_restore_jobs
+                try:
+                    job = self._create_restore_job(group_id, use_uncoupled_group, group_id, force, autoapprove)
+                    active_jobs.append(job['id'])
+                except Exception as e:
+                    failed[group_id] = str(e)
+        return active_jobs, cancelled_jobs, pending_restore_jobs, failed
 
     @h.concurrent_handler
     def restore_groups_from_path(self, request):
@@ -1041,32 +1135,47 @@ class Planner(object):
                             'only groups with 1 node backend can be used'.format(
                                 group.group_id, len(group.node_backends)))
 
-        groups_to_backup = []
-        groups_to_restore = []
         active_jobs = []
-        uncoupled_groups = []
         cancelled_jobs = []
         pending_restore_jobs = []
         failed = {}
 
         for group in groups:
             group = storage.groups[group]
-            if group.type not in [storage.Group.TYPE_UNKNOWN,
-                                  storage.Group.TYPE_DATA,
-                                  storage.Group.TYPE_UNCOUPLED,
-                                  storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1,
-                                  storage.Group.TYPE_RESERVED_LRC_8_2_2_V1]:
-                failed[group.group_id] = 'Failed group type: {}'.format(group.type)
-                continue
-            if group.couple is None:
-                self._cleanup_job_find(group.group_id, active_jobs, uncoupled_groups, failed)
+            if group.type in [storage.Group.TYPE_UNCOUPLED,
+                              storage.Group.TYPE_RESERVED_LRC_8_2_2_V1]:
+                if group.couple is None:
+                    self._backend_cleanup_group(group.group_id, active_jobs, failed, force, autoapprove)
+                else:
+                    failed[group.group_id] = "Type: {}. couple: {}".format(group.type, group.couple)
+            elif group.type == storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1:
+                if group.couple is None:
+                    self._restore_uncoupled_lrc_group(group.group_id, active_jobs, failed, force, autoapprove)
+                else:
+                    failed[group.group_id] = "Type: {}. couple: {}".format(group.type, group.couple)
+            elif group.type == storage.Group.TYPE_LRC_8_2_2_V1:
+                if group.couple is None:
+                    failed[group.group_id] = "Type: {}. couple: {}".format(group.type, group.couple)
+                else:
+                    self._restore_lrc_group(group.group_id, active_jobs, failed, force, autoapprove)
+            elif group.type in [storage.Group.TYPE_DATA,
+                                storage.Group.TYPE_UNKNOWN]:
+                if group.couple is None:
+                    failed[group.group_id] = "Type: {}. couple: {}".format(group.type, group.couple)
+                else:
+                    if group.couple.couple.lrc822v1_groupset is not None:
+                        failed[group.group_id] = "Type: {}. groupset: {}".format(group.type, group.couple)
+                    else:
+                        self._restore_group(group.group_id,
+                                            active_jobs,
+                                            cancelled_jobs,
+                                            pending_restore_jobs,
+                                            failed,
+                                            use_uncoupled_group,
+                                            force,
+                                            autoapprove)
             else:
-                self._restore_job_find(group.group_id,
-                                       active_jobs,
-                                       groups_to_backup,
-                                       groups_to_restore,
-                                       cancelled_jobs,
-                                       pending_restore_jobs)
+                failed[group.group_id] = 'Failed group type: {}'.format(group.type)
 
         #
         group_histories = infrastructure.group_history_finder.search_by_node_backend(
@@ -1097,7 +1206,7 @@ class Planner(object):
                 continue
 
             if group not in storage.groups and not group.couples:
-                self._cleanup_job_find(group.group_id, active_jobs, uncoupled_groups, failed)
+                self._backend_cleanup_group(group.group_id, active_jobs, failed, force, autoapprove)
             else:
                 if len(group.couples) > 1:
                     failed[group.group_id] = 'Count couples in history > 1'
@@ -1106,36 +1215,17 @@ class Planner(object):
                     couple = group.couples[0].couple
 
                 if len(couple) == storage.Lrc.Scheme822v1.STRIPE_SIZE:
-                    failed[group.group_id] = 'Failed group type: {}'.format('lrc')
+                    self._restore_lrc_group(group.group_id, active_jobs, failed, force, autoapprove)
                 else:
-                    self._restore_job_find(group.group_id,
-                                           active_jobs,
-                                           groups_to_backup,
-                                           groups_to_restore,
-                                           cancelled_jobs,
-                                           pending_restore_jobs,
-                                           restore_only=True)
-
-        for group in groups_to_backup:
-            try:
-                job = self._create_restore_job(group, use_uncoupled_group, group, force, autoapprove)
-                active_jobs.append(job['id'])
-            except Exception as e:
-                failed[group] = str(e)
-
-        for group in groups_to_restore:
-            try:
-                job = self._create_restore_job(group, use_uncoupled_group, None, force, autoapprove)
-                active_jobs.append(job['id'])
-            except Exception as e:
-                failed[group] = str(e)
-
-        for group in uncoupled_groups:
-            try:
-                job = self._create_backend_cleanup_job(group, force, autoapprove)
-                active_jobs.append(job['id'])
-            except Exception as e:
-                failed[group] = str(e)
+                    self._restore_group(group.group_id,
+                                        active_jobs,
+                                        cancelled_jobs,
+                                        pending_restore_jobs,
+                                        failed,
+                                        use_uncoupled_group,
+                                        force,
+                                        autoapprove,
+                                        restore_only=True)
 
         return {'jobs': active_jobs, 'failed': failed, 'cancelled_jobs': cancelled_jobs, 'help': pending_restore_jobs}
 
