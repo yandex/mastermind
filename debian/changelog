@@ -1,3 +1,9 @@
+mastermind (2.28.189) trusty; urgency=medium
+
+  * Fix checking alive keys for groups without backends
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 09 Mar 2017 20:22:59 +0300
+
 mastermind (2.28.188) trusty; urgency=medium
 
   * Make lrc validate task the last one in lrc restore job, remove check groups
