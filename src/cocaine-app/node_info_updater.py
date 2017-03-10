@@ -552,7 +552,10 @@ class NodeInfoUpdater(object):
 
             group.parse_meta(meta)
 
-            if group.type == storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1:
+            if group.type in (
+                storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1,
+                storage.Group.TYPE_RESERVED_LRC_8_2_2_V1,
+            ):
                 return
 
             ns_id = group.meta.get('namespace')
