@@ -1035,12 +1035,12 @@ def _cached(key):
             if footprint != cached_data['footprint']:
 
                 # TODO: Remove this log record
-                logger.debug('Groupset {}, key {}, footprint {}, cached footprint {}'.format(
-                    self,
-                    key,
-                    footprint,
-                    cached_data['footprint'],
-                ))
+                # logger.debug('Groupset {}, key {}, footprint {}, cached footprint {}'.format(
+                #     self,
+                #     key,
+                #     footprint,
+                #     cached_data['footprint'],
+                # ))
                 self._cache[key] = {
                     'data': f(self, *args, **kwargs),
                     'footprint': footprint,
@@ -1261,6 +1261,26 @@ class FsStat(object):
         self.commands_stat = sum((nb.stat.commands_stat for nb in node_backends), CommandsStat())
 
 
+def status_change_log(f):
+    @functools.wraps(f)
+    def wrapper(self, *args, **kwargs):
+        prev_status = self.status
+        res = f(self, *args, **kwargs)
+        if prev_status != self.status:
+            logger.info(
+                '{type} {id} status updated from {prev_status} to {cur_status} '
+                '({status_text})'.format(
+                    type=type(self).__name__,
+                    id=self,
+                    prev_status=prev_status,
+                    cur_status=self.status,
+                    status_text=self.status_text,
+                )
+            )
+        return res
+    return wrapper
+
+
 class Fs(object):
     def __init__(self, host, fsid):
         self.host = host
@@ -1288,6 +1308,7 @@ class Fs(object):
     def update_commands_stats(self):
         self.stat.update_commands_stats(self.node_backends)
 
+    @status_change_log
     def update_status(self):
         nbs = self.node_backends.keys()
         prev_status = self.status
@@ -1380,6 +1401,7 @@ class NodeBackend(object):
                                          new_stat['backend']['config'].get('file')) + '/'
         self.stat.update(new_stat, collect_ts)
 
+    @status_change_log
     def update_status(self):
         if not self.stat:
             self.status = Status.INIT
@@ -1683,6 +1705,24 @@ class Group(object):
     def reset_meta(self):
         self.meta = None
 
+    # NOTE: this is custom decorator intended to be used with 'parse_meta()'
+    def __type_change_log(f):
+        @functools.wraps(f)
+        def wrapper(self, *args, **kwargs):
+            prev_type = self._type
+            res = f(self, *args, **kwargs)
+            if prev_type != self._type:
+                logger.info(
+                    'Group {id} type updated from {prev_type} to {cur_type}'.format(
+                        id=self,
+                        prev_type=prev_type,
+                        cur_type=self._type,
+                    )
+                )
+            return res
+        return wrapper
+
+    @__type_change_log
     def parse_meta(self, raw_meta):
 
         if raw_meta is None:
@@ -1698,12 +1738,6 @@ class Group(object):
                 raise Exception('Unable to parse meta')
 
         self._type = self._get_type(self.meta)
-        logger.debug(
-            'Group {group}: meta parsed, group type is determined as "{type}"'.format(
-                group=self,
-                type=self._type,
-            )
-        )
 
     def equal_meta(self, other):
         if type(self.meta) != type(other.meta):
@@ -1745,6 +1779,7 @@ class Group(object):
     def effective_free_space(self):
         return sum(nb.effective_free_space for nb in self.node_backends)
 
+    @status_change_log
     def update_status(self):
         """Updates group's own status.
         WARNING: This method should not take into consideration any of the
@@ -1752,7 +1787,7 @@ class Group(object):
         properties, state, etc."""
 
         if not self.node_backends:
-            logger.info('Group {0}: no node backends, status set to INIT'.format(self.group_id))
+            # logger.info('Group {0}: no node backends, status set to INIT'.format(self.group_id))
             self.status = Status.INIT
             self.status_text = ('Group {0} is in INIT state because there is '
                                 'no node backends serving this group'.format(self))
@@ -1941,18 +1976,6 @@ class Group(object):
 
     def __eq__(self, other):
         return self.group_id == other
-
-
-def status_change_log(f):
-    @functools.wraps(f)
-    def wrapper(self, *args, **kwargs):
-        old_status = self.status
-        res = f(self, *args, **kwargs)
-        if old_status != self.status:
-            logger.info('Couple {0} status updated from {1} to {2} ({3})'.format(
-                self, old_status, self.status, self.status_text))
-        return res
-    return wrapper
 
 
 class Groupset(object):

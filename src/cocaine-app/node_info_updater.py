@@ -214,7 +214,7 @@ class NodeInfoUpdater(object):
 
             try:
                 if result['error']:
-                    logger.info(
+                    logger.error(
                         'Monitor stat {node}: request to {url} failed with error {error}'.format(
                             node=node,
                             url=result['url'],
@@ -223,7 +223,7 @@ class NodeInfoUpdater(object):
                     )
                     continue
                 elif result['code'] != 200:
-                    logger.info(
+                    logger.error(
                         'Monitor stat {node}: request to {url} failed with code {code}'.format(
                             node=node,
                             url=result['url'],
@@ -356,6 +356,7 @@ class NodeInfoUpdater(object):
             node_backend = storage.node_backends[node_backend_addr]
 
         if b_stat['status']['state'] != 1:
+            # TODO: check this one
             logger.info('Node backend {0} is not enabled: state {1}'.format(
                 str(node_backend), b_stat['status']['state']))
             node_backend.disable()
@@ -385,12 +386,11 @@ class NodeInfoUpdater(object):
             fs.update_statistics(b_stat['backend'], collect_ts)
             processed_fss.add(fs)
 
-        logger.info('Updating statistics for node backend {}'.format(node_backend))
         prev_base_path = node_backend.base_path
         try:
             node_backend.update_statistics(b_stat, collect_ts)
         except KeyError as e:
-            logger.warn('Bad stat for node backend {0} ({1}): {2}'.format(
+            logger.error('Bad stat for node backend {0} ({1}): {2}'.format(
                 node_backend, e, b_stat))
             pass
 
@@ -458,12 +458,20 @@ class NodeInfoUpdater(object):
                     )
                     continue
 
-            logger.debug('Cluster updating: node {}, updating FS commands stats'.format(node))
             for fs in fss:
-                fs.update_commands_stats()
+                try:
+                    fs.update_commands_stats()
+                except Exception:
+                    logger.exception(
+                        'Node {}: failed to update commands stat for fs {}'.format(node, fs)
+                    )
+                    continue
 
-            logger.debug('Cluster updating: node {}, updating node commands stats'.format(node))
-            node.update_commands_stats(good_node_backends)
+            try:
+                node.update_commands_stats(good_node_backends)
+            except Exception:
+                logger.exception('Failed to update node commands stats')
+                pass
 
         except Exception as e:
             logger.exception('Unable to process statistics for node {}'.format(node))
@@ -520,16 +528,10 @@ class NodeInfoUpdater(object):
             return storage.groupsets[groupset_str]
 
         def _process_group_metadata(response, group, elapsed_time=None, end_time=None):
-            logger.debug('Cluster updating: group {0} meta key read time: {1}.{2}'.format(
-                group.group_id, elapsed_time.tsec, elapsed_time.tnsec))
-
             if response.error.code:
                 if response.error.code == errors.ELLIPTICS_NOT_FOUND:
                     # This group is some kind of uncoupled group, not an error
                     group.parse_meta(None)
-                    logger.info(
-                        'Group {group} has no metakey'.format(group=group)
-                    )
                 elif response.error.code in (
                     # Route list did not contain the group, expected error
                     errors.ELLIPTICS_GROUP_NOT_IN_ROUTE_LIST,
@@ -552,7 +554,10 @@ class NodeInfoUpdater(object):
 
             group.parse_meta(meta)
 
-            if group.type == storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1:
+            if group.type in (
+                storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1,
+                storage.Group.TYPE_RESERVED_LRC_8_2_2_V1,
+            ):
                 return
 
             ns_id = group.meta.get('namespace')
@@ -578,8 +583,6 @@ class NodeInfoUpdater(object):
                         type=group.type,
                     )
                 )
-
-            logger.info('Read symmetric groups from group {}: {}'.format(group.group_id, groups))
 
             for gid in groups:
                 if gid != group.group_id:

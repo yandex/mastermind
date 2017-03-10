@@ -115,10 +115,6 @@ class WeightManager(object):
                     skip_couples = set()
 
                     for couple_res in buckets:
-                        logger.debug('Ns {}, calculating weight for couple {}'.format(
-                            ns.id,
-                            couple_res.couple
-                        ))
                         # count couple weight, accumulate it
                         weight, couple_res_units = WeightCalculator.calculate_resources(couple_res)
                         # change the state of resources
@@ -132,10 +128,6 @@ class WeightManager(object):
                         self.__claim(couple_res, claim_res_units)
                         # mark couples with shared resources
                         claimed_units += claim_res_units
-                        logger.debug('Ns {}, acc claimed resources: {}'.format(
-                            ns.id,
-                            claimed_units
-                        ))
                         skip_couples.add(couple_res.couple)
                         self.__rebucket(buckets, couple_res, skip_couples, ns_size)
                         ns_weights[ns_size].append((
@@ -147,6 +139,11 @@ class WeightManager(object):
                         if claimed_units >= required_units and enough_couples:
                             # claimed enough resouce units for namespace
                             break
+
+                    logger.debug('Ns {}, acc claimed resources: {}'.format(
+                        ns.id,
+                        claimed_units
+                    ))
 
                 ns_groups_count = ns_settings.groups_count
                 found_couples = len(ns_weights.get(ns_groups_count, []))
@@ -201,11 +198,11 @@ class WeightManager(object):
         nets = [self.net[net_key] for net_key in couple_res.net_keys()]
         for resource in itertools.chain(disks, nets):
             resource.claim(resource_units)
-            logger.debug('Ns {}, claimed {} resource units from resource {}'.format(
-                couple_res.couple.namespace.id,
-                resource_units,
-                resource
-            ))
+            # logger.debug('Ns {}, claimed {} resource units from resource {}'.format(
+            #     couple_res.couple.namespace.id,
+            #     resource_units,
+            #     resource
+            # ))
 
     def __restore(self, couple_res):
         disks = [self.disks[disk_key] for disk_key in couple_res.disks_keys()]
@@ -475,12 +472,14 @@ class CouplesBuckets(object):
         if couple_res.couple not in self.buckets_idx[bucket_id]:
             self.buckets[bucket_id].append(couple_res)
             self.buckets_idx[bucket_id].add(couple_res.couple)
-            logger.debug('Couple {} goes into bucket {} ({}){}'.format(
-                couple_res.couple,
-                bucket_id + 1,
-                self.BUCKET_ORDER[bucket_id],
-                ' (rebucketing)' if updating else ''
-            ))
+            if bucket_id != 0:
+                # log if bucket id is not 0 since bucket 0 is the base one
+                logger.debug('Couple {} goes into bucket {} ({}){}'.format(
+                    couple_res.couple,
+                    bucket_id + 1,
+                    self.BUCKET_ORDER[bucket_id],
+                    ' (rebucketing)' if updating else ''
+                ))
             if updating:
                 for i, bucket in enumerate(self.buckets):
                     if i == bucket_id:
