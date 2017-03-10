@@ -1,3 +1,13 @@
+mastermind (2.28.190) trusty; urgency=medium
+
+  * Omit excessive log messages
+  * Do not check namespace for reserved lrc groups
+  * Add entities status change log messages
+  * Decrease weight manager log messages amount
+  * Adjust some log message levels
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 10 Mar 2017 13:17:18 +0300
+
 mastermind (2.28.189) trusty; urgency=medium
 
   * Fix checking alive keys for groups without backends
