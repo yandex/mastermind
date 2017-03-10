@@ -1270,13 +1270,17 @@ def status_change_log(f):
         res = f(self, *args, **kwargs)
         if prev_status != self.status:
             logger.info(
-                '{type} {id} status updated from {prev_status} to {cur_status} '
-                '({status_text})'.format(
+                '{type} {id} status updated from {prev_status} to {cur_status}'
+                '{status_text}'.format(
                     type=type(self).__name__,
                     id=self,
                     prev_status=prev_status,
                     cur_status=self.status,
-                    status_text=self.status_text,
+                    status_text=(
+                        ' ({})'.format(self.status_text)
+                        if self.status_text else
+                        ''
+                    ),
                 )
             )
         return res
@@ -1288,6 +1292,7 @@ class Fs(object):
         self.host = host
         self.fsid = fsid
         self.status = Status.OK
+        self.status_text = ''  # generalization for objects that have 'status' attribute
 
         self.node_backends = {}
 
