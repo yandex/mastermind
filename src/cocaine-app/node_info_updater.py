@@ -214,7 +214,7 @@ class NodeInfoUpdater(object):
 
             try:
                 if result['error']:
-                    logger.info(
+                    logger.error(
                         'Monitor stat {node}: request to {url} failed with error {error}'.format(
                             node=node,
                             url=result['url'],
@@ -223,7 +223,7 @@ class NodeInfoUpdater(object):
                     )
                     continue
                 elif result['code'] != 200:
-                    logger.info(
+                    logger.error(
                         'Monitor stat {node}: request to {url} failed with code {code}'.format(
                             node=node,
                             url=result['url'],
@@ -390,7 +390,7 @@ class NodeInfoUpdater(object):
         try:
             node_backend.update_statistics(b_stat, collect_ts)
         except KeyError as e:
-            logger.warn('Bad stat for node backend {0} ({1}): {2}'.format(
+            logger.error('Bad stat for node backend {0} ({1}): {2}'.format(
                 node_backend, e, b_stat))
             pass
 
