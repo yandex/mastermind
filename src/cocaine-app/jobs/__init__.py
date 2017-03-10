@@ -142,7 +142,7 @@ class JobProcessor(object):
 
     def _retry_job(self, job):
         for task in job.tasks:
-            if task.status in (Task.STATUS_COMPLETED, Task.STATUS_COMPLETED):
+            if task.status in Task.FINISHED_STATUSES:
                 continue
             if task.status != Task.STATUS_FAILED:
                 # unexpected status, skip job processing
@@ -351,17 +351,14 @@ class JobProcessor(object):
 
         for task in job.tasks:
 
-            if task.status == Task.STATUS_SKIPPED:
-                continue
-
-            if task.status == Task.STATUS_COMPLETED:
+            if task.status in Task.FINISHED_STATUSES:
                 continue
 
             if task.status == Task.STATUS_QUEUED:
                 # NOTE: task can change status to 'executing' on this step, then
                 # it is safe to continue task execution
                 try:
-                    self.__start_task(job, task)
+                    task._start_task(self)
                 except JobBrokenError as e:
                     job.status = Job.STATUS_BROKEN
                     job.on_execution_interrupted(error_msg=str(e))
@@ -388,7 +385,7 @@ class JobProcessor(object):
 
             if task.status == Task.STATUS_EXECUTING:
                 try:
-                    self.__update_task(job, task)
+                    task.update(self)
                 except Exception as e:
                     job.status = Job.STATUS_PENDING
                     job.on_execution_interrupted(error_msg=str(e))
@@ -409,9 +406,10 @@ class JobProcessor(object):
                 job.on_execution_interrupted()
                 break
 
-        finished_statuses = (Task.STATUS_COMPLETED, Task.STATUS_SKIPPED)
+            if task.status not in Task.FINISHED_STATUSES:
+                break
 
-        if all(task.status in finished_statuses for task in job.tasks):
+        if all(task.status in Task.FINISHED_STATUSES for task in job.tasks):
             logger.info('Job {}, tasks processing is finished'.format(job.id))
             try:
                 job.status = Job.STATUS_COMPLETED
@@ -419,112 +417,6 @@ class JobProcessor(object):
             except RuntimeError as e:
                 logger.error('Job {}, failed to complete job: {}'.format(job.id, e))
                 raise
-
-    def __start_task(self, job, task):
-        logger.info('Job {}, executing new task {}'.format(job.id, task))
-
-        task.add_history_record()
-
-        try:
-            task.on_exec_start(self)
-            logger.info('Job {}, task {} preparation completed'.format(job.id, task.id))
-        except Exception as e:
-            logger.exception('Job {}, task {}: failed to execute task start handler'.format(
-                job.id,
-                task.id
-            ))
-            task.status = Task.STATUS_FAILED
-            task.on_run_history_update(error=e)
-            raise
-
-        try:
-            task.attempts += 1
-            task.last_run_history_record.attempts = task.last_run_history_record.attempts + 1
-            self.__execute_task(task)
-            logger.info('Job {}, task {} execution successfully started'.format(
-                job.id,
-                task.id
-            ))
-        except Exception as e:
-            try:
-                task.on_exec_stop(self)
-            except Exception:
-                logger.exception('Job {}, task {}: failed to execute task stop handler'.format(
-                    job.id,
-                    task.id
-                ))
-                task.status = Task.STATUS_FAILED
-                task.on_run_history_update(error=e)
-                raise
-
-            if isinstance(e, RetryError):
-                logger.error('Job {}, task {}: retry error: {}'.format(job.id, task.id, e))
-                if task.attempts < JOB_CONFIG.get('minions', {}).get('execute_attempts', 3):
-                    # NOTE: no status change, will be retried
-                    return
-
-            task.status = Task.STATUS_FAILED
-            task.on_run_history_update(error=e)
-            raise
-
-        task.status = Task.STATUS_EXECUTING
-
-    def __update_task(self, job, task):
-        logger.info('Job {}, task {} status update'.format(job.id, task.id))
-
-        try:
-            self.__update_task_status(task)
-        except Exception as e:
-            logger.exception('Job {}, task {}: failed to update status'.format(job.id, task.id))
-            task.status = Task.STATUS_FAILED
-
-            # TODO: should we call on_exec_stop here?
-
-            task.on_run_history_update(error=e)
-            raise
-
-        try:
-            if not task.finished(self):
-                logger.debug('Job {}, task {} is not finished'.format(job.id, task.id))
-                return
-
-            task.status = (Task.STATUS_FAILED
-                           if task.failed(self) else
-                           Task.STATUS_COMPLETED)
-        except Exception as e:
-            logger.exception('Job {}, task {}: failed to check status'.format(job.id, task.id))
-            task.status = Task.STATUS_FAILED
-
-            # TODO: should we call on_exec_stop here?
-
-            task.on_run_history_update(error=e)
-            raise
-
-        try:
-            task.on_exec_stop(self)
-        except Exception as e:
-            logger.exception('Job {}, task {}: failed to execute task stop handler'.format(
-                job.id,
-                task.id
-            ))
-            task.status = Task.STATUS_FAILED
-            raise
-
-        task.on_run_history_update()
-        logger.debug('Job {}, task {} is finished, status {}'.format(job.id, task.id, task.status))
-
-    def __update_task_status(self, task):
-        if isinstance(task, MinionCmdTask):
-            task.update_status(self)
-        else:
-            task.update_status()
-
-    def __execute_task(self, task):
-        task.start_ts, task.finish_ts = time.time(), None
-        if isinstance(task, MinionCmdTask):
-            task.execute(self)
-        else:
-            task.execute()
 
     @h.concurrent_handler
     def create_job(self, request):
@@ -667,26 +559,8 @@ class JobProcessor(object):
         for job in executing_jobs:
             for task in job.tasks:
                 if task.status == Task.STATUS_EXECUTING:
-                    # Move task stop handling to task itself?
-                    if isinstance(task, MinionCmdTask):
-                        try:
-                            self.minions_monitor._terminate_cmd(task.host, task.minion_cmd_id)
-                        except Exception as e:
-                            logger.error('Job {0}, task {1}: failed to stop '
-                                'minion task: {2}\n{3}'.format(
-                                    job.id, task.id, e, traceback.format_exc()))
-                            raise
-
-                    try:
-                        task.on_exec_stop(self)
-                    except Exception as e:
-                        logger.error('Job {0}, task {1}: failed to execute task '
-                            'stop handler: {2}\n{3}'.format(
-                                job.id, task.id, e, traceback.format_exc()))
-                        raise
-
-                    task.status = Task.STATUS_FAILED
-
+                    task.stop(self)
+                    logging.info("Job {}, task {}: cancelled".format(job.id, task.id))
                     break
 
             self._cancel_job(job)
@@ -818,7 +692,7 @@ class JobProcessor(object):
             raise ValueError('Job {0}: task {1} has status {2}, should '
                 'have been failed'.format(job.id, task.id, task.status))
 
-        task.status = status
+        task.set_status(status)
         task.attempts = 0
         job.status = Job.STATUS_EXECUTING
         job.update_ts = time.time()

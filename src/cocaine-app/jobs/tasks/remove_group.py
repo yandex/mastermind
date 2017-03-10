@@ -23,7 +23,7 @@ class RemoveGroupTask(MinionCmdTask):
         self.cmd = TaskTypes.TYPE_REMOVE_GROUP
         self.type = TaskTypes.TYPE_REMOVE_GROUP
 
-    def execute(self, processor):
+    def _execute(self, processor):
         try:
             minion_response = processor.minions_monitor.remove_group(
                 self.host,

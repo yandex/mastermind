@@ -29,7 +29,7 @@ class RecoverGroupDcTask(MinionCmdTask):
         if not group_id in storage.groups:
             raise JobBrokenError('Group {0} is not found'.format(group_id))
 
-    def execute(self, processor):
+    def _execute(self, processor):
 
         # checking if task still applicable
         logger.info('Job {0}, task {1}: checking group {2} and couple {3} '
@@ -43,7 +43,7 @@ class RecoverGroupDcTask(MinionCmdTask):
                 'expected {3}'.format(self, self.group,
                                        group.couple, self.couple))
 
-        super(RecoverGroupDcTask, self).execute(processor)
+        super(RecoverGroupDcTask, self)._execute(processor)
 
     STATUSES_TO_SKIP = (
         -2,   # No such file or directory (key is not found)
