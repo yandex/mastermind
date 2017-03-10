@@ -117,3 +117,35 @@ class CoupleDefragJob(Job):
     @property
     def _involved_couples(self):
         return [self.couple]
+
+
+    @staticmethod
+    def report_resources(params):
+        """
+        Report resources supposed usage for specified params
+        :param params: params to be passed on creating the job instance
+        :return: dict={'groups':[], 'resources':{ Job.RESOURCE_HOST_IN: [], etc}}
+        """
+
+        # XXX: this code duplicates 'set_resources', 'involved_groups' methods but this duplication is chose
+        # to minimize changes to test
+        res = {}
+
+        couple = params.get('couple', '')
+        res['groups'] = [int(gid) for gid in couple.split(':')]
+        res['resources'] = {
+            Job.RESOURCE_FS: [],
+            Job.RESOURCE_CPU: [],
+        }
+        couples = (storage.cache_couples
+                   if params.get('is_cache_couple', False) else
+                   storage.replicas_groupsets)
+        if couple not in couples:
+            raise ValueError("Invalid couple {} (params are {})".format(couple, params))
+        couple = couples[couple]
+
+        for g in couple.groups:
+            res['resources'][Job.RESOURCE_FS].append(
+                (g.node_backends[0].node.host.addr, str(g.node_backends[0].fs.fsid)))
+            res['resources'][Job.RESOURCE_CPU].append(g.node_backends[0].node.host.addr)
+        return res
