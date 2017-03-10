@@ -4,3 +4,5 @@ mastermind.egg-info
 
 # in case someone uses fuse for development
 .fuse*
+.idea
+*_dev.manifest
