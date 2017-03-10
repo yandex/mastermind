@@ -1,0 +1,6 @@
+usr/bin/mastermind_deploy.sh usr/bin
+usr/bin/mastermind_app_name.sh usr/bin
+usr/bin/mastermind_upload_profile usr/bin
+src/cocaine-app/mastermind-scheduler.manifest usr/lib/mastermind/cocaine-app/
+src/cocaine-app/mastermind-scheduler.profile usr/lib/mastermind/cocaine-app/
+mastermind.tar.gz usr/lib/mastermind/cocaine-app/
