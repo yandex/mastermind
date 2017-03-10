@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 # encoding: utf-8
 from functools import wraps
 import logging
@@ -39,7 +39,6 @@ import couple_records
 import minions_monitor
 import node_info_updater
 from planner import Planner
-from sched import Scheduler
 from manual_locks import manual_locker
 from namespaces import NamespacesSettings
 from mastermind_core.config import config
@@ -212,18 +211,6 @@ def init_minions():
     return m
 
 
-def init_smart_scheduler(job_processor):
-    from sched.defrag_starter import DefragStarter
-    from sched.recover_starter import RecoveryStarter
-    from sched.ttl_cleanup_starter import TtlCleanupStarter
-
-    scheduler = Scheduler(meta_db, job_processor)
-    defrag_starter = DefragStarter(scheduler)
-    recovery_starter = RecoveryStarter(scheduler)
-    ttl_cleanup_starter = TtlCleanupStarter(scheduler)
-    return scheduler
-
-
 def init_move_planner(job_processor, niu):
     from planner.move_planner import MovePlanner
     planner = MovePlanner(meta_db, niu, job_processor)
@@ -269,11 +256,6 @@ def init_planner(job_processor, niu, namespaces_settings):
     move_planner = init_move_planner(job_processor, niu)
     external_storage_converting_planner = init_external_storage_converting_planner(job_processor, namespaces_settings)
     lrc_reserve_group_planner = init_lrc_reserve_planner(job_processor)
-
-    smart_scheduler = config.get('scheduler', {}).get('enabled', False)
-    if smart_scheduler:
-        # Turn on smart scheduler as the main scheduling mechanism
-        return init_smart_scheduler(job_processor)
 
     # Turn on the specifialized planners
     if move_planner:
