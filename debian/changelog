@@ -1,3 +1,10 @@
+mastermind (2.28.191) trusty; urgency=medium
+
+  * Fix file system status change logging
+  * Refactor job and task relationships
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 10 Mar 2017 17:12:33 +0300
+
 mastermind (2.28.190) trusty; urgency=medium
 
   * Omit excessive log messages
