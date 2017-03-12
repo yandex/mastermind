@@ -161,7 +161,7 @@ class JobProcessor(object):
 
             break
 
-    def _ready_jobs(self):
+    def _ready_job_ids(self):
 
         active_statuses = list(Job.ACTIVE_STATUSES)
         active_statuses.remove(Job.STATUS_NOT_APPROVED)
@@ -170,18 +170,27 @@ class JobProcessor(object):
         active_statuses.remove(Job.STATUS_PENDING)
         active_statuses.remove(Job.STATUS_BROKEN)
 
-        active_jobs = self.job_finder.jobs(statuses=active_statuses, sort=False)
-        active_jobs.sort(key=lambda j: j.create_ts)
+        active_jobs_data = self.job_finder.jobs_data(
+            statuses=active_statuses,
+            projection=(
+                Job.FIELD_ID,
+                Job.FIELD_TYPE,
+                Job.FIELD_STATUS,
+                Job.FIELD_CREATE_TS,
+                Job.FIELD_RESOURCES,
+            )
+        )
+        active_jobs_data = sorted(active_jobs_data, key=lambda j: j[Job.FIELD_CREATE_TS])
 
         # in the case of smart scheduler, it plans jobs in accordance with resource consumption
         # while scheduler is not the only source of jobs, jobs created manually are difficult to predict and
         # we suppose that there are not much of them
         # so for the smart-scheduler case we could assume that all active jobs could be executed
         if config.get('scheduler', {}).get('enabled', False):
-            return active_jobs
+            return (j[Job.FIELD_ID] for j in active_jobs_data)
 
-        ready_jobs = []
-        new_jobs = []
+        ready_jobs_data = []
+        new_jobs_data = []
 
         def default_res_counter():
             return {
@@ -197,43 +206,47 @@ class JobProcessor(object):
         type_jobs_count = {}
 
         # counting current resource usage
-        for job in active_jobs:
-            if job.status == Job.STATUS_NEW:
-                if job.type in self.SUPPORTED_JOBS:
-                    new_jobs.append(job)
+        for job_data in active_jobs_data:
+
+            job_type = job_data[Job.FIELD_TYPE]
+            if job_data[Job.FIELD_STATUS] == Job.STATUS_NEW:
+                if job_type in self.SUPPORTED_JOBS:
+                    new_jobs_data.append(job_data)
             else:
-                type_res = resources[job.type]
-                for res_type, res_val in self._unfold_resources(job.resources):
+                type_res = resources[job_type]
+                for res_type, res_val in self._unfold_resources(job_data[Job.FIELD_RESOURCES]):
                     type_res[res_type].setdefault(res_val, 0)
                     type_res[res_type][res_val] += 1
 
-                if job.status == Job.STATUS_EXECUTING:
-                    ready_jobs.append(job)
-                    type_jobs_count.setdefault(job.type, 0)
-                    type_jobs_count[job.type] += 1
+                if job_data[Job.FIELD_STATUS] == Job.STATUS_EXECUTING:
+                    ready_jobs_data.append(job_data)
+                    type_jobs_count.setdefault(job_type, 0)
+                    type_jobs_count[job_type] += 1
 
         logger.debug('Resources usage: {}; by type {}'.format(dict(resources), type_jobs_count))
 
         # selecting jobs to start processing
-        for job in new_jobs:
+        for job_data in new_jobs_data:
+
+            job_type = job_data[Job.FIELD_TYPE]
 
             check_types = [
                 t
                 for t, p in self.JOB_PRIORITIES.iteritems()
-                if p >= self.JOB_PRIORITIES[job.type]
+                if p >= self.JOB_PRIORITIES[job_type]
             ]
             logger.debug(
                 'Job {}: checking job type resources according to priorities: {}'.format(
-                    job.id,
+                    job_data['id'],
                     check_types
                 )
             )
 
             no_slots = False
 
-            for res_type, res_val in self._unfold_resources(job.resources):
+            for res_type, res_val in self._unfold_resources(job_data[Job.FIELD_RESOURCES]):
 
-                max_res_limit = JOB_CONFIG.get(job.type, {}).get('resources_limits', {}).get(
+                max_res_limit = JOB_CONFIG.get(job_type, {}).get('resources_limits', {}).get(
                     res_type, float('inf')
                 )
 
@@ -248,7 +261,7 @@ class JobProcessor(object):
                         'Job {job_id}: will be skipped, resource {res_type} / {res_val} is '
                         'occupuied by higher or same priority jobs (used {used_res_count} >= '
                         '{max_res_limit})'.format(
-                            job_id=job.id,
+                            job_id=job_data[Job.FIELD_ID],
                             res_type=res_type,
                             res_val=res_val,
                             used_res_count=used_res_count,
@@ -261,35 +274,36 @@ class JobProcessor(object):
             if no_slots:
                 continue
 
-            type_cur_usage = type_jobs_count.get(job.type, 0)
-            type_max_usage = JOB_CONFIG.get(job.type, {}).get('max_executing_jobs', 50)
+            type_cur_usage = type_jobs_count.get(job_type, 0)
+            type_max_usage = JOB_CONFIG.get(job_type, {}).get('max_executing_jobs', 50)
             if type_cur_usage >= type_max_usage:
                 logger.debug(
                     'Job {}: will be skipped, job type {} counter {} >= {}'.format(
-                        job.id, job.type, type_cur_usage, type_max_usage))
+                        job_data[Job.FIELD_ID], job_type, type_cur_usage, type_max_usage))
                 continue
 
             # account job resources and add job to queue
-            for res_type, res_val in self._unfold_resources(job.resources):
+            for res_type, res_val in self._unfold_resources(job_data[Job.FIELD_RESOURCES]):
 
-                cur_usage = resources[job.type][res_type].get(res_val, 0)
-                max_usage = JOB_CONFIG.get(job.type, {}).get(
+                cur_usage = resources[job_type][res_type].get(res_val, 0)
+                max_usage = JOB_CONFIG.get(job_type, {}).get(
                     'resources_limits', {}).get(res_type, float('inf'))
 
                 logger.debug(
                     'Job {}: will use resource {} / {} counter {} / {}'.format(
-                        job.id, res_type, res_val, cur_usage, max_usage))
-                resources[job.type][res_type].setdefault(res_val, 0)
-                resources[job.type][res_type][res_val] += 1
+                        job_data[Job.FIELD_ID], res_type, res_val, cur_usage, max_usage))
+                resources[job_type][res_type].setdefault(res_val, 0)
+                resources[job_type][res_type][res_val] += 1
 
-            type_jobs_count.setdefault(job.type, 0)
-            type_jobs_count[job.type] += 1
+            type_jobs_count.setdefault(job_type, 0)
+            type_jobs_count[job_type] += 1
 
-            ready_jobs.append(job)
+            ready_jobs_data.append(job_data)
 
-        logger.debug('Ready jobs: {0}'.format(len(ready_jobs)))
+        logger.debug('Ready jobs: {0}'.format(len(ready_jobs_data)))
 
-        return ready_jobs
+        return (j[Job.FIELD_ID] for j in ready_jobs_data)
+
 
     def _execute_jobs(self):
 
@@ -301,9 +315,9 @@ class JobProcessor(object):
 
                 self._retry_jobs()
 
-                ready_jobs = self._ready_jobs()
+                ready_job_ids = self._ready_job_ids()
 
-                for job in ready_jobs:
+                for job_id in ready_job_ids:
                     try:
                         self.__process_job(job)
                         job.save()
