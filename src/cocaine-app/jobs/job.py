@@ -527,7 +527,7 @@ class Job(MongoObject):
         return collection.find(params).sort(sort_by, sort_by_order)
 
     @staticmethod
-    def list_no_sort(collection, **kwargs):
+    def list_no_sort(collection, projection=None, **kwargs):
         """
         TODO: This method is a temporary solution until 'list' method
         is refactored to stop using mandatory sorting
@@ -543,7 +543,8 @@ class Job(MongoObject):
                 continue
             params.update(condition(k, v))
 
-        return collection.find(params)
+        # NOTE: change fields kw parameter to 'projection' when move to mongo3
+        return collection.find(params, fields=projection)
 
     def on_execution_interrupted(self, error_msg=None):
         ts = time.time()
