@@ -1,3 +1,10 @@
+mastermind-cocainev11 (2.28.192) trusty; urgency=medium
+
+  * Process job under per-job lock instead of a global JOBS lock
+  * Collect ready job ids instead of job objects
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sun, 12 Mar 2017 20:00:24 +0300
+
 mastermind-cocainev11 (2.28.191) trusty; urgency=medium
 
   * Fix file system status change logging
