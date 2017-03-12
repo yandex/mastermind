@@ -429,7 +429,7 @@ class Job(MongoObject):
 
     def release_locks(self):
         try:
-            sync_manager.persistent_locks_release(self._locks, self.id)
+            sync_manager.persistent_locks_release(self._locks, check=self.id)
         except InconsistentLockError as e:
             logger.error('Job {0}: some of the locks {1} are already acquired by another '
                 'job {2}'.format(self.id, self._locks, e.holder_id))
