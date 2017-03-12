@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 import logging
 import os.path
+import sys
 import traceback
 
 from kazoo.client import KazooClient
@@ -72,10 +73,29 @@ class ZkSyncManager(object):
         finally:
             lock.release()
 
-    def persistent_locks_acquire(self, locks, data=''):
+    @contextmanager
+    def ephemeral_locks(self, locks, data=''):
+        self.persistent_locks_acquire(locks, data=data, ephemeral=True)
+        exc_info = None
+        try:
+            yield
+        except:
+            # will be raised in the 'finally' block
+            exc_info = sys.exc_info()
+        finally:
+            try:
+                self.persistent_locks_release(locks, check=data)
+            except Exception as e:
+                logger.error('Failed to release ephemeral locks {}: {}'.format(locks, e))
+                pass
+            if exc_info:
+                # raising original exception if any
+                raise exc_info[0], exc_info[1], exc_info[2]
+
+    def persistent_locks_acquire(self, locks, data='', ephemeral=False):
         try:
             retry = self._retry.copy()
-            result = retry(self._inner_persistent_locks_acquire, locks=locks, data=data)
+            result = retry(self._inner_persistent_locks_acquire, locks=locks, data=data, ephemeral=True)
         except RetryFailedError:
             raise LockError('Failed to acquire persistent locks {} after several retries'.format(
                 locks))
@@ -85,7 +105,7 @@ class ZkSyncManager(object):
             raise LockError
         return result
 
-    def _inner_persistent_locks_acquire(self, locks, data):
+    def _inner_persistent_locks_acquire(self, locks, data, ephemeral=False):
 
         ensured_paths = set()
 
@@ -96,7 +116,7 @@ class ZkSyncManager(object):
             if len(parts) == 2 and parts[0] not in ensured_paths:
                 self.client.ensure_path(parts[0])
                 ensured_paths.add(parts[0])
-            tr.create(path, data)
+            tr.create(path, data, ephemeral=ephemeral)
 
         failed = False
         failed_locks = []
