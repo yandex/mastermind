@@ -55,6 +55,12 @@ class Job(MongoObject):
     RESOURCE_HOST_OUT = 'host_out'
     RESOURCE_CPU = 'cpu'
 
+    FIELD_ID = 'id'
+    FIELD_TYPE = 'type'
+    FIELD_STATUS = 'status'
+    FIELD_CREATE_TS = 'create_ts'
+    FIELD_RESOURCES = 'resources'
+
     # NOTE: this list should be synchronized with the set of RESOURCE_* constants
     RESOURCE_TYPES = (
         RESOURCE_FS,
@@ -251,13 +257,13 @@ class Job(MongoObject):
         return job
 
     def load(self, data):
-        self.id = data['id'].encode('utf-8')
-        self.status = data['status']
-        self.create_ts = data.get('create_ts') or data['start_ts']
+        self.id = data[self.FIELD_ID].encode('utf-8')
+        self.status = data[self.FIELD_STATUS]
+        self.create_ts = data.get(self.FIELD_CREATE_TS) or data['start_ts']
         self.start_ts = data['start_ts']
         self.finish_ts = data['finish_ts']
         self.update_ts = data.get('update_ts') or self.finish_ts or self.start_ts
-        self.type = data['type']
+        self.type = data[self.FIELD_TYPE]
         self.error_msg = data.get('error_msg', [])
 
         self.tasks = [TaskFactory.make_task(task_data, self) for task_data in data['tasks']]
@@ -324,13 +330,13 @@ class Job(MongoObject):
             self._finish_ts = int(value)
 
     def _dump(self):
-        data = {'id': self.id,
-                'status': self.status,
-                'create_ts': self.create_ts,
+        data = {self.FIELD_ID: self.id,
+                self.FIELD_STATUS: self.status,
+                self.FIELD_CREATE_TS: self.create_ts,
                 'start_ts': self.start_ts,
                 'update_ts': self.update_ts,
                 'finish_ts': self.finish_ts,
-                'type': self.type,
+                self.FIELD_TYPE: self.type,
                 'error_msg': self.error_msg}
 
         data.update({
@@ -429,7 +435,7 @@ class Job(MongoObject):
 
     def release_locks(self):
         try:
-            sync_manager.persistent_locks_release(self._locks, self.id)
+            sync_manager.persistent_locks_release(self._locks, check=self.id)
         except InconsistentLockError as e:
             logger.error('Job {0}: some of the locks {1} are already acquired by another '
                 'job {2}'.format(self.id, self._locks, e.holder_id))
@@ -521,7 +527,7 @@ class Job(MongoObject):
         return collection.find(params).sort(sort_by, sort_by_order)
 
     @staticmethod
-    def list_no_sort(collection, **kwargs):
+    def list_no_sort(collection, projection=None, **kwargs):
         """
         TODO: This method is a temporary solution until 'list' method
         is refactored to stop using mandatory sorting
@@ -537,7 +543,8 @@ class Job(MongoObject):
                 continue
             params.update(condition(k, v))
 
-        return collection.find(params)
+        # NOTE: change fields kw parameter to 'projection' when move to mongo3
+        return collection.find(params, fields=projection)
 
     def on_execution_interrupted(self, error_msg=None):
         ts = time.time()
