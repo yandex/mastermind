@@ -55,6 +55,12 @@ class Job(MongoObject):
     RESOURCE_HOST_OUT = 'host_out'
     RESOURCE_CPU = 'cpu'
 
+    FIELD_ID = 'id'
+    FIELD_TYPE = 'type'
+    FIELD_STATUS = 'status'
+    FIELD_CREATE_TS = 'create_ts'
+    FIELD_RESOURCES = 'resources'
+
     # NOTE: this list should be synchronized with the set of RESOURCE_* constants
     RESOURCE_TYPES = (
         RESOURCE_FS,
@@ -251,13 +257,13 @@ class Job(MongoObject):
         return job
 
     def load(self, data):
-        self.id = data['id'].encode('utf-8')
-        self.status = data['status']
-        self.create_ts = data.get('create_ts') or data['start_ts']
+        self.id = data[self.FIELD_ID].encode('utf-8')
+        self.status = data[self.FIELD_STATUS]
+        self.create_ts = data.get(self.FIELD_CREATE_TS) or data['start_ts']
         self.start_ts = data['start_ts']
         self.finish_ts = data['finish_ts']
         self.update_ts = data.get('update_ts') or self.finish_ts or self.start_ts
-        self.type = data['type']
+        self.type = data[self.FIELD_TYPE]
         self.error_msg = data.get('error_msg', [])
 
         self.tasks = [TaskFactory.make_task(task_data, self) for task_data in data['tasks']]
@@ -324,13 +330,13 @@ class Job(MongoObject):
             self._finish_ts = int(value)
 
     def _dump(self):
-        data = {'id': self.id,
-                'status': self.status,
-                'create_ts': self.create_ts,
+        data = {self.FIELD_ID: self.id,
+                self.FIELD_STATUS: self.status,
+                self.FIELD_CREATE_TS: self.create_ts,
                 'start_ts': self.start_ts,
                 'update_ts': self.update_ts,
                 'finish_ts': self.finish_ts,
-                'type': self.type,
+                self.FIELD_TYPE: self.type,
                 'error_msg': self.error_msg}
 
         data.update({
