@@ -1,5 +1,4 @@
 import logging
-import math
 
 from error import JobBrokenError
 from infrastructure import infrastructure
