@@ -57,3 +57,4 @@ class TaskTypes(object):
     TYPE_REMOVE_GROUP_FILE = 'remove_group_file'
     TYPE_CREATE_FILE_MARKER = 'create_file_marker'
     TYPE_LRC_RECOVERY_TASK = 'lrc_recovery'
+    TYPE_CHECK_FILE_SYSTEM_TASK = 'check_file_system'

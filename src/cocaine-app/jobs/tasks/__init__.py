@@ -30,6 +30,7 @@ from create_group_file import CreateGroupFileTask
 from remove_group_file import RemoveGroupFileTask
 from create_file_marker import CreateFileMarkerTask
 from lrc_recovery import LrcRecoveryTask
+from check_file_system import CheckFileSystemTask
 
 
 class TaskFactory(object):
@@ -61,6 +62,7 @@ class TaskFactory(object):
         TaskTypes.TYPE_REMOVE_GROUP_FILE: RemoveGroupFileTask,
         TaskTypes.TYPE_CREATE_FILE_MARKER: CreateFileMarkerTask,
         TaskTypes.TYPE_LRC_RECOVERY_TASK: LrcRecoveryTask,
+        TaskTypes.TYPE_CHECK_FILE_SYSTEM_TASK: CheckFileSystemTask,
     }
 
     @staticmethod
