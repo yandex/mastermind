@@ -1,5 +1,4 @@
 import logging
-import time
 
 import jobs
 from mastermind_core.config import config

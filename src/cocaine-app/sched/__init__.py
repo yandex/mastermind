@@ -1,12 +1,8 @@
-from copy import copy, deepcopy
-import heapq
 from logging import getLogger
 import storage
 import time
 from collections import defaultdict, Counter
 import itertools
-
-import pymongo
 
 import jobs
 from jobs.job import Job
@@ -16,7 +12,6 @@ from mastermind_core.db.mongo.pool import Collection
 from sync import sync_manager
 from sync.error import LockFailedError, LockAlreadyAcquiredError
 from timer import periodic_timer
-from history import GroupHistoryFinder
 import timed_queue
 
 logger = getLogger('mm.sched')
@@ -38,6 +33,7 @@ class Scheduler(object):
         # store a list of starters in order to manage them and make a better schedule in the future
         self.starters = []
 
+        # FIXME can broken if not in config, assert may be better?
         if config['metadata'].get('scheduler', {}).get('db'):
             self.collection = Collection(db[config['metadata']['scheduler']['db']], 'scheduler')
 
@@ -49,7 +45,7 @@ class Scheduler(object):
         for res_type, job_type in itertools.product(jobs.Job.RESOURCE_TYPES, jobs.JobTypes.AVAILABLE_TYPES):
             self.res_limits[job_type][res_type] = config.get('jobs', {}).get(job_type, {}).get(
                             'resources_limits', {}).get(res_type, 1)
-        logger.info("Obtained res limits are {}".format(self.res_limits))
+        logger.info("Obtained res limits are {}".format(dict(self.res_limits)))
 
     def _start_tq(self):
         self.__tq.start()
@@ -389,7 +385,6 @@ class Scheduler(object):
             offset += res['nRemoved']
 
         self.history_data = history
-
 
     def update_historic_ts(self, couple_id, recover_ts=None, cleanup_ts=None):
         """
