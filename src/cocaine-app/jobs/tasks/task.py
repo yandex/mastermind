@@ -308,7 +308,7 @@ class Task(object):
             self._wrapped_on_exec_stop(processor)
             raise
 
-    def update(self, processor):
+    def update_status(self, processor):
         assert self.status == Task.STATUS_EXECUTING
 
         logger.info('Job {}, task {}: status update'.format(self.parent_job.id, self.id))
