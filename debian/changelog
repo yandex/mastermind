@@ -1,3 +1,12 @@
+mastermind-cocainev11 (2.28.194) trusty; urgency=medium
+
+  * Retries and group checks when adding tasks to lrc convert job
+  * Restore-path: check job tasks
+  * Change create_job_attempts for lrc jobs
+  * Restore: check file system
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 13 Mar 2017 19:57:34 +0300
+
 mastermind-cocainev11 (2.28.193) trusty; urgency=medium
 
   * Fix allias `update` on method and parameter in Task
