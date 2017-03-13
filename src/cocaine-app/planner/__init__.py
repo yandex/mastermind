@@ -848,6 +848,7 @@ class Planner(object):
         return job.dump()
 
     CREATE_JOB_ATTEMPTS = 3
+    CREATE_LRC_JOB_ATTEMPTS = 1
     RUNNING_STATUSES = [jobs.Job.STATUS_NOT_APPROVED,
                         jobs.Job.STATUS_NEW,
                         jobs.Job.STATUS_EXECUTING]
@@ -894,7 +895,7 @@ class Planner(object):
         last_error = None
 
         selector = LrcReserveGroupSelector(self.job_processor)
-        for _ in xrange(self.CREATE_JOB_ATTEMPTS):
+        for _ in xrange(self.CREATE_LRC_JOB_ATTEMPTS):
             try:
                 job = selector.restore_uncoupled_lrc_group(
                     group,
@@ -914,7 +915,7 @@ class Planner(object):
         last_error = None
 
         selector = LrcReserveGroupSelector(self.job_processor)
-        for _ in xrange(self.CREATE_JOB_ATTEMPTS):
+        for _ in xrange(self.CREATE_LRC_JOB_ATTEMPTS):
             try:
                 job = selector.restore_lrc_group(
                     group,
