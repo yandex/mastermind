@@ -422,7 +422,7 @@ class JobProcessor(object):
 
             if task.status == Task.STATUS_EXECUTING:
                 try:
-                    task.update(self)
+                    task.update_status(self)
                 except Exception as e:
                     job.status = Job.STATUS_PENDING
                     job.on_execution_interrupted(error_msg=str(e))
