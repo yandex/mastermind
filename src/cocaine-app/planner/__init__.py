@@ -15,6 +15,7 @@ from infrastructure_cache import cache
 from planner.lrc_reserve_groups import LrcReserveGroupSelector
 import inventory
 import jobs
+from jobs.tasks import Task
 from jobs.error import JobRequirementError
 from manual_locks import manual_locker
 from mastermind_core.config import config
@@ -848,6 +849,7 @@ class Planner(object):
         return job.dump()
 
     CREATE_JOB_ATTEMPTS = 3
+    CREATE_LRC_JOB_ATTEMPTS = 1
     RUNNING_STATUSES = [jobs.Job.STATUS_NOT_APPROVED,
                         jobs.Job.STATUS_NEW,
                         jobs.Job.STATUS_EXECUTING]
@@ -894,7 +896,7 @@ class Planner(object):
         last_error = None
 
         selector = LrcReserveGroupSelector(self.job_processor)
-        for _ in xrange(self.CREATE_JOB_ATTEMPTS):
+        for _ in xrange(self.CREATE_LRC_JOB_ATTEMPTS):
             try:
                 job = selector.restore_uncoupled_lrc_group(
                     group,
@@ -914,7 +916,7 @@ class Planner(object):
         last_error = None
 
         selector = LrcReserveGroupSelector(self.job_processor)
-        for _ in xrange(self.CREATE_JOB_ATTEMPTS):
+        for _ in xrange(self.CREATE_LRC_JOB_ATTEMPTS):
             try:
                 job = selector.restore_lrc_group(
                     group,
@@ -1045,7 +1047,10 @@ class Planner(object):
                 if cancel_job:
                     try:
                         self.job_processor._cancel_job(job)
-                        cancelled_jobs.append(job.id)
+                        if job.tasks[0].type == jobs.TaskTypes.TYPE_CHECK_FILE_SYSTEM_TASK and job.tasks[0].status == Task.STATUS_FAILED:
+                            pass
+                        else:
+                            cancelled_jobs.append(job.id)
                     except Exception as e:
                         logger.exception('Failed to cancel job {}'.format(job.id))
                         raise ValueError('Failed to cancel job {}: {}'.format(job.id, e))

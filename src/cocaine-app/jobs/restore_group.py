@@ -14,7 +14,7 @@ from tasks import (RsyncBackendTask, MinionCmdTask,
                    MarkBackendTask, RemovePathTask,
                    CreateIdsFileTask, CreateGroupFileTask,
                    UnmarkBackendTask, RemoveGroupFileTask,
-                   CreateFileMarkerTask)
+                   CreateFileMarkerTask, CheckFileSystemTask)
 import storage
 
 
@@ -144,6 +144,16 @@ class RestoreGroupJob(Job):
             remove_path = os.path.join(
                 dst_base_path, self.GROUP_FILE_DIR_MOVE_DST_RENAME)
 
+        src_backend = infrastructure.get_backend_by_group_id(src_group.group_id)
+        restore_backend = infrastructure.get_backend_by_group_id(group.group_id)
+
+        params = {'backend_path': src_backend.base_path}
+        task = CheckFileSystemTask.new(self,
+                                       host=src_backend.node.host.addr,
+                                       params=params)
+
+        self.tasks.append(task)
+
         if self.uncoupled_group:
             for group_id in self.merged_groups:
                 merged_group = storage.groups[group_id]
@@ -260,9 +270,6 @@ class RestoreGroupJob(Job):
                                         params=params)
 
                 self.tasks.append(task)
-
-        src_backend = infrastructure.get_backend_by_group_id(src_group.group_id)
-        restore_backend = infrastructure.get_backend_by_group_id(group.group_id)
 
         mark_src_backend = self.make_path(
             self.BACKEND_DOWN_MARKER, base_path=src_backend.base_path).format(
