@@ -145,6 +145,38 @@ class SymlinkSettings(SettingsObject):
             )
 
 
+class MetadataSettings(SettingsObject):
+
+    PARENT_KEY = 'metadata'
+
+    ENABLE = 'enable'
+
+    VALID_SETTING_KEYS = set([
+        ENABLE,
+    ])
+
+    # TODO: Add option to limit total size of custom metadata
+
+    @SettingsObject.settings_property
+    def enable(self):
+        return self._settings.get(self.ENABLE)
+
+    @enable.setter
+    def enable(self, value):
+        self._settings[self.ENABLE] = value
+
+    def validate(self):
+        super(MetadataSettings, self).validate()
+
+        if self.ENABLE in self._settings:
+            if not isinstance(self._settings[self.ENABLE], bool):
+                raise ValueError(
+                    'Namespace "{}": attributes metadata enable should be boolean'.format(
+                        self.namespace
+                    )
+                )
+
+
 class AttributesSettings(SettingsObject):
 
     PARENT_KEY = 'attributes'
@@ -153,12 +185,14 @@ class AttributesSettings(SettingsObject):
     MIMETYPE = 'mimetype'
     TTL = 'ttl'
     SYMLINK = 'symlink'
+    METADATA = 'metadata'
 
     VALID_SETTING_KEYS = set([
         FILENAME,
         MIMETYPE,
         TTL,
         SYMLINK,
+        METADATA,
     ])
 
     def _rebuild(self):
@@ -171,6 +205,11 @@ class AttributesSettings(SettingsObject):
             self._symlink = SymlinkSettings(self, self._settings[self.SYMLINK])
         else:
             self._symlink = SymlinkSettings(self, {})
+
+        if self.METADATA in self._settings:
+            self._metadata = MetadataSettings(self, self._settings[self.METADATA])
+        else:
+            self._metadata = MetadataSettings(self, {})
 
     @SettingsObject.settings_property
     def filename(self):
@@ -196,6 +235,10 @@ class AttributesSettings(SettingsObject):
     def symlink(self):
         return self._symlink
 
+    @property
+    def metadata(self):
+        return self._metadata
+
     def validate(self):
         super(AttributesSettings, self).validate()
 
@@ -217,3 +260,4 @@ class AttributesSettings(SettingsObject):
 
         self._ttl.validate()
         self._symlink.validate()
+        self._metadata.validate()

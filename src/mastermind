@@ -1060,6 +1060,12 @@ def ns_setup(namespace,
                  'Scope limit for symlink, available values: "namespace" - symlink can be a '
                  'relative url to the same namespace\'s keys;'
              ),
+             attributes_metadata=(
+                 '',
+                 '',
+                 "This flag toggles the client's ability to store key's custom metadata in "
+                 "key's attributes."
+             ),
              json=('', None, 'Format output as json'),
              host=None, app=None):
 
@@ -1136,6 +1142,10 @@ def ns_setup(namespace,
         # symlink should not be passed if not set so that default value stays None
         if attributes_symlink:
             params['attributes_symlink'] = attributes_symlink == '1'
+
+        # metadata should not be passed if not set so that default value stays None
+        if attributes_metadata:
+            params['attributes_metadata'] = attributes_metadata == '1'
 
         ns = cl.namespaces.setup(
             namespace,
@@ -1248,6 +1258,13 @@ def ns_setup(namespace,
 
         if symlink_attributes:
             attributes['symlink'] = symlink_attributes
+
+        metadata_attributes = {}
+        if attributes_metadata:
+            metadata_attributes['enable'] = attributes_metadata == '1'
+
+        if metadata_attributes:
+            attributes['metadata'] = metadata_attributes
 
         if attributes:
             settings['attributes'] = attributes
