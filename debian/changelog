@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.193) trusty; urgency=medium
+
+  * Fix allias `update` on method and parameter in Task
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 13 Mar 2017 16:01:19 +0300
+
 mastermind-cocainev11 (2.28.192) trusty; urgency=medium
 
   * Process job under per-job lock instead of a global JOBS lock
