@@ -438,6 +438,11 @@ class JobProcessor(object):
                     job._dirty = True
                     job.update_ts = time.time()
 
+                    if task.status in Task.FINISHED_STATUSES:
+                        # NOTE: this is temporary. Process next task on the next
+                        # job process iteration.
+                        break
+
             if task.status == Task.STATUS_FAILED:
                 job.status = Job.STATUS_PENDING
                 job.on_execution_interrupted()
