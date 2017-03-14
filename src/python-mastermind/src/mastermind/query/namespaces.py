@@ -77,7 +77,8 @@ class NamespacesQuery(Query):
               attributes_symlink=None,
               attributes_symlink_scope_limit=None,
               attributes_metadata=None,
-              owner_id=None,):
+              owner_id=None,
+    ):
         """Performs initial namespace setup.
 
         Args:

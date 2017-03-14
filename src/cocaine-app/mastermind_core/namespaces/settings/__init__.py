@@ -73,35 +73,12 @@ class NamespaceSettings(SettingsObject):
         )
 
     def _rebuild(self):
-        if self.REDIRECT in self._settings:
-            self._redirect = RedirectSettings(self, self._settings[self.REDIRECT])
-        else:
-            self._redirect = RedirectSettings(self, {})
-
-        if self.SIGNATURE in self._settings:
-            self._signature = SignatureSettings(self, self._settings[self.SIGNATURE])
-        else:
-            self._signature = SignatureSettings(self, {})
-
-        if self.AUTH_KEYS in self._settings:
-            self._auth_keys = AuthKeysSettings(self, self._settings[self.AUTH_KEYS])
-        else:
-            self._auth_keys = AuthKeysSettings(self, {})
-
-        if self.FEATURES in self._settings:
-            self._features = FeaturesSettings(self, self._settings[self.FEATURES])
-        else:
-            self._features = FeaturesSettings(self, {})
-
-        if self.ATTRIBUTES in self._settings:
-            self._attributes = AttributesSettings(self, self._settings[self.ATTRIBUTES])
-        else:
-            self._attributes = AttributesSettings(self, {})
-
-        if self.OWNER in self._settings:
-            self._owner = OwnerSettings(self, self._settings[self.OWNER])
-        else:
-            self._owner = OwnerSettings(self, {})
+        self._redirect = RedirectSettings(self, self._settings.get(self.REDIRECT, {}))
+        self._signature = SignatureSettings(self, self._settings.get(self.SIGNATURE, {}))
+        self._auth_keys = AuthKeysSettings(self, self._settings.get(self.AUTH_KEYS, {}))
+        self._features = FeaturesSettings(self, self._settings.get(self.FEATURES, {}))
+        self._attributes = AttributesSettings(self, self._settings.get(self.ATTRIBUTES, {}))
+        self._owner = OwnerSettings(self, self._settings.get(self.OWNER, {}))
 
     @SettingsObject.settings_property
     def deleted(self):
