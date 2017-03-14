@@ -1,3 +1,9 @@
+mastermind-cocainev11 (2.28.195) trusty; urgency=medium
+
+  * Process next job task on the next job process iteration
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 14 Mar 2017 23:13:38 +0300
+
 mastermind-cocainev11 (2.28.194) trusty; urgency=medium
 
   * Retries and group checks when adding tasks to lrc convert job
