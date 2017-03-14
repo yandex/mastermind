@@ -2188,6 +2188,58 @@ def lrc_groupset_convert(groupset=('g',
     return
 
 
+@lrcGroupsetDispatcher.command(name='recover')
+@log_action
+def lrc_groupset_recover(
+    group_or_groupset,
+    autoapprove=('a', False, 'Automatically approve jobs'),
+    json=('', None, 'Format data as json'),
+    host=None,
+    app=None
+):
+    '''Create job to recover lrc groupset'''
+    cl = client(host, app)
+
+    if ':' not in group_or_groupset:
+        # this is a group, fetch lrc groupset for this group
+        try:
+            meta = cl.groups[int(group_or_groupset)].meta
+        except Exception:
+            meta = None
+        if not (meta and 'lrc_groups' in meta):
+            print warn('Group {} is not an lrc group'.format(group_or_groupset))
+            return 1
+        lrc_groups = meta['lrc_groups']
+        groupset = ':'.join(str(g) for g in lrc_groups)
+    else:
+        groupset = group_or_groupset
+
+    options = {
+        'lrc_groupsets': [groupset],
+        'need_approving': not autoapprove,
+    }
+
+    res = cl.request(
+        'create_lrc_recover_jobs',
+        options
+    )
+
+    if not len(res):
+        print warn('Unexpected empty result')
+        sys.exit(1)
+
+    res = res[0]
+
+    if isinstance(res, basestring):
+        print warn(res)
+        sys.exit(1)
+
+    if json:
+        print dumps(res)
+    else:
+        pprint(res)
+
+
 @coupleDispatcher.command(name='ttl_cleanup')
 @log_action
 def ttl_cleanup(iter_group,

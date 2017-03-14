@@ -61,6 +61,7 @@ class JobProcessor(object):
     JOB_PRIORITIES = {
         JobTypes.TYPE_RESTORE_GROUP_JOB: 25,
         JobTypes.TYPE_RESTORE_LRC_GROUP_JOB: 25,
+        JobTypes.TYPE_RECOVER_LRC_GROUPSET_JOB: 25,
         JobTypes.TYPE_MOVE_JOB: 20,
         JobTypes.TYPE_TTL_CLEANUP_JOB: 19,
         JobTypes.TYPE_BACKEND_MANAGER_JOB: 18,
@@ -81,6 +82,7 @@ class JobProcessor(object):
     SUPPORTED_JOBS = set([
         JobTypes.TYPE_RESTORE_GROUP_JOB,
         JobTypes.TYPE_RESTORE_LRC_GROUP_JOB,
+        JobTypes.TYPE_RECOVER_LRC_GROUPSET_JOB,
         JobTypes.TYPE_RESTORE_UNCOUPLED_LRC_GROUP_JOB,
         JobTypes.TYPE_MOVE_JOB,
         JobTypes.TYPE_TTL_CLEANUP_JOB,
