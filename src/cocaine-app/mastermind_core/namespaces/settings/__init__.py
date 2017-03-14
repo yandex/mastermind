@@ -4,6 +4,7 @@ from mastermind_core.namespaces.settings.signature import SignatureSettings
 from mastermind_core.namespaces.settings.auth_keys import AuthKeysSettings
 from mastermind_core.namespaces.settings.features import FeaturesSettings
 from mastermind_core.namespaces.settings.attributes import AttributesSettings
+from mastermind_core.namespaces.settings.owner import OwnerSettings
 
 
 class NamespaceSettings(SettingsObject):
@@ -25,6 +26,7 @@ class NamespaceSettings(SettingsObject):
     AUTH_KEYS = 'auth-keys'
     FEATURES = 'features'
     ATTRIBUTES = 'attributes'
+    OWNER = 'owner'
 
     VALID_SETTING_KEYS = set([
         __SERVICE,
@@ -41,6 +43,7 @@ class NamespaceSettings(SettingsObject):
         AUTH_KEYS,
         FEATURES,
         ATTRIBUTES,
+        OWNER,
     ])
 
     SUCCESS_COPIES_ANY = 'any'
@@ -61,6 +64,7 @@ class NamespaceSettings(SettingsObject):
         self._auth_keys = None
         self._features = None
         self._attributes = None
+        self._owner = None
 
         super(NamespaceSettings, self).__init__(
             parent=None,
@@ -94,6 +98,11 @@ class NamespaceSettings(SettingsObject):
         else:
             self._attributes = AttributesSettings(self, {})
 
+        if self.OWNER in self._settings:
+            self._owner = OwnerSettings(self, self._settings[self.OWNER])
+        else:
+            self._owner = OwnerSettings(self, {})
+
     @SettingsObject.settings_property
     def deleted(self):
         return self._settings.get(self.__SERVICE, {}).get(self.__DELETED, False)
@@ -122,6 +131,10 @@ class NamespaceSettings(SettingsObject):
     @property
     def attributes(self):
         return self._attributes
+
+    @property
+    def owner(self):
+        return self._owner
 
     @SettingsObject.settings_property
     def min_units(self):
@@ -273,6 +286,7 @@ class NamespaceSettings(SettingsObject):
         self._auth_keys.validate()
         self._features.validate()
         self._attributes.validate()
+        self._owner.validate()
 
         # Checking redirect and signature linked values
         linked_keys = (

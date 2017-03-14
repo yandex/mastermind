@@ -1105,6 +1105,11 @@ def ns_setup(namespace,
                  "This flag toggles the client's ability to store key's custom metadata in "
                  "key's attributes."
              ),
+             owner_id=(
+                 '',
+                 '',
+                 "Namespace owner integer identification number. ABC should know a service with this id."
+             ),
              json=('', None, 'Format output as json'),
              host=None, app=None):
 
@@ -1172,6 +1177,11 @@ def ns_setup(namespace,
             attributes_ttl_minimum=attributes_ttl_minimum,
             attributes_ttl_maximum=attributes_ttl_maximum,
             attributes_symlink_scope_limit=attributes_symlink_scope_limit,
+            owner_id=(
+                int(owner_id)
+                if owner_id else
+                None
+            ),
         )
 
         # attributes_ttl should not be passed if not set so that default value stays None
@@ -1307,6 +1317,9 @@ def ns_setup(namespace,
 
         if attributes:
             settings['attributes'] = attributes
+
+        if owner_id:
+            settings.setdefault('owner', {})['id'] = int(owner_id)
 
         if overwrite:
             ns.settings = settings
