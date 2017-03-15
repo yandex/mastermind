@@ -4,6 +4,7 @@ from mastermind_core.namespaces.settings.signature import SignatureSettings
 from mastermind_core.namespaces.settings.auth_keys import AuthKeysSettings
 from mastermind_core.namespaces.settings.features import FeaturesSettings
 from mastermind_core.namespaces.settings.attributes import AttributesSettings
+from mastermind_core.namespaces.settings.owner import OwnerSettings
 
 
 class NamespaceSettings(SettingsObject):
@@ -25,6 +26,7 @@ class NamespaceSettings(SettingsObject):
     AUTH_KEYS = 'auth-keys'
     FEATURES = 'features'
     ATTRIBUTES = 'attributes'
+    OWNER = 'owner'
 
     VALID_SETTING_KEYS = set([
         __SERVICE,
@@ -41,6 +43,7 @@ class NamespaceSettings(SettingsObject):
         AUTH_KEYS,
         FEATURES,
         ATTRIBUTES,
+        OWNER,
     ])
 
     SUCCESS_COPIES_ANY = 'any'
@@ -61,6 +64,7 @@ class NamespaceSettings(SettingsObject):
         self._auth_keys = None
         self._features = None
         self._attributes = None
+        self._owner = None
 
         super(NamespaceSettings, self).__init__(
             parent=None,
@@ -69,30 +73,12 @@ class NamespaceSettings(SettingsObject):
         )
 
     def _rebuild(self):
-        if self.REDIRECT in self._settings:
-            self._redirect = RedirectSettings(self, self._settings[self.REDIRECT])
-        else:
-            self._redirect = RedirectSettings(self, {})
-
-        if self.SIGNATURE in self._settings:
-            self._signature = SignatureSettings(self, self._settings[self.SIGNATURE])
-        else:
-            self._signature = SignatureSettings(self, {})
-
-        if self.AUTH_KEYS in self._settings:
-            self._auth_keys = AuthKeysSettings(self, self._settings[self.AUTH_KEYS])
-        else:
-            self._auth_keys = AuthKeysSettings(self, {})
-
-        if self.FEATURES in self._settings:
-            self._features = FeaturesSettings(self, self._settings[self.FEATURES])
-        else:
-            self._features = FeaturesSettings(self, {})
-
-        if self.ATTRIBUTES in self._settings:
-            self._attributes = AttributesSettings(self, self._settings[self.ATTRIBUTES])
-        else:
-            self._attributes = AttributesSettings(self, {})
+        self._redirect = RedirectSettings(self, self._settings.get(self.REDIRECT, {}))
+        self._signature = SignatureSettings(self, self._settings.get(self.SIGNATURE, {}))
+        self._auth_keys = AuthKeysSettings(self, self._settings.get(self.AUTH_KEYS, {}))
+        self._features = FeaturesSettings(self, self._settings.get(self.FEATURES, {}))
+        self._attributes = AttributesSettings(self, self._settings.get(self.ATTRIBUTES, {}))
+        self._owner = OwnerSettings(self, self._settings.get(self.OWNER, {}))
 
     @SettingsObject.settings_property
     def deleted(self):
@@ -122,6 +108,10 @@ class NamespaceSettings(SettingsObject):
     @property
     def attributes(self):
         return self._attributes
+
+    @property
+    def owner(self):
+        return self._owner
 
     @SettingsObject.settings_property
     def min_units(self):
@@ -273,6 +263,7 @@ class NamespaceSettings(SettingsObject):
         self._auth_keys.validate()
         self._features.validate()
         self._attributes.validate()
+        self._owner.validate()
 
         # Checking redirect and signature linked values
         linked_keys = (

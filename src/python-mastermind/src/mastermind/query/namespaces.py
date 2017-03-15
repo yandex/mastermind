@@ -76,7 +76,9 @@ class NamespacesQuery(Query):
               attributes_ttl_maximum=None,
               attributes_symlink=None,
               attributes_symlink_scope_limit=None,
-              attributes_metadata=None,):
+              attributes_metadata=None,
+              owner_id=None,
+    ):
         """Performs initial namespace setup.
 
         Args:
@@ -141,6 +143,7 @@ class NamespacesQuery(Query):
             "namespace": symlink can be a relative url to the same namespace's keys
           attributes_metadata: this flag toggles the client's ability to store key's custom
             metadata in key's attributes.
+          owner_id: namespace owner integer identification number. ABC should know a service with this id.
 
         Returns:
           Namespace object representing created namespace.
@@ -241,6 +244,13 @@ class NamespacesQuery(Query):
 
         if attributes:
             settings['attributes'] = attributes
+
+        owner = {}
+        if owner_id is not None:
+            owner['id'] = int(owner_id)
+
+        if owner:
+            settings['owner'] = owner
 
         ns_data = self.client.request('namespace_setup', [namespace, True, settings, {}])
 
