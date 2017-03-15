@@ -14,8 +14,9 @@ class RecoveryStarter(object):
     def __init__(self, scheduler):
         self.scheduler = scheduler
         self.params = config.get('scheduler', {}).get('recover_dc', {})
+        period_val = self.params.get("recover_dc_period", 60 * 15)  # 15 minutes default
         scheduler.register_periodic_func(self._do_recover_dc,
-                                         period_default=60*15,  # each 15 minutes
+                                         period_val=period_val,
                                          starter_name="recover_dc")
 
     def _do_recover_dc(self):

@@ -213,7 +213,14 @@ def init_minions():
 
 
 def init_smart_scheduler(job_processor):
+    from sched.defrag_starter import DefragStarter
+    from sched.recover_starter import RecoveryStarter
+    from sched.ttl_cleanup_starter import TtlCleanupStarter
+
     scheduler = Scheduler(meta_db, job_processor)
+    defrag_starter = DefragStarter(scheduler)
+    recovery_starter = RecoveryStarter(scheduler)
+    ttl_cleanup_starter = TtlCleanupStarter(scheduler)
     return scheduler
 
 
