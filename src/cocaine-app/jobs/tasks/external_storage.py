@@ -32,16 +32,18 @@ class ExternalStorageTask(MinionCmdTask):
     def ready_for_retry(self, processor):
         if super(ExternalStorageTask, self).ready_for_retry(processor):
 
-            ready = inventory.is_external_storage_task_ready_for_retry(
-                self,
-                self.parent_job.src_storage,
-                self.parent_job.src_storage_options,
-                storage,
-                processor
-            )
+            # TODO: move src_storage and src_storage_options to task params
+            if hasattr(self.parent_job, 'src_storage') and hasattr(self.parent_job, 'src_storage_options'):
+                ready = inventory.is_external_storage_task_ready_for_retry(
+                    self,
+                    self.parent_job.src_storage,
+                    self.parent_job.src_storage_options,
+                    storage,
+                    processor
+                )
 
-            if not ready:
-                return False
+                if not ready:
+                    return False
 
             return True
         return False

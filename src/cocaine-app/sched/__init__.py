@@ -54,12 +54,11 @@ class Scheduler(object):
     def _start_tq(self):
         self.__tq.start()
 
-    def register_periodic_func(self, starter_func, period_default, starter_name=None, lock_name=None):
+    def register_periodic_func(self, starter_func, period_val, starter_name=None, lock_name=None):
         """
         Guarantee that starter_func would be run within specified period under a zookeeper lock
         :param starter_func - a function to be run
-        :param period_default - the default value of period to run the function with
-            if the "{starter_name}_period" is not specified under {starter_name} sub-section with sched config section
+        :param period_val - the period with which the function would run (in seconds)
         :param starter_name - a logical name of starter. Name of starter subsection within sched section in config.
                             Defaults to starter_func.__name__
         :param lock_name - a name of lock in zookeeper that protects starter from simultaneous execution).
@@ -68,8 +67,6 @@ class Scheduler(object):
 
         starter_name = starter_name or starter_func.__name__
         lock_name = lock_name or "scheduler/{}".format(starter_name)
-        period_param = "{}_period".format(starter_name)
-        period_val = self.params.get(starter_name, {}).get(period_param, period_default)
 
         logger.info("Registering periodic starter func {} to be raised on {} period".format(starter_name, period_val))
 
@@ -204,7 +201,7 @@ class Scheduler(object):
         for job in existing_jobs:
 
             if self.job_processor.JOB_PRIORITIES[job.type] >= self.job_processor.JOB_PRIORITIES[job_type] and not force:
-                logger.info('Cannot stop job {} type {} since it has >= priority and no force'.format(job.id, job.type))
+                logger.debug('Cannot stop job {} type {} since it has >= priority and no force'.format(job.id, job.type))
                 continue
 
             # The time has passed since self.res was built. existing_jobs have more actual statuses
@@ -219,15 +216,15 @@ class Scheduler(object):
                     # These jobs could be cancelled, but there is a potential race between making decision
                     #  and actual job status. Since we are prohibited to cancel running jobs of not STOP_ALLOWED_TYPES
                     # skip cancellation for a while. That would be fixed as soon as job queries would be introduced
-                    logger.info('Job was not running {} of type {}'.format(job.id, job.type))
+                    logger.debug('Job {} of type {} was not running'.format(job.id, job.type))
 
-                logger.info('Cannot stop job {} of type {}'.format(job.id, job.type))
+                logger.debug('Cannot stop job {} of type {}'.format(job.id, job.type))
                 continue
 
             cancellable_jobs_ids.append(job.id)
 
         if len(cancellable_jobs_ids) == 0 and len(completed_jobs_ids) == 0:
-            logger.info("No jobs to cancel while {} are blocking".format(len(job_ids)))
+            logger.info("No jobs to cancel while ({}) are blocking".format(job_ids))
             return False
 
         logger.info("Analyzing demand {} while cancellable_jobs are {}".format(demand, cancellable_jobs_ids))
@@ -260,10 +257,9 @@ class Scheduler(object):
         logger.info("Successfully cancelled {}".format(cancellable_jobs_ids))
         return True
 
-    # TODO: rename process_jobs into create_jobs
-    def process_jobs(self, job_type, jobs_param_list, sched_params):
+    def create_jobs(self, job_type, jobs_param_list, sched_params):
         """
-        Scheduler creates jobs with specified params of specified type.
+        Scheduler creates jobs of the specified type with the specified params .
         :param job_type: job type
         :param jobs_param_list: a list of dictionaries with params for jobs created.
                                 A number of job created <= len(jobs_param_list)
@@ -272,18 +268,16 @@ class Scheduler(object):
                             For example, one may want to increase priority or decrease max_deadline_time
         :return: a number of generated jobs
         """
+        created_jobs = []
 
         self.update_resource_stat()
 
-        max_jobs = sched_params.get('max_executing_jobs')
-        if max_jobs:
-            job_count = self.job_count[job_type]
-            if job_count >= max_jobs:
-                logger.info('Found {} unfinished jobs (>= {}) of {} type'.format(job_count, max_jobs, job_type))
-                return 0
-            max_jobs -= job_count
-
-        created_job = 0
+        max_jobs = sched_params.get('max_executing_jobs', 100)
+        job_count = self.job_count[job_type]
+        if job_count >= max_jobs:
+            logger.info('Found {} unfinished jobs (>= {}) of {} type'.format(job_count, max_jobs, job_type))
+            return created_jobs
+        max_jobs -= job_count
 
         # common param for all types of jobs
         need_approving = not sched_params.get('autoapprove', False)
@@ -292,7 +286,7 @@ class Scheduler(object):
 
         if not hasattr(job_class, 'report_resources'):
             logger.error("Couldn't schedule the job {}. Add static report_resources function".format(job_type))
-            return 0
+            return created_jobs
 
         job_report_resources = job_class.report_resources
 
@@ -323,54 +317,60 @@ class Scheduler(object):
                 logger.exception("Creating job {} with params {} has excepted".format(job_type, job_param))
                 continue
 
-            created_job += 1
-            if max_jobs and created_job >= max_jobs:
-                return created_job
+            max_jobs -= 1
+            if max_jobs == 0:
+                return created_jobs
 
+            created_jobs.append(job)
             self.add_to_resource_stat(res, job.id)
 
         # do not update self.job_count, since they would be rewritten on next update & they don't influence calculations
 
-        # TODO: return a list of created jobs
-        return created_job
+        return created_jobs
 
     def get_history(self):
 
-        if len(self.history_data) != len(storage.couples):
+        if len(self.history_data) != len(storage.groupsets.replicas):
             self.sync_history()
         return self.history_data
 
     def sync_history(self):
+        """
+        Sync mongo representation with storage.groupsets (statistical representation), then update
+         internal object representation
+        :return:
+        """
 
         cursor = self.collection.find()
 
         logger.info('Sync recover data is required: {} records/{} couples, cursor {}'.format(
-                len(self.history_data), len(storage.couples), cursor.count()))
+                len(self.history_data), len(storage.groupsets.replicas), cursor.count()))
 
-        recover_data_couples = set()
-        history = {}
+        recover_data_groupsets = set()
+        history = defaultdict(dict)
 
         for data_record in cursor:
             couple_str = data_record['couple']
-            history[couple_str] = {'recover_ts': data_record.get('recover_ts')}
-            recover_data_couples.add(couple_str)
+            history[couple_str] = {'recover_ts': data_record.get('recover_ts'),
+                                   'ttl_cleanup_ts': data_record.get('ttl_cleanup_ts')}
+            recover_data_groupsets.add(couple_str)
 
         ts = int(time.time())
 
-        # XXX: rework, it is too expensive
-        storage_couples = set(str(c) for c in storage.couples.keys())
-        add_couples = list(storage_couples - recover_data_couples)
-        remove_couples = list(recover_data_couples - storage_couples)
+        storage_groupsets = set(str(c) for c in storage.groupsets.replicas.keys())
+        add_groupsets = list(storage_groupsets - recover_data_groupsets)
+        remove_groupsets = list(recover_data_groupsets - storage_groupsets)
 
-        logger.info('Couples to add {}, couple to remove {}'.format(add_couples, remove_couples))
+        logger.info('Couples to add {}, couple to remove {}'.format(add_groupsets, remove_groupsets))
 
         offset = 0
         OP_SIZE = 200
-        while offset < len(add_couples):
+        while offset < len(add_groupsets):
             bulk_op = self.collection.initialize_unordered_bulk_op()
-            bulk_add_couples = add_couples[offset:offset + OP_SIZE]
+            bulk_add_couples = add_groupsets[offset:offset + OP_SIZE]
             for couple in bulk_add_couples:
-                bulk_op.insert({'couple': couple, 'recover_ts': ts})
+                # these couples are new. No need to cleanup or recover
+                bulk_op.insert({'couple': couple, 'recover_ts': ts, 'ttl_cleanup_ts': ts})
             res = bulk_op.execute()
             if res['nInserted'] != len(bulk_add_couples):
                 raise ValueError('Failed to add couples recover data: {}/{} ({})'.format(
@@ -378,9 +378,9 @@ class Scheduler(object):
             offset += res['nInserted']
 
         offset = 0
-        while offset < len(remove_couples):
+        while offset < len(remove_groupsets):
             bulk_op = self.collection.initialize_unordered_bulk_op()
-            bulk_remove_couples = remove_couples[offset:offset + OP_SIZE]
+            bulk_remove_couples = remove_groupsets[offset:offset + OP_SIZE]
             bulk_op.find({'couple': {'$in': bulk_remove_couples}}).remove()
             res = bulk_op.execute()
             if res['nRemoved'] != len(bulk_remove_couples):
@@ -390,15 +390,37 @@ class Scheduler(object):
 
         self.history_data = history
 
-    def update_recover_ts(self, couple_id, ts):
-        ts = int(ts)
+
+    def update_historic_ts(self, couple_id, recover_ts=None, cleanup_ts=None):
+        """
+        Update records in mongo with corresponding times
+        :param couple_id: couple_id
+        :param recover_ts: epoch time if we need to update recover_ts time else None
+        :param cleanup_ts: epoch time if we need to update ttl_cleanup time else None
+        """
+
+        updated_values = {}
+        if recover_ts:
+            updated_values['recover_ts'] = int(recover_ts)
+        if cleanup_ts:
+            updated_values['ttl_cleanup_ts'] = int(cleanup_ts)
+
+        if len(updated_values) == 0:
+            return
+
         res = self.collection.update(
             {'couple': couple_id},
-            {'couple': couple_id, 'recover_ts': ts},
+            {"$set": updated_values},
             upsert=True)
         if res['ok'] != 1:
-            logger.error('Unexpected mongo response during recover ts update: {}'.format(res))
-            raise RuntimeError('Mongo operation result: {}'.format(res['ok']))
+            logger.error('Unexpected mongo response during update of historic data: {0}'.format(res))
+            raise RuntimeError('Mongo operation result: {0}'.format(res['ok']))
 
         # update cached representation
-        self.history_data[couple_id] = {'recover_ts': ts}
+        self.history_data[couple_id].update(updated_values)
+
+    def update_recover_ts(self, couple_id, ts):
+        self.update_historic_ts(couple_id, recover_ts=ts)
+
+    def update_cleanup_ts(self, couple_id, ts):
+        self.update_historic_ts(couple_id, cleanup_ts=ts)
