@@ -21,7 +21,7 @@ import keys
 from mastermind_core.config import config
 from mastermind_core.db.mongo.pool import Collection
 from mastermind_core.response import CachedGzipResponse
-from mastermind_core.helpers import gzip_compress, convert_config_bytes_value
+from mastermind_core.helpers import gzip_compress, convert_config_bytes_value, json_dumps
 import monitor
 import statistics
 import storage
@@ -1484,7 +1484,7 @@ class Balancer(object):
                     continue
                 res[ns] = namespaces_states[ns]
             if request.get('gzip', False):
-                res = gzip_compress(json.dumps(res))
+                res = gzip_compress(json_dumps(res))
         else:
             res = self.niu._namespaces_states.get_result(
                 compressed=request.get('gzip', False)
