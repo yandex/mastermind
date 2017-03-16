@@ -1,4 +1,3 @@
-import json
 import threading
 import time
 
@@ -124,10 +123,10 @@ class CachedGzipResponse(CachedResponse):
 
     def _compress(self, result):
         try:
-            data = json.dumps(result)
-        except (TypeError, ValueError):
+            data = helpers.json_dumps(result)
+        except (TypeError, ValueError) as e:
             raise TypeError(
                 'Cached gzip response does not support objects '
-                'that cannot be dumped to json'
+                'that cannot be dumped to json: {}'.format(e)
             )
         return helpers.gzip_compress(data, compression_level=self._compression_level)

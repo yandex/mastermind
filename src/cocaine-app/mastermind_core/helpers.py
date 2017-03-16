@@ -2,6 +2,7 @@ import contextlib
 import copy
 import cStringIO
 import gzip
+from json import JSONEncoder
 
 
 def gzip_compress(data, compression_level=1):
@@ -93,3 +94,26 @@ def convert_config_bytes_value(value):
     elif suffix == 'T':
         return bytes_value * (1024 ** 4)
     return bytes_value
+
+
+def json_dumps(obj):
+    """ Dumps obj to json representation.
+
+    This implementation is based on standard library's json.JSONEncoder 'encode' method
+    with an intent to force python implementation of encoding.
+    This is done deliberately to assure that GIL is released and context is being switched
+    during large objects' encoding.
+    """
+    encoder = JSONEncoder(check_circular=False)
+
+    # This is for extremely simple cases and benchmarks.
+    if isinstance(obj, basestring):
+        return encoder.encode(obj)
+
+    # This doesn't pass the iterator directly to ''.join() because the
+    # exceptions aren't as detailed.  The list call should be roughly
+    # equivalent to the PySequence_Fast that ''.join() would do.
+    chunks = encoder.iterencode(obj, _one_shot=False)
+    if not isinstance(chunks, (list, tuple)):
+        chunks = list(chunks)
+    return ''.join(chunks)
