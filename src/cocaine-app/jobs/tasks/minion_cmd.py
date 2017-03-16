@@ -30,6 +30,7 @@ class MinionCmdTask(Task):
         if task.params is None:
             task.params = {}
         task.params['task_id'] = task.id
+        task.params['job_id'] = task.parent_job.id
         return task
 
     def _update_status(self, processor):
