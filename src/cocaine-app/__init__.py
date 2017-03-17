@@ -191,6 +191,7 @@ def init_lrc_reserve_planner(job_processor):
     planner = LrcReservePlanner(job_processor)
     helpers.register_handle(W, planner.create_lrc_restore_jobs)
     helpers.register_handle(W, planner.create_uncoupled_lrc_restore_jobs)
+    helpers.register_handle(W, planner.create_lrc_recover_jobs)
     return planner
 
 

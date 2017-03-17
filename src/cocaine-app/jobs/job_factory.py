@@ -4,6 +4,7 @@ from recover_dc import RecoverDcJob
 from couple_defrag import CoupleDefragJob
 from restore_group import RestoreGroupJob
 from restore_lrc_group import RestoreLrcGroupJob
+from recover_lrc_groupset import RecoverLrcGroupsetJob
 from restore_uncoupled_lrc_group import RestoreUncoupledLrcGroupJob
 from backend_cleanup import BackendCleanupJob
 from make_lrc_groups import MakeLrcGroupsJob
@@ -21,6 +22,7 @@ class JobFactory(object):
         JobTypes.TYPE_COUPLE_DEFRAG_JOB: CoupleDefragJob,
         JobTypes.TYPE_RESTORE_GROUP_JOB: RestoreGroupJob,
         JobTypes.TYPE_RESTORE_LRC_GROUP_JOB: RestoreLrcGroupJob,
+        JobTypes.TYPE_RECOVER_LRC_GROUPSET_JOB: RecoverLrcGroupsetJob,
         JobTypes.TYPE_RESTORE_UNCOUPLED_LRC_GROUP_JOB: RestoreUncoupledLrcGroupJob,
         JobTypes.TYPE_MAKE_LRC_GROUPS_JOB: MakeLrcGroupsJob,
         JobTypes.TYPE_ADD_LRC_GROUPSET_JOB: AddLrcGroupsetJob,
