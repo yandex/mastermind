@@ -15,6 +15,7 @@ from kazoo.exceptions import (
 from kazoo.retry import KazooRetry, RetryFailedError
 from mastermind.utils.queue import LockingQueue
 from mastermind_core import helpers
+from mastermind_core.config import config
 import msgpack
 
 # from errors import ConnectionError, InvalidDataError
@@ -30,13 +31,18 @@ kazoo_logger.propagate = False
 kazoo_logger.setLevel(logging.INFO)
 
 
+SYNC_CFG = config.get('sync', {})
+CACHE_MANAGER_CFG = config.get('cache', {}).get('manager', {})
+DEFAULT_TIMEOUT = 3
+
+
 class ZkSyncManager(object):
 
     RETRIES = 2
     LOCK_TIMEOUT = 3
 
     def __init__(self, host='127.0.0.1:2181', lock_path_prefix='/mastermind/locks/'):
-        self.client = KazooClient(host, timeout=3)
+        self.client = KazooClient(host, timeout=SYNC_CFG.get('timeout', DEFAULT_TIMEOUT))
         logger.info('Connecting to zookeeper host {}, lock_path_prefix: {}'.format(
             host, lock_path_prefix))
         try:
@@ -204,7 +210,7 @@ class ZkCacheTaskManager(object):
     RETRIES = 2
 
     def __init__(self, host='127.0.0.1:2181', lock_path_prefix='/mastermind/cache/'):
-        self.client = KazooClient(host, timeout=3)
+        self.client = KazooClient(host, timeout=CACHE_MANAGER_CFG.get('timeout', DEFAULT_TIMEOUT))
         logger.info('Connecting to zookeeper host {}, lock_path_prefix: {}'.format(
             host, lock_path_prefix))
         try:
