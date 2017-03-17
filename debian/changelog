@@ -1,3 +1,10 @@
+mastermind-cocainev11 (2.28.197) trusty; urgency=medium
+
+  * Add configurable timeout for kazoo managers
+  * Restore-path: fix cancell job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 17 Mar 2017 14:38:14 +0300
+
 mastermind-cocainev11 (2.28.196) trusty; urgency=medium
 
   * Send job-id to mastermind-minion
