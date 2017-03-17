@@ -105,6 +105,59 @@ class LrcReservePlanner(object):
             res.append(job.dump())
         return res
 
+    def _create_lrc_recover_job(self, lrc_groupset, need_approving=True):
+        if not isinstance(lrc_groupset, storage.Lrc822v1Groupset):
+            raise ValueError('Groupset {} does not belong to lrc groupset'.format(lrc_groupset))
+
+        if lrc_groupset.status != storage.Status.ARCHIVED:
+            raise ValueError(
+                'Groupset not in good state, status "{}"'.format(
+                    lrc_groupset.status,
+                )
+            )
+
+        job = None
+        try:
+            job = self.job_processor._create_job(
+                jobs.JobTypes.TYPE_RECOVER_LRC_GROUPSET_JOB,
+                {
+                    'lrc_groupset': str(lrc_groupset),
+                    'need_approving': need_approving,
+
+                },
+                force=True,
+            )
+        except (LockFailedError, JobRequirementError) as e:
+            logger.error(e)
+            raise
+        except Exception:
+            logger.exception('Failed to create lrc recover job')
+            raise
+
+        return job
+
+    @h.concurrent_handler
+    def create_lrc_recover_jobs(self, request):
+        if 'lrc_groupsets' not in request:
+            raise ValueError('Lrc groupsets are required')
+
+        lrc_groupsets = request['lrc_groupsets']
+
+        res = []
+        for lrc_groupset in lrc_groupsets:
+            try:
+                lrc_groupset = storage.groupsets[lrc_groupset]
+                job = self._create_lrc_recover_job(
+                    lrc_groupset,
+                    need_approving=request.get('need_approving', True),
+                )
+            except Exception as e:
+                logger.exception(e)
+                res.append(str(e))
+                continue
+            res.append(job.dump())
+        return res
+
     @h.concurrent_handler
     def create_uncoupled_lrc_restore_jobs(self, request):
         if 'uncoupled_lrc_groups' not in request:
@@ -247,7 +300,6 @@ class LrcReserve(object):
                         host_node.name,
                     )
                 )
-
 
                 new_groups_count = self._count_lrc_reserved_groups_number(uncoupled_group)
                 new_groups_ids = infrastructure.infrastructure.reserve_group_ids(new_groups_count)
