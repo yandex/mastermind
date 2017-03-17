@@ -1053,7 +1053,8 @@ class Planner(object):
                             cancelled_jobs.append(job.id)
                     except Exception as e:
                         logger.exception('Failed to cancel job {}'.format(job.id))
-                        raise ValueError('Failed to cancel job {}: {}'.format(job.id, e))
+                        failed[group_id] = 'Failed to cancel job {}: {}'.format(job.id, e)
+                        return active_jobs, cancelled_jobs, pending_restore_jobs, failed
                     try:
                         job = self._create_restore_job(group_id, use_uncoupled_group, None, force, autoapprove)
                         active_jobs.append(job['id'])
@@ -1065,9 +1066,8 @@ class Planner(object):
                     # manually
                     pending_restore_jobs.append(job.id)
             else:
-                raise ValueError(
-                    'Unknown job status: {}'.format(job.status)
-                )
+                failed[group_id] = 'Unknown job status: {}'.format(job.status)
+                return active_jobs, cancelled_jobs, pending_restore_jobs, failed
         else:
             if restore_only:
                 try:
