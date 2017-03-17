@@ -1,4 +1,3 @@
-import json
 import functools
 import uuid
 
@@ -6,7 +5,7 @@ import helpers
 from mastermind_core.config import config
 from mastermind_core.db.mongo import MongoObject
 from mastermind_core.db.mongo.pool import Collection
-from mastermind_core.helpers import gzip_compress
+from mastermind_core.helpers import gzip_compress, json_dumps
 from mastermind_core.response import CachedGzipResponse
 
 
@@ -115,7 +114,7 @@ class ExternalStorageMeta(object):
             res.append(mapping)
 
         if request.get('gzip', False):
-            res = gzip_compress(json.dumps(res))
+            res = gzip_compress(json_dumps(res))
 
         return res
 
