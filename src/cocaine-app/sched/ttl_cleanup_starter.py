@@ -2,7 +2,6 @@ import logging
 import time
 import datetime
 
-from infrastructure import infrastructure
 import jobs
 from mastermind_core.config import config
 import storage

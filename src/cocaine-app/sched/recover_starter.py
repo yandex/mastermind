@@ -68,4 +68,3 @@ class RecoveryStarter(object):
 
         groupset_weights.sort(reverse=True)
         return groupset_weights
-
