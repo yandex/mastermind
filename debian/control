@@ -25,6 +25,7 @@ Depends:
  cocaine-v12-framework-python,
  python-tornado (>= 4.0),
  cocaine-v12-tools,
+ python-opster (>= 4.0),
  python-pymongo (<< 3),
  python-bson (<< 3),
  python-requests,
@@ -71,9 +72,13 @@ Architecture: amd64
 Depends:
  ${shlibs:Depends},
  ${misc:Depends},
- python-tornado (>= 4.0),
  cocaine-v12-framework-python,
- python-simplejson,
+ elliptics-client,
  python-mastermind (= ${binary:Version}),
+ python-opster (>= 4.0),
+ python-pymongo (<< 3),
+ python-bson (<< 3),
+ python-simplejson,
+ python-tornado (>= 4.0),
  yandex-yql-python,
 Description: Mastermind scheduler worker
