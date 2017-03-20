@@ -1,0 +1,102 @@
+// mastermind-cache data schema
+
+namespace mmc;
+
+table LrcSettings {
+    part_size:uint;
+    scheme:string;
+}
+
+table NativeSettings {
+    // groups_count:uint;
+    // success_copies_num:string; //XXX: better to use enum
+    // auth_key_read:string;
+    // auth_key_write:string;
+    // static_group_ids:[uint];
+    //...
+}
+
+union GroupsetSettings { NativeSettings, LrcSettings }
+
+// (for both enums) UNKNOWN should always have value 0
+enum GroupsetType : byte { UNKNOWN = 0, NATIVE = 1, LRC = 2 }
+enum GroupsetStatus : byte { UNKNOWN = 0, BAD = 1, OK = 2 }
+
+table Groupset {
+    type:GroupsetType;
+    id:string;
+    status:GroupsetStatus;
+    settings:GroupsetSettings;
+    group_ids:[uint];
+}
+
+table Couple {
+    id:uint;
+    status:string;
+
+    free_effective_space:ulong;
+    free_reserved_space:ulong;
+
+    read_preference:[string];
+    groupsets:[Groupset];
+
+    distinfo:string;
+}
+
+// Values are lowercase here to provide string names compatible with common usage.
+// `all` value comes first (with the numeric value 0) so it'd also be used
+// as safest possible default value for `success_copies_num`.
+enum WritePolicy : byte { all = 0, quorum = 1, any = 2 }
+
+table NamespaceSettings {
+    replica_count:uint;
+    success_copies_num:WritePolicy;
+    static_couple:[uint];
+
+    user_settings:string;
+
+    // auth_key_for_write:string;
+    // auth_key_for_read:string;
+
+    // sign_token:string;
+    // sign_path_prefix:string;
+    // sign_port:string;
+
+    // redirect_expire_time:uint;
+    // redirect_content_length_threshold:ulong;
+}
+
+table Statistics {
+    is_full:bool;
+    //...
+}
+
+table CoupleWeight {
+    couple_id:uint;
+    group_ids:[uint]; //XXX: why separate group list? why not to get it from couple?
+    weight:ulong;
+    memory:ulong;
+}
+
+table Namespace {
+    name:string;
+    deleted:bool = false;
+    couples:[Couple];
+    settings:NamespaceSettings;
+    statistics:Statistics;
+    couple_weights:[CoupleWeight];
+}
+
+table UnitToCouples {
+    unit_id:uint;
+    service_prefix:string;
+    couple_ids:[uint];
+}
+
+table StorageInfo {
+    timestamp:ulong;
+    namespaces:[Namespace];
+    unit_mapping:[UnitToCouples];
+}
+
+root_type StorageInfo;
