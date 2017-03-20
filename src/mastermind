@@ -2219,7 +2219,7 @@ def lrc_groupset_recover(
             meta = cl.groups[int(group_or_groupset)].meta
         except Exception:
             meta = None
-        if not (meta and 'lrc_groups' in meta):
+        if not (meta and 'lrc' in meta):
             print warn('Group {} is not an lrc group'.format(group_or_groupset))
             return 1
         lrc_groups = meta['lrc_groups']
