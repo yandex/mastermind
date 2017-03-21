@@ -73,18 +73,21 @@ class NamespacesSettings(object):
                 logger.exception('Failed to construct namespace settings object')
                 continue
         namespaces_settings.append(
-            NamespaceSettings({
-                'namespace': storage.Group.CACHE_NAMESPACE,
-            })
+            self._make_storage_cache_ns_settings()
         )
         return namespaces_settings
+
+    def _make_storage_cache_ns_settings(self):
+        return NamespaceSettings({
+            NamespaceSettings.NAMESPACE: storage.Group.CACHE_NAMESPACE,
+            NamespaceSettings.GROUPS_COUNT: 1,
+            NamespaceSettings.SUCCESS_COPIES_NUM: NamespaceSettings.SUCCESS_COPIES_ALL,
+        })
 
     def get(self, namespace_id):
         if namespace_id == storage.Group.CACHE_NAMESPACE:
             # special internal namespace for cache groups
-            return NamespaceSettings({
-                'namespace': storage.Group.CACHE_NAMESPACE,
-            })
+            return self._make_storage_cache_ns_settings()
         settings_dump = self.settings_db.find_one(
             spec_or_id={'namespace': namespace_id},
             fields={'_id': False}
