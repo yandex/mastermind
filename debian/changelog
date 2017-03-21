@@ -1,3 +1,13 @@
+mastermind-cocainev11 (2.28.199) trusty; urgency=medium
+
+  * Filter internal namespaces out
+  * Extend debian installer
+  * Add scheduler manifests, extend example conf
+  * Move scheduler to independent module
+  * Fix lrc groupset recover
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 21 Mar 2017 15:26:52 +0300
+
 mastermind-cocainev11 (2.28.198) trusty; urgency=medium
 
   * Decrease number of mastermind workers
