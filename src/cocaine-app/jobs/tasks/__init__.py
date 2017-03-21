@@ -21,6 +21,16 @@ from external_storage import ExternalStorageTask
 from external_storage_data_size import ExternalStorageDataSizeTask
 from write_external_storage_mapping import WriteExternalStorageMappingTask
 from change_couple_settings import ChangeCoupleSettingsTask
+from move_path import MovePathTask
+from mark_backend import MarkBackendTask
+from unmark_backend import UnmarkBackendTask
+from remove_path import RemovePathTask
+from create_ids_file import CreateIdsFileTask
+from create_group_file import CreateGroupFileTask
+from remove_group_file import RemoveGroupFileTask
+from create_file_marker import CreateFileMarkerTask
+from lrc_recovery import LrcRecoveryTask
+from check_file_system import CheckFileSystemTask
 
 
 class TaskFactory(object):
@@ -43,6 +53,16 @@ class TaskFactory(object):
         TaskTypes.TYPE_EXTERNAL_STORAGE_DATA_SIZE: ExternalStorageDataSizeTask,
         TaskTypes.TYPE_WRITE_EXTERNAL_STORAGE_MAPPING: WriteExternalStorageMappingTask,
         TaskTypes.TYPE_CHANGE_COUPLE_SETTINGS: ChangeCoupleSettingsTask,
+        TaskTypes.TYPE_MOVE_PATH: MovePathTask,
+        TaskTypes.TYPE_MARK_BACKEND: MarkBackendTask,
+        TaskTypes.TYPE_REMOVE_PATH: RemovePathTask,
+        TaskTypes.TYPE_CREATE_IDS_FILE: CreateIdsFileTask,
+        TaskTypes.TYPE_CREATE_GROUP_FILE: CreateGroupFileTask,
+        TaskTypes.TYPE_UNMARK_BACKEND: UnmarkBackendTask,
+        TaskTypes.TYPE_REMOVE_GROUP_FILE: RemoveGroupFileTask,
+        TaskTypes.TYPE_CREATE_FILE_MARKER: CreateFileMarkerTask,
+        TaskTypes.TYPE_LRC_RECOVERY_TASK: LrcRecoveryTask,
+        TaskTypes.TYPE_CHECK_FILE_SYSTEM_TASK: CheckFileSystemTask,
     }
 
     @staticmethod

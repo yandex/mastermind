@@ -16,6 +16,8 @@ class MinionCmdTask(Task):
     PARAMS = ('group', 'host', 'cmd', 'params', 'minion_cmd_id')
     TASK_TIMEOUT = 6000
 
+    MINION_RESTART_EXIT_CODE = 666
+
     def __init__(self, job):
         super(MinionCmdTask, self).__init__(job)
         self.minion_cmd = None
@@ -28,9 +30,10 @@ class MinionCmdTask(Task):
         if task.params is None:
             task.params = {}
         task.params['task_id'] = task.id
+        task.params['job_id'] = task.parent_job.id
         return task
 
-    def update_status(self, processor):
+    def _update_status(self, processor):
         try:
             self.minion_cmd = processor.minions_monitor._get_command(self.minion_cmd_id)
             logger.debug('Job {0}, task {1}, minion command status was updated: {2}'.format(
@@ -47,7 +50,7 @@ class MinionCmdTask(Task):
             return
         self._set_run_history_parameters(self.minion_cmd)
 
-    def execute(self, processor):
+    def _execute(self, processor):
         try:
             minion_response = processor.minions_monitor.execute(
                 self.host,
@@ -58,6 +61,9 @@ class MinionCmdTask(Task):
             raise RetryError(self.attempts, e)
         cmd_response = minion_response.values()[0]
         self._set_minion_task_parameters(cmd_response)
+
+    def _terminate(self, processor):
+        processor.minions_monitor._terminate_cmd(self.host, self.minion_cmd_id)
 
     def _set_minion_task_parameters(self, minion_cmd):
         self.minion_cmd = minion_cmd
@@ -99,8 +105,19 @@ class MinionCmdTask(Task):
     def __str__(self):
         return 'MinionCmdTask[id: {0}]<{1}>'.format(self.id, self.cmd)
 
-    def make_new_history_record(self):
-        record = super(MinionCmdTask, self).make_new_history_record()
+    def _make_new_history_record(self):
+        record = super(MinionCmdTask, self)._make_new_history_record()
         record.command_uid = None
         record.exit_code = None
         return record
+
+    @property
+    def next_retry_ts(self):
+        last_record = self.last_run_history_record
+        if last_record.status != 'error':
+            return None
+
+        if last_record.exit_code == self.MINION_RESTART_EXIT_CODE:
+            return int(time.time())
+
+        return super(MinionCmdTask, self).next_retry_ts

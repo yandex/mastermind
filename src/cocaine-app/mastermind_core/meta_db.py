@@ -1,9 +1,12 @@
-from mastermind_core.config import config
+# coding=utf-8
+from __future__ import unicode_literals
+
+from mastermind_core.config import METADATA_OPTIONS, METADATA_URL
 from mastermind_core.db.mongo.pool import MongoReplicaSetClient
 
 
-mrsc_options = config['metadata'].get('options', {})
+def init_meta_db():
+    return MongoReplicaSetClient(METADATA_URL, **METADATA_OPTIONS) if METADATA_URL else None
 
-meta_db = None
-if config['metadata'].get('url'):
-    meta_db = MongoReplicaSetClient(config['metadata']['url'], **mrsc_options)
+
+meta_db = init_meta_db()

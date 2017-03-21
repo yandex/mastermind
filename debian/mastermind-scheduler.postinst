@@ -1,0 +1,32 @@
+#!/bin/sh
+
+
+set -e
+
+#DEBHELPER#
+
+case "$1" in
+    configure)
+
+    DEPLOY_DIR="/usr/lib/mastermind"
+
+    mkdir -p /var/log/mastermind
+    chown cocaine -R $DEPLOY_DIR
+    chown cocaine -R /var/log/mastermind
+
+    BASE_APP_NAME=`/usr/bin/mastermind_app_name.sh`
+
+    /usr/bin/mastermind_deploy.sh $DEPLOY_DIR $BASE_APP_NAME-scheduler mastermind-scheduler.manifest mastermind-scheduler.profile
+    cocaine-tool runlist add-app -n default --app $BASE_APP_NAME-scheduler --profile $BASE_APP_NAME-scheduler --force
+
+    ;;
+    abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+exit 0

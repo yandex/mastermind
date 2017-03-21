@@ -1,7 +1,13 @@
+import functools
+import logging
+
 from errors import CacheUpstreamError
 from infrastructure_cache import cache
 from mastermind import helpers as mh
 import storage
+
+
+logger = logging.getLogger('mm.storage')
 
 
 class Host(object):
@@ -310,6 +316,30 @@ class NodeBackendStat(object):
         return stat
 
 
+def status_change_log(f):
+    @functools.wraps(f)
+    def wrapper(self, *args, **kwargs):
+        prev_status = self.status
+        res = f(self, *args, **kwargs)
+        if prev_status != self.status:
+            logger.info(
+                '{type} {id} status updated from {prev_status} to {cur_status}'
+                '{status_text}'.format(
+                    type=type(self).__name__,
+                    id=self,
+                    prev_status=prev_status,
+                    cur_status=self.status,
+                    status_text=(
+                        ' ({})'.format(self.status_text)
+                        if self.status_text else
+                        ''
+                    ),
+                )
+            )
+        return res
+    return wrapper
+
+
 class NodeBackendBase(object):
 
     __slots__ = (
@@ -341,6 +371,7 @@ class NodeBackendBase(object):
             self.KEY_STATUS_TEXT: 'Node {} is not inititalized yet'.format(self),
         }
 
+    @status_change_log
     def update(self, data):
         self.data = data
 
@@ -385,8 +416,17 @@ class FsBase(object):
         self.node_backends = {}
         self.stat = None
 
+    @status_change_log
     def update(self, data):
         self.data = data
+
+    @property
+    def status(self):
+        return self.data[self.KEY_STATUS]
+
+    @property
+    def status_text(self):
+        return self.data[self.KEY_STATUS_TEXT]
 
 
 class FsStat(object):
@@ -490,6 +530,7 @@ class GroupBase(object):
         for node_backend in node_backends or []:
             self.add_node_backend(node_backend)
 
+    @status_change_log
     def update(self, data):
         self.data = data
 

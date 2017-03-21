@@ -10,7 +10,11 @@ from job_types import JobTypes
 from mastermind_core.config import config
 from tasks import (RsyncBackendTask, MinionCmdTask,
                    NodeStopTask, HistoryRemoveNodeTask,
-                   WaitBackendStateTask)
+                   WaitBackendStateTask, MovePathTask,
+                   MarkBackendTask, RemovePathTask,
+                   CreateIdsFileTask, CreateGroupFileTask,
+                   UnmarkBackendTask, RemoveGroupFileTask,
+                   CreateFileMarkerTask, CheckFileSystemTask)
 import storage
 
 
@@ -24,7 +28,6 @@ class RestoreGroupJob(Job):
     MERGE_GROUP_FILE_MARKER_PATH = config.get('restore', {}).get('merge_group_file_marker')
     GROUP_FILE_DIR_MOVE_DST_RENAME = config.get('restore', {}).get('group_file_dir_move_dst_rename')
     MERGE_GROUP_FILE_DIR_MOVE_SRC_RENAME = config.get('restore', {}).get('merge_group_file_dir_move_src_rename')
-    BACKEND_STOP_MARKER = config.get('restore', {}).get('backend_stop_marker')
 
     PARAMS = ('group', 'src_group', 'uncoupled_group', 'uncoupled_group_fsid',
               'merged_groups', 'resources')
@@ -83,6 +86,13 @@ class RestoreGroupJob(Job):
 
         self.resources = resources
 
+    @property
+    def _required_group_types(self):
+        return {
+            group_id: storage.Group.TYPE_UNCOUPLED
+            for group_id in [self.uncoupled_group] + self.merged_groups
+        }
+
     def create_tasks(self, processor):
 
         group = storage.groups[self.group]
@@ -134,6 +144,16 @@ class RestoreGroupJob(Job):
             remove_path = os.path.join(
                 dst_base_path, self.GROUP_FILE_DIR_MOVE_DST_RENAME)
 
+        src_backend = infrastructure.get_backend_by_group_id(src_group.group_id)
+        restore_backend = infrastructure.get_backend_by_group_id(group.group_id)
+
+        params = {'backend_path': src_backend.base_path}
+        task = CheckFileSystemTask.new(self,
+                                       host=src_backend.node.host.addr,
+                                       params=params)
+
+        self.tasks.append(task)
+
         if self.uncoupled_group:
             for group_id in self.merged_groups:
                 merged_group = storage.groups[group_id]
@@ -167,17 +187,9 @@ class RestoreGroupJob(Job):
 
                 params = {'node_backend': node_backend_str.encode('utf-8'),
                           'group': str(group_id),
-                          'merged_to': str(self.uncoupled_group),
-                          'remove_group_file': merged_group_file}
+                          'merged_to': str(self.uncoupled_group)
+                          }
 
-                if merged_group_file_marker:
-                    params['group_file_marker'] = merged_group_file_marker.format(
-                        dst_group_id=self.uncoupled_group,
-                        dst_backend_id=dst_backend_id)
-
-                if merged_path:
-                    params['move_src'] = os.path.dirname(merged_group_file)
-                    params['move_dst'] = merged_path
 
                 task = NodeStopTask.new(self,
                             group=group_id,
@@ -187,6 +199,28 @@ class RestoreGroupJob(Job):
                             params=params)
 
                 self.tasks.append(task)
+
+                if merged_group_file_marker:
+                    params = {'group': str(group_id)}
+                    params['group_file_marker'] = merged_group_file_marker.format(
+                        dst_group_id=self.uncoupled_group,
+                        dst_backend_id=dst_backend_id)
+
+                    task = CreateFileMarkerTask.new(self,
+                                                    host=dst_host,
+                                                    params=params)
+
+                    self.tasks.append(task)
+
+                if merged_path:
+                    params = {}
+                    params['move_src'] = os.path.dirname(merged_group_file)
+                    params['move_dst'] = merged_path
+                    task = MovePathTask.new(self,
+                                            host=merged_nb.node.host.addr,
+                                            params=params)
+
+                    self.tasks.append(task)
 
                 reconfigure_cmd = infrastructure._reconfigure_node_cmd(
                     merged_nb.node.host.addr,
@@ -218,10 +252,6 @@ class RestoreGroupJob(Job):
             params = {'node_backend': dst_node_backend.encode('utf-8'),
                       'group': str(self.uncoupled_group)}
 
-            if remove_path:
-                params['move_src'] = os.path.join(os.path.dirname(group_file))
-                params['move_dst'] = remove_path
-
             task = NodeStopTask.new(self,
                         group=self.uncoupled_group,
                         uncoupled=True,
@@ -231,8 +261,15 @@ class RestoreGroupJob(Job):
 
             self.tasks.append(task)
 
-        src_backend = src_group.node_backends[0]
-        restore_backend = group.node_backends and group.node_backends[0]
+            if remove_path:
+                params = {}
+                params['move_src'] = os.path.join(os.path.dirname(group_file))
+                params['move_dst'] = remove_path
+                task = MovePathTask.new(self,
+                                        host=dst_host,
+                                        params=params)
+
+                self.tasks.append(task)
 
         mark_src_backend = self.make_path(
             self.BACKEND_DOWN_MARKER, base_path=src_backend.base_path).format(
@@ -248,8 +285,14 @@ class RestoreGroupJob(Job):
             params={'node_backend': self.node_backend(
                 src_backend.node.host.addr, src_backend.node.port,
                 src_backend.backend_id).encode('utf-8'),
-                    'mark_backend': mark_src_backend,
                     'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]})
+
+        self.tasks.append(task)
+
+        params = {'mark_backend': mark_src_backend}
+        task = MarkBackendTask.new(self,
+                                   host=src_backend.node.host.addr,
+                                   params=params)
 
         self.tasks.append(task)
 
@@ -267,9 +310,16 @@ class RestoreGroupJob(Job):
                 params={'node_backend': self.node_backend(
                     restore_backend.node.host.addr, restore_backend.node.port,
                     restore_backend.backend_id).encode('utf-8'),
-                        'mark_backend': mark_restore_backend,
                         'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]})
             self.tasks.append(task)
+
+            params = {'mark_backend': mark_restore_backend}
+            task = MarkBackendTask.new(self,
+                                       host=dst_host,
+                                       params=params)
+
+            self.tasks.append(task)
+
 
             expected_statuses = [storage.Status.STALLED, storage.Status.INIT, storage.Status.RO]
             task = WaitBackendStateTask.new(
@@ -297,13 +347,7 @@ class RestoreGroupJob(Job):
                     if self.IDS_FILE_PATH else
                     '')
 
-        params = {'group': str(self.group),
-                  'group_file': group_file,
-                  'ids': ids_file}
-
-        if remove_path and self.uncoupled_group:
-            params['remove_path'] = remove_path
-
+        params = {'group': str(self.group)}
         check_node_backend = None
         if old_group_node_backends_set:
             check_node_backend = self.node_backend(old_host, old_port, old_backend_id)
@@ -317,6 +361,29 @@ class RestoreGroupJob(Job):
             node_backend=check_node_backend,
             params=params
         )
+        self.tasks.append(task)
+
+        if remove_path and self.uncoupled_group:
+            params = {'remove_path': remove_path}
+            task = RemovePathTask.new(self,
+                                      host=dst_host,
+                                      params=params)
+
+            self.tasks.append(task)
+
+        params = {'group': str(self.group),
+                  'group_file': group_file}
+        task = CreateGroupFileTask.new(self,
+                                       host=dst_host,
+                                       params=params)
+
+        self.tasks.append(task)
+
+        params = {'ids': ids_file}
+        task = CreateIdsFileTask.new(self,
+                                     host=dst_host,
+                                     params=params)
+
         self.tasks.append(task)
 
         additional_files = config.get('restore', {}).get('restore_additional_files', [])
@@ -343,10 +410,10 @@ class RestoreGroupJob(Job):
                 self.BACKEND_DOWN_MARKER, base_path=restore_backend.base_path).format(
                     backend_id=restore_backend.backend_id)
             stop_restore_backend = self.make_path(
-                self.BACKEND_STOP_MARKER, base_path=src_backend.base_path).format(
-                    backend_id=src_backend.backend_id)
+                self.BACKEND_STOP_MARKER, base_path=restore_backend.base_path).format(
+                    backend_id=restore_backend.backend_id)
 
-            nb = group.node_backends[0]
+            nb = restore_backend
             shutdown_cmd = infrastructure._remove_node_backend_cmd(
                 nb.node.host.addr, nb.node.port, nb.node.family, nb.backend_id)
 
@@ -368,6 +435,18 @@ class RestoreGroupJob(Job):
                     raise RuntimeError('Failed to resolve host {0}'.format(host))
             src_hostname, dst_hostname = hostnames
 
+            params = {'node_backend': str(nb).encode('utf-8'),
+                      'group': str(self.group),
+                      'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS,
+                                        self.DNET_CLIENT_UNKNOWN_BACKEND]}
+
+            task = NodeStopTask.new(self,
+                                    group=self.group,
+                                    host=nb.node.host.addr,
+                                    cmd=shutdown_cmd,
+                                    params=params)
+            self.tasks.append(task)
+
             group_file_marker_fmt = group_file_marker.format(
                 group_id=str(self.group),
                 src_host=nb.node.host.addr,
@@ -380,24 +459,34 @@ class RestoreGroupJob(Job):
                 dst_port=str(dst_port),
                 dst_base_path=dst_base_path,
                 dst_backend_id=dst_backend_id)
-            params = {'node_backend': str(nb).encode('utf-8'),
-                      'group': str(self.group),
+            params = {'group': str(self.group),
                       'group_file_marker': group_file_marker_fmt,
-                      'remove_group_file': group_file,
-                      'unmark_backend': mark_restore_backend,
-                      'create_stop_file': stop_restore_backend,
-                      'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]}
+                      'stop_backend': stop_restore_backend
+                      }
+
+            task = CreateFileMarkerTask.new(self,
+                                            host=nb.node.host.addr,
+                                            params=params)
+
+            self.tasks.append(task)
 
             if self.GROUP_FILE_DIR_MOVE_SRC_RENAME and group_file:
+                params = {}
                 params['move_src'] = os.path.join(os.path.dirname(group_file))
                 params['move_dst'] = os.path.join(
                     nb.base_path, self.GROUP_FILE_DIR_MOVE_SRC_RENAME)
+                params['stop_backend'] = stop_restore_backend
+                task = MovePathTask.new(self,
+                                        host=nb.node.host.addr,
+                                        params=params)
 
-            task = NodeStopTask.new(self,
-                                    group=self.group,
-                                    host=nb.node.host.addr,
-                                    cmd=shutdown_cmd,
-                                    params=params)
+                self.tasks.append(task)
+
+            params = {'unmark_backend': mark_restore_backend}
+            task = UnmarkBackendTask.new(self,
+                                         host=nb.node.host.addr,
+                                         params=params)
+
             self.tasks.append(task)
 
         reconfigure_cmd = infrastructure._reconfigure_node_cmd(
@@ -455,8 +544,14 @@ class RestoreGroupJob(Job):
                 params={'node_backend': self.node_backend(
                     src_backend.node.host.addr, src_backend.node.port,
                     src_backend.backend_id).encode('utf-8'),
-                        'unmark_backend': mark_src_backend,
                         'success_codes': [self.DNET_CLIENT_ALREADY_IN_PROGRESS]})
+
+            self.tasks.append(task)
+
+            params = {'unmark_backend': mark_src_backend}
+            task = UnmarkBackendTask.new(self,
+                                         host=src_backend.node.host.addr,
+                                         params=params)
 
             self.tasks.append(task)
 

@@ -4,6 +4,7 @@ from logging import getLogger
 import socket
 import storage
 import time
+import datetime
 
 import pymongo
 
@@ -11,8 +12,11 @@ from errors import CacheUpstreamError
 import helpers as h
 from infrastructure import infrastructure, UncoupledGroupsSelector
 from infrastructure_cache import cache
+from planner.lrc_reserve_groups import LrcReserveGroupSelector
 import inventory
 import jobs
+from jobs.tasks import Task
+from jobs.error import JobRequirementError
 from manual_locks import manual_locker
 from mastermind_core.config import config
 from mastermind_core.db.mongo.pool import Collection
@@ -40,6 +44,9 @@ class Planner(object):
     COUPLE_DEFRAG_LOCK = 'planner/couple_defrag'
     RECOVER_DC_LOCK = 'planner/recover_dc'
     TTL_CLEANUP_LOCK = 'planner/ttl_cleanup'
+    MOVE_PLANNER = 'move_planner'
+    EXTERNAL_STORAGE_CONVERTING_PLANNER = 'external_storage_converting_planner'
+    LRC_RESERVE_GROUP_PLANNER = 'lrc_reserve_group_planner'
 
     def __init__(self, db, niu, job_processor, namespaces_settings):
 
@@ -47,6 +54,7 @@ class Planner(object):
 
         logger.info('Planner initializing')
         self.candidates = []
+        self.planners = {}
         self.job_processor = job_processor
         self.__max_plan_length = self.params.get('move', {}).get('max_plan_length', 5)
         self.__tq = timed_queue.TimedQueue()
@@ -90,7 +98,8 @@ class Planner(object):
     def _start_tq(self):
         self.__tq.start()
 
-    def add_planner(self, planner):
+    def add_planner(self, planner, planner_name):
+        self.planners[planner_name] = planner
         planner.schedule_tasks(self.__tq)
 
     def _get_yt_stat(self):
@@ -139,19 +148,82 @@ class Planner(object):
                 self.ttl_cleanup_timer.next(),
                 self._ttl_cleanup_planner)
 
+    def _get_idle_groups(self, days_of_idle):
+        """
+        Iterates all over couples. Find couples where ttl_cleanup hasn't run for more than 'days of idle'
+        :param days_of_idle: how long the group could be idle
+        :return: list of groups[0] from couples
+        """
+
+        idle_groups = []
+
+        # the epoch time when executed jobs are considered meaningful
+        idleness_threshold = time.time() - datetime.timedelta(days=days_of_idle).total_seconds()
+
+        couples_data = self.collection.find().sort('ttl_cleanup_ts', pymongo.ASCENDING)
+        if couples_data.count() < len(storage.replicas_groupsets):
+            logger.info('Sync cleanup data is required: {0} records/{1} couples'.format(
+                couples_data.count(), len(storage.replicas_groupsets)))
+            self.sync_historic_data(recover_ts=0, cleanup_ts=int(time.time()))
+            couples_data = self.collection.find().sort('ttl_cleanup_ts', pymongo.ASCENDING)
+
+        for couple_data in couples_data:
+            c = couple_data['couple']
+
+            # if couple_data doesn't contain cleanup_ts field then cleanup_ts has never been run on this couple
+            # and None < idleness_threshold
+            ts = couple_data.get('ttl_cleanup_ts')
+            if ts > idleness_threshold:
+                # all couples after this one have more "fresh" job worked for them
+                logger.debug("Found lazy couples {}".format(idle_groups))
+                return idle_groups
+
+            # couple has format "gr0:gr1:...:grN". We are interested only in the group #0
+            idle_groups.append(int(c.split(":")[0]))
+
+        logger.debug("Find lazy couples {}".format(idle_groups))
+        return idle_groups
+
     def _do_ttl_cleanup(self):
         logger.info('Run ttl cleanup')
 
-        couple_list = self._get_yt_stat()
-        for couple in couple_list:
+        max_cleanup_jobs = config.get('jobs', {}).get('ttl_cleanup_job', {}).get(
+            'max_executing_jobs', 100)
 
-            iter_group = couple  # in tskv coupld id is actually group[0] from couple id
+        allowed_idleness_period = config.get('jobs', {}).get('ttl_cleanup_job', {}).get(
+            'max_idle_days', 270)
+
+        count = self.job_processor.job_finder.jobs_count(
+            types=jobs.JobTypes.TYPE_TTL_CLEANUP_JOB,
+            statuses=jobs.Job.ACTIVE_STATUSES)
+        if count >= max_cleanup_jobs:
+            logger.info('Found {} unfinished ttl cleanup jobs (>= {})'.format(count, max_cleanup_jobs))
+            return
+        else:
+            max_new_cleanup_jobs = max_cleanup_jobs - count
+
+        # get information from mds-proxy Yt logs
+        yt_group_list = self._get_yt_stat()
+
+        # get couples where ttl_cleanup wasn't run for long time (or never)
+        time_group_list = self._get_idle_groups(days_of_idle=allowed_idleness_period)
+
+        # remove dups
+        yt_group_list = set(yt_group_list + time_group_list)
+
+        for iter_group in yt_group_list:
             if iter_group not in storage.groups:
                 logger.error("Not valid group is extracted from aggregation log {}".format(iter_group))
                 continue
             iter_group = storage.groups[iter_group]
             if not iter_group.couple:
-                logger.error("Iter group is uncoupled {}".format(str(iter_group)))
+                logger.error("Iter group is uncoupled {}".format(iter_group))
+                continue
+
+            ns_settings = self.namespaces_settings.get(iter_group.couple.namespace.id)
+            if not ns_settings or not ns_settings.attributes.ttl.enable:
+                logger.debug("Skipping group {} cause ns '{}' without ttl".format(
+                              iter_group.group_id, iter_group.couple.namespace.id))
                 continue
 
             try:
@@ -169,8 +241,19 @@ class Planner(object):
                         'need_approving': not self.params.get('ttl_cleanup', {}).get('autoapprove', False),
                     },
                 )
+                max_new_cleanup_jobs -= 1
+                if max_new_cleanup_jobs == 0:
+                    logger.info("Stopping job creation due to upper limitation on job count {}", max_cleanup_jobs)
+                    break
+            except LockAlreadyAcquiredError as e:
+                logger.info("Failed to create a new job since couple/group are already locked {}".format(e))
+                continue
+            except JobRequirementError as e:
+                logger.error("Failed to create a new job since failed to meet job requirements {}".format(e))
+                continue
             except:
                 logger.exception("Creating job for iter group {} has excepted".format(iter_group))
+                continue
 
     @staticmethod
     def _prepare_candidates_by_dc(suitable_groups, unsuitable_dcs):
@@ -369,9 +452,13 @@ class Planner(object):
 
         logger.info('Successfully created {0} recover dc jobs'.format(created_jobs))
 
-    def sync_recover_data(self):
+    def sync_historic_data(self, recover_ts, cleanup_ts):
+        """
+        Update mongo DB storing (couple, recore_ts, cleanup_ts)
+        Remove legacy records, add fresh ones
+        """
 
-        recover_data_couples = set()
+        hist_data_couples = set()
 
         offset = 0
         while True:
@@ -381,19 +468,17 @@ class Planner(object):
                 skip=offset, limit=self.RECOVERY_OP_CHUNK)
             count = 0
             for rdc in cursor:
-                recover_data_couples.add(rdc['couple'])
+                hist_data_couples.add(rdc['couple'])
                 count += 1
             offset += count
 
             if count < self.RECOVERY_OP_CHUNK:
                 break
 
-        ts = int(time.time())
-
         storage_couples = set(str(c) for c in storage.replicas_groupsets.keys())
 
-        add_couples = list(storage_couples - recover_data_couples)
-        remove_couples = list(recover_data_couples - storage_couples)
+        add_couples = list(storage_couples - hist_data_couples)
+        remove_couples = list(hist_data_couples - storage_couples)
 
         logger.info('Couples to add to recover data list: {0}'.format(add_couples))
         logger.info('Couples to remove from recover data list: {0}'.format(remove_couples))
@@ -404,10 +489,11 @@ class Planner(object):
             bulk_add_couples = add_couples[offset:offset + self.RECOVERY_OP_CHUNK]
             for couple in bulk_add_couples:
                 bulk_op.insert({'couple': couple,
-                                'recover_ts': ts})
+                                'recover_ts': recover_ts,
+                                'ttl_cleanup_ts': cleanup_ts})
             res = bulk_op.execute()
             if res['nInserted'] != len(bulk_add_couples):
-                raise ValueError('failed to add couples recover data: {0}/{1} ({2})'.format(
+                raise ValueError('failed to add couples historic data: {0}/{1} ({2})'.format(
                     res['nInserted'], len(bulk_add_couples), res))
             offset += res['nInserted']
 
@@ -418,7 +504,7 @@ class Planner(object):
             bulk_op.find({'couple': {'$in': bulk_remove_couples}}).remove()
             res = bulk_op.execute()
             if res['nRemoved'] != len(bulk_remove_couples):
-                raise ValueError('failed to remove couples recover data: {0}/{1} ({2})'.format(
+                raise ValueError('failed to remove couples historic data: {0}/{1} ({2})'.format(
                     res['nRemoved'], len(bulk_remove_couples), res))
             offset += res['nRemoved']
 
@@ -443,7 +529,7 @@ class Planner(object):
         if cursor.count() < len(storage.replicas_groupsets):
             logger.info('Sync recover data is required: {0} records/{1} couples'.format(
                 cursor.count(), len(storage.replicas_groupsets)))
-            self.sync_recover_data()
+            self.sync_historic_data(recover_ts=int(time.time()), cleanup_ts=0)
             cursor = self.collection.find().sort('recover_ts',
                                                  pymongo.ASCENDING)
 
@@ -513,15 +599,36 @@ class Planner(object):
 
         return [candidate[0] for candidate in candidates[-count:]]
 
-    def update_recover_ts(self, couple_id, ts):
-        ts = int(ts)
+    def update_historic_ts(self, couple_id, recover_ts=None, cleanup_ts=None):
+        """
+        Update records in mongo with corresponding times
+        :param couple_id: couple_id
+        :param recover_ts: epoch time if we need to update recover_ts time else None
+        :param cleanup_ts: epoch time if we need to update ttl_cleanup time else None
+        """
+
+        updated_values = {}
+        if recover_ts:
+            updated_values['recover_ts'] = int(recover_ts)
+        if cleanup_ts:
+            updated_values['ttl_cleanup_ts'] = int(cleanup_ts)
+
+        if len(updated_values) == 0:
+            return
+
         res = self.collection.update(
             {'couple': couple_id},
-            {'couple': couple_id, 'recover_ts': ts},
+            {"$set": updated_values},
             upsert=True)
         if res['ok'] != 1:
-            logger.error('Unexpected mongo response during recover ts update: {0}'.format(res))
+            logger.error('Unexpected mongo response during update of historic data: {0}'.format(res))
             raise RuntimeError('Mongo operation result: {0}'.format(res['ok']))
+
+    def update_recover_ts(self, couple_id, ts):
+        self.update_historic_ts(couple_id, recover_ts=ts)
+
+    def update_cleanup_ts(self, couple_id, ts):
+        self.update_historic_ts(couple_id, cleanup_ts=ts)
 
     def _couple_defrag(self):
         try:
@@ -690,6 +797,9 @@ class Planner(object):
         if group.couple is None:
             raise ValueError('Group {0} is uncoupled'.format(group.group_id))
 
+        if group.couple.couple.lrc822v1_groupset is not None:
+            raise ValueError("Group {0} have lrc822v1 groupset {1}".format(group.group_id, group.couple))
+
         candidates = []
         if src_group is None:
             for g in group.coupled_groups:
@@ -739,6 +849,7 @@ class Planner(object):
         return job.dump()
 
     CREATE_JOB_ATTEMPTS = 3
+    CREATE_LRC_JOB_ATTEMPTS = 1
     RUNNING_STATUSES = [jobs.Job.STATUS_NOT_APPROVED,
                         jobs.Job.STATUS_NEW,
                         jobs.Job.STATUS_EXECUTING]
@@ -746,9 +857,6 @@ class Planner(object):
                       jobs.Job.STATUS_BROKEN]
     RESTORE_TYPES = [jobs.JobTypes.TYPE_MOVE_JOB,
                      jobs.JobTypes.TYPE_RESTORE_GROUP_JOB]
-    RESTORE_AND_MANAGER_TYPES = [jobs.JobTypes.TYPE_MOVE_JOB,
-                                 jobs.JobTypes.TYPE_RESTORE_GROUP_JOB,
-                                 jobs.JobTypes.TYPE_BACKEND_MANAGER_JOB]
 
     def _create_restore_job(self, group, use_uncoupled_group, src_group, force, autoapprove):
         last_error = None
@@ -784,32 +892,47 @@ class Planner(object):
         if last_error:
             raise last_error
 
-    def _create_backend_manager_job(self, group, force, autoapprove, cmd_type, mark_backend=None, unmark_backend=None):
-        couple = storage.groups[group].couple
-        params = {
-            'group': group,
-            'couple': str(couple) if couple else None,
-            'need_approving': not autoapprove,
-            'cmd_type': cmd_type,
-            'mark_backend': mark_backend,
-            'unmark_backend': unmark_backend,
-        }
+    def _create_restore_uncoupled_lrc_job(self, group, force, autoapprove):
         last_error = None
-        for _ in xrange(self.CREATE_JOB_ATTEMPTS):
+
+        selector = LrcReserveGroupSelector(self.job_processor)
+        for _ in xrange(self.CREATE_LRC_JOB_ATTEMPTS):
             try:
-                job = self.job_processor._create_job(
-                    jobs.JobTypes.TYPE_BACKEND_MANAGER_JOB,
-                    params,
-                    force=force,
+                job = selector.restore_uncoupled_lrc_group(
+                    group,
+                    check_status=not force,
+                    need_approving=not autoapprove
                 )
-                return job.dump()
             except Exception as e:
                 last_error = e
                 continue
+
+            return job
+
         if last_error:
             raise last_error
 
-    def _cleanup_job_find(self, group_id, active_jobs, uncoupled_groups, failed):
+    def _create_restore_lrc_job(self, group, force, autoapprove):
+        last_error = None
+
+        selector = LrcReserveGroupSelector(self.job_processor)
+        for _ in xrange(self.CREATE_LRC_JOB_ATTEMPTS):
+            try:
+                job = selector.restore_lrc_group(
+                    group,
+                    check_status=not force,
+                    need_approving=not autoapprove
+                )
+            except Exception as e:
+                last_error = e
+                continue
+
+            return job
+
+        if last_error:
+            raise last_error
+
+    def _backend_cleanup_group(self, group_id, active_jobs, failed, force=False, autoapprove=False):
         group_jobs = self.job_processor.job_finder.jobs(
             groups=group_id,
             types=jobs.JobTypes.TYPE_BACKEND_CLEANUP_JOB,
@@ -826,23 +949,87 @@ class Planner(object):
                                                                                               job.status
                                                                                               )
         else:
-            uncoupled_groups.append(group_id)
+            nb = infrastructure.get_backend_by_group_id(group_id)
+            if nb and nb.stat and nb.stat.files > 1:
+                failed[group_id] = 'Create backend cleanup job failed. Records_alive > 1 ({})'.format(nb.stat.files)
+            else:
+                try:
+                    job = self._create_backend_cleanup_job(group_id, force, autoapprove)
+                    active_jobs.append(job['id'])
+                except Exception as e:
+                    failed[group_id] = str(e)
 
-        return active_jobs, uncoupled_groups
+        return active_jobs, failed
 
-    def _restore_job_find(self,
-                          group_id,
-                          active_jobs,
-                          groups_to_backup,
-                          groups_to_restore,
-                          cancelled_jobs,
-                          pending_restore_jobs,
-                          restore_only=False
-                          ):
+    def _restore_uncoupled_lrc_group(self, group_id, active_jobs, failed, force=False, autoapprove=False):
+        # TODO: find and stop convert_to_lrc_groupset_job
+        group_jobs = self.job_processor.job_finder.jobs(
+            groups=group_id,
+            types=jobs.JobTypes.TYPE_RESTORE_UNCOUPLED_LRC_GROUP_JOB,
+            statuses=jobs.Job.ACTIVE_STATUSES,
+            sort=False,
+        )
+        if group_jobs:
+            job = group_jobs[0]
+
+            if job.status in self.RUNNING_STATUSES:
+                active_jobs.append(job.id)
+            else:
+                failed[group_id] = 'Restore uncoupled lrc job failed, group: {}, status: {}'.format(
+                    group_id,
+                    job.status
+                )
+        else:
+            try:
+                job = self._create_restore_uncoupled_lrc_job(group_id, force, autoapprove)
+                active_jobs.append(job.id)
+            except Exception as e:
+                failed[group_id] = str(e)
+
+        return active_jobs, failed
+
+    def _restore_lrc_group(self, group_id, active_jobs, failed, force=False, autoapprove=False):
+        # TODO: find restore_lrc_group_job
+        group_jobs = self.job_processor.job_finder.jobs(
+            groups=group_id,
+            types=jobs.JobTypes.TYPE_RESTORE_LRC_GROUP_JOB,
+            statuses=jobs.Job.ACTIVE_STATUSES,
+            sort=False,
+        )
+        if group_jobs:
+            job = group_jobs[0]
+
+            if job.status in self.RUNNING_STATUSES:
+                active_jobs.append(job.id)
+            else:
+                failed[group_id] = 'Restore lrc job failed, group: {}, status: {}'.format(
+                    group_id,
+                    job.status
+                )
+        else:
+            try:
+                job = self._create_restore_lrc_job(group_id, force, autoapprove)
+                active_jobs.append(job.id)
+            except Exception as e:
+                failed[group_id] = str(e)
+
+        return active_jobs, failed
+
+    def _restore_group(self,
+                       group_id,
+                       active_jobs,
+                       cancelled_jobs,
+                       pending_restore_jobs,
+                       failed,
+                       use_uncoupled_group,
+                       force,
+                       autoapprove,
+                       restore_only=False
+                       ):
 
         group_jobs = self.job_processor.job_finder.jobs(
             groups=group_id,
-            types=self.RESTORE_AND_MANAGER_TYPES,
+            types=self.RESTORE_TYPES,
             statuses=jobs.Job.ACTIVE_STATUSES,
             sort=False,
         )
@@ -855,35 +1042,46 @@ class Planner(object):
                 cancel_job = False
                 if job.type == jobs.JobTypes.TYPE_MOVE_JOB:
                     cancel_job = True
-                elif job.type == jobs.JobTypes.TYPE_BACKEND_MANAGER_JOB:
-                    cancel_job = False
                 elif job.group == job.src_group:
                     cancel_job = True
                 if cancel_job:
                     try:
                         self.job_processor._cancel_job(job)
-                        cancelled_jobs.append(job.id)
+                        if job.tasks[0].type == jobs.TaskTypes.TYPE_CHECK_FILE_SYSTEM_TASK and job.tasks[0].status == Task.STATUS_FAILED:
+                            pass
+                        else:
+                            cancelled_jobs.append(job.id)
                     except Exception as e:
                         logger.exception('Failed to cancel job {}'.format(job.id))
-                        raise ValueError('Failed to cancel job {}: {}'.format(job.id, e))
-                    groups_to_restore.append(group_id)
+                        failed[group_id] = 'Failed to cancel job {}: {}'.format(job.id, e)
+                        return active_jobs, cancelled_jobs, pending_restore_jobs, failed
+                    try:
+                        job = self._create_restore_job(group_id, use_uncoupled_group, None, force, autoapprove)
+                        active_jobs.append(job['id'])
+                    except Exception as e:
+                        failed[group_id] = str(e)
                 else:
                     # Jobs in pending or broken states that were
                     # working with fallback can be restored only
                     # manually
                     pending_restore_jobs.append(job.id)
-            elif job.status == jobs.Job.STATUS_CANCELLED:
-                groups_to_restore.append(group_id)
             else:
-                raise ValueError(
-                    'Unknown job status: {}'.format(job.status)
-                )
+                failed[group_id] = 'Unknown job status: {}'.format(job.status)
+                return active_jobs, cancelled_jobs, pending_restore_jobs, failed
         else:
             if restore_only:
-                groups_to_restore.append(group_id)
+                try:
+                    job = self._create_restore_job(group_id, use_uncoupled_group, None, force, autoapprove)
+                    active_jobs.append(job['id'])
+                except Exception as e:
+                    failed[group_id] = str(e)
             else:
-                groups_to_backup.append(group_id)
-        return active_jobs, groups_to_backup, groups_to_restore, cancelled_jobs, pending_restore_jobs
+                try:
+                    job = self._create_restore_job(group_id, use_uncoupled_group, group_id, force, autoapprove)
+                    active_jobs.append(job['id'])
+                except Exception as e:
+                    failed[group_id] = str(e)
+        return active_jobs, cancelled_jobs, pending_restore_jobs, failed
 
     @h.concurrent_handler
     def restore_groups_from_path(self, request):
@@ -941,31 +1139,47 @@ class Planner(object):
                             'only groups with 1 node backend can be used'.format(
                                 group.group_id, len(group.node_backends)))
 
-        groups_to_backup = []
-        groups_to_restore = []
         active_jobs = []
-        uncoupled_groups = []
         cancelled_jobs = []
         pending_restore_jobs = []
         failed = {}
 
         for group in groups:
             group = storage.groups[group]
-            if group.type not in [storage.Group.TYPE_UNKNOWN,
-                                  storage.Group.TYPE_DATA,
-                                  storage.Group.TYPE_UNCOUPLED,
-                                  storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1]:
-                failed[group.group_id] = 'Failed group type: {}'.format(group.type)
-                continue
-            if group.couple is None:
-                self._cleanup_job_find(group.group_id, active_jobs, uncoupled_groups, failed)
+            if group.type in [storage.Group.TYPE_UNCOUPLED,
+                              storage.Group.TYPE_RESERVED_LRC_8_2_2_V1]:
+                if group.couple is None:
+                    self._backend_cleanup_group(group.group_id, active_jobs, failed, force, autoapprove)
+                else:
+                    failed[group.group_id] = "Type: {}. couple: {}".format(group.type, group.couple)
+            elif group.type == storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1:
+                if group.couple is None:
+                    self._restore_uncoupled_lrc_group(group.group_id, active_jobs, failed, force, autoapprove)
+                else:
+                    failed[group.group_id] = "Type: {}. couple: {}".format(group.type, group.couple)
+            elif group.type == storage.Group.TYPE_LRC_8_2_2_V1:
+                if group.couple is None:
+                    failed[group.group_id] = "Type: {}. couple: {}".format(group.type, group.couple)
+                else:
+                    self._restore_lrc_group(group.group_id, active_jobs, failed, force, autoapprove)
+            elif group.type in [storage.Group.TYPE_DATA,
+                                storage.Group.TYPE_UNKNOWN]:
+                if group.couple is None:
+                    failed[group.group_id] = "Type: {}. couple: {}".format(group.type, group.couple)
+                else:
+                    if group.couple.couple.lrc822v1_groupset is not None:
+                        failed[group.group_id] = "Type: {}. groupset: {}".format(group.type, group.couple)
+                    else:
+                        self._restore_group(group.group_id,
+                                            active_jobs,
+                                            cancelled_jobs,
+                                            pending_restore_jobs,
+                                            failed,
+                                            use_uncoupled_group,
+                                            force,
+                                            autoapprove)
             else:
-                self._restore_job_find(group.group_id,
-                                       active_jobs,
-                                       groups_to_backup,
-                                       groups_to_restore,
-                                       cancelled_jobs,
-                                       pending_restore_jobs)
+                failed[group.group_id] = 'Failed group type: {}'.format(group.type)
 
         #
         group_histories = infrastructure.group_history_finder.search_by_node_backend(
@@ -996,7 +1210,7 @@ class Planner(object):
                 continue
 
             if group not in storage.groups and not group.couples:
-                self._cleanup_job_find(group.group_id, active_jobs, uncoupled_groups, failed)
+                self._backend_cleanup_group(group.group_id, active_jobs, failed, force, autoapprove)
             else:
                 if len(group.couples) > 1:
                     failed[group.group_id] = 'Count couples in history > 1'
@@ -1005,36 +1219,17 @@ class Planner(object):
                     couple = group.couples[0].couple
 
                 if len(couple) == storage.Lrc.Scheme822v1.STRIPE_SIZE:
-                    failed[group.group_id] = 'Failed group type: {}'.format('lrc')
+                    self._restore_lrc_group(group.group_id, active_jobs, failed, force, autoapprove)
                 else:
-                    self._restore_job_find(group.group_id,
-                                           active_jobs,
-                                           groups_to_backup,
-                                           groups_to_restore,
-                                           cancelled_jobs,
-                                           pending_restore_jobs,
-                                           restore_only=True)
-
-        for group in groups_to_backup:
-            try:
-                job = self._create_restore_job(group, use_uncoupled_group, group, force, autoapprove)
-                active_jobs.append(job['id'])
-            except Exception as e:
-                failed[group] = str(e)
-
-        for group in groups_to_restore:
-            try:
-                job = self._create_restore_job(group, use_uncoupled_group, None, force, autoapprove)
-                active_jobs.append(job['id'])
-            except Exception as e:
-                failed[group] = str(e)
-
-        for group in uncoupled_groups:
-            try:
-                job = self._create_backend_cleanup_job(group, force, autoapprove)
-                active_jobs.append(job['id'])
-            except Exception as e:
-                failed[group] = str(e)
+                    self._restore_group(group.group_id,
+                                        active_jobs,
+                                        cancelled_jobs,
+                                        pending_restore_jobs,
+                                        failed,
+                                        use_uncoupled_group,
+                                        force,
+                                        autoapprove,
+                                        restore_only=True)
 
         return {'jobs': active_jobs, 'failed': failed, 'cancelled_jobs': cancelled_jobs, 'help': pending_restore_jobs}
 
@@ -1078,7 +1273,7 @@ class Planner(object):
                                 jobs.JobTypes.TYPE_MOVE_JOB,
                                 job_params, force=True)
                             res['jobs'].append(job.dump())
-                        except LockAlreadyAcquiredError as e:
+                        except (LockAlreadyAcquiredError, JobRequirementError) as e:
                             logger.error(
                                 'Failed to create move job for group {}, attempt {}/{}'.format(
                                     group.group_id,

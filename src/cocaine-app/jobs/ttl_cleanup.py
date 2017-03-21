@@ -4,6 +4,7 @@ from job_types import JobTypes
 import logging
 import storage
 from infrastructure import infrastructure
+import time
 
 logger = logging.getLogger('mm.jobs')
 
@@ -99,3 +100,35 @@ class TtlCleanupJob(Job):
     def _involved_couples(self):
         # Addressing by iter_group may cause an exception. See comment in _involved_groups
         return [str(storage.groups[self.iter_group].couple)]
+
+    def on_complete(self, processor):
+        couple = str(storage.groups[self.iter_group].couple)
+        processor.planner.update_cleanup_ts(couple, time.time())
+
+    @staticmethod
+    def report_resources(params):
+        """
+        Report resources supposed usage for specified params
+        :param params: params to be passed on creating the job instance
+        :return: dict={'groups':[], 'resources':{ Job.RESOURCE_HOST_IN: [], etc}}
+        """
+
+        # XXX: this code duplicates 'set_resources', 'involved_groups' methods but this duplication is chose
+        # to minimize changes to test
+        res = {}
+
+        iter_group = params['iter_group']
+
+        if iter_group not in storage.groups:
+            raise ValueError("Group {} is not present in storage.groups".format(iter_group))
+
+        couple = storage.groups[iter_group].couple
+        nb = storage.groups[iter_group].node_backends[0]
+        res['resources'] = {}
+        res['resources'][Job.RESOURCE_HOST_IN] = []
+        res['resources'][Job.RESOURCE_FS] = []
+        res['resources'][Job.RESOURCE_HOST_IN].append(nb.node.host.addr)
+        res['resources'][Job.RESOURCE_FS].append((nb.node.host.addr, str(nb.fs.fsid)))
+        res['groups'] = [g.group_id for g in couple.groups]
+
+        return res

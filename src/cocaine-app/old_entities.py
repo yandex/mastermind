@@ -1,4 +1,5 @@
 import errno
+import functools
 import logging
 import os.path
 import time
@@ -215,6 +216,30 @@ class NodeBackendStat(object):
         return res
 
 
+def status_change_log(f):
+    @functools.wraps(f)
+    def wrapper(self, *args, **kwargs):
+        prev_status = self.status
+        res = f(self, *args, **kwargs)
+        if prev_status != self.status:
+            logger.info(
+                '{type} {id} status updated from {prev_status} to {cur_status}'
+                '{status_text}'.format(
+                    type=type(self).__name__,
+                    id=self,
+                    prev_status=prev_status,
+                    cur_status=self.status,
+                    status_text=(
+                        ' ({})'.format(self.status_text)
+                        if self.status_text else
+                        ''
+                    ),
+                )
+            )
+        return res
+    return wrapper
+
+
 class NodeBackendBase(object):
 
     __slots__ = (
@@ -271,6 +296,7 @@ class NodeBackendBase(object):
                                          new_stat['backend']['config'].get('file')) + '/'
         self.stat.update(new_stat, collect_ts)
 
+    @status_change_log
     def update_status(self):
         if not self.stat:
             self.status = storage.Status.INIT
@@ -322,6 +348,7 @@ class FsBase(object):
         self.host = host
         self.fsid = fsid
         self.status = storage.Status.OK
+        self.status_text = ''  # generalization for objects that have 'status' attribute
 
         self.node_backends = {}
 
@@ -335,6 +362,7 @@ class FsBase(object):
     def update_commands_stats(self):
         self.stat.update_commands_stats(self.node_backends)
 
+    @status_change_log
     def update_status(self):
         nbs = self.node_backends.keys()
         prev_status = self.status
@@ -551,6 +579,24 @@ class GroupBase(object):
     def reset_meta(self):
         self.meta = None
 
+    # NOTE: this is custom decorator intended to be used with 'parse_meta()'
+    def __type_change_log(f):
+        @functools.wraps(f)
+        def wrapper(self, *args, **kwargs):
+            prev_type = self._type
+            res = f(self, *args, **kwargs)
+            if prev_type != self._type:
+                logger.info(
+                    'Group {id} type updated from {prev_type} to {cur_type}'.format(
+                        id=self,
+                        prev_type=prev_type,
+                        cur_type=self._type,
+                    )
+                )
+            return res
+        return wrapper
+
+    @__type_change_log
     def parse_meta(self, raw_meta):
 
         if raw_meta is None:
@@ -566,12 +612,6 @@ class GroupBase(object):
                 raise Exception('Unable to parse meta')
 
         self._type = self._get_type(self.meta)
-        logger.debug(
-            'Group {group}: meta parsed, group type is determined as "{type}"'.format(
-                group=self,
-                type=self._type,
-            )
-        )
 
     def equal_meta(self, other):
         if type(self.meta) != type(other.meta):
@@ -600,6 +640,7 @@ class GroupBase(object):
         else:
             self.update_status()
 
+    @status_change_log
     def update_status(self):
         """Updates group's own status.
         WARNING: This method should not take into consideration any of the

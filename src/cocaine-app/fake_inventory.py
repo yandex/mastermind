@@ -212,6 +212,7 @@ def make_external_storage_validate_command(couple_id,
                                            groupset_settings,
                                            src_storage,
                                            src_storage_options,
+                                           additional_backends=None,
                                            trace_id=None):
     '''
     Construct command that will be executed by minion to validate data converted from
@@ -228,7 +229,8 @@ def make_external_storage_validate_command(couple_id,
         @src_storage_options (dict): source storage options (data unit to convert, etc.)
         @trace_id (str): trace id that should be used by the command if tracing is
             implemented
-
+        @additional_backends (list): additional backends to use for validation tasks
+            (like validation after groupset restore when group was moved to another host)
     '''
     raise NotImplementedError()
 

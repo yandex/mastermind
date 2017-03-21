@@ -1,0 +1,3 @@
+{
+    "slave" : "scheduler_worker.py"
+}

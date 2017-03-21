@@ -16,28 +16,34 @@ class ExternalStorageTask(MinionCmdTask):
         if last_record.status != 'error':
             return None
 
-        assert hasattr(self.parent_job, 'src_storage')
-        assert hasattr(self.parent_job, 'src_storage_options')
+        # TODO: move src_storage and src_storage_options to task params
+        if hasattr(self.parent_job, 'src_storage') and hasattr(self.parent_job, 'src_storage_options'):
+            retry_ts = inventory.external_storage_task_retry_ts(
+                self,
+                self.parent_job.src_storage,
+                self.parent_job.src_storage_options
+            )
 
-        return inventory.external_storage_task_retry_ts(
-            self,
-            self.parent_job.src_storage,
-            self.parent_job.src_storage_options
-        )
+            if retry_ts:
+                return retry_ts
+
+        return super(ExternalStorageTask, self).next_retry_ts
 
     def ready_for_retry(self, processor):
         if super(ExternalStorageTask, self).ready_for_retry(processor):
 
-            ready = inventory.is_external_storage_task_ready_for_retry(
-                self,
-                self.parent_job.src_storage,
-                self.parent_job.src_storage_options,
-                storage,
-                processor
-            )
+            # TODO: move src_storage and src_storage_options to task params
+            if hasattr(self.parent_job, 'src_storage') and hasattr(self.parent_job, 'src_storage_options'):
+                ready = inventory.is_external_storage_task_ready_for_retry(
+                    self,
+                    self.parent_job.src_storage,
+                    self.parent_job.src_storage_options,
+                    storage,
+                    processor
+                )
 
-            if not ready:
-                return False
+                if not ready:
+                    return False
 
             return True
         return False

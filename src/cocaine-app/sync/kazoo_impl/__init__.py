@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 import logging
 import os.path
+import sys
 import traceback
 
 from kazoo.client import KazooClient
@@ -14,6 +15,7 @@ from kazoo.exceptions import (
 from kazoo.retry import KazooRetry, RetryFailedError
 from mastermind.utils.queue import LockingQueue
 from mastermind_core import helpers
+from mastermind_core.config import config
 import msgpack
 
 # from errors import ConnectionError, InvalidDataError
@@ -29,13 +31,18 @@ kazoo_logger.propagate = False
 kazoo_logger.setLevel(logging.INFO)
 
 
+SYNC_CFG = config.get('sync', {})
+CACHE_MANAGER_CFG = config.get('cache', {}).get('manager', {})
+DEFAULT_TIMEOUT = 3
+
+
 class ZkSyncManager(object):
 
     RETRIES = 2
     LOCK_TIMEOUT = 3
 
-    def __init__(self, host='127.0.0.1:2181', lock_path_prefix='/mastermind/locks/'):
-        self.client = KazooClient(host, timeout=3)
+    def __init__(self, host='127.0.0.1:2181', lock_path_prefix='/mastermind/locks/', **kwargs):
+        self.client = KazooClient(host, timeout=SYNC_CFG.get('timeout', DEFAULT_TIMEOUT))
         logger.info('Connecting to zookeeper host {}, lock_path_prefix: {}'.format(
             host, lock_path_prefix))
         try:
@@ -72,10 +79,29 @@ class ZkSyncManager(object):
         finally:
             lock.release()
 
-    def persistent_locks_acquire(self, locks, data=''):
+    @contextmanager
+    def ephemeral_locks(self, locks, data=''):
+        self.persistent_locks_acquire(locks, data=data, ephemeral=True)
+        exc_info = None
+        try:
+            yield
+        except:
+            # will be raised in the 'finally' block
+            exc_info = sys.exc_info()
+        finally:
+            try:
+                self.persistent_locks_release(locks, check=data)
+            except Exception as e:
+                logger.error('Failed to release ephemeral locks {}: {}'.format(locks, e))
+                pass
+            if exc_info:
+                # raising original exception if any
+                raise exc_info[0], exc_info[1], exc_info[2]
+
+    def persistent_locks_acquire(self, locks, data='', ephemeral=False):
         try:
             retry = self._retry.copy()
-            result = retry(self._inner_persistent_locks_acquire, locks=locks, data=data)
+            result = retry(self._inner_persistent_locks_acquire, locks=locks, data=data, ephemeral=True)
         except RetryFailedError:
             raise LockError('Failed to acquire persistent locks {} after several retries'.format(
                 locks))
@@ -85,7 +111,7 @@ class ZkSyncManager(object):
             raise LockError
         return result
 
-    def _inner_persistent_locks_acquire(self, locks, data):
+    def _inner_persistent_locks_acquire(self, locks, data, ephemeral=False):
 
         ensured_paths = set()
 
@@ -96,16 +122,16 @@ class ZkSyncManager(object):
             if len(parts) == 2 and parts[0] not in ensured_paths:
                 self.client.ensure_path(parts[0])
                 ensured_paths.add(parts[0])
-            tr.create(path, data)
+            tr.create(path, data, ephemeral=ephemeral)
 
         failed = False
         failed_locks = []
         result = tr.commit()
-        for i, res in enumerate(result):
+        for lockid, res in zip(locks, result):
             if isinstance(res, ZookeeperError):
                 failed = True
             if isinstance(res, NodeExistsError):
-                failed_locks.append(locks[i])
+                failed_locks.append(lockid)
 
         if failed_locks:
             holders = []
@@ -183,8 +209,8 @@ class ZkCacheTaskManager(object):
 
     RETRIES = 2
 
-    def __init__(self, host='127.0.0.1:2181', lock_path_prefix='/mastermind/cache/'):
-        self.client = KazooClient(host, timeout=3)
+    def __init__(self, host='127.0.0.1:2181', lock_path_prefix='/mastermind/cache/', **kwargs):
+        self.client = KazooClient(host, timeout=CACHE_MANAGER_CFG.get('timeout', DEFAULT_TIMEOUT))
         logger.info('Connecting to zookeeper host {}, lock_path_prefix: {}'.format(
             host, lock_path_prefix))
         try:

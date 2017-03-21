@@ -35,7 +35,7 @@ def update_commands_stat(comm_stat, state):
     comm_stat.ell_net_write_rate = state['ell_net_write_rate']
 
 
-def create_groupset_if_needed(gsid, groups, gstype, nsid, status=None, status_text=None):
+def create_groupset_if_needed(gsid, groups, gstype, nsid):
     for gid in groups:
         if gid not in storage.groups:
             logger.info(
@@ -62,12 +62,6 @@ def create_groupset_if_needed(gsid, groups, gstype, nsid, status=None, status_te
             groups=(storage.groups[gid] for gid in groups),
             group_type=group_type,
         )
-
-        if status:
-            groupset.status = status
-
-        if status_text:
-            groupset.status_text = status_text
 
         for gid in groups:
             infrastructure.update_group_history(storage.groups[gid])
@@ -551,9 +545,9 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                 groups=gs_state['groups'],
                 gstype=gs_state['type'],
                 nsid=couple_state['namespace'],
-                status=gs_state['status'],
-                status_text=gs_state['status_text'],
             )
+            replicas_gs.status = gs_state['status']
+            replicas_gs.status_text = gs_state['status_text']
         else:
             group_ids = map(int, couple_state['id'].split(':'))
             replicas_gs = create_groupset_if_needed(
@@ -570,9 +564,9 @@ class NodeInfoUpdater(NodeInfoUpdaterBase):
                 groups=gs_state['groups'],
                 gstype=gs_state['type'],
                 nsid=couple_state['namespace'],
-                status=gs_state['status'],
-                status_text=gs_state['status_text'],
             )
+            lrc_gs.status = gs_state['status']
+            lrc_gs.status_text = gs_state['status_text']
 
             if 'settings' not in gs_state:
                 raise ValueError('Groupset {}: field "settings" is missed'.format(lrc_gs))
