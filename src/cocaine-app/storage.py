@@ -2319,12 +2319,21 @@ class Groupset(object):
     def as_tuple(self):
         return tuple(group.group_id for group in self.groups)
 
+    @property
+    def type(self):
+        if isinstance(self, Couple):
+            return GROUPSET_REPLICAS
+        elif isinstance(self, Lrc822v1Groupset):
+            return GROUPSET_LRC
+
+        raise ValueError('Failed to determine type of groupset {}'.format(self))
+
     def info_data(self):
 
         data = {'id': str(self),
                 'status': self.status,
                 'status_text': self.status_text,
-                'type': GROUPSET_REPLICAS,
+                'type': self.type,
                 'settings': {},
                 'tuple': self.as_tuple()}
         try:
@@ -2688,7 +2697,6 @@ class Lrc822v1Groupset(Groupset):
     def info_data(self):
         data = super(Lrc822v1Groupset, self).info_data()
 
-        data['type'] = GROUPSET_LRC
         data['settings'] = self.groupset_settings
         if self.couple:
             data['couple'] = str(self.couple)
