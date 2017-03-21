@@ -2977,6 +2977,8 @@ class DcHostView(object):
 
 
 class Namespace(object):
+    INTERNAL_NAMESPACES = (Group.CACHE_NAMESPACE,)
+
     def __init__(self, id):
         self.id = id
         self.couples = set()

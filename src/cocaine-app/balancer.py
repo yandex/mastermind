@@ -1453,10 +1453,14 @@ class Balancer(object):
         except IndexError:
             _filter = {}
 
-        def filtered_out(ns_ettings):
+        def filtered_out(ns_settings):
             if _filter.get('deleted') is not None:
                 if _filter['deleted'] != ns_settings.deleted:
                     return True
+
+            if ns_settings.namespace in storage.Namespace.INTERNAL_NAMESPACES:
+                return True
+
             return False
 
         res = []
