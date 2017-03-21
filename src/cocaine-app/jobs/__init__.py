@@ -1,12 +1,15 @@
 from collections import defaultdict
+from contextlib import contextmanager
 import itertools
 import logging
+import os
+import socket
 import time
 import traceback
 
 import elliptics
 
-from error import JobBrokenError, RetryError
+from error import JobBrokenError, RetryError, JobRequirementError
 import helpers as h
 from job_types import JobTypes, TaskTypes
 from job import Job
@@ -20,6 +23,7 @@ from make_lrc_groups import MakeLrcGroupsJob
 from add_lrc_groupset import AddLrcGroupsetJob
 from job_factory import JobFactory
 from restore_group import RestoreGroupJob
+from restore_lrc_group import RestoreLrcGroupJob
 from backend_cleanup import BackendCleanupJob
 from backend_manager import BackendManagerJob
 from convert_to_lrc_groupset import ConvertToLrcGroupsetJob
@@ -46,10 +50,18 @@ class JobProcessor(object):
     JOBS_UPDATE = 'jobs_update'
     JOBS_LOCK = 'jobs'
 
+    JOB_LOCK = 'job/{job_id}'
+    JOB_PROCESSOR_ID = '{hostname}|{pid}'.format(
+        hostname=socket.gethostname(),
+        pid=os.getpid(),
+    )
+
     JOB_MANUAL_TIMEOUT = 20
 
     JOB_PRIORITIES = {
         JobTypes.TYPE_RESTORE_GROUP_JOB: 25,
+        JobTypes.TYPE_RESTORE_LRC_GROUP_JOB: 25,
+        JobTypes.TYPE_RECOVER_LRC_GROUPSET_JOB: 25,
         JobTypes.TYPE_MOVE_JOB: 20,
         JobTypes.TYPE_TTL_CLEANUP_JOB: 19,
         JobTypes.TYPE_BACKEND_MANAGER_JOB: 18,
@@ -58,20 +70,26 @@ class JobProcessor(object):
         JobTypes.TYPE_RECOVER_DC_JOB: 15,
         JobTypes.TYPE_COUPLE_DEFRAG_JOB: 10,
         JobTypes.TYPE_MAKE_LRC_GROUPS_JOB: 5,
+        JobTypes.TYPE_MAKE_LRC_RESERVED_GROUPS_JOB: 5,
         # Priority of this jobs is zero
         # because they're not using resources
         JobTypes.TYPE_BACKEND_CLEANUP_JOB: 0,
+        JobTypes.TYPE_RESTORE_UNCOUPLED_LRC_GROUP_JOB: 0,
     }
 
     # job types that should be processed by processor,
     # jobs with other types will be skipped
     SUPPORTED_JOBS = set([
         JobTypes.TYPE_RESTORE_GROUP_JOB,
+        JobTypes.TYPE_RESTORE_LRC_GROUP_JOB,
+        JobTypes.TYPE_RECOVER_LRC_GROUPSET_JOB,
+        JobTypes.TYPE_RESTORE_UNCOUPLED_LRC_GROUP_JOB,
         JobTypes.TYPE_MOVE_JOB,
         JobTypes.TYPE_TTL_CLEANUP_JOB,
         JobTypes.TYPE_RECOVER_DC_JOB,
         JobTypes.TYPE_COUPLE_DEFRAG_JOB,
         JobTypes.TYPE_MAKE_LRC_GROUPS_JOB,
+        JobTypes.TYPE_MAKE_LRC_RESERVED_GROUPS_JOB,
         JobTypes.TYPE_ADD_LRC_GROUPSET_JOB,
         JobTypes.TYPE_CONVERT_TO_LRC_GROUPSET_JOB,
         JobTypes.TYPE_BACKEND_CLEANUP_JOB,
@@ -136,7 +154,7 @@ class JobProcessor(object):
 
     def _retry_job(self, job):
         for task in job.tasks:
-            if task.status in (Task.STATUS_COMPLETED, Task.STATUS_COMPLETED):
+            if task.status in Task.FINISHED_STATUSES:
                 continue
             if task.status != Task.STATUS_FAILED:
                 # unexpected status, skip job processing
@@ -155,7 +173,7 @@ class JobProcessor(object):
 
             break
 
-    def _ready_jobs(self):
+    def _ready_job_ids(self):
 
         active_statuses = list(Job.ACTIVE_STATUSES)
         active_statuses.remove(Job.STATUS_NOT_APPROVED)
@@ -164,11 +182,27 @@ class JobProcessor(object):
         active_statuses.remove(Job.STATUS_PENDING)
         active_statuses.remove(Job.STATUS_BROKEN)
 
-        active_jobs = self.job_finder.jobs(statuses=active_statuses, sort=False)
-        active_jobs.sort(key=lambda j: j.create_ts)
+        active_jobs_data = self.job_finder.jobs_data(
+            statuses=active_statuses,
+            projection=(
+                Job.FIELD_ID,
+                Job.FIELD_TYPE,
+                Job.FIELD_STATUS,
+                Job.FIELD_CREATE_TS,
+                Job.FIELD_RESOURCES,
+            )
+        )
+        active_jobs_data = sorted(active_jobs_data, key=lambda j: j[Job.FIELD_CREATE_TS])
 
-        ready_jobs = []
-        new_jobs = []
+        # in the case of smart scheduler, it plans jobs in accordance with resource consumption
+        # while scheduler is not the only source of jobs, jobs created manually are difficult to predict and
+        # we suppose that there are not much of them
+        # so for the smart-scheduler case we could assume that all active jobs could be executed
+        if config.get('scheduler', {}).get('enabled', False):
+            return (j[Job.FIELD_ID] for j in active_jobs_data)
+
+        ready_jobs_data = []
+        new_jobs_data = []
 
         def default_res_counter():
             return {
@@ -184,43 +218,47 @@ class JobProcessor(object):
         type_jobs_count = {}
 
         # counting current resource usage
-        for job in active_jobs:
-            if job.status == Job.STATUS_NEW:
-                if job.type in self.SUPPORTED_JOBS:
-                    new_jobs.append(job)
+        for job_data in active_jobs_data:
+
+            job_type = job_data[Job.FIELD_TYPE]
+            if job_data[Job.FIELD_STATUS] == Job.STATUS_NEW:
+                if job_type in self.SUPPORTED_JOBS:
+                    new_jobs_data.append(job_data)
             else:
-                type_res = resources[job.type]
-                for res_type, res_val in self._unfold_resources(job.resources):
+                type_res = resources[job_type]
+                for res_type, res_val in self._unfold_resources(job_data[Job.FIELD_RESOURCES]):
                     type_res[res_type].setdefault(res_val, 0)
                     type_res[res_type][res_val] += 1
 
-                if job.status == Job.STATUS_EXECUTING:
-                    ready_jobs.append(job)
-                    type_jobs_count.setdefault(job.type, 0)
-                    type_jobs_count[job.type] += 1
+                if job_data[Job.FIELD_STATUS] == Job.STATUS_EXECUTING:
+                    ready_jobs_data.append(job_data)
+                    type_jobs_count.setdefault(job_type, 0)
+                    type_jobs_count[job_type] += 1
 
         logger.debug('Resources usage: {}; by type {}'.format(dict(resources), type_jobs_count))
 
         # selecting jobs to start processing
-        for job in new_jobs:
+        for job_data in new_jobs_data:
+
+            job_type = job_data[Job.FIELD_TYPE]
 
             check_types = [
                 t
                 for t, p in self.JOB_PRIORITIES.iteritems()
-                if p >= self.JOB_PRIORITIES[job.type]
+                if p >= self.JOB_PRIORITIES[job_type]
             ]
             logger.debug(
                 'Job {}: checking job type resources according to priorities: {}'.format(
-                    job.id,
+                    job_data['id'],
                     check_types
                 )
             )
 
             no_slots = False
 
-            for res_type, res_val in self._unfold_resources(job.resources):
+            for res_type, res_val in self._unfold_resources(job_data[Job.FIELD_RESOURCES]):
 
-                max_res_limit = JOB_CONFIG.get(job.type, {}).get('resources_limits', {}).get(
+                max_res_limit = JOB_CONFIG.get(job_type, {}).get('resources_limits', {}).get(
                     res_type, float('inf')
                 )
 
@@ -235,7 +273,7 @@ class JobProcessor(object):
                         'Job {job_id}: will be skipped, resource {res_type} / {res_val} is '
                         'occupuied by higher or same priority jobs (used {used_res_count} >= '
                         '{max_res_limit})'.format(
-                            job_id=job.id,
+                            job_id=job_data[Job.FIELD_ID],
                             res_type=res_type,
                             res_val=res_val,
                             used_res_count=used_res_count,
@@ -248,35 +286,49 @@ class JobProcessor(object):
             if no_slots:
                 continue
 
-            type_cur_usage = type_jobs_count.get(job.type, 0)
-            type_max_usage = JOB_CONFIG.get(job.type, {}).get('max_executing_jobs', 50)
+            type_cur_usage = type_jobs_count.get(job_type, 0)
+            type_max_usage = JOB_CONFIG.get(job_type, {}).get('max_executing_jobs', 50)
             if type_cur_usage >= type_max_usage:
                 logger.debug(
                     'Job {}: will be skipped, job type {} counter {} >= {}'.format(
-                        job.id, job.type, type_cur_usage, type_max_usage))
+                        job_data[Job.FIELD_ID], job_type, type_cur_usage, type_max_usage))
                 continue
 
             # account job resources and add job to queue
-            for res_type, res_val in self._unfold_resources(job.resources):
+            for res_type, res_val in self._unfold_resources(job_data[Job.FIELD_RESOURCES]):
 
-                cur_usage = resources[job.type][res_type].get(res_val, 0)
-                max_usage = JOB_CONFIG.get(job.type, {}).get(
+                cur_usage = resources[job_type][res_type].get(res_val, 0)
+                max_usage = JOB_CONFIG.get(job_type, {}).get(
                     'resources_limits', {}).get(res_type, float('inf'))
 
                 logger.debug(
                     'Job {}: will use resource {} / {} counter {} / {}'.format(
-                        job.id, res_type, res_val, cur_usage, max_usage))
-                resources[job.type][res_type].setdefault(res_val, 0)
-                resources[job.type][res_type][res_val] += 1
+                        job_data[Job.FIELD_ID], res_type, res_val, cur_usage, max_usage))
+                resources[job_type][res_type].setdefault(res_val, 0)
+                resources[job_type][res_type][res_val] += 1
 
-            type_jobs_count.setdefault(job.type, 0)
-            type_jobs_count[job.type] += 1
+            type_jobs_count.setdefault(job_type, 0)
+            type_jobs_count[job_type] += 1
 
-            ready_jobs.append(job)
+            ready_jobs_data.append(job_data)
 
-        logger.debug('Ready jobs: {0}'.format(len(ready_jobs)))
+        logger.debug('Ready jobs: {0}'.format(len(ready_jobs_data)))
 
-        return ready_jobs
+        return (j[Job.FIELD_ID] for j in ready_jobs_data)
+
+    @contextmanager
+    def locked_job(self, job_id):
+        job = self.job_finder._get_job(job_id)
+        # NOTE: change flag inside _get_job method? Need to inspect callers
+        job._dirty = False
+
+        locks = sync_manager.ephemeral_locks(
+            [self.JOB_LOCK.format(job_id=job.id)],
+            data=self.JOB_PROCESSOR_ID,
+        )
+        with locks:
+            yield job
+            job.save()
 
     def _execute_jobs(self):
 
@@ -288,14 +340,15 @@ class JobProcessor(object):
 
                 self._retry_jobs()
 
-                ready_jobs = self._ready_jobs()
+                ready_job_ids = self._ready_job_ids()
 
-                for job in ready_jobs:
+                for job_id in ready_job_ids:
                     try:
-                        self.__process_job(job)
-                        job.save()
-                    except LockError:
-                        pass
+                        with self.locked_job(job_id) as job:
+                            self.__process_job(job)
+                    except LockAlreadyAcquiredError as e:
+                        logger.debug('Job {}: already processed by {}'.format(job.id, e.holder_id))
+                        continue
                     except Exception as e:
                         logger.exception('Failed to process job {}'.format(job.id))
                         continue
@@ -338,17 +391,14 @@ class JobProcessor(object):
 
         for task in job.tasks:
 
-            if task.status == Task.STATUS_SKIPPED:
-                continue
-
-            if task.status == Task.STATUS_COMPLETED:
+            if task.status in Task.FINISHED_STATUSES:
                 continue
 
             if task.status == Task.STATUS_QUEUED:
                 # NOTE: task can change status to 'executing' on this step, then
                 # it is safe to continue task execution
                 try:
-                    self.__start_task(job, task)
+                    task._start_task(self)
                 except JobBrokenError as e:
                     job.status = Job.STATUS_BROKEN
                     job.on_execution_interrupted(error_msg=str(e))
@@ -375,7 +425,7 @@ class JobProcessor(object):
 
             if task.status == Task.STATUS_EXECUTING:
                 try:
-                    self.__update_task(job, task)
+                    task.update_status(self)
                 except Exception as e:
                     job.status = Job.STATUS_PENDING
                     job.on_execution_interrupted(error_msg=str(e))
@@ -396,9 +446,10 @@ class JobProcessor(object):
                 job.on_execution_interrupted()
                 break
 
-        finished_statuses = (Task.STATUS_COMPLETED, Task.STATUS_SKIPPED)
+            if task.status not in Task.FINISHED_STATUSES:
+                break
 
-        if all(task.status in finished_statuses for task in job.tasks):
+        if all(task.status in Task.FINISHED_STATUSES for task in job.tasks):
             logger.info('Job {}, tasks processing is finished'.format(job.id))
             try:
                 job.status = Job.STATUS_COMPLETED
@@ -406,112 +457,6 @@ class JobProcessor(object):
             except RuntimeError as e:
                 logger.error('Job {}, failed to complete job: {}'.format(job.id, e))
                 raise
-
-    def __start_task(self, job, task):
-        logger.info('Job {}, executing new task {}'.format(job.id, task))
-
-        task.add_history_record()
-
-        try:
-            task.on_exec_start(self)
-            logger.info('Job {}, task {} preparation completed'.format(job.id, task.id))
-        except Exception as e:
-            logger.exception('Job {}, task {}: failed to execute task start handler'.format(
-                job.id,
-                task.id
-            ))
-            task.status = Task.STATUS_FAILED
-            task.on_run_history_update(error=e)
-            raise
-
-        try:
-            task.attempts += 1
-            task.last_run_history_record.attempts = task.last_run_history_record.attempts + 1
-            self.__execute_task(task)
-            logger.info('Job {}, task {} execution successfully started'.format(
-                job.id,
-                task.id
-            ))
-        except Exception as e:
-            try:
-                task.on_exec_stop(self)
-            except Exception:
-                logger.exception('Job {}, task {}: failed to execute task stop handler'.format(
-                    job.id,
-                    task.id
-                ))
-                task.status = Task.STATUS_FAILED
-                task.on_run_history_update(error=e)
-                raise
-
-            if isinstance(e, RetryError):
-                logger.error('Job {}, task {}: retry error: {}'.format(job.id, task.id, e))
-                if task.attempts < JOB_CONFIG.get('minions', {}).get('execute_attempts', 3):
-                    # NOTE: no status change, will be retried
-                    return
-
-            task.status = Task.STATUS_FAILED
-            task.on_run_history_update(error=e)
-            raise
-
-        task.status = Task.STATUS_EXECUTING
-
-    def __update_task(self, job, task):
-        logger.info('Job {}, task {} status update'.format(job.id, task.id))
-
-        try:
-            self.__update_task_status(task)
-        except Exception as e:
-            logger.exception('Job {}, task {}: failed to update status'.format(job.id, task.id))
-            task.status = Task.STATUS_FAILED
-
-            # TODO: should we call on_exec_stop here?
-
-            task.on_run_history_update(error=e)
-            raise
-
-        try:
-            if not task.finished(self):
-                logger.debug('Job {}, task {} is not finished'.format(job.id, task.id))
-                return
-
-            task.status = (Task.STATUS_FAILED
-                           if task.failed(self) else
-                           Task.STATUS_COMPLETED)
-        except Exception as e:
-            logger.exception('Job {}, task {}: failed to check status'.format(job.id, task.id))
-            task.status = Task.STATUS_FAILED
-
-            # TODO: should we call on_exec_stop here?
-
-            task.on_run_history_update(error=e)
-            raise
-
-        try:
-            task.on_exec_stop(self)
-        except Exception as e:
-            logger.exception('Job {}, task {}: failed to execute task stop handler'.format(
-                job.id,
-                task.id
-            ))
-            task.status = Task.STATUS_FAILED
-            raise
-
-        task.on_run_history_update()
-        logger.debug('Job {}, task {} is finished, status {}'.format(job.id, task.id, task.status))
-
-    def __update_task_status(self, task):
-        if isinstance(task, MinionCmdTask):
-            task.update_status(self)
-        else:
-            task.update_status()
-
-    def __execute_task(self, task):
-        task.start_ts, task.finish_ts = time.time(), None
-        if isinstance(task, MinionCmdTask):
-            task.execute(self)
-        else:
-            task.execute()
 
     @h.concurrent_handler
     def create_job(self, request):
@@ -536,7 +481,7 @@ class JobProcessor(object):
 
             job = self._create_job(job_type, params, force=force)
 
-        except LockFailedError:
+        except (LockFailedError, JobRequirementError):
             raise
         except Exception:
             logger.exception('Failed to create job')
@@ -551,7 +496,7 @@ class JobProcessor(object):
         JobType = JobFactory.make_job_type(job_type)
 
         try:
-            job = JobType.new(self.session, **params)
+            job = JobType.new(self, self.session, **params)
         except LockAlreadyAcquiredError as e:
             if not force:
                 raise
@@ -581,30 +526,13 @@ class JobProcessor(object):
                         existing_job.id, existing_job.type))
 
             logger.info('Stopping jobs: {0}'.format(job_ids))
-            logger.debug('Lock acquiring')
-            with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
-                logger.debug('Lock acquired')
-                self._stop_jobs(jobs)
+
+            self.stop_jobs_list(jobs)
 
             logger.info('Retrying job creation')
-            job = JobType.new(self.session, **params)
+            job = JobType.new(self, self.session, **params)
 
         job.collection = self.job_finder.collection
-
-        inv_group_ids = job._involved_groups
-        try:
-            logger.info('Job {0}: updating groups {1} status'.format(job.id, inv_group_ids))
-            self.node_info_updater.update_status(
-                groups=[
-                    storage.groups[ig]
-                    for ig in inv_group_ids
-                    if ig in storage.groups
-                ]
-            )
-        except Exception as e:
-            logger.info('Job {0}: failed to update groups status: {1}\n{2}'.format(
-                job.id, e, traceback.format_exc()))
-            pass
 
         try:
             job.create_tasks(self)
@@ -633,12 +561,8 @@ class JobProcessor(object):
             except IndexError:
                 raise ValueError('Job uids is required')
 
-            logger.debug('Lock acquiring')
-            with sync_manager.lock(self.JOBS_LOCK, timeout=self.JOB_MANUAL_TIMEOUT):
-                logger.debug('Lock acquired')
-
-                jobs = self.job_finder.jobs(ids=job_uids, sort=False)
-                self._stop_jobs(jobs)
+            jobs = self.job_finder.jobs(ids=job_uids, sort=False)
+            self.stop_jobs_list(jobs)
 
         except LockFailedError as e:
             raise
@@ -649,73 +573,57 @@ class JobProcessor(object):
 
         return [job.dump() for job in jobs]
 
-    def _stop_jobs(self, jobs):
+    def stop_jobs_list(self, jobs):
 
-        executing_jobs = []
+        # TODO: accept job_ids, not jobs
 
         for job in jobs:
-            if job.status in Job.ACTIVE_STATUSES:
-                if job.status != Job.STATUS_EXECUTING:
+            with self.locked_job(job.id) as job:
+                if job.status in Job.ACTIVE_STATUSES and job.status != Job.STATUS_EXECUTING:
                     self._cancel_job(job)
-                else:
-                    executing_jobs.append(job)
-
-        for job in executing_jobs:
-            for task in job.tasks:
-                if task.status == Task.STATUS_EXECUTING:
-                    # Move task stop handling to task itself?
-                    if isinstance(task, MinionCmdTask):
-                        try:
-                            self.minions_monitor._terminate_cmd(task.host, task.minion_cmd_id)
-                        except Exception as e:
-                            logger.error('Job {0}, task {1}: failed to stop '
-                                'minion task: {2}\n{3}'.format(
-                                    job.id, task.id, e, traceback.format_exc()))
-                            raise
-
-                    try:
-                        task.on_exec_stop(self)
-                    except Exception as e:
-                        logger.error('Job {0}, task {1}: failed to execute task '
-                            'stop handler: {2}\n{3}'.format(
-                                job.id, task.id, e, traceback.format_exc()))
-                        raise
-
-                    task.status = Task.STATUS_FAILED
-
-                    break
-
-            self._cancel_job(job)
-
-        for job in jobs:
-            job.save()
-
-        return jobs
+                elif job.status == Job.STATUS_EXECUTING:
+                    for task in job.tasks:
+                        if task.status == Task.STATUS_EXECUTING:
+                            task.stop(self)
+                            logging.info("Job {}, task {}: cancelled".format(job.id, task.id))
+                            break
+                    self._cancel_job(job)
 
     @h.concurrent_handler
     def cancel_job(self, request):
         job_id = None
+
+        expected_statuses = (
+            Job.STATUS_PENDING,
+            Job.STATUS_NOT_APPROVED,
+            Job.STATUS_BROKEN,
+        )
+
+        job = None
+
         try:
             try:
                 job_id = request[0]
             except IndexError as e:
                 raise ValueError('Job id is required')
 
-            job = self.job_finder._get_job(job_id)
+            with self.locked_job(job_id) as job:
 
-            if job.status not in (Job.STATUS_PENDING,
-                Job.STATUS_NOT_APPROVED, Job.STATUS_BROKEN):
-                raise ValueError('Job {0}: status is "{1}", should have been '
-                    '"{2}|{3}|{4}"'.format(job.id, job.status,
-                        Job.STATUS_PENDING, Job.STATUS_NOT_APPROVED, Job.STATUS_BROKEN))
-
-            self._cancel_job(job)
+                if job.status not in expected_statuses:
+                    raise ValueError(
+                        'Job {job_id}: status is "{cur_status}", expected one of '
+                        '{statuses}'.format(
+                            job_id=job.id,
+                            cur_status=job.status,
+                            statuses=expected_statuses,
+                        )
+                    )
+                self._cancel_job(job)
 
             logger.info('Job {0}: status set to {1}'.format(job.id, job.status))
 
         except Exception as e:
-            logger.error('Failed to cancel job {0}: {1}\n{2}'.format(
-                job_id, e, traceback.format_exc()))
+            logger.exception('Failed to cancel job {}'.format(job_id))
             raise
 
         return job.dump()
@@ -727,32 +635,42 @@ class JobProcessor(object):
 
         job.status = Job.STATUS_CANCELLED
         job.complete(self)
+        job._dirty = True
         job.save()
 
     @h.concurrent_handler
     def approve_job(self, request):
         job_id = None
+        job = None
+
+        expected_statuses = (
+            Job.STATUS_NOT_APPROVED,
+        )
+
         try:
             try:
                 job_id = request[0]
             except IndexError as e:
                 raise ValueError('Job id is required')
 
-            job = self.job_finder._get_job(job_id)
+            with self.locked_job(job_id) as job:
 
-            if job.status != Job.STATUS_NOT_APPROVED:
-                raise ValueError('Job {0}: status is "{1}", should have been '
-                    '"{2}"'.format(job.id, job.status, Job.STATUS_NOT_APPROVED))
+                if job.status not in expected_statuses:
+                    raise ValueError(
+                        'Job {job_id}: status is "{cur_status}", expected one of '
+                        '{statuses}'.format(
+                            job_id=job.id,
+                            cur_status=job.status,
+                            statuses=expected_statuses,
+                        )
+                    )
 
-            job.status = Job.STATUS_NEW
-            job.update_ts = time.time()
-            job._dirty = True
-
-            job.save()
+                job.status = Job.STATUS_NEW
+                job.update_ts = time.time()
+                job._dirty = True
 
         except Exception as e:
-            logger.error('Failed to approve job {0}: {1}\n{2}'.format(
-                job_id, e, traceback.format_exc()))
+            logger.exception('Failed to approve job {}'.format(job_id))
             raise
 
         return job.dump()
@@ -795,36 +713,42 @@ class JobProcessor(object):
 
     def __change_failed_task_status(self, job_id, task_id, status):
 
-        job = self.job_finder._get_job(job_id)
+        with self.locked_job(job_id) as job:
 
-        if job.status not in (Job.STATUS_PENDING, Job.STATUS_BROKEN):
-            raise ValueError('Job {0}: status is "{1}", should have been '
-                '{2}|{3}'.format(job.id, job.status, Job.STATUS_PENDING, Job.STATUS_BROKEN))
+            if job.status not in (Job.STATUS_PENDING, Job.STATUS_BROKEN):
+                raise ValueError('Job {0}: status is "{1}", should have been '
+                    '{2}|{3}'.format(job.id, job.status, Job.STATUS_PENDING, Job.STATUS_BROKEN))
 
-        task = None
-        for t in job.tasks:
-            if t.id == task_id:
-                task = t
-                break
-        else:
-            raise ValueError('Job {0} does not contain task '
-                'with id {1}'.format(job_id, task_id))
+            task = None
+            for t in job.tasks:
+                if t.id == task_id:
+                    task = t
+                    break
+            else:
+                raise ValueError('Job {0} does not contain task '
+                    'with id {1}'.format(job_id, task_id))
 
-        if task.status != Task.STATUS_FAILED:
-            raise ValueError('Job {0}: task {1} has status {2}, should '
-                'have been failed'.format(job.id, task.id, task.status))
+            if task.status != Task.STATUS_FAILED:
+                raise ValueError('Job {0}: task {1} has status {2}, should '
+                    'have been failed'.format(job.id, task.id, task.status))
 
-        task.status = status
-        task.attempts = 0
-        job.status = Job.STATUS_EXECUTING
-        job.update_ts = time.time()
-        job._dirty = True
-        job.save()
-        logger.info('Job {0}: task {1} status was reset to {2}, '
-            'job status was reset to {3}'.format(
-                job.id, task.id, task.status, job.status))
+            task.set_status(status)
+            task.attempts = 0
+            job.status = Job.STATUS_EXECUTING
+            job.update_ts = time.time()
+            job._dirty = True
 
-        return job
+            logger.info(
+                'Job {job_id}: task {task_id} status was reset to {task_status}, job status was '
+                'reset to {job_status}'.format(
+                    job_id=job.id,
+                    task_id=task.id,
+                    task_status=task.status,
+                    job_status=job.status,
+                )
+            )
+
+            return job
 
     @h.concurrent_handler
     def restart_failed_to_start_job(self, request):
@@ -1104,6 +1028,18 @@ class JobFinder(object):
             job._dirty = False
             jobs.append(job)
         return jobs
+
+    def jobs_data(self, types=None, statuses=None, ids=None, groups=None, projection=None):
+        job_list = Job.list_no_sort(
+            self.collection,
+            status=statuses,
+            type=types,
+            group=groups,
+            id=ids,
+            projection=projection,
+        )
+        for j in job_list:
+            yield j
 
     def get_uncoupled_groups_in_service(self):
         # TODO: this list of types should be dynamical,

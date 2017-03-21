@@ -1,20 +1,325 @@
-mastermind (2.28.155~collector3) trusty; urgency=medium
-
-  * Treat 'null' dc as unkown
-
- -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 21 Feb 2017 15:44:59 +0300
-
-mastermind (2.28.155~collector2) trusty; urgency=medium
-
-  * Fix misprint
-
- -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 03 Feb 2017 14:29:53 +0300
-
-mastermind (2.28.155~collector1) trusty; urgency=medium
+mastermind (2.28.200~collector1) trusty; urgency=medium
 
   * Add `collector` command to mastermind-cli
 
  -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 12 Jan 2017 17:58:41 +0300
+
+mastermind (2.28.200) trusty; urgency=medium
+
+  * Remove temporary pause between completing the task and starting the next
+    one
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 21 Mar 2017 18:00:22 +0300
+
+mastermind (2.28.199) trusty; urgency=medium
+
+  * Filter internal namespaces out
+  * Extend debian installer
+  * Add scheduler manifests, extend example conf
+  * Move scheduler to independent module
+  * Fix lrc groupset recover
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 21 Mar 2017 15:26:52 +0300
+
+mastermind (2.28.198) trusty; urgency=medium
+
+  * Decrease number of mastermind workers
+  * Skip unsupported keys when initializing sync and cache managers
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 17 Mar 2017 14:46:53 +0300
+
+mastermind (2.28.197) trusty; urgency=medium
+
+  * Add configurable timeout for kazoo managers
+  * Restore-path: fix cancell job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 17 Mar 2017 14:38:14 +0300
+
+mastermind (2.28.196) trusty; urgency=medium
+
+  * Send job-id to mastermind-minion
+  * Implement lrc groupset recover job
+  * Use iterative json encoding instead of C implementation
+  * Add owner field to namespace settings
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 17 Mar 2017 12:34:14 +0300
+
+mastermind (2.28.195) trusty; urgency=medium
+
+  * Process next job task on the next job process iteration
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 14 Mar 2017 23:13:38 +0300
+
+mastermind (2.28.194) trusty; urgency=medium
+
+  * Retries and group checks when adding tasks to lrc convert job
+  * Restore-path: check job tasks
+  * Change create_job_attempts for lrc jobs
+  * Restore: check file system
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 13 Mar 2017 19:57:34 +0300
+
+mastermind (2.28.193) trusty; urgency=medium
+
+  * Fix allias `update` on method and parameter in Task
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 13 Mar 2017 16:01:19 +0300
+
+mastermind (2.28.192) trusty; urgency=medium
+
+  * Process job under per-job lock instead of a global JOBS lock
+  * Collect ready job ids instead of job objects
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sun, 12 Mar 2017 20:00:24 +0300
+
+mastermind (2.28.191) trusty; urgency=medium
+
+  * Fix file system status change logging
+  * Refactor job and task relationships
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 10 Mar 2017 17:12:33 +0300
+
+mastermind (2.28.190) trusty; urgency=medium
+
+  * Omit excessive log messages
+  * Do not check namespace for reserved lrc groups
+  * Add entities status change log messages
+  * Decrease weight manager log messages amount
+  * Adjust some log message levels
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 10 Mar 2017 13:17:18 +0300
+
+mastermind (2.28.189) trusty; urgency=medium
+
+  * Fix checking alive keys for groups without backends
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 09 Mar 2017 20:22:59 +0300
+
+mastermind (2.28.188) trusty; urgency=medium
+
+  * Make lrc validate task the last one in lrc restore job, remove check groups
+  * Restore-path: restore lrc groups
+  * Use get_backend_by_group_id for restore_group job
+  * Use get_backend_by_group_id for backend_cleanup job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 09 Mar 2017 18:32:19 +0300
+
+mastermind (2.28.187) trusty; urgency=medium
+
+  * Add check_dst_groups parameter for validation during lrc restore job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sat, 04 Mar 2017 18:27:37 +0300
+
+mastermind (2.28.186) trusty; urgency=medium
+
+  * Add job_processor to balancer
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 03 Mar 2017 17:08:55 +0300
+
+mastermind (2.28.185) trusty; urgency=medium
+
+  * Fix misprint
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 03 Mar 2017 15:52:44 +0300
+
+mastermind (2.28.184) trusty; urgency=medium
+
+  * Fix dictionary size change during iteration
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 02 Mar 2017 22:10:51 +0300
+
+mastermind (2.28.183) trusty; urgency=medium
+
+  * Fix bug with analyzing failed locks on couple build
+  * Update uncoupled group check during couple build
+  * Add involved uncoupled groups for backend manager and backend cleanup jobs
+  * Check required group types after acquiring locks on groups during job creation
+  * Smart-scheduler: API for periodic run, limitation on a number of executing jobs, resource accounting logic, job history
+  * Account defrag jobs in service statuses
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 02 Mar 2017 19:47:57 +0300
+
+mastermind (2.28.182) trusty; urgency=medium
+
+  * Fix retry ts calculation for non-convert jobs
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 01 Mar 2017 14:59:33 +0300
+
+mastermind (2.28.181) trusty; urgency=medium
+
+  * Fix retry timestamp for external storage convert tasks
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 28 Feb 2017 15:42:08 +0300
+
+mastermind (2.28.180) trusty; urgency=medium
+
+  * Account restore lrc jobs in statuses
+  * Update lrc reserve group status before using for restoring uncoupled lrc group
+  * Update uncoupled group status before using for reserved groups
+  * Update timestamp low threshold from history records
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 27 Feb 2017 20:19:06 +0300
+
+mastermind (2.28.179) trusty; urgency=medium
+
+  * Distribute new lrc groups by hdds on a host
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Sat, 25 Feb 2017 19:56:09 +0300
+
+mastermind (2.28.178) trusty; urgency=medium
+
+  * Fix make lrc groups job accounting
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 24 Feb 2017 19:23:12 +0300
+
+mastermind (2.28.177) trusty; urgency=medium
+
+  * Account make lrc groups job when preparing uncoupled lrc groups
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 23 Feb 2017 19:49:39 +0300
+
+mastermind (2.28.176) trusty; urgency=medium
+
+  * Add 'uncoupled_groups_total_space' for lrc uncoupled groups prepare handle
+  * Fix uncoupled lrc groups accounting during prepare
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 22 Feb 2017 18:22:02 +0300
+
+mastermind (2.28.175) trusty; urgency=medium
+
+  * Fix creating lrc group jobs when group has no backends
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 22 Feb 2017 14:00:42 +0300
+
+mastermind (2.28.174) trusty; urgency=medium
+
+  * Skip removing group from old location if it was already cleaned
+  * Skip checks of group availability
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 17 Feb 2017 17:38:05 +0300
+
+mastermind (2.28.173) trusty; urgency=medium
+
+  * Fix hdd selection for restoring lrc groups
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 17 Feb 2017 15:37:36 +0300
+
+mastermind (2.28.172) trusty; urgency=medium
+
+  * Use last non-empty history record to determine group's backend
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 17 Feb 2017 14:59:12 +0300
+
+mastermind (2.28.171) trusty; urgency=medium
+
+  * Fix restore uncoupled lrc job creation
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 17 Feb 2017 13:06:53 +0300
+
+mastermind (2.28.170) trusty; urgency=medium
+
+  * Tolerate uncoupled lrc groups that are not found in storage
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 17 Feb 2017 01:00:46 +0300
+
+mastermind (2.28.169) trusty; urgency=medium
+
+  * Skip hdds where restored group is located
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 16 Feb 2017 17:20:09 +0300
+
+mastermind (2.28.168) trusty; urgency=medium
+
+  * Add uncoupled lrc group restore cli handle
+  * Add restore uncoupled lrc group job
+  * Fix cluster tree building when failed to determine host tree
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 16 Feb 2017 15:14:27 +0300
+
+mastermind (2.28.167) trusty; urgency=medium
+
+  * Restore-path: clean reserved-lrc groups
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 14 Feb 2017 15:26:39 +0300
+
+mastermind (2.28.166) trusty; urgency=medium
+
+  * Add optional external storage validation task for lrc restore
+  * Fix restore job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 10 Feb 2017 19:38:49 +0300
+
+mastermind (2.28.165) trusty; urgency=medium
+
+  * Add --no-check-status option to skip lrc groupset status checking on restore
+  * Fix uncoupled groups total space checking in lrc reserve planner
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 09 Feb 2017 19:58:15 +0300
+
+mastermind (2.28.164) trusty; urgency=medium
+
+  * Fix lrc group restore
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 09 Feb 2017 19:11:03 +0300
+
+mastermind (2.28.163) trusty; urgency=medium
+
+  * Use only appropriate groups on lrc reserve planning
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 09 Feb 2017 17:39:37 +0300
+
+mastermind (2.28.162) trusty; urgency=medium
+
+  * Use cluster tree for lrc reserve planning
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 09 Feb 2017 16:08:03 +0300
+
+mastermind (2.28.161) trusty; urgency=medium
+
+  * Fix restore job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 08 Feb 2017 14:05:49 +0300
+
+mastermind (2.28.160) trusty; urgency=medium
+
+  * Add backend to history record only when its statistics is fresh
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 07 Feb 2017 18:42:10 +0300
+
+mastermind (2.28.159) trusty; urgency=medium
+
+  * Skip acquiring global 'jobs' lock when stopping jobs
+  * Check lrc groupset status before creating restore job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Tue, 07 Feb 2017 14:19:48 +0300
+
+mastermind (2.28.158) trusty; urgency=medium
+
+  * Stop trying to use uncoupled group for reserve groups planning if job
+    creation failed
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 06 Feb 2017 19:45:46 +0300
+
+mastermind (2.28.157) trusty; urgency=medium
+
+  * Remove check for group existence when executing create group task
+  * Add NodeBackend helper method to create NodeBackend object from backend history record
+  * Add lrc group restore cli command
+  * Implement LrcReserveGroupSelector that selects appropriate lrc reserve groups and creates lrc restore jobs
+  * Add helper for fetching last known host for group by its id
+  * Add reserved groups list to cli commands
+  * Implement lrc reserve planner
+  * Implement make lrc reserved group job
+  * Add groupset view for uncoupled lrc groups list cli command
+  * Add lrc recover job
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Mon, 06 Feb 2017 18:27:54 +0300
+
+mastermind (2.28.156) trusty; urgency=medium
+
+  * Use minion task
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 03 Feb 2017 16:31:25 +0300
 
 mastermind (2.28.155) trusty; urgency=medium
 

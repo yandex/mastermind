@@ -23,11 +23,16 @@ class WaitGroupsetStateTask(Task):
         super(WaitGroupsetStateTask, self).__init__(job)
         self.type = TaskTypes.TYPE_WAIT_GROUPSET_STATE
 
-    def update_status(self):
+    def _update_status(self, processor):
         # infrastructure state is updated by itself via task queue
         pass
 
-    def execute(self):
+    def _terminate(self, processor):
+        # cannot terminate task, since this task works only synchronously
+        # early cleanup phase breaks nothing
+        pass
+
+    def _execute(self, processor):
         pass
 
     def finished(self, processor):

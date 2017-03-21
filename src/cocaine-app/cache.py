@@ -490,9 +490,8 @@ class CacheManager(object):
             # NOTE: marked cache groups will be available only on the next node info update cycle
             self._mark_cache_groups()
 
-        except Exception as e:
-            logger.info('Failed to update groups: {0}\n{1}'.format(
-                e, traceback.format_exc()))
+        except:
+            logger.exception('Failed to update groups')
         finally:
             logger.info(
                 'Cluster updating: updating group coupling info '

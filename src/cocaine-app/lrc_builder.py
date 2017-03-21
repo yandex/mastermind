@@ -5,8 +5,10 @@ from mastermind.utils.tree_picker import TreePicker
 
 import infrastructure
 import inventory
+import jobs
 from jobs.job_types import JobTypes
 from mastermind_core.config import config
+from mastermind_core import helpers
 import storage
 
 
@@ -25,6 +27,7 @@ class LRC_8_2_2_V1_Builder(object):
     DC_NODE_TYPE = inventory.get_dc_node_type()
 
     CFG = LRC_CFG.get('lrc-8-2-2-v1', {})
+    TS_TOLERANCE = config.get('total_space_diff_tolerance', 0.05)
 
     # Builder can be configured to restrict the number
     # of selected groups for building an lrc groupset
@@ -44,6 +47,11 @@ class LRC_8_2_2_V1_Builder(object):
         self.lrc_tree = None
         self.lrc_nodes = None
         self.job_processor = job_processor
+
+        self._total_space_options = [
+            helpers.convert_config_bytes_value(ts)
+            for ts in self.CFG.get('uncoupled_groups_total_space', [])
+        ]
 
     def build(self, count, mandatory_dcs=None):
         """ Create jobs for preparing at least `count` lrc groupsets
@@ -126,7 +134,8 @@ class LRC_8_2_2_V1_Builder(object):
             for LRC groupset construction;
         """
 
-        self.lrc_tree, self.lrc_nodes = self._build_lrc_tree()
+        self.lrc_tree, self.lrc_nodes = None, None
+        self._build_lrc_tree()
 
         selected_groups = self._select_groups(
             mandatory_dcs or [],
@@ -166,7 +175,32 @@ class LRC_8_2_2_V1_Builder(object):
         infrastructure.infrastructure.account_ns_groups(nodes, lrc_groups)
         infrastructure.infrastructure.update_groups_list(tree)
 
+        self.lrc_tree, self.lrc_nodes = tree, nodes
+
+        make_lrc_groups_jobs = self.job_processor.job_finder.jobs(
+            types=(
+                JobTypes.TYPE_MAKE_LRC_GROUPS_JOB,
+            ),
+            statuses=jobs.Job.ACTIVE_STATUSES,
+            sort=False,
+        )
+
+        for job in make_lrc_groups_jobs:
+            logger.debug('Accounting job {}'.format(job.id))
+            self._account_lrc_groups(uncoupled_group_ids=job.uncoupled_groups)
+
         return tree, nodes
+
+    def _uncoupled_group_ts_match(self, uncoupled_group_ts):
+
+        if not self._total_space_options:
+            return True
+
+        for option_ts in self._total_space_options:
+            if abs(option_ts - uncoupled_group_ts) < option_ts * self.TS_TOLERANCE:
+                return True
+
+        return False
 
     def _select_groups(self, mandatory_dcs, skip_groups=None):
         """ Get generator producing groups for lrc groupset
@@ -206,6 +240,15 @@ class LRC_8_2_2_V1_Builder(object):
         mandatory_dcs.extend([None] * (self.DCS_COUNT - len(mandatory_dcs)))
 
         for ts, group_ids in groups_by_total_space.iteritems():
+
+            if not self._uncoupled_group_ts_match(ts):
+                logger.debug(
+                    'Selecting among groups with total space {total_space}: skipped due to '
+                    '"uncoupled_groups_total_space" settings'.format(
+                        total_space=ts,
+                    )
+                )
+                continue
 
             logger.debug(
                 'Selecting among groups with total space {total_space}: {groups}'.format(
@@ -319,7 +362,15 @@ class LRC_8_2_2_V1_Builder(object):
 
                     yield selected_groups
 
-                    self._account_selected_groups(tree, nodes, selected_groups)
+                    self._account_selected_groups(
+                        tree,
+                        nodes,
+                        [
+                            group_id
+                            for dc_group_ids in selected_groups
+                            for group_id in dc_group_ids
+                        ]
+                    )
 
             except StopIteration:
                 # here, one of the following happened:
@@ -426,22 +477,32 @@ class LRC_8_2_2_V1_Builder(object):
             2) selected groups are added to the lrc groups tree
             to keep group selection properties;
         """
-        group_ids = set(
-            group_id
-            for dc_group_ids in group_ids
-            for group_id in dc_group_ids
-        )
+        group_ids = set(group_ids)
         for hdd_node in nodes['hdd'].itervalues():
             hdd_node['groups'] = hdd_node.get('groups', set()) - group_ids
 
         infrastructure.infrastructure.update_groups_list(tree)
 
-        for group_id in group_ids:
-            nb = storage.groups[group_id].node_backends[0]
+        self._account_lrc_groups(uncoupled_group_ids=group_ids)
+
+    def _account_lrc_groups(self, uncoupled_group_ids):
+        for group_id in uncoupled_group_ids:
+            nb = infrastructure.infrastructure.get_backend_by_group_id(group_id)
+            if not nb.fs:
+                continue
             host = nb.node.host
             hdd_full_path = host.full_path + '|' + str(nb.fs.fsid)
             hdd_node = self.lrc_nodes['hdd'][hdd_full_path]
-            hdd_node.setdefault('groups', set()).add(group_id)
+
+            logger.debug('Adding {} groups count to hdd {}'.format(
+                self.LRC_GROUPS_PER_GROUP,
+                hdd_full_path
+            ))
+
+            # each uncoupled group is being split into LRC_GROUPS_PER_GROUP groups
+            hdd_node.setdefault('groups', set()).update(
+                DummyGroup() for _ in xrange(self.LRC_GROUPS_PER_GROUP)
+            )
 
         infrastructure.infrastructure.update_groups_list(self.lrc_tree)
 
@@ -454,11 +515,29 @@ class LRC_8_2_2_V1_Builder(object):
 
         def lrc_groups_on_host(group_id):
             group = storage.groups[group_id]
-            host = group.node_backends[0].node.host
-            host_lrc_groups_ids = self.lrc_nodes['host'][host.full_path].get('groups', [])
-            return len(host_lrc_groups_ids)
+            nb = group.node_backends[0]
+            host = nb.node.host
+            host_full_path = host.full_path
+            host_lrc_groups_ids = self.lrc_nodes['host'][host_full_path].get('groups', [])
 
-        return min(
+            hdd_full_path = host_full_path + '|' + str(nb.fs.fsid)
+            hdd_lrc_groups_ids = self.lrc_nodes['hdd'][hdd_full_path].get('groups', [])
+
+            return len(host_lrc_groups_ids), len(hdd_lrc_groups_ids)
+
+        selected_group_id = min(
             group_ids,
             key=lrc_groups_on_host,
         )
+        selected_group = storage.groups[selected_group_id]
+        logger.debug('Selected uncoupled group: {}, host {}, key: {}'.format(
+            selected_group_id,
+            selected_group.node_backends[0].node.host.hostname,
+            lrc_groups_on_host(selected_group_id),
+        ))
+
+        return selected_group_id
+
+
+class DummyGroup(object):
+    pass

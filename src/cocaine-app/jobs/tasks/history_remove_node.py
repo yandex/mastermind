@@ -23,11 +23,16 @@ class HistoryRemoveNodeTask(Task):
         super(HistoryRemoveNodeTask, self).__init__(job)
         self.type = TaskTypes.TYPE_HISTORY_REMOVE_NODE
 
-    def update_status(self):
+    def _update_status(self, processor):
         # infrastructure state is updated by itself via task queue
         pass
 
-    def execute(self):
+    def _terminate(self, processor):
+        # cannot terminate task, since this task works only synchronously
+        # early cleanup phase breaks nothing
+        pass
+
+    def _execute(self, processor):
         try:
             hostname = cache.get_hostname_by_addr(self.host)
         except CacheUpstreamError:

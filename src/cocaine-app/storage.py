@@ -1,17 +1,13 @@
 # -*- coding: utf-8 -*-
 import datetime
-import errno
 import functools
 import itertools
 import helpers as h
 import logging
 import math
-import os.path
 import random
 import time
 import types
-
-import msgpack
 
 from errors import CacheUpstreamError
 import jobs.job
@@ -23,6 +19,7 @@ from mastermind.query.couples import Couple as CoupleInfo
 from mastermind.query.groupsets import Groupset as GroupsetInfo
 from mastermind.query.groups import Group as GroupInfo
 from mastermind_core.config import config
+from new_entities import status_change_log
 
 if config.get('stat_source', 'native') == 'collector':
     from new_entities import (
@@ -36,9 +33,9 @@ if config.get('stat_source', 'native') == 'collector':
 else:
     from old_entities import (
         Host,
-        NodeBackendStat,
+        # NodeBackendStat,
         NodeBackendBase,
-        FsStat,
+        # FsStat,
         FsBase,
         GroupBase,
     )
@@ -262,6 +259,23 @@ class Lrc(object):
 
             return False
 
+        @staticmethod
+        def get_shard_groups(lrc_groupset, group):
+            group_idx = lrc_groupset.groups.index(group)
+            for shard_idxs in Lrc.Scheme822v1.INDEX_SHARD_INDICES:
+                if group_idx in shard_idxs:
+                    return [
+                        lrc_groupset.groups[idx]
+                        for idx in sorted(shard_idxs)
+                    ]
+
+            raise RuntimeError(
+                'Failed to determine shard for group {} in lrc groupset {}'.format(
+                    group,
+                    lrc_groupset,
+                )
+            )
+
         builder = lrc_builder.LRC_8_2_2_V1_Builder
 
     @staticmethod
@@ -325,7 +339,7 @@ class Lrc(object):
 
         global groups
 
-        for group in groups:
+        for group in groups.keys():
             if not check_group(group):
                 continue
 
@@ -838,12 +852,12 @@ def _cached(key):
             if footprint != cached_data['footprint']:
 
                 # TODO: Remove this log record
-                logger.debug('Groupset {}, key {}, footprint {}, cached footprint {}'.format(
-                    self,
-                    key,
-                    footprint,
-                    cached_data['footprint'],
-                ))
+                # logger.debug('Groupset {}, key {}, footprint {}, cached footprint {}'.format(
+                #     self,
+                #     key,
+                #     footprint,
+                #     cached_data['footprint'],
+                # ))
                 self._cache[key] = {
                     'data': f(self, *args, **kwargs),
                     'footprint': footprint,
@@ -887,6 +901,8 @@ class Node(object):
 
         if isinstance(other, Node):
             return self.host.addr == other.host.addr and self.port == other.port
+
+        return False
 
     def update_commands_stats(self, node_backends):
         self.stat.update_commands_stats(node_backends)
@@ -1025,6 +1041,50 @@ class NodeBackend(NodeBackendBase):
                 self.stat.stat_commit_errors or
                 0)
 
+    @staticmethod
+    def from_history_record(backend_record):
+        """ Construct NodeBackend object from history backend record.
+
+        NOTE: if storage does not contain objects from history record (Host, Node, NodeBackend,
+        etc.), such objects will not be automatically added to storage during execution of this
+        method.
+
+        Raises:
+            CacheUpstreamError - if failed to resolve hostname to an IP address.
+
+        Returns:
+            NodeBackend object.
+        """
+        addr = cache.get_ip_address_by_host(backend_record.hostname)
+
+        host = hosts.get(addr, Host(addr))
+        node_id = '{}:{}'.format(host, backend_record.port)
+        node = nodes.get(
+            node_id,
+            Node(
+                host=host,
+                port=backend_record.port,
+                family=backend_record.family,
+            )
+        )
+        backend_id = '{}/{}'.format(node, backend_record.backend_id)
+        backend = node_backends.get(
+            backend_id,
+            NodeBackend(
+                node=node,
+                backend_id=backend_record.backend_id,
+            ),
+        )
+        if not backend.base_path:
+            backend.base_path = backend_record.path
+        return backend
+
+    def __repr__(self):
+        return ('<Node backend object: node=%s, backend_id=%d, '
+                'status=%s, read_only=%s, stat=%s>' % (
+                    str(self.node), self.backend_id,
+                    self.status, str(self.read_only), repr(self.stat)))
+
     def __str__(self):
         return '%s:%d/%d' % (self.node.host.addr, self.node.port, self.backend_id)
 
@@ -1052,8 +1112,15 @@ class Group(GroupBase):
     TYPE_DATA = 'data'
     TYPE_CACHE = 'cache'
     TYPE_UNCOUPLED_CACHE = 'uncoupled_cache'
+
     TYPE_LRC_8_2_2_V1 = 'lrc-8-2-2-v1'
     TYPE_UNCOUPLED_LRC_8_2_2_V1 = 'uncoupled_lrc-8-2-2-v1'
+    TYPE_RESERVED_LRC_8_2_2_V1 = 'reserved_lrc-8-2-2-v1'
+    TYPES_LRC_8_2_2_V1 = (
+        TYPE_LRC_8_2_2_V1,
+        TYPE_UNCOUPLED_LRC_8_2_2_V1,
+        TYPE_RESERVED_LRC_8_2_2_V1,
+    )
 
     AVAILABLE_TYPES = set([
         TYPE_DATA,
@@ -1061,6 +1128,7 @@ class Group(GroupBase):
         TYPE_UNCOUPLED_CACHE,
         TYPE_LRC_8_2_2_V1,
         TYPE_UNCOUPLED_LRC_8_2_2_V1,
+        TYPE_RESERVED_LRC_8_2_2_V1,
     ])
 
     def add_node_backend(self, node_backend):
@@ -1099,7 +1167,8 @@ class Group(GroupBase):
             'id': self.group_id,
             'status': self.status,
             'status_text': self.status_text,
-            'node_backends': [nb.info() for nb in self.node_backends]
+            'node_backends': [nb.info() for nb in self.node_backends],
+            'type': self.type,
         }
 
         data['couple'] = None
@@ -1111,6 +1180,8 @@ class Group(GroupBase):
 
         if self.meta:
             data['namespace'] = self.meta.get('namespace')
+            if self.type == Group.TYPE_UNCOUPLED_LRC_8_2_2_V1:
+                data['lrc_groups'] = self.meta.get('lrc_groups')
         if self.active_job:
             data['active_job'] = self.active_job
 
@@ -1151,6 +1222,17 @@ class Group(GroupBase):
             'lrc_groups': lrc_groups,
         }
 
+    @staticmethod
+    def compose_reserved_lrc_group_meta(scheme):
+        if scheme == Lrc.Scheme822v1:
+            group_type = Group.TYPE_RESERVED_LRC_8_2_2_V1
+        else:
+            raise ValueError('Unknown scheme: {}'.format(scheme))
+        return {
+            'version': 2,
+            'type': group_type,
+        }
+
     @property
     def coupled_groups(self):
         if not self.couple:
@@ -1171,30 +1253,6 @@ class Group(GroupBase):
     def __eq__(self, other):
         return self.group_id == other
 
-
-def status_change_log(f):
-    @functools.wraps(f)
-    def wrapper(self, *args, **kwargs):
-        old_status = self.status
-        res = f(self, *args, **kwargs)
-        if old_status != self.status:
-            logger.info('Couple {0} status updated from {1} to {2} ({3})'.format(
-                self, old_status, self.status, self.status_text))
-        return res
-    return wrapper
-
-def memoized(attr_name):
-
-    def wrapper(f):
-
-        @functools.wraps(f)
-        def wrapped(self, *args, **kwargs):
-            if not hasattr(self, attr_name):
-                setattr(self, attr_name, f(self, *args, **kwargs))
-            return getattr(self, attr_name)
-        return wrapped
-
-    return wrapper
 
 class Groupset(object):
     def __init__(self, groups):
@@ -1241,18 +1299,20 @@ class Groupset(object):
             JobTypes.TYPE_MOVE_JOB,
             JobTypes.TYPE_RESTORE_GROUP_JOB,
             JobTypes.TYPE_ADD_LRC_GROUPSET_JOB,
+            JobTypes.TYPE_RESTORE_LRC_GROUP_JOB,
+            JobTypes.TYPE_COUPLE_DEFRAG_JOB,
         )
         running_job_statuses = (jobs.job.Job.STATUS_NEW, jobs.job.Job.STATUS_EXECUTING)
         if self.active_job and self.active_job['type'] in service_job_types:
             if self.active_job['status'] in running_job_statuses:
                 return Status(
                     code=Status.SERVICE_ACTIVE,
-                    text='Couple {} has active job {}'.format(self, self.active_job['id']),
+                    text='Groupset {} has active job {}'.format(self, self.active_job['id']),
                 )
             else:
                 return Status(
                     code=Status.SERVICE_STALLED,
-                    text='Couple {} has stalled job {}'.format(self, self.active_job['id']),
+                    text='Groupset {} has stalled job {}'.format(self, self.active_job['id']),
                 )
         return None
 
@@ -1880,6 +1940,10 @@ class Couple(Groupset):
             if not isinstance(settings['frozen'], bool):
                 raise ValueError('Replicas groupset "frozen" setting must be bool')
 
+    @property
+    def couple_id(self):
+        return int(str(self).split(':')[0])
+
 
 class Lrc822v1Groupset(Groupset):
     def __init__(self, groups):
@@ -1894,10 +1958,7 @@ class Lrc822v1Groupset(Groupset):
         data = super(Lrc822v1Groupset, self).info_data()
 
         data['type'] = GROUPSET_LRC
-        data['settings'] = {
-            'scheme': self.scheme,
-            'part_size': self.part_size,
-        }
+        data['settings'] = self.groupset_settings
         if self.couple:
             data['couple'] = str(self.couple)
         else:
@@ -2185,6 +2246,8 @@ class DcHostView(object):
 
 
 class Namespace(object):
+    INTERNAL_NAMESPACES = (Group.CACHE_NAMESPACE,)
+
     def __init__(self, id):
         self.id = id
         self.couples = set()

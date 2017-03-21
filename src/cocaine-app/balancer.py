@@ -21,7 +21,7 @@ import keys
 from mastermind_core.config import config
 from mastermind_core.db.mongo.pool import Collection
 from mastermind_core.response import CachedGzipResponse
-from mastermind_core.helpers import gzip_compress, convert_config_bytes_value
+from mastermind_core.helpers import gzip_compress, convert_config_bytes_value, json_dumps
 import monitor
 import statistics
 import storage
@@ -56,6 +56,7 @@ class Balancer(object):
         self.infrastructure = None
         self.statistics = statistics.Statistics(self)
         self.niu = None
+        self.job_processor = None
         self.namespaces_settings = namespaces_settings
 
         self._cached_keys = CachedGzipResponse()
@@ -652,11 +653,12 @@ class Balancer(object):
 
     @staticmethod
     def _remove_unusable_groups(groups_by_total_space, groups):
+        groups_to_remove = groups[:]
         for ts, group_ids in groups_by_total_space.iteritems():
-            for group_to_remove in groups[:]:
+            for group_to_remove in groups_to_remove[:]:
                 if group_to_remove in group_ids:
                     group_ids.remove(group_to_remove)
-                    groups.remove(group_to_remove)
+                    groups_to_remove.remove(group_to_remove)
 
     @contextmanager
     def _locked_uncoupled_groups(self, uncoupled_groups, groups_by_total_space, comment=''):
@@ -667,9 +669,16 @@ class Balancer(object):
         except LockAlreadyAcquiredError as e:
             failed_group_ids = [locks[lock_id] for lock_id in e.lock_ids]
             self._remove_unusable_groups(groups_by_total_space, failed_group_ids)
+            logger.error('Failed to acquire locks {} of {}'.format(
+                e.lock_ids,
+                locks.keys(),
+            ))
             yield [ug for ug in uncoupled_groups if ug not in failed_group_ids]
 
         else:
+
+            logger.info('Locks successfully acquired: {}'.format(locks.keys()))
+
             try:
                 yield uncoupled_groups
             finally:
@@ -740,10 +749,6 @@ class Balancer(object):
                     init_state=options['init_state'],
                     groupsets=options['groupsets'],
                     dry_run=options['dry_run'])
-
-                if couple is None:
-                    # not enough valid groups
-                    break
 
                 self.infrastructure.account_ns_groups(nodes, couple.groups)
                 self.infrastructure.update_groups_list(tree)
@@ -899,20 +904,33 @@ class Balancer(object):
                       init_state,
                       groupsets,
                       dry_run=False):
+        """
+        Build couple from
+        :param ns_current_state:
+        :param units:
+        :param size:
+        :param groups_by_total_space:
+        :param mandatory_groups:
+        :param namespace:
+        :param init_state:
+        :param groupsets:
+        :param dry_run:
+        :return: couple. Excepts if None
+        """
 
         while True:
             groups_to_couple = self.__choose_groups_to_couple(
                 ns_current_state, units, size, groups_by_total_space, mandatory_groups)
 
             if not groups_to_couple:
-                return None
+                raise RuntimeError("Failed to find groups to couple")
 
             groupsets_groups = []
 
             for groupset in groupsets:
                 if groupset['type'] == 'lrc':
                     scheme = storage.Lrc.make_scheme(groupset['settings']['scheme'])
-                    builder = scheme.builder()
+                    builder = scheme.builder(job_processor=self.job_processor)
                     try:
                         lrc_uncoupled_group_ids = next(
                             builder.select_uncoupled_groups(
@@ -920,10 +938,7 @@ class Balancer(object):
                             )
                         )
                     except StopIteration:
-                        logger.error(
-                            'Failed to find appropriate groups for LRC groupset construction'
-                        )
-                        return None
+                        raise RuntimeError("Failed to find appropriate groups for LRC groupset construction")
                     groupsets_groups.append(lrc_uncoupled_group_ids)
 
             involved_groups = groups_to_couple + [
@@ -944,12 +959,12 @@ class Balancer(object):
                 logger.info('Chosen groups to couple: {0}'.format(groups_to_couple))
 
                 unsuitable_group_ids = get_unsuitable_uncoupled_group_ids(
-                    self.node,
-                    involved_groups,
+                    self.niu,
+                    groups_to_couple,
                 )
                 if unsuitable_group_ids:
                     logger.error(
-                        'Groups {} cannot be coupled: failed to ensure empty metakey '
+                        'Groups {} cannot be coupled: failed to pass uncoupled check '
                         'for groups {}'.format(
                             involved_groups,
                             unsuitable_group_ids,
@@ -1013,6 +1028,7 @@ class Balancer(object):
                                 self.infrastructure.update_group_history(group)
 
                     except Exception:
+                        logger.exception("Failed to write groupset metakey {}".format(couple))
                         couple.destroy()
                         for couple_groupset in couple_groupsets:
                             couple_groupset.destroy()
@@ -1438,10 +1454,14 @@ class Balancer(object):
         except IndexError:
             _filter = {}
 
-        def filtered_out(ns_ettings):
+        def filtered_out(ns_settings):
             if _filter.get('deleted') is not None:
                 if _filter['deleted'] != ns_settings.deleted:
                     return True
+
+            if ns_settings.namespace in storage.Namespace.INTERNAL_NAMESPACES:
+                return True
+
             return False
 
         res = []
@@ -1469,7 +1489,7 @@ class Balancer(object):
                     continue
                 res[ns] = namespaces_states[ns]
             if request.get('gzip', False):
-                res = gzip_compress(json.dumps(res))
+                res = gzip_compress(json_dumps(res))
         else:
             res = self.niu._namespaces_states.get_result(
                 compressed=request.get('gzip', False)
@@ -1684,45 +1704,39 @@ def kill_symm_group(n, couple):
         raise RuntimeError(s)
 
 
-def get_unsuitable_uncoupled_group_ids(n, group_ids):
-    logger.info('Checking empty meta key for groups {0}'.format(group_ids))
+def get_unsuitable_uncoupled_group_ids(node_info_updater, group_ids):
+    logger.info('Checking uncoupled groups {}'.format(group_ids))
 
-    s = elliptics.Session(n)
-    wait_timeout = (
-        config
-        .get('elliptics', {})
-        .get('wait_timeout')
-    ) or config.get('wait_timeout', 5)
-    s.set_timeout(wait_timeout)
-    s.set_exceptions_policy(elliptics.exceptions_policy.no_exceptions)
-    s.set_filter(elliptics.filters.all_final)
-
-    results = {}
-    for group_id in group_ids:
-        session = s.clone()
-        session.add_groups([group_id])
-
-        logger.debug('Request to check {0} for group {1}'.format(
-            keys.SYMMETRIC_GROUPS_KEY.replace('\0', '\\0'), group_id))
-        results[group_id] = session.read_data(keys.SYMMETRIC_GROUPS_KEY)
-
-    unsuitable_uncoupled_groups = []
-
-    def update_unsuitable_groups(entry, group_id, elapsed_time=None, end_time=None):
-        if entry.error.code != -2:
-            # -2 is the one and only sign that this uncoupled group is suitable
-            unsuitable_uncoupled_groups.append(group_id)
-
-    while results:
-        group_id, result = results.popitem()
-        h.process_elliptics_async_result(
-            result=result,
-            processor=update_unsuitable_groups,
-            group_id=group_id,
-            raise_on_error=False
+    try:
+        node_info_updater.update_status(
+            groups=[storage.groups[group_id] for group_id in group_ids]
         )
+    except Exception as e:
+        logger.exception('Failed to update uncoupled groups status')
+        raise
 
-    return unsuitable_uncoupled_groups
+    unsuitable_group_ids = []
+    for group_id in group_ids:
+        uncoupled_group = storage.groups[group_id]
+        if uncoupled_group.type != storage.Group.TYPE_UNCOUPLED:
+            logger.error('Group {}: type is {}, expected {}'.format(
+                uncoupled_group.group_id,
+                uncoupled_group.type,
+                storage.Group.TYPE_UNCOUPLED,
+            ))
+            unsuitable_group_ids.append(group_id)
+            continue
+        stat = uncoupled_group.get_stat()
+        if stat.files > 0:
+            logger.error('Group {} has {} alive keys, expected {}'.format(
+                uncoupled_group.group_id,
+                stat.files,
+                0,
+            ))
+            unsuitable_group_ids.append(group_id)
+            continue
+
+    return unsuitable_group_ids
 
 
 def write_groupset_metakey(n, couple, groupset, settings, rollback_on_error=True):

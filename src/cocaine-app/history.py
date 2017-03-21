@@ -363,9 +363,9 @@ class GroupHistoryFinder(object):
         if start_ts or finish_ts:
             timestamp_pattern = {}
             if start_ts:
-                timestamp_pattern['$gte'] = start_ts
+                timestamp_pattern['$gt'] = start_ts
             if finish_ts:
-                timestamp_pattern['$lt'] = finish_ts
+                timestamp_pattern['$lte'] = finish_ts
             record_pattern['timestamp'] = timestamp_pattern
         or_pattern = {'$or': [
             {

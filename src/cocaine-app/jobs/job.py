@@ -4,11 +4,12 @@ import os.path
 import time
 import uuid
 
-from error import JobBrokenError
+from error import JobBrokenError, JobRequirementError
 import helpers as h
 import keys
 from mastermind_core.db.mongo import MongoObject
 from mastermind_core.config import config
+import storage
 from sync import sync_manager
 from sync.error import (
     LockError,
@@ -54,6 +55,12 @@ class Job(MongoObject):
     RESOURCE_HOST_OUT = 'host_out'
     RESOURCE_CPU = 'cpu'
 
+    FIELD_ID = 'id'
+    FIELD_TYPE = 'type'
+    FIELD_STATUS = 'status'
+    FIELD_CREATE_TS = 'create_ts'
+    FIELD_RESOURCES = 'resources'
+
     # NOTE: this list should be synchronized with the set of RESOURCE_* constants
     RESOURCE_TYPES = (
         RESOURCE_FS,
@@ -68,10 +75,14 @@ class Job(MongoObject):
     GROUP_FILE_DIR_MOVE_SRC_RENAME = RESTORE_CFG.get('group_file_dir_move_src_rename')
     BACKEND_DOWN_MARKER = RESTORE_CFG.get('backend_down_marker')
     IDS_FILE_PATH = RESTORE_CFG.get('ids_file')
+    BACKEND_STOP_MARKER = RESTORE_CFG.get('backend_stop_marker')
 
     BACKEND_COMMANDS_CFG = config.get('backend_commands', {})
 
     DNET_CLIENT_ALREADY_IN_PROGRESS = -114
+
+    # Invalid argument
+    DNET_CLIENT_UNKNOWN_BACKEND = -22
 
     def __init__(self, need_approving=False):
         self.id = None
@@ -87,8 +98,8 @@ class Job(MongoObject):
         self.error_msg = []
 
     @classmethod
-    def new(cls, session, **kwargs):
-        super(Job, cls).new(session, **kwargs)
+    def new(cls, job_processor, session, **kwargs):
+        super(Job, cls).new(job_processor, session, **kwargs)
 
         cparams = {}
         for cparam in cls.COMMON_PARAMS:
@@ -122,13 +133,112 @@ class Job(MongoObject):
             raise
 
         try:
-            job.mark_groups(session)
-        except Exception as e:
-            logger.error('Job {0}: failed to mark required groups: {1}'.format(job.id, e))
+            try:
+                job._update_groups(job_processor.node_info_updater)
+                job._ensure_group_types()
+            except Exception as e:
+                raise JobRequirementError(str(e))
+
+            try:
+                job.mark_groups(session)
+            except Exception as e:
+                logger.error('Job {0}: failed to mark required groups: {1}'.format(job.id, e))
+                raise
+
+        except Exception:
             job.release_locks()
             raise
 
         return job
+
+    @property
+    def _required_group_types(self):
+        """ Return dictionary that maps group id to required group type.
+
+        Groups will be updated synchronously and their types will be checked against
+        corresponding required group types (see _ensure_group_types()).
+        """
+        return {}
+
+    def _update_groups(self, node_info_updater):
+        group_ids = set()
+
+        # _involved_groups may include groups that are not yet created or are unavailable
+        group_ids.update(
+            group_id
+            for group_id in self._involved_groups
+            if group_id in storage.groups
+        )
+
+        group_ids.update(self._required_group_types.iterkeys())
+
+        groups = []
+        for group_id in group_ids:
+            try:
+                groups.append(storage.groups[group_id])
+            except KeyError as e:
+                raise RuntimeError(
+                    'Cannot update status of group {}: {}'.format(group_id, e)
+                )
+
+        try:
+            node_info_updater.update_status(groups=groups)
+        except Exception as e:
+            error_msg = 'Failed to update groups statuses: {}'.format(e)
+            logger.exception(error_msg)
+            raise RuntimeError(error_msg)
+
+    def _ensure_group_types(self):
+        for group_id, group_type in self._required_group_types.iteritems():
+            group = storage.groups[group_id]
+            if group.type != group_type:
+                raise ValueError(
+                    'Group {} has type "{}", expected type "{}"'.format(
+                        group_id,
+                        group.type,
+                        group_type,
+                    )
+                )
+
+            # TODO: customize by group type
+            if group_type == storage.Group.TYPE_UNCOUPLED:
+                stat = group.get_stat()
+                if stat.files > 0:
+                    raise ValueError('Uncoupled group {} has {} alive keys, expected {}'.format(
+                        group.group_id,
+                        stat.files,
+                        0,
+                    ))
+
+            elif group_type == storage.Group.TYPE_UNCOUPLED_LRC_8_2_2_V1:
+                stat = group.get_stat()
+                if stat.files > 1:
+                    raise ValueError('Uncoupled lrc group {} has {} alive keys, expected {}'.format(
+                        group.group_id,
+                        stat.files,
+                        1,
+                    ))
+                if group.status != storage.Status.COUPLED:
+                    raise ValueError('Uncoupled lrc group {} has status "{}", expected "{}"'.format(
+                        group.group_id,
+                        group.status,
+                        storage.Status.COUPLED,
+                    ))
+
+            elif group_type == storage.Group.TYPE_RESERVED_LRC_8_2_2_V1:
+                stat = group.get_stat()
+                if stat.files > 1:
+                    raise ValueError('Reserved lrc group {} has {} alive keys, expected {}'.format(
+                        group.group_id,
+                        stat.files,
+                        1,
+                    ))
+                if group.status != storage.Status.COUPLED:
+                    raise ValueError('Reserved lrc group {} has status "{}", expected "{}"'.format(
+                        group.group_id,
+                        group.status,
+                        storage.Status.COUPLED,
+                    ))
 
     def _check_job(self):
         """Check job parameters and prerequisites.
@@ -149,13 +259,13 @@ class Job(MongoObject):
         return job
 
     def load(self, data):
-        self.id = data['id'].encode('utf-8')
-        self.status = data['status']
-        self.create_ts = data.get('create_ts') or data['start_ts']
+        self.id = data[self.FIELD_ID].encode('utf-8')
+        self.status = data[self.FIELD_STATUS]
+        self.create_ts = data.get(self.FIELD_CREATE_TS) or data['start_ts']
         self.start_ts = data['start_ts']
         self.finish_ts = data['finish_ts']
         self.update_ts = data.get('update_ts') or self.finish_ts or self.start_ts
-        self.type = data['type']
+        self.type = data[self.FIELD_TYPE]
         self.error_msg = data.get('error_msg', [])
 
         self.tasks = [TaskFactory.make_task(task_data, self) for task_data in data['tasks']]
@@ -222,13 +332,13 @@ class Job(MongoObject):
             self._finish_ts = int(value)
 
     def _dump(self):
-        data = {'id': self.id,
-                'status': self.status,
-                'create_ts': self.create_ts,
+        data = {self.FIELD_ID: self.id,
+                self.FIELD_STATUS: self.status,
+                self.FIELD_CREATE_TS: self.create_ts,
                 'start_ts': self.start_ts,
                 'update_ts': self.update_ts,
                 'finish_ts': self.finish_ts,
-                'type': self.type,
+                self.FIELD_TYPE: self.type,
                 'error_msg': self.error_msg}
 
         data.update({
@@ -327,7 +437,7 @@ class Job(MongoObject):
 
     def release_locks(self):
         try:
-            sync_manager.persistent_locks_release(self._locks, self.id)
+            sync_manager.persistent_locks_release(self._locks, check=self.id)
         except InconsistentLockError as e:
             logger.error('Job {0}: some of the locks {1} are already acquired by another '
                 'job {2}'.format(self.id, self._locks, e.holder_id))
@@ -419,7 +529,7 @@ class Job(MongoObject):
         return collection.find(params).sort(sort_by, sort_by_order)
 
     @staticmethod
-    def list_no_sort(collection, **kwargs):
+    def list_no_sort(collection, projection=None, **kwargs):
         """
         TODO: This method is a temporary solution until 'list' method
         is refactored to stop using mandatory sorting
@@ -435,7 +545,8 @@ class Job(MongoObject):
                 continue
             params.update(condition(k, v))
 
-        return collection.find(params)
+        # NOTE: change fields kw parameter to 'projection' when move to mongo3
+        return collection.find(params, fields=projection)
 
     def on_execution_interrupted(self, error_msg=None):
         ts = time.time()

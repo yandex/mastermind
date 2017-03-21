@@ -85,7 +85,7 @@ class InfrastructureCache(object):
                 return addresses[family][0]
 
         if strict:
-            raise ValueError('Host {} cannot be resolved to ip address'.format(host))
+            raise CacheUpstreamError('Host {} cannot be resolved to ip address'.format(host))
 
         return None
 

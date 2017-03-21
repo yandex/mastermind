@@ -160,3 +160,39 @@ class RecoverDcJob(Job):
         couple = group.couple
 
         return [str(couple)]
+
+
+    @staticmethod
+    def report_resources(params):
+        """
+        Report resources supposed usage for specified params
+        :param params: params to be passed on creating the job instance
+        :return: dict={'groups':[], 'resources':{ Job.RESOURCE_HOST_IN: [], etc}}
+        """
+
+        # XXX: this code duplicates 'set_resources', 'involved_groups' methods but this duplication is chose
+        # to minimize changes to test
+        res = {}
+
+        couple = params.get('couple')
+        if couple:
+            res['groups'] = [int(gid) for gid in couple.split(':')]
+        else:
+            group_id = params.get('group')
+            group = storage.groups[group_id]
+            couple = group.couple
+            res['groups'] = [g.group_id for g in couple.groups]
+
+        res['resources'] = {
+            Job.RESOURCE_HOST_IN: [],
+            Job.RESOURCE_HOST_OUT: [],
+            Job.RESOURCE_FS: [],
+        }
+
+        for group_id in res['groups']:
+            g = storage.groups[group_id]
+            res['resources'][Job.RESOURCE_HOST_IN].append(g.node_backends[0].node.host.addr)
+            res['resources'][Job.RESOURCE_HOST_OUT].append(g.node_backends[0].node.host.addr)
+            res['resources'][Job.RESOURCE_FS].append((g.node_backends[0].node.host.addr, str(g.node_backends[0].fs.fsid)))
+
+        return res

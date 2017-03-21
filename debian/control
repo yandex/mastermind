@@ -25,6 +25,7 @@ Depends:
  cocaine-v12-framework-python,
  python-tornado (>= 4.0),
  cocaine-v12-tools,
+ python-opster (>= 4.0),
  python-pymongo (<< 3),
  python-bson (<< 3),
  python-requests,
@@ -65,3 +66,19 @@ Depends:
 Conflicts:
  python-mastermind-cocainev11
 Description: Common components and a client library for Mastermind
+
+Package: mastermind-scheduler
+Architecture: amd64
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ cocaine-v12-framework-python,
+ elliptics-client,
+ python-mastermind (= ${binary:Version}),
+ python-opster (>= 4.0),
+ python-pymongo (<< 3),
+ python-bson (<< 3),
+ python-simplejson,
+ python-tornado (>= 4.0),
+ yandex-yql-python,
+Description: Mastermind scheduler worker

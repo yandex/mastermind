@@ -75,7 +75,10 @@ class NamespacesQuery(Query):
               attributes_ttl_minimum=None,
               attributes_ttl_maximum=None,
               attributes_symlink=None,
-              attributes_symlink_scope_limit=None,):
+              attributes_symlink_scope_limit=None,
+              attributes_metadata=None,
+              owner_id=None,
+    ):
         """Performs initial namespace setup.
 
         Args:
@@ -138,6 +141,9 @@ class NamespacesQuery(Query):
             (key's data contains url to another key in the scope (see symlink_scope_limit defenition)
           attributes_symlink_scope_limit: scope limit for symlink, available values:
             "namespace": symlink can be a relative url to the same namespace's keys
+          attributes_metadata: this flag toggles the client's ability to store key's custom
+            metadata in key's attributes.
+          owner_id: namespace owner integer identification number. ABC should know a service with this id.
 
         Returns:
           Namespace object representing created namespace.
@@ -229,8 +235,22 @@ class NamespacesQuery(Query):
         if symlink_attributes:
             attributes['symlink'] = symlink_attributes
 
+        metadata_attributes = {}
+        if attributes_metadata is not None:
+            metadata_attributes['enable'] = attributes_metadata is True
+
+        if metadata_attributes:
+            attributes['metadata'] = metadata_attributes
+
         if attributes:
             settings['attributes'] = attributes
+
+        owner = {}
+        if owner_id is not None:
+            owner['id'] = int(owner_id)
+
+        if owner:
+            settings['owner'] = owner
 
         ns_data = self.client.request('namespace_setup', [namespace, True, settings, {}])
 

@@ -30,6 +30,13 @@ class MakeLrcGroupsJob(Job):
     def _set_resources(self):
         self.resources = {}
 
+    @property
+    def _required_group_types(self):
+        return {
+            group_id: storage.Group.TYPE_UNCOUPLED
+            for group_id in self.uncoupled_groups
+        }
+
     def create_tasks(self, processor):
         """ Create tasks for new lrc groups construction
 
@@ -167,6 +174,18 @@ class MakeLrcGroupsJob(Job):
                     'group': str(uncoupled_group.group_id),
                     'group_base_path': nb.base_path,
                 },
+            )
+        )
+
+        # remove nb from uncoupled group's history
+        job_tasks.append(
+            tasks.HistoryRemoveNodeTask.new(
+                self,
+                group=uncoupled_group.group_id,
+                host=nb.node.host.addr,
+                port=nb.node.port,
+                family=nb.node.family,
+                backend_id=nb.backend_id,
             )
         )
 
