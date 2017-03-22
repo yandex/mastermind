@@ -68,7 +68,7 @@ table NamespaceSettings {
 
 table Statistics {
     is_full:bool;
-    //...
+    raw_data:string;
 }
 
 table CoupleWeight {
