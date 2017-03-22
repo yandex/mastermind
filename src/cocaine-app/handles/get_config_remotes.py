@@ -54,7 +54,7 @@ class ConfigRemotesFlatbuffersBuilder(FlatbuffersBuilder):
         fb_elliptics_remotes_offset = self.builder.EndVector(len(fb_eliptics_remote_offsets))
 
         InitialRemotesInfo.InitialRemotesInfoStart(self.builder)
-        # TODO: add timestamp
+        InitialRemotesInfo.InitialRemotesInfoAddTimestamp(self.builder, int(time.time()))
         InitialRemotesInfo.InitialRemotesInfoAddEllipticsRemotes(self.builder, fb_elliptics_remotes_offset)
         root_offset = InitialRemotesInfo.InitialRemotesInfoEnd(self.builder)
 
