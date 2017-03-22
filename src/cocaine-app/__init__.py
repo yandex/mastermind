@@ -32,6 +32,8 @@ import storage
 import balancer
 import external_storage
 import helpers
+import handles
+import handles.get_config_remotes
 import history
 import infrastructure
 import jobs
@@ -158,7 +160,10 @@ def register_handle(h):
             )
         response.close()
 
-    W.on(h.__name__, wrapper)
+    if isinstance(h, handles.Handle):
+        W.on(h.handle_name, h)
+    else:
+        W.on(h.__name__, wrapper)
     logger.info("Registering handler for event %s" % h.__name__)
     return wrapper
 
@@ -352,6 +357,10 @@ def init_manual_locker(manual_locker):
     return manual_locker
 
 
+def init_handles():
+    register_handle(handles.get_config_remotes.get_config_remotes)
+
+
 jf = init_job_finder()
 
 external_storage_meta = init_external_storage_meta()
@@ -371,6 +380,7 @@ if j:
 else:
     po = None
 ml = init_manual_locker(manual_locker)
+init_handles()
 
 
 for handler in balancer.handlers(b):

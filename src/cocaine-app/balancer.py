@@ -1211,9 +1211,9 @@ class Balancer(object):
         return self.infrastructure.reserve_group_ids(groups_count)
 
     # @h.concurrent_handler
-    @h.handler_wne
-    def get_config_remotes(self, request):
-        return CONFIG_REMOTES
+    # @h.handler_wne
+    # def get_config_remotes(self, request):
+    #     return CONFIG_REMOTES
 
     ALPHANUM = 'a-zA-Z0-9'
     EXTRA = '\-_'
