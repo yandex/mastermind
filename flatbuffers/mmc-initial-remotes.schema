@@ -1,0 +1,10 @@
+// elliptics remotes data schema
+
+namespace mmc;
+
+table InitialRemotesInfo {
+    timestamp:ulong;
+    elliptics_remotes:[string];
+}
+
+root_type InitialRemotesInfo;
