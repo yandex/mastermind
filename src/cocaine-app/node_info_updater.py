@@ -12,6 +12,7 @@ import msgpack
 
 import helpers as h
 from infrastructure import infrastructure
+import handles
 from jobs import Job
 import keys
 from load_manager import load_manager
@@ -723,14 +724,34 @@ class NodeInfoUpdater(object):
             result_ts = time.time()
 
             start_ts = time.time()
+            logger.info('Namespaces statistics updating: started')
+            namespaces_statistics = self.statistics.per_ns_statistics(per_entity_stat=per_entity_stat)
+            logger.info('Namespaces statistics updating: result prepared, time: {:.3f}'.format(
+                time.time() - start_ts
+            ))
+
+            start_ts = time.time()
             logger.info('Namespaces states updating: started')
             namespaces_states = self._calculate_namespaces_states(
                 namespaces_settings,
+                namespaces_statistics=namespaces_statistics,
                 per_entity_stat=per_entity_stat,
             )
             logger.info('Namespaces states updating: result prepared, time: {:.3f}'.format(
                 time.time() - start_ts
             ))
+
+            # start_ts = time.time()
+            handles.get_storage_state_snapshot.handle.update(
+                namespaces_settings=namespaces_settings,
+                weight_manager=weight_manager,
+                namespaces_statistics=namespaces_statistics,
+                timestamp=result_ts,
+            )
+            # logger.info('Storage state updating: result prepared, size {}, time: {:.3f}'.format(
+            #     len(fb),
+            #     time.time() - start_ts
+            # ))
 
             if self.external_storage_meta:
                 start_ts = time.time()
@@ -763,7 +784,7 @@ class NodeInfoUpdater(object):
                 time.time() - cache_update_start_ts
             ))
 
-    def _calculate_namespaces_states(self, namespaces_settings, per_entity_stat=None):
+    def _calculate_namespaces_states(self, namespaces_settings, namespaces_statistics, per_entity_stat=None):
 
         def default():
             return {
@@ -811,7 +832,7 @@ class NodeInfoUpdater(object):
             ))
 
         # statistics
-        for ns, stats in self.statistics.per_ns_statistics(per_entity_stat).iteritems():
+        for ns, stats in namespaces_statistics.iteritems():
             res[ns]['statistics'] = stats
 
         # settings

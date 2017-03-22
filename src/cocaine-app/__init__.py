@@ -34,6 +34,7 @@ import external_storage
 import helpers
 import handles
 import handles.get_config_remotes
+import handles.get_storage_state_snapshot
 import history
 import infrastructure
 import jobs
@@ -359,6 +360,7 @@ def init_manual_locker(manual_locker):
 
 def init_handles():
     register_handle(handles.get_config_remotes.get_config_remotes)
+    register_handle(handles.get_storage_state_snapshot.get_storage_state_snapshot)
 
 
 jf = init_job_finder()
