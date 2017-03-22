@@ -18,7 +18,8 @@ class GetConfigRemotesHandle(Handle):
     @h.handler_wne
     def __call__(self, request):
         request = request or {}
-        response_format = request.get('format', RESPONSE_FORMAT_NATIVE)
+        # response_format = request.get('format', RESPONSE_FORMAT_NATIVE)
+        response_format = request.get('format', RESPONSE_FORMAT_FLATBUFFERS)
 
         if response_format == RESPONSE_FORMAT_NATIVE:
             return self.get_config_remotes_native()
