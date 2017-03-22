@@ -1,3 +1,5 @@
+import time
+
 from handles import Handle
 from handles.builder import FlatbuffersBuilder
 import helpers as h

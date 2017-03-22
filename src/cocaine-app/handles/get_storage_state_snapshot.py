@@ -11,6 +11,7 @@ from mastermind_core.flatbuffers.mmc import GroupsetType, GroupsetStatus, Groups
 from mastermind_core.flatbuffers.mmc import Namespace, Statistics, NamespaceSettings, WritePolicy
 from mastermind_core.flatbuffers.mmc import CoupleWeight
 from mastermind_core.flatbuffers.mmc import StorageInfo
+from mastermind_core.response import CachedGzipResponse
 import storage
 
 
@@ -21,24 +22,28 @@ class GetStorageStateSnapshotHandle(Handle):
 
     def __init__(self, *args, **kwargs):
         super(GetStorageStateSnapshotHandle, self).__init__(*args, **kwargs)
-        self._cache = ''
+        self._response = CachedGzipResponse()
 
     @h.handler_wne
     def __call__(self, request):
         request = request or {}
-        return self.get_storage_state_snapshot_flatbuffers()
+        return self.get_storage_state_snapshot_flatbuffers(compressed=request.get('gzip', False))
 
-    def get_storage_state_snapshot_flatbuffers(self):
-        return self._cache
+    def get_storage_state_snapshot_flatbuffers(self, compressed=False):
+        return self._response.get_result(compressed=compressed)
 
     def update(self, namespaces_settings, weight_manager, namespaces_statistics, timestamp=None):
-        builder = StorageStateSnapshotFlatbuffersBuilder(
-            namespaces_settings=namespaces_settings,
-            weight_manager=weight_manager,
-            namespaces_statistics=namespaces_statistics,
-            timestamp=timestamp or time.time(),
-        )
-        self._cache = builder.build()
+        try:
+            builder = StorageStateSnapshotFlatbuffersBuilder(
+                namespaces_settings=namespaces_settings,
+                weight_manager=weight_manager,
+                namespaces_statistics=namespaces_statistics,
+                timestamp=timestamp or time.time(),
+            )
+            self._response.set_result(builder.build(), ts=timestamp)
+        except Exception as e:
+            self._response.set_exception(e)
+            pass
 
 
 class StorageStateSnapshotFlatbuffersBuilder(FlatbuffersBuilder):
