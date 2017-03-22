@@ -1,3 +1,9 @@
+mastermind (2.28.200~fb0) trusty; urgency=medium
+
+  * Implement flatbuffers handles
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Wed, 22 Mar 2017 22:20:48 +0300
+
 mastermind (2.28.200) trusty; urgency=medium
 
   * Remove temporary pause between completing the task and starting the next
