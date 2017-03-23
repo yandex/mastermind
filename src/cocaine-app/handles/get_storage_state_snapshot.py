@@ -10,6 +10,7 @@ from mastermind_core.flatbuffers.mmc import Groupset, LrcSettings
 from mastermind_core.flatbuffers.mmc import GroupsetType, GroupsetStatus, GroupsetSettings
 from mastermind_core.flatbuffers.mmc import Namespace, Statistics, NamespaceSettings, WritePolicy
 from mastermind_core.flatbuffers.mmc import CoupleWeight
+from mastermind_core.flatbuffers.mmc import UnitToCouples
 from mastermind_core.flatbuffers.mmc import StorageInfo
 from mastermind_core.response import CachedGzipResponse
 import storage
@@ -32,12 +33,19 @@ class GetStorageStateSnapshotHandle(Handle):
     def get_storage_state_snapshot_flatbuffers(self, compressed=False):
         return self._response.get_result(compressed=compressed)
 
-    def update(self, namespaces_settings, weight_manager, namespaces_statistics, timestamp=None):
+    def update(self,
+               namespaces_settings,
+               weight_manager,
+               namespaces_statistics,
+               external_storage_mapping,
+               timestamp=None):
+
         try:
             builder = StorageStateSnapshotFlatbuffersBuilder(
                 namespaces_settings=namespaces_settings,
                 weight_manager=weight_manager,
                 namespaces_statistics=namespaces_statistics,
+                external_storage_mapping=external_storage_mapping,
                 timestamp=timestamp or time.time(),
             )
             self._response.set_result(builder.build(), ts=timestamp)
@@ -52,6 +60,7 @@ class StorageStateSnapshotFlatbuffersBuilder(FlatbuffersBuilder):
                  namespaces_settings,
                  weight_manager,
                  namespaces_statistics,
+                 external_storage_mapping,
                  timestamp,
                  *args,
                  **kwargs):
@@ -64,6 +73,7 @@ class StorageStateSnapshotFlatbuffersBuilder(FlatbuffersBuilder):
         }
         self.weights = weight_manager.weights
         self.namespaces_statistics = namespaces_statistics
+        self.external_storage_mapping = external_storage_mapping
 
         self.timestamp = timestamp
 
@@ -275,6 +285,25 @@ class StorageStateSnapshotFlatbuffersBuilder(FlatbuffersBuilder):
         Namespace.NamespaceAddName(self.builder, fb_id_offset)
         return Namespace.NamespaceEnd(self.builder)
 
+    def _save_unit_mapping_couple_ids(self, mapping):
+        UnitToCouples.UnitToCouplesStartCoupleIdsVector(self.builder, len(mapping['couples']))
+        for couple_id in reversed(mapping['couples']):
+            self.builder.PrependUint32(couple_id)
+        return self.builder.EndVector(len(mapping['couples']))
+
+    def _save_unit_mapping(self, mapping):
+        fb_service_prefix_offset = self._save_string(
+            mapping['external_storage_options']['mulca_service_stid_prefix'],
+            shared=True,
+        )
+        fb_couple_ids_offset = self._save_unit_mapping_couple_ids(mapping)
+
+        UnitToCouples.UnitToCouplesStart(self.builder)
+        UnitToCouples.UnitToCouplesAddCoupleIds(self.builder, fb_couple_ids_offset)
+        UnitToCouples.UnitToCouplesAddServicePrefix(self.builder, fb_service_prefix_offset)
+        UnitToCouples.UnitToCouplesAddUnitId(self.builder, int(mapping['external_storage_options']['mulca_unit']))
+        return UnitToCouples.UnitToCouplesEnd(self.builder)
+
     def build(self):
 
         fb_namespace_offsets = []
@@ -290,10 +319,19 @@ class StorageStateSnapshotFlatbuffersBuilder(FlatbuffersBuilder):
             self.builder.PrependUOffsetTRelative(i)
         fb_namespaces_offset = self.builder.EndVector(len(fb_namespace_offsets))
 
-        # TODO: Unit mappings
+        fb_unit_mapping_offsets = []
+        for mapping in self.external_storage_mapping:
+            if mapping['external_storage'] != 'mulca':
+                continue
+            fb_unit_mapping_offsets.append(self._save_unit_mapping(mapping))
+
+        StorageInfo.StorageInfoStartUnitMappingVector(self.builder, len(fb_unit_mapping_offsets))
+        for i in reversed(fb_unit_mapping_offsets):
+            self.builder.PrependUOffsetTRelative(i)
+        fb_unit_mapping_offset = self.builder.EndVector(len(fb_unit_mapping_offsets))
 
         StorageInfo.StorageInfoStart(self.builder)
-        # StorageInfo.StorageInfoAddUnitMapping(self.builder, unit_mapping_offset)
+        StorageInfo.StorageInfoAddUnitMapping(self.builder, fb_unit_mapping_offset)
         StorageInfo.StorageInfoAddNamespaces(self.builder, fb_namespaces_offset)
         StorageInfo.StorageInfoAddTimestamp(self.builder, int(self.timestamp))
         root_offset = StorageInfo.StorageInfoEnd(self.builder)

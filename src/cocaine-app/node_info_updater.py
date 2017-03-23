@@ -741,18 +741,7 @@ class NodeInfoUpdater(object):
                 time.time() - start_ts
             ))
 
-            # start_ts = time.time()
-            handles.get_storage_state_snapshot.handle.update(
-                namespaces_settings=namespaces_settings,
-                weight_manager=weight_manager,
-                namespaces_statistics=namespaces_statistics,
-                timestamp=result_ts,
-            )
-            # logger.info('Storage state updating: result prepared, size {}, time: {:.3f}'.format(
-            #     len(fb),
-            #     time.time() - start_ts
-            # ))
-
+            external_storage_mapping = []
             if self.external_storage_meta:
                 start_ts = time.time()
                 logger.info('External storage mapping updating: started')
@@ -760,6 +749,19 @@ class NodeInfoUpdater(object):
                 logger.info('External storage mapping updating: result prepared, time: {:.3f}'.format(
                     time.time() - start_ts
                 ))
+
+            start_ts = time.time()
+            logger.info('Storage state snapshot updating: started')
+            handles.get_storage_state_snapshot.handle.update(
+                namespaces_settings=namespaces_settings,
+                weight_manager=weight_manager,
+                namespaces_statistics=namespaces_statistics,
+                external_storage_mapping=external_storage_mapping,
+                timestamp=result_ts,
+            )
+            logger.info('Storage state snapshot updating: result prepared, time: {:.3f}'.format(
+                time.time() - start_ts
+            ))
 
         except Exception as e:
             logger.exception('Cached responses updating: failed')
