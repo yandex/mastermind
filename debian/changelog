@@ -1,3 +1,10 @@
+mastermind (2.28.200~fb2) trusty; urgency=medium
+
+  * Add get_storage_state_snapshot full namespace statistics
+  * Add get_storage_state_snapshot log messages
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 23 Mar 2017 16:21:48 +0300
+
 mastermind (2.28.200~fb1) trusty; urgency=medium
 
   * Use only couples with matched groups count for couple weights list
