@@ -1,3 +1,9 @@
+mastermind (2.28.200~fb3) trusty; urgency=medium
+
+  * Update get_storage_state_snapshot handle with groupsets distinfo data
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 23 Mar 2017 23:27:33 +0300
+
 mastermind (2.28.200~fb2) trusty; urgency=medium
 
   * Add get_storage_state_snapshot full namespace statistics
