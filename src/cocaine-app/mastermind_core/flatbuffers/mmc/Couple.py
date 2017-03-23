@@ -81,14 +81,7 @@ class Couple(object):
             return self._tab.VectorLen(o)
         return 0
 
-    # Couple
-    def Distinfo(self):
-        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(16))
-        if o != 0:
-            return self._tab.String(o + self._tab.Pos)
-        return ""
-
-def CoupleStart(builder): builder.StartObject(7)
+def CoupleStart(builder): builder.StartObject(6)
 def CoupleAddId(builder, id): builder.PrependUint32Slot(0, id, 0)
 def CoupleAddStatus(builder, status): builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(status), 0)
 def CoupleAddFreeEffectiveSpace(builder, freeEffectiveSpace): builder.PrependUint64Slot(2, freeEffectiveSpace, 0)
@@ -97,5 +90,4 @@ def CoupleAddReadPreference(builder, readPreference): builder.PrependUOffsetTRel
 def CoupleStartReadPreferenceVector(builder, numElems): return builder.StartVector(4, numElems, 4)
 def CoupleAddGroupsets(builder, groupsets): builder.PrependUOffsetTRelativeSlot(5, flatbuffers.number_types.UOffsetTFlags.py_type(groupsets), 0)
 def CoupleStartGroupsetsVector(builder, numElems): return builder.StartVector(4, numElems, 4)
-def CoupleAddDistinfo(builder, distinfo): builder.PrependUOffsetTRelativeSlot(6, flatbuffers.number_types.UOffsetTFlags.py_type(distinfo), 0)
 def CoupleEnd(builder): return builder.EndObject()

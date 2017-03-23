@@ -71,7 +71,14 @@ class Groupset(object):
             return self._tab.VectorLen(o)
         return 0
 
-def GroupsetStart(builder): builder.StartObject(6)
+    # Groupset
+    def Distinfo(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(16))
+        if o != 0:
+            return self._tab.String(o + self._tab.Pos)
+        return ""
+
+def GroupsetStart(builder): builder.StartObject(7)
 def GroupsetAddType(builder, type): builder.PrependInt8Slot(0, type, 0)
 def GroupsetAddId(builder, id): builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(id), 0)
 def GroupsetAddStatus(builder, status): builder.PrependInt8Slot(2, status, 0)
@@ -79,4 +86,5 @@ def GroupsetAddSettingsType(builder, settingsType): builder.PrependUint8Slot(3, 
 def GroupsetAddSettings(builder, settings): builder.PrependUOffsetTRelativeSlot(4, flatbuffers.number_types.UOffsetTFlags.py_type(settings), 0)
 def GroupsetAddGroupIds(builder, groupIds): builder.PrependUOffsetTRelativeSlot(5, flatbuffers.number_types.UOffsetTFlags.py_type(groupIds), 0)
 def GroupsetStartGroupIdsVector(builder, numElems): return builder.StartVector(4, numElems, 4)
+def GroupsetAddDistinfo(builder, distinfo): builder.PrependUOffsetTRelativeSlot(6, flatbuffers.number_types.UOffsetTFlags.py_type(distinfo), 0)
 def GroupsetEnd(builder): return builder.EndObject()

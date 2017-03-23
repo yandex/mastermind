@@ -125,8 +125,10 @@ class StorageStateSnapshotFlatbuffersBuilder(FlatbuffersBuilder):
 
         fb_id_offset = self._save_string(str(groupset))
         fb_group_ids_offset = self._save_groupset_group_ids(groupset)
+        fb_distinfo_offset = self._save_string(json.dumps(groupset.groupset_hosts()))
 
         Groupset.GroupsetStart(self.builder)
+        Groupset.GroupsetAddDistinfo(self.builder, fb_distinfo_offset)
         Groupset.GroupsetAddGroupIds(self.builder, fb_group_ids_offset)
         if fb_settings_offset is not None:
             Groupset.GroupsetAddSettingsType(self.builder, fb_settings_type)

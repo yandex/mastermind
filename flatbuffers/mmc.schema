@@ -28,6 +28,7 @@ table Groupset {
     status:GroupsetStatus;
     settings:GroupsetSettings;
     group_ids:[uint];
+    distinfo:string;
 }
 
 table Couple {
@@ -39,8 +40,6 @@ table Couple {
 
     read_preference:[string];
     groupsets:[Groupset];
-
-    distinfo:string;
 }
 
 // Values are lowercase here to provide string names compatible with common usage.
