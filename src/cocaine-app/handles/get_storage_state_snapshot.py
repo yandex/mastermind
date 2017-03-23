@@ -244,13 +244,14 @@ class StorageStateSnapshotFlatbuffersBuilder(FlatbuffersBuilder):
         CoupleWeight.CoupleWeightAddCoupleId(self.builder, couple_id)
         return CoupleWeight.CoupleWeightEnd(self.builder)
 
-    def _save_ns_couple_weights(self, namespace):
+    def _save_ns_couple_weights(self, namespace, ns_settings):
         weights = self.weights.get(namespace.id, {})
+
+        ns_groups_count = ns_settings.groups_count
 
         fb_couple_weight_offsets = [
             self._save_ns_couple_weight(w)
-            for groups_count, groups_count_weights in weights.iteritems()
-            for w in groups_count_weights
+            for w in weights.get(ns_groups_count, [])
         ]
         Namespace.NamespaceStartCoupleWeightsVector(self.builder, len(fb_couple_weight_offsets))
         for i in reversed(fb_couple_weight_offsets):
@@ -274,7 +275,7 @@ class StorageStateSnapshotFlatbuffersBuilder(FlatbuffersBuilder):
         ns_settings = self.namespaces_settings[namespace]
         fb_settings_offset = self._save_ns_settings(ns_settings)
         fb_statistics_offset = self._save_ns_statistics(namespace)
-        fb_weights_offset = self._save_ns_couple_weights(namespace)
+        fb_weights_offset = self._save_ns_couple_weights(namespace, ns_settings)
 
         Namespace.NamespaceStart(self.builder)
         Namespace.NamespaceAddCoupleWeights(self.builder, fb_weights_offset)
