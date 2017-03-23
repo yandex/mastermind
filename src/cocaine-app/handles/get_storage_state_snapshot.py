@@ -274,10 +274,10 @@ class StorageStateSnapshotFlatbuffersBuilder(FlatbuffersBuilder):
     def _save_ns_statistics(self, namespace):
         statistics = self.namespaces_statistics.get(namespace.id, {})
 
-        # fb_raw_data_offset = self._save_string(json.dumps(statistics))
+        fb_raw_data_offset = self._save_string(json.dumps(statistics))
 
         Statistics.StatisticsStart(self.builder)
-        # Statistics.StatisticsAddRawData(self.builder, fb_raw_data_offset)
+        Statistics.StatisticsAddRawData(self.builder, fb_raw_data_offset)
         Statistics.StatisticsAddIsFull(self.builder, statistics.get('is_full', False))
         return Statistics.StatisticsEnd(self.builder)
 
