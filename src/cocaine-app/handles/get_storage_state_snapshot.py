@@ -216,19 +216,27 @@ class StorageStateSnapshotFlatbuffersBuilder(FlatbuffersBuilder):
         NamespaceSettings.NamespaceSettingsAddReplicaCount(self.builder, ns_settings.groups_count)
         return NamespaceSettings.NamespaceSettingsEnd(self.builder)
 
-    def _save_ns_couples(self, couples):
+    def _save_ns_couples(self, namespace):
+
+        couples = namespace.couples
 
         couple_offsets = [self._save_couple(couple) for couple in couples]
 
         Namespace.NamespaceStartCouplesVector(self.builder, len(couple_offsets))
         for i in reversed(couple_offsets):
             self.builder.PrependUOffsetTRelative(i)
+
+        logger.info(
+            'Storage state: namespace {}, packed {} couples total'.format(namespace.id, len(couple_offsets))
+        )
+
         return self.builder.EndVector(len(couple_offsets))
 
     def _save_ns_couple_weight_group_ids(self, group_ids):
         Groupset.GroupsetStartGroupIdsVector(self.builder, len(group_ids))
         for i in reversed(group_ids):
             self.builder.PrependUint32(i)
+
         return self.builder.EndVector(len(group_ids))
 
     def _save_ns_couple_weight(self, w):
@@ -256,6 +264,11 @@ class StorageStateSnapshotFlatbuffersBuilder(FlatbuffersBuilder):
         Namespace.NamespaceStartCoupleWeightsVector(self.builder, len(fb_couple_weight_offsets))
         for i in reversed(fb_couple_weight_offsets):
             self.builder.PrependUOffsetTRelative(i)
+
+        logger.info(
+            'Storage state: namespace {}, packed {} couples for write'.format(namespace.id, len(fb_couple_weight_offsets))
+        )
+
         return self.builder.EndVector(len(fb_couple_weight_offsets))
 
     def _save_ns_statistics(self, namespace):
@@ -270,7 +283,7 @@ class StorageStateSnapshotFlatbuffersBuilder(FlatbuffersBuilder):
 
     def _save_namespace(self, namespace):
         fb_id_offset = self._save_string(namespace.id)
-        fb_couples_offset = self._save_ns_couples(namespace.couples)
+        fb_couples_offset = self._save_ns_couples(namespace)
 
         ns_settings = self.namespaces_settings[namespace]
         fb_settings_offset = self._save_ns_settings(ns_settings)
@@ -320,6 +333,8 @@ class StorageStateSnapshotFlatbuffersBuilder(FlatbuffersBuilder):
             self.builder.PrependUOffsetTRelative(i)
         fb_namespaces_offset = self.builder.EndVector(len(fb_namespace_offsets))
 
+        logger.info('Storage state: packed {} namespaces'.format(len(fb_namespace_offsets)))
+
         fb_unit_mapping_offsets = []
         for mapping in self.external_storage_mapping:
             if mapping['external_storage'] != 'mulca':
@@ -330,6 +345,8 @@ class StorageStateSnapshotFlatbuffersBuilder(FlatbuffersBuilder):
         for i in reversed(fb_unit_mapping_offsets):
             self.builder.PrependUOffsetTRelative(i)
         fb_unit_mapping_offset = self.builder.EndVector(len(fb_unit_mapping_offsets))
+
+        logger.info('Storage state: packed {} unit mappings'.format(len(fb_unit_mapping_offsets)))
 
         StorageInfo.StorageInfoStart(self.builder)
         StorageInfo.StorageInfoAddUnitMapping(self.builder, fb_unit_mapping_offset)
