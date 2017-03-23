@@ -1,3 +1,10 @@
+mastermind (2.28.200~fb1) trusty; urgency=medium
+
+  * Use only couples with matched groups count for couple weights list
+  * Add unit mappings to get_storage_state_snapshot handle
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Thu, 23 Mar 2017 14:34:33 +0300
+
 mastermind (2.28.200~fb0) trusty; urgency=medium
 
   * Implement flatbuffers handles
