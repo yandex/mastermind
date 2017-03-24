@@ -38,11 +38,12 @@ RSYNC_MODULE = config.get('restore', {}).get('rsync_use_module') and \
     config['restore'].get('rsync_module')
 RSYNC_USER = config.get('restore', {}).get('rsync_user', 'rsync')
 
-RECOVERY_DC_CNF = config.get('infrastructure', {}).get('recovery_dc', {})
-RECOVERY_DC_LRC_CNF = config.get('infrastructure', {}).get('recovery_dc_lrc', {})
-LRC_CONVERT_DC_CNF = config.get('infrastructure', {}).get('lrc_convert', {})
-LRC_VALIDATE_DC_CNF = config.get('infrastructure', {}).get('lrc_validate', {})
-LRC_RECOVERY_DC_CNF = config.get('infrastructure', {}).get('lrc_recovery', {})
+INFRASTRUCTURE = config.get('infrastructure', {})
+RECOVERY_DC_CNF = INFRASTRUCTURE.get('recovery_dc', {})
+RECOVERY_DC_LRC_CNF = INFRASTRUCTURE.get('recovery_dc_lrc', {})
+LRC_CONVERT_DC_CNF = INFRASTRUCTURE.get('lrc_convert', {})
+LRC_VALIDATE_DC_CNF = INFRASTRUCTURE.get('lrc_validate', {})
+LRC_RECOVERY_DC_CNF = INFRASTRUCTURE.get('lrc_recovery', {})
 
 logger.info('Rsync module using: %s' % RSYNC_MODULE)
 logger.info('Rsync user: %s' % RSYNC_USER)
@@ -624,7 +625,7 @@ class Infrastructure(object):
                         remove_all_older=None,
                         remove_permanent_older=None):
 
-        TTL_CLEANUP_CNF = config.get('infrastructure', {}).get('ttl_cleanup', {})
+        TTL_CLEANUP_CNF = INFRASTRUCTURE.get('ttl_cleanup', {})
 
         if remove_all_older:
             remove_type = '--remove-all-older {}'.format(remove_all_older)
@@ -640,7 +641,7 @@ class Infrastructure(object):
             wait_timeout=(wait_timeout or TTL_CLEANUP_CNF.get('wait_timeout', 20)),
             nproc=(nproc or TTL_CLEANUP_CNF.get('nproc', 10)),
             batch_size=(batch_size or TTL_CLEANUP_CNF.get('batch_size', 100)),
-            trace_id=(trace_id or int(uuid.uuid4().hex[:16], 16)),
+            trace_id=trace_id or uuid.uuid4().hex[:16],
             log=TTL_CLEANUP_CNF.get('log', 'ttl_cleanup.log'),
             log_level="info",
             tmp_dir=TTL_CLEANUP_CNF.get(
@@ -917,7 +918,7 @@ class Infrastructure(object):
             attempts=RECOVERY_DC_LRC_CNF.get('attempts', 1),
             batch=RECOVERY_DC_LRC_CNF.get('batch', 2000),
             log=RECOVERY_DC_LRC_CNF.get('log', 'dnet_recovery.log').format(
-                couple_id=str(lrc_groupset.couple)
+                couple_id=lrc_groupset.couple
             ),
             log_level=RECOVERY_DC_LRC_CNF.get('log_level', 1),
             processes_num=len(modified_shard_groups),

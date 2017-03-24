@@ -68,7 +68,7 @@ class TtlCleanupJob(Job):
             batch_size=self.batch_size,
             attempts=self.attempts,
             nproc=self.nproc,
-            trace_id=int(self.id[:16], 16),
+            trace_id=self.id[:16],
             safe=self.dry_run,
             remove_all_older=self.remove_all_older,
             remove_permanent_older=self.remove_permanent_older

@@ -26,7 +26,7 @@ class RecoverDcJob(Job):
 
     PARAMS = ('group', 'couple',
               'resources',
-              'keys', 'host', 'port', 'family', 'backend_id' # read-only parameters
+              'keys', 'host', 'port', 'family', 'backend_id'  # read-only parameters
              )
 
     def __init__(self, **kwargs):
@@ -84,10 +84,8 @@ class RecoverDcJob(Job):
 
     def create_tasks(self, processor):
 
-        if not self.couple in storage.replicas_groupsets:
+        if self.couple not in storage.replicas_groupsets:
             raise JobBrokenError('Couple {0} is not found'.format(self.couple))
-
-        couple = storage.replicas_groupsets[self.couple]
 
         group = storage.groups[self.group]
 
