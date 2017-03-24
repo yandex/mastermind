@@ -10,13 +10,6 @@ from job_types import JobTypes
 from tasks import NodeBackendDefragTask, CoupleDefragStateCheckTask, RecoverGroupDcTask
 import storage
 from sync import sync_manager
-from sync.error import (
-    LockError,
-    LockFailedError,
-    LockAlreadyAcquiredError,
-    InconsistentLockError,
-    API_ERROR_CODE
-)
 
 
 logger = logging.getLogger('mm.jobs')
@@ -113,7 +106,6 @@ class RecoverDcJob(Job):
             host=self.host,
             cmd=recover_cmd,
             json_stats=True,
-            tmp_dir=tmp_dir,
             params={
                 'node_backend': self.node_backend(
                     host=self.host,
@@ -158,7 +150,6 @@ class RecoverDcJob(Job):
         couple = group.couple
 
         return [str(couple)]
-
 
     @staticmethod
     def report_resources(params):

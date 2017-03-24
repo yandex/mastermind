@@ -26,7 +26,7 @@ class RecoverGroupDcTask(MinionCmdTask):
         return task
 
     def check(self, group_id):
-        if not group_id in storage.groups:
+        if group_id not in storage.groups:
             raise JobBrokenError('Group {0} is not found'.format(group_id))
 
     def _execute(self, processor):

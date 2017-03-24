@@ -1,6 +1,7 @@
 from copy import deepcopy
 import logging
 import operator
+import os
 import re
 import threading
 import time
@@ -72,6 +73,8 @@ class Infrastructure(object):
     TASK_SYNC = 'infrastructure_sync'
     TASK_UPDATE = 'infrastructure_update'
 
+    REMOTE_TPL = '-r {host}:{port}:{family}'
+
     RSYNC_CMD = ('rsync -rlHpogDt --progress --timeout=1200 '
                  '"{user}@{src_host}:{src_path}data*" "{dst_path}"')
     RSYNC_MODULE_CMD = ('rsync -av --progress --timeout=1200 '
@@ -87,8 +90,6 @@ class Infrastructure(object):
         '-a {attempts} -b {batch} -l {log} -L {log_level} -n {processes_num} '
         '-T {trace_id} --user-flags {user_flag} {json_stats}'
     )
-
-    REMOTE_TPL = '-r {host}:{port}:{family}'
 
     DNET_DEFRAG_CMD = (
         'dnet_client backend -r {host}:{port}:{family} '
@@ -981,20 +982,21 @@ class Infrastructure(object):
                     )
                 )
 
+        tmp_dir = (LRC_CONVERT_DC_CNF.get('tmp_dir', '/var/tmp/lrc_convert_{couple_id}')
+                   .format(couple_id=couple))
+        trace_id_hex = trace_id or uuid.uuid4().hex[:16]
+
         cmd = self.LRC_CONVERT_CMD.format(
             remotes=' '.join(set(remotes)),
             src_groups=','.join(str(g.group_id) for g in src_groups),
             dst_groups=','.join(str(g.group_id) for g in dst_groups),
             part_size=part_size,
             scheme=scheme,
-            tmp_dir=LRC_CONVERT_DC_CNF.get(
-                'tmp_dir',
-                '/var/tmp/lrc_convert_{couple_id}'
-            ).format(couple_id=couple),
+            tmp_dir=os.path.join(tmp_dir, trace_id_hex),
             attempts=LRC_CONVERT_DC_CNF.get('attempts', 1),
             log=LRC_CONVERT_DC_CNF.get('log', 'lrc_convert.log').format(couple_id=couple),
             log_level=LRC_CONVERT_DC_CNF.get('log_level', 1),
-            trace_id=trace_id or uuid.uuid4().hex[:16],
+            trace_id=trace_id_hex,
             data_flow_rate=LRC_CONVERT_DC_CNF.get('data_flow_rate', 10),  # MB/s
             wait_timeout=LRC_CONVERT_DC_CNF.get('wait_timeout', 20),  # seconds
         )
@@ -1007,7 +1009,6 @@ class Infrastructure(object):
                           dst_groups,
                           part_size,
                           scheme,
-                          check_dst_groups=None,
                           trace_id=None):
 
         remotes = []
@@ -1020,21 +1021,20 @@ class Infrastructure(object):
                         family=nb.node.family,
                     )
                 )
-
+        tmp_dir = (LRC_VALIDATE_DC_CNF.get('tmp_dir', '/var/tmp/lrc_validate_{couple_id}')
+                   .format(couple_id=couple))
+        trace_id_hex = trace_id or uuid.uuid4().hex[:16]
         cmd = self.LRC_VALIDATE_CMD.format(
             remotes=' '.join(set(remotes)),
             src_groups=','.join(str(g.group_id) for g in src_groups),
             dst_groups=','.join(str(g.group_id) for g in dst_groups),
             part_size=part_size,
             scheme=scheme,
-            tmp_dir=LRC_VALIDATE_DC_CNF.get(
-                'tmp_dir',
-                '/var/tmp/lrc_validate_{couple_id}'
-            ).format(couple_id=couple),
+            tmp_dir=os.path.join(tmp_dir, trace_id_hex),
             attempts=LRC_VALIDATE_DC_CNF.get('attempts', 1),
             log=LRC_VALIDATE_DC_CNF.get('log', 'lrc_validate.log').format(couple_id=couple),
             log_level=LRC_VALIDATE_DC_CNF.get('log_level', 1),
-            trace_id=trace_id or uuid.uuid4().hex[:16],
+            trace_id=trace_id_hex,
             data_flow_rate=LRC_CONVERT_DC_CNF.get('data_flow_rate', 10),  # MB/s
             wait_timeout=LRC_CONVERT_DC_CNF.get('wait_timeout', 20),  # seconds
             check_dst_groups=','.join(str(g.group_id) for g in dst_groups),
@@ -1073,7 +1073,9 @@ class Infrastructure(object):
                     dst_group=dst_group.group_id,
                 )
             )
-
+        tmp_dir = (LRC_RECOVERY_DC_CNF.get('tmp_dir', '/var/tmp/lrc_recovery_{couple_id}')
+                   .format(couple_id=lrc_groupset.couple))
+        trace_id_hex = trace_id or uuid.uuid4().hex[:16]
         cmd = self.LRC_RECOVERY_CMD.format(
             remotes=' '.join(set(remotes)),
             dst_groups=','.join(str(g.group_id) for g in lrc_groupset.groups),
@@ -1082,17 +1084,14 @@ class Infrastructure(object):
             scheme=lrc_groupset.scheme,
             log=LRC_RECOVERY_DC_CNF.get('log', 'lrc_recovery.log').format(couple_id=lrc_groupset),
             log_level=LRC_RECOVERY_DC_CNF.get('log_level', 1),
-            tmp_dir=LRC_RECOVERY_DC_CNF.get(
-                'tmp_dir',
-                '/var/tmp/lrc_recovery_{couple_id}'
-            ).format(couple_id=lrc_groupset.couple),
+            tmp_dir=os.path.join(tmp_dir, trace_id_hex),
             attempts=LRC_RECOVERY_DC_CNF.get('attempts', 1),
             copy_groups=(
                 '--copy-groups {}'.format(','.join(copy_groups_params))
                 if copy_groups_params else
                 ''
             ),
-            trace_id=trace_id or uuid.uuid4().hex[:16],
+            trace_id=trace_id_hex,
             json_stats='-S json' if json_stats else '',
         )
 
