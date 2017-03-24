@@ -1,3 +1,9 @@
+mastermind (2.28.200~fb4) trusty; urgency=medium
+
+  Fix groupset id in get_storage_state_snapshot handle
+
+ -- Andrey Vasilenkov <indigo@yandex-team.ru>  Fri, 24 Mar 2017 17:01:29 +0300
+
 mastermind (2.28.200~fb3) trusty; urgency=medium
 
   * Update get_storage_state_snapshot handle with groupsets distinfo data
