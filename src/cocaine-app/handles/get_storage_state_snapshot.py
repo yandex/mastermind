@@ -123,7 +123,7 @@ class StorageStateSnapshotFlatbuffersBuilder(FlatbuffersBuilder):
         else:
             raise ValueError('Unsupported groupset type {}'.format(groupset.type))
 
-        fb_id_offset = self._save_string(str(groupset))
+        fb_id_offset = self._save_string(groupset.groupset_id)
         fb_group_ids_offset = self._save_groupset_group_ids(groupset)
         fb_distinfo_offset = self._save_string(json.dumps(groupset.groupset_hosts()))
 

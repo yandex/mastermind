@@ -497,9 +497,12 @@ class MultiRepository(object):
 
 GROUPSET_REPLICAS = 'replicas'
 GROUPSET_LRC = 'lrc'
+
+GROUPSET_ID_REPLICAS = GROUPSET_REPLICAS
+GROUPSET_ID_LRC_8_2_2_V1 = Lrc.Scheme822v1.ID
 GROUPSET_IDS = set([
-    GROUPSET_REPLICAS,
-    Lrc.Scheme822v1.ID,
+    GROUPSET_ID_REPLICAS,
+    GROUPSET_ID_LRC_8_2_2_V1,
 ])
 
 
@@ -2684,6 +2687,10 @@ class Couple(Groupset):
     def couple_id(self):
         return int(str(self).split(':')[0])
 
+    @property
+    def groupset_id(self):
+        return GROUPSET_ID_REPLICAS
+
 
 class Lrc822v1Groupset(Groupset):
     def __init__(self, groups):
@@ -2940,6 +2947,10 @@ class Lrc822v1Groupset(Groupset):
             g.effective_free_space
             for g in self.groups[:Lrc.Scheme822v1.NUM_DATA_PARTS]
         )
+
+    @property
+    def groupset_id(self):
+        return GROUPSET_ID_LRC_8_2_2_V1
 
 
 class DcNodes(object):
