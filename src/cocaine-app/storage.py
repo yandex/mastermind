@@ -1827,9 +1827,16 @@ class Group(object):
 
         if self.type == self.TYPE_DATA:
             # perform checks for common data group
-            status = self.update_storage_group_status()
+            status = self.update_storage_group_status(self.meta.get('couple'))
             if status:
                 return status
+
+        elif self.type == self.TYPE_LRC_8_2_2_V1:
+            # perform checks for lrc-8-2-2-v1 group
+            status = self.update_storage_group_status(self.meta.get('lrc', {}).get('groups'))
+            if status:
+                return status
+
         elif self.type == self.TYPE_CACHE:
             pass
 
@@ -1863,7 +1870,7 @@ class Group(object):
 
         return self.status
 
-    def update_storage_group_status(self):
+    def update_storage_group_status(self, group_ids):
         if not self.meta['couple']:
             self.status = Status.INIT
             self.status_text = ('Group {0} is in INIT state because there is '
@@ -1873,10 +1880,10 @@ class Group(object):
         if not self.couple:
             self.status = Status.BAD
             self.status_text = ('Group {0} is in Bad state because '
-                                'couple was not created'.format(self))
+                                'groupset was not created'.format(self))
             return self.status
 
-        if not self.couple.check_groups(self.meta['couple']):
+        if not self.couple.check_groups(group_ids):
             self.status = Status.BAD
             self.status_text = ('Group {} is in Bad state because couple check fails'.format(self))
             return self.status
@@ -1887,7 +1894,7 @@ class Group(object):
                                 'no namespace has been assigned to it'.format(self))
             return self.status
 
-        if self.group_id not in self.meta['couple']:
+        if self.group_id not in group_ids:
             self.status = Status.BROKEN
             self.status_text = ('Group {0} is in BROKEN state because '
                                 'its group id is missing from coupling info'.format(self))
@@ -2904,6 +2911,23 @@ class Lrc822v1Groupset(Groupset):
         part_size = settings['part_size']
         if not isinstance(part_size, int) or part_size <= 0:
             raise ValueError('"part_size" must be a positive integer')
+
+    def check_groups(self, groups):
+        for group in self.groups:
+            if not group.meta:
+                # tolerate meta read errors for neighbour lrc-8-2-2-v1 groups
+                continue
+
+            if 'lrc' not in group.meta or not group.meta['lrc'].get('groups'):
+                return False
+
+            if set(groups) != set(group.meta['lrc']['groups']):
+                return False
+
+        if set(groups) != set(g.group_id for g in self.groups):
+            return False
+
+        return True
 
     @property
     def groups_effective_space(self):
